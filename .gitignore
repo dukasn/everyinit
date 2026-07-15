@@ -1,0 +1,24 @@
+# Ignore everything in the root
+/*
+
+# Explicitly allow standard root files and directories
+!/.gitignore
+!/Cargo.toml
+!/Cargo.lock
+!/README.md
+!/docs/
+!/crates/
+!/.evin/
+!/builtins/
+!/CHANGELOG.md
+!/LICENSE
+
+# (progress.md and STACK.md remain excluded by the /* rule)
+
+# Standard Rust ignores for allowed directories
+target/
+**/*.rs.bk
+**/*.log
+**/*.tmp
+**/*.bak
+**/.evin/trace.json
