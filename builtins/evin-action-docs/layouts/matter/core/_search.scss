@@ -1,0 +1,214 @@
+/* ==========================================================================
+   MATERIAL 3 EXPRESSIVE SEARCH VIEW SYSTEM
+   ========================================================================== */
+#searchModal.m3-dialog {
+    margin-top: 60px;
+    margin-bottom: auto;
+    border-radius: 28px;
+    background-color: var(--ui-color-surface-container-high);
+    border: 1px solid color-mix(in srgb, var(--ui-color-outline) 60%, transparent);
+    box-shadow: var(--ui-elevation-level-5), 0 0 0 1px var(--ui-color-outline);
+    overflow: hidden;
+}
+
+#searchModal .dialog-header {
+    height: 64px;
+    padding: 0 16px 0 20px;
+    background-color: var(--ui-color-surface-container-high);
+    border-bottom: none;
+}
+
+#searchModal .dialog-title-icon {
+    width: 24px;
+    height: 24px;
+    color: var(--ui-color-primary);
+}
+
+#searchModal .dialog-search-input {
+    font-size: var(--ui-typescale-title-medium-size);
+    font-weight: 400;
+    color: var(--ui-color-on-surface);
+    height: 48px;
+}
+
+#searchModal .dialog-search-prompt { font-size: var(--ui-typescale-title-medium-size); }
+
+#searchModal .dialog-content {
+    display: none;
+    padding: 0;
+    max-height: 62vh;
+    background-color: var(--ui-color-surface-container-low);
+}
+
+#searchModal .dialog-content:not(:empty) {
+    display: block;
+    padding: 12px;
+    border-top: 1px solid color-mix(in srgb, var(--ui-color-outline) 40%, transparent);
+}
+
+/* M3 Search Result Card List Item */
+.search-result-card {
+    height: auto !important;
+    min-height: 60px;
+    padding: 10px 14px !important;
+    margin-bottom: 4px !important;
+    border-radius: 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+    border: 1px solid transparent;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    transition: background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+}
+
+/* Transparent Leading Icon */
+.search-result-left {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--ui-color-on-surface-variant);
+    opacity: 0.75;
+    background: transparent !important;
+    border-radius: 0 !important;
+    transition: color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), opacity var(--ui-motion-duration-short) var(--ui-motion-easing-standard), transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+}
+
+.search-result-left .docs-icon,
+.search-result-left .evin-icon {
+    width: 22px;
+    height: 22px;
+}
+
+/* Hover & Keyboard Selected States */
+.search-result-card:hover,
+.search-result-card.selected {
+    background-color: var(--ui-color-state-selected) !important;
+    outline: none;
+}
+
+.search-result-card:hover .search-result-left,
+.search-result-card.selected .search-result-left {
+    color: var(--ui-color-primary);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.search-result-card:hover .search-result-title,
+.search-result-card.selected .search-result-title {
+    color: var(--ui-color-primary);
+}
+
+/* M3 Category Badge & Title Layout */
+.search-result-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.search-result-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.m3-category-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--ui-color-primary) 12%, transparent);
+    color: var(--ui-color-primary);
+    font-size: var(--ui-typescale-label-medium-size);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    line-height: 1.3;
+    flex-shrink: 0;
+}
+
+.m3-reference-badge {
+    display: inline-flex;
+    align-items: center;
+    color: var(--ui-color-on-surface);
+    font-family: var(--ui-typescale-font-monospace);
+    font-size: var(--ui-typescale-label-medium-size);
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.search-result-title {
+    color: var(--ui-color-on-surface);
+    font-size: 0.9375rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-result-snippet {
+    font-size: var(--ui-typescale-body-small-size);
+    line-height: 1.45;
+    color: var(--ui-color-on-surface-variant);
+    opacity: 0.9;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.search-result-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    flex-shrink: 0;
+    transition: background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+}
+
+.search-result-arrow {
+    opacity: 0.4;
+    width: 20px;
+    height: 20px;
+    color: var(--ui-color-on-surface-variant);
+    transition: opacity var(--ui-motion-duration-short) var(--ui-motion-easing-standard), transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard), color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+}
+
+.search-result-card:hover .search-result-arrow,
+.search-result-card.selected .search-result-arrow {
+    opacity: 1;
+    transform: translateX(4px);
+    color: var(--ui-color-primary);
+}
+
+::highlight(search-highlight),
+.search-highlight {
+    background-color: color-mix(in srgb, var(--ui-color-primary) 24%, transparent);
+    color: var(--ui-color-primary);
+    font-weight: 700;
+    border-radius: 3px;
+    padding: 1px 4px;
+}
+
+.search-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px 16px;
+    color: var(--ui-color-on-surface-variant);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    text-align: center;
+}

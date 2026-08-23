@@ -1,0 +1,22 @@
+[package]
+name = "evin-action-changelog"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+evin-diagnostic = { workspace = true }
+evin-yaml = { workspace = true }
+evin-action-sdk = { workspace = true }
+evin-locales = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+marked-yaml = { workspace = true }
+thiserror = { workspace = true }
+evin-gitrules = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }

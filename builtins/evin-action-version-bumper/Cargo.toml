@@ -1,0 +1,23 @@
+[package]
+name = "evin-action-version-bumper"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+evin-yaml = { workspace = true }
+evin-action-sdk = { workspace = true }
+evin-locales = { workspace = true }
+evin-gitrules = { workspace = true }
+serde = { workspace = true }
+marked-yaml = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+semver = { workspace = true }
+chrono = "0.4.45"
+evin-diagnostic = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }

@@ -1,0 +1,10 @@
+[package]
+name = "evin-dotenv"
+version = { workspace = true }
+edition = "2024"
+publish = false
+
+[dependencies]
+evin-diagnostic = { workspace = true }
+evin-locales = { workspace = true }
+

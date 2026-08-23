@@ -1,0 +1,175 @@
+@use '../tokens/tokens' as tokens;
+$topbar-enabled: false !default;
+
+/* Compact is the mobile-first default. Scaffold changes occur only at the
+ * Material 3 window-size boundaries declared in the shared token layer. */
+.scroll-pane { padding-inline: var(--ui-layout-margin-inline); }
+
+.search-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--ui-ref-space-12);
+    min-width: var(--ui-ref-space-12);
+    height: var(--ui-ref-space-12);
+    padding: 0;
+    border: 0;
+    border-radius: var(--ui-shape-corner-full);
+    background: transparent;
+    color: var(--ui-color-on-surface-variant);
+    cursor: pointer;
+    font: inherit;
+    transition: background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), width var(--ui-motion-duration-medium) var(--ui-motion-easing-standard);
+}
+
+.search-trigger:hover,
+.search-trigger:focus-visible {
+    background: var(--ui-color-state-hover);
+    color: var(--ui-color-on-surface);
+    outline: none;
+}
+
+.search-trigger-label,
+.search-trigger .search-kbd { display: none; }
+
+#searchModal.m3-dialog {
+    /* A native dialog's automatic margins are not a reliable centering
+     * mechanism once it is moved toward the top of the viewport. Anchor it
+     * explicitly so every window class shares the same visual center. */
+    position: fixed;
+    inset: auto;
+    /* Native modal dialogs own their block inset. Use their supported block
+     * margins for the intentional top gap; this survives modal promotion. */
+    --ui-search-dialog-block-offset: clamp(var(--ui-ref-space-6), 4dvh, var(--ui-ref-space-10));
+    inset-block: 0;
+    inset-inline-start: 50%;
+    inset-inline-end: auto;
+    translate: -50% 0;
+    width: min(calc(100vw - (2 * var(--ui-layout-search-viewport-gutter))), var(--ui-layout-search-docked-width));
+    max-width: none;
+    /* Both block insets are owned by the native modal. `fit-content` prevents
+     * that anchor from stretching an otherwise header-only search surface. */
+    height: fit-content;
+    max-height: calc(100dvh - var(--ui-search-dialog-block-offset) - var(--ui-layout-search-viewport-gutter));
+    max-inline-size: var(--ui-layout-search-docked-width);
+    max-block-size: calc(100dvh - var(--ui-search-dialog-block-offset) - var(--ui-layout-search-viewport-gutter));
+    margin-block-start: var(--ui-search-dialog-block-offset);
+    margin-block-end: auto;
+    margin-inline: 0;
+    padding: 0;
+    border: 1px solid var(--ui-color-outline);
+    border-radius: var(--ui-shape-corner-extra-large);
+}
+
+#searchModal .dialog-content { max-height: min(62dvh, calc(100dvh - var(--ui-layout-header-height) - var(--ui-ref-space-12))); }
+
+.announcement-bar { gap: var(--ui-ref-space-2); }
+.banner-link { min-width: 0; flex-wrap: wrap; line-height: 1.35; }
+.banner-arrow { display: none; }
+
+@media (min-width: tokens.$ui-window-medium) {
+    .search-trigger {
+        justify-content: flex-start;
+        gap: var(--ui-ref-space-2);
+        width: auto;
+        min-width: 112px;
+        padding-inline: var(--ui-ref-space-4);
+        border: 1px solid var(--ui-color-outline);
+        background: var(--ui-color-surface-container-low);
+    }
+
+    .search-trigger-label { display: inline; }
+
+    #searchModal.m3-dialog {
+        --ui-search-dialog-block-offset: clamp(var(--ui-ref-space-8), 5dvh, var(--ui-ref-space-12));
+        max-height: min(720px, calc(100dvh - var(--ui-search-dialog-block-offset) - var(--ui-layout-search-viewport-gutter)));
+    }
+
+    #searchModal .dialog-content { max-height: min(62vh, 620px); }
+    .banner-link { flex-wrap: nowrap; }
+    .banner-arrow { display: inline-flex; }
+}
+
+@media (min-width: tokens.$ui-window-expanded) {
+    aside.sidebar {
+        position: relative;
+        inset: auto;
+        z-index: auto;
+        width: var(--ui-layout-sidebar-width);
+        max-width: var(--ui-layout-sidebar-width);
+        min-width: 0;
+        box-sizing: border-box;
+        height: 100%;
+        box-shadow: none;
+        transform: translateX(0);
+        visibility: visible;
+    }
+
+    /* The persistent sidebar is already inside the app region below an
+     * enabled topbar; retaining the modal drawer offset would create 44px of
+     * empty space above it. */
+    @if $topbar-enabled {
+        .docs-topbar ~ .app-layout aside.sidebar,
+        .evin-topbar ~ .app-layout aside.sidebar { inset-block-start: auto; }
+    }
+
+    .app-layout.sidebar-closed aside.sidebar {
+        width: 0;
+        border-right-color: transparent;
+        transform: translateX(-100%);
+        visibility: hidden;
+    }
+
+    .app-layout.sidebar-closed aside.sidebar > * {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .app-layout.sidebar-open .sidebar-backdrop,
+    .sidebar-backdrop { display: none; }
+    .header-brand { display: none; }
+}
+
+@media (min-width: tokens.$ui-window-large) {
+    .search-trigger {
+        min-width: 184px;
+        justify-content: space-between;
+    }
+
+    .search-trigger .search-kbd { display: inline-flex; }
+}
+
+@media (min-width: tokens.$ui-window-extra-large) {
+    .header-toolbar { padding-inline: var(--ui-ref-space-6); }
+}
+
+@media (max-height: tokens.$ui-window-compact-height) {
+    aside.sidebar {
+        height: 100dvh;
+    }
+
+    .sidebar-top { padding-top: var(--ui-ref-space-3); }
+    .brand-title { margin-bottom: var(--ui-ref-space-2); }
+    :root { --ui-layout-search-viewport-gutter: var(--ui-ref-space-3); }
+    #searchModal.m3-dialog {
+        --ui-search-dialog-block-offset: var(--ui-layout-search-viewport-gutter);
+        max-height: calc(100dvh - var(--ui-search-dialog-block-offset) - var(--ui-layout-search-viewport-gutter));
+    }
+    #searchModal .dialog-content { max-height: calc(100dvh - var(--ui-layout-header-height) - var(--ui-ref-space-6)); }
+}
+
+@media (pointer: coarse) {
+    .nav-item,
+    .nav-group-toggle,
+    .toc-link,
+    .banner-close-btn { min-width: var(--ui-ref-space-12); min-height: var(--ui-ref-space-12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+    }
+}

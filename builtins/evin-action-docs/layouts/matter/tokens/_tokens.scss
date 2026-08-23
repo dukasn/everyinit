@@ -1,0 +1,450 @@
+/*
+ * Shared documentation UI design tokens.
+ *
+ * Layers:
+ *   1. --ui-ref-*      Stable reference values and scales.
+ *   2. --ui-*          Semantic roles consumed by components.
+ *   3. --ui-layout-*   Documentation-shell geometry.
+ *
+ * Short --ui-* variables remain aliases for concise theme overrides. New
+ * layouts should consume the semantic roles directly.
+ */
+
+/*
+ * Window-size boundaries. Keep high-level scaffold media queries
+ * tied to these constants; components should prefer intrinsic sizing and
+ * container queries.
+ */
+$ui-window-medium: 600px !default;
+$ui-window-expanded: 840px !default;
+$ui-window-large: 1200px !default;
+$ui-window-extra-large: 1600px !default;
+$ui-window-compact-height: 479px !default;
+$presentation-variants: () !default;
+
+:root {
+    /* Reference palette: warm industrial concrete. */
+    --ui-ref-color-neutral-0: #0E0D0C;
+    --ui-ref-color-neutral-4: #141210;
+    --ui-ref-color-neutral-10: #1D1B19;
+    --ui-ref-color-neutral-15: #25221F;
+    --ui-ref-color-neutral-20: #302D29;
+    --ui-ref-color-neutral-30: #48433E;
+    --ui-ref-color-neutral-40: #5F5A54;
+    --ui-ref-color-neutral-50: #77716A;
+    --ui-ref-color-neutral-60: #918A82;
+    --ui-ref-color-neutral-70: #ACA49C;
+    --ui-ref-color-neutral-80: #C8C0B9;
+    --ui-ref-color-neutral-90: #E6DFD8;
+    --ui-ref-color-neutral-94: #F3F0EC;
+    --ui-ref-color-neutral-96: #F8F6F2;
+    --ui-ref-color-neutral-98: #FFFBF7;
+    --ui-ref-color-neutral-100: #FFFFFF;
+
+    /* Reference spacing scale. */
+    --ui-ref-space-1: 4px;
+    --ui-ref-space-2: 8px;
+    --ui-ref-space-3: 12px;
+    --ui-ref-space-4: 16px;
+    --ui-ref-space-5: 20px;
+    --ui-ref-space-6: 24px;
+    --ui-ref-space-8: 32px;
+    --ui-ref-space-10: 40px;
+    --ui-ref-space-12: 48px;
+    --ui-ref-space-14: 56px;
+    --ui-ref-space-16: 64px;
+    --ui-ref-space-20: 80px;
+    --ui-ref-space-24: 96px;
+
+    /* Light color roles (Warm Architectural Matter / Material 3 Tonal Palette). */
+    --ui-color-background: #F8F6F2;
+    --ui-color-on-background: #1D1B19;
+    --ui-color-surface: #F2ECE4;
+    --ui-color-surface-variant: #EAE3D9;
+    --ui-color-surface-container-lowest: #FFFBF7;
+    --ui-color-surface-container-low: #F2ECE4;
+    --ui-color-surface-container: #ECE5DC;
+    --ui-color-surface-container-high: #E4DDD3;
+    --ui-color-surface-container-highest: #DDD5C9;
+    --ui-color-on-surface: #1D1B19;
+    --ui-color-on-surface-variant: #524B43;
+    --ui-color-primary: #332E2A;
+    --ui-color-on-primary: #FFFBF7;
+    --ui-color-outline: #C0B7AA;
+    --ui-color-outline-variant: #DDD6CC;
+    --ui-color-link: #24201D;
+    --ui-color-link-hover: #0E0D0C;
+    --ui-color-state-hover: rgb(51 46 42 / 0.07);
+    --ui-color-state-focus: rgb(51 46 42 / 0.16);
+    --ui-color-state-selected: rgb(51 46 42 / 0.12);
+    --ui-color-scrim: rgb(29 27 25 / 0.48);
+    --ui-color-code-surface: #ECE5DC;
+    --ui-color-code-inline-surface: #E0D8CC;
+    --ui-color-code-on-surface: #1D1B19;
+    --ui-color-code-outline: #D4CCC0;
+    --ui-color-code-label: #635C53;
+    --ui-color-banner-surface: #25221F;
+    --ui-color-banner-on-surface: #F4F4F6;
+    --ui-color-banner-badge: #E5E0DB;
+    --ui-color-banner-on-badge: #302D29;
+    --ui-color-banner-outline: rgb(255 251 247 / 0.14);
+
+    /* Topbar palette is emitted only for the selected variant. It remains
+     * isolated from document-theme ink so contrast is never inherited. */
+    @if index($presentation-variants, "deepspace") {
+        --ui-topbar-white: #FFFFFF; --ui-topbar-black: #000000; --ui-topbar-deepspace-surface: #05060A; --ui-topbar-deepspace-ink: #E2E8F0; --ui-topbar-deepspace-outline: rgb(168 85 247 / 0.2); --ui-topbar-deepspace-purple: #C084FC; --ui-topbar-deepspace-purple-soft: rgb(168 85 247 / 0.25); --ui-topbar-deepspace-cyan: #38BDF8; --ui-topbar-deepspace-cyan-soft: rgb(56 189 248 / 0.1); --ui-topbar-deepspace-badge: #E9D5FF; --ui-topbar-deepspace-badge-surface: rgb(168 85 247 / 0.15); --ui-topbar-deepspace-badge-outline: rgb(168 85 247 / 0.4);
+    } @if index($presentation-variants, "collider") {
+        --ui-topbar-ink-light: #E2E8F0; --ui-topbar-collider-surface: #030712; --ui-topbar-collider-outline: #1F2937; --ui-topbar-collider-track: rgb(255 255 255 / 0.08); --ui-topbar-collider-cyan: #22D3EE; --ui-topbar-collider-pink: #E879F9; --ui-topbar-collider-badge-surface: rgb(34 211 238 / 0.08); --ui-topbar-collider-badge-outline: rgb(34 211 238 / 0.25); --ui-topbar-collider-link: #F472B6;
+    } @if index($presentation-variants, "industrial") {
+        --ui-topbar-black: #000000; --ui-topbar-industrial-surface: #14120E; --ui-topbar-industrial-ink: #F5F5F4; --ui-topbar-industrial-outline: #382E1E; --ui-topbar-industrial-amber: #F59E0B; --ui-topbar-industrial-stripe: #1C1917; --ui-topbar-industrial-action: #FBBF24; --ui-topbar-industrial-action-surface: rgb(245 158 11 / 0.12);
+    } @if index($presentation-variants, "genome") {
+        --ui-topbar-black: #000000; --ui-topbar-genome-surface: #041310; --ui-topbar-genome-ink: #D1FAE5; --ui-topbar-genome-outline: rgb(16 185 129 / 0.25); --ui-topbar-genome-glow: rgb(5 150 105 / 0.15); --ui-topbar-genome-dot: rgb(52 211 153 / 0.2); --ui-topbar-genome-tag: #34D399; --ui-topbar-genome-tag-surface: rgb(6 78 59 / 0.4); --ui-topbar-genome-tag-outline: #059669; --ui-topbar-genome-action: #6EE7B7;
+    } @if index($presentation-variants, "blueprint") {
+        --ui-topbar-blueprint-surface: #071526; --ui-topbar-blueprint-ink: #BAE6FD; --ui-topbar-blueprint-outline: #0369A1; --ui-topbar-blueprint-grid: rgb(56 189 248 / 0.08); --ui-topbar-blueprint-corner: #0284C7; --ui-topbar-blueprint-badge: #F0F9FF; --ui-topbar-blueprint-action: #38BDF8; --ui-topbar-blueprint-action-hover: #FFFFFF;
+    } @if index($presentation-variants, "crt") {
+        --ui-topbar-black: #000000; --ui-topbar-crt-surface: #0A0700; --ui-topbar-crt-ink: #FBBF24; --ui-topbar-crt-outline: #78350F; --ui-topbar-crt-scan: rgb(0 0 0 / 0.35); --ui-topbar-crt-action: #F59E0B; --ui-topbar-crt-action-hover: #FDE68A; --ui-topbar-crt-glow: rgb(245 158 11 / 0.6); --ui-topbar-crt-action-shadow: 0 0 6px rgb(245 158 11 / 0.4);
+    } @if index($presentation-variants, "aurora") {
+        --ui-topbar-white: #FFFFFF; --ui-topbar-aurora-surface: #0D0F1A; --ui-topbar-aurora-outline: rgb(255 255 255 / 0.08); --ui-topbar-aurora-indigo: rgb(99 102 241 / 0.45); --ui-topbar-aurora-pink: rgb(236 72 153 / 0.45); --ui-topbar-aurora-blue: rgb(14 165 233 / 0.4); --ui-topbar-aurora-glass: rgb(255 255 255 / 0.12); --ui-topbar-aurora-glass-outline: rgb(255 255 255 / 0.2);
+    } @if index($presentation-variants, "cyber") {
+        --ui-topbar-cyber-surface: #05080F; --ui-topbar-cyber-ink: #A7F3D0; --ui-topbar-cyber-outline: rgb(0 255 170 / 0.2); --ui-topbar-cyber-grid: rgb(0 255 170 / 0.04); --ui-topbar-cyber-green: #10B981; --ui-topbar-cyber-action-hover: #34D399; --ui-topbar-cyber-code: #34D399; --ui-topbar-cyber-code-surface: rgb(16 185 129 / 0.1); --ui-topbar-cyber-code-outline: rgb(16 185 129 / 0.3); --ui-topbar-cyber-action-ink: #022C22;
+    } @if index($presentation-variants, "prismatic") {
+        --ui-topbar-white: #FFFFFF; --ui-topbar-prismatic-surface: #11131D; --ui-topbar-prismatic-outline: rgb(255 255 255 / 0.08); --ui-topbar-prismatic-pink: #FF007A; --ui-topbar-prismatic-purple: #7928CA; --ui-topbar-prismatic-blue: #0070F3; --ui-topbar-prismatic-cyan: #00DFD8; --ui-topbar-prismatic-badge-start: #EC4899; --ui-topbar-prismatic-badge-end: #8B5CF6; --ui-topbar-prismatic-link: #38BDF8; --ui-topbar-prismatic-close: #94A3B8;
+    } @if index($presentation-variants, "brutalist") {
+        --ui-topbar-white: #FFFFFF; --ui-topbar-black: #000000; --ui-topbar-brutalist-surface: #DFFF1A; --ui-topbar-brutalist-action-hover: #252525; --ui-topbar-brutalist-pattern: rgb(0 0 0 / 0.04);
+    } @if index($presentation-variants, "holo") {
+        --ui-topbar-white: #FFFFFF; --ui-topbar-holo-surface-start: #181926; --ui-topbar-holo-surface-end: #24273A; --ui-topbar-holo-outline: rgb(255 255 255 / 0.1); --ui-topbar-holo-sheen: rgb(255 255 255 / 0.1); --ui-topbar-holo-gold: rgb(255 215 0 / 0.12); --ui-topbar-holo-magenta: rgb(255 0 128 / 0.12); --ui-topbar-holo-cyan: rgb(0 255 255 / 0.12); --ui-topbar-holo-ink-start: #FFD1FF; --ui-topbar-holo-ink-end: #FAD0C4; --ui-topbar-holo-glass: rgb(255 255 255 / 0.08); --ui-topbar-holo-glass-hover: rgb(255 255 255 / 0.18); --ui-topbar-holo-glass-outline: rgb(255 255 255 / 0.15); --ui-topbar-holo-close: #CBD5E1;
+    } @if index($presentation-variants, "geo") {
+        --ui-topbar-white: #FFFFFF; --ui-topbar-black: #000000; --ui-topbar-geo-surface: #11141A; --ui-topbar-geo-ink: #E2E8F0; --ui-topbar-geo-outline: #1E2430; --ui-topbar-geo-orange: #F97316; --ui-topbar-geo-blue: #0EA5E9; --ui-topbar-geo-purple: #8B5CF6; --ui-topbar-geo-action-hover: #FB923C; --ui-topbar-geo-close: #94A3B8;
+    } @if index($presentation-variants, "luxury") {
+        --ui-topbar-ink-light: #E2E8F0; --ui-topbar-luxury-surface: #090A0F; --ui-topbar-luxury-outline: #1A1D28; --ui-topbar-luxury-glow: rgb(139 92 246 / 0.25); --ui-topbar-luxury-sparkle: #A78BFA; --ui-topbar-luxury-link: #C4B5FD; --ui-topbar-luxury-close: #64748B;
+    }
+
+    /* Canonical Matter Chromatic & ANSI Palette (Light: Deep Saturation / WCAG AA 4.5:1+) */
+    --ui-palette-black: #1D1B19;
+    --ui-palette-red: #C50D33;
+    --ui-palette-green: #358B22;
+    --ui-palette-yellow: #C87B08;
+    --ui-palette-blue: #1656D8;
+    --ui-palette-magenta: #7B2ED6;
+    --ui-palette-cyan: #0E7F87;
+    --ui-palette-white: #F8F6F2;
+    --ui-palette-orange: #E65500;
+    --ui-palette-muted: #746D65;
+
+    /* Light Syntax Highlighting Tokens */
+    --ui-syn-keyword: var(--ui-palette-magenta);
+    --ui-syn-function: var(--ui-palette-blue);
+    --ui-syn-type: var(--ui-palette-red);
+    --ui-syn-string: var(--ui-palette-green);
+    --ui-syn-comment: var(--ui-palette-muted);
+    --ui-syn-variable: var(--ui-palette-blue);
+    --ui-syn-constant: var(--ui-palette-orange);
+    --ui-syn-punctuation: #524B43;
+    --ui-syn-attribute: var(--ui-palette-yellow);
+    --ui-syn-operator: var(--ui-palette-cyan);
+
+    /* Diagram Surface & Node Design Tokens (Warm Cohesive Matter Palette) */
+    --ui-diagram-bg: #EAE3D9;
+    --ui-diagram-node-bg: #F5EFE7;
+    --ui-diagram-node-text: #1D1B19;
+    --ui-diagram-node-border: #C5BCB0;
+    --ui-diagram-cluster-bg: #DFD8CE;
+    --ui-diagram-cluster-border: #ABA193;
+    --ui-diagram-line: #48433E;
+    --ui-diagram-accent: var(--ui-palette-blue);
+    --ui-diagram-git-0: var(--ui-palette-magenta);
+    --ui-diagram-git-1: var(--ui-palette-blue);
+    --ui-diagram-git-2: var(--ui-palette-green);
+    --ui-diagram-git-3: var(--ui-palette-orange);
+    --ui-diagram-git-label: #FFFBF7;
+
+    /* Shape, type, motion, and elevation roles. */
+    --ui-shape-corner-extra-small: 4px;
+    --ui-shape-corner-small: 8px;
+    --ui-shape-corner-medium: 12px;
+    --ui-shape-corner-large: 16px;
+    --ui-shape-corner-extra-large: 24px;
+    --ui-shape-corner-full: 9999px;
+    --ui-typescale-font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --ui-typescale-font-monospace: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
+    --ui-typescale-body-large-size: 1rem;
+    --ui-typescale-body-medium-size: 0.875rem;
+    --ui-typescale-body-small-size: 0.8125rem;
+    --ui-typescale-headline-large-size: clamp(2.75rem, 4vw, 3.25rem);
+    --ui-typescale-headline-medium-size: clamp(1.875rem, 3vw, 2.25rem);
+    --ui-typescale-headline-small-size: 1.5rem;
+    --ui-typescale-headline-compact-size: 1.25rem;
+    --ui-typescale-title-large-size: 1.25rem;
+    --ui-typescale-title-medium-size: 1.125rem;
+    --ui-typescale-label-large-size: 0.875rem;
+    --ui-typescale-label-medium-size: 0.75rem;
+    --ui-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ui-motion-easing-emphasized: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ui-motion-duration-short: 150ms;
+    --ui-motion-duration-medium: 300ms;
+    --ui-motion-duration-long: 350ms;
+    --ui-elevation-level-1: 0 1px 3px rgb(29 27 25 / 0.14);
+    --ui-elevation-level-2: 0 2px 10px rgb(29 27 25 / 0.16);
+    --ui-elevation-level-3: 0 8px 32px rgb(29 27 25 / 0.22);
+    --ui-elevation-level-5: 0 24px 48px -12px rgb(29 27 25 / 0.32);
+    --ui-elevation-icon: 0 1px 1px rgb(29 27 25 / 0.32);
+    --ui-elevation-divider: 0 1px 0 var(--ui-color-outline);
+
+    /* Documentation rhythm and shell geometry. Keep reading density fluid while
+     * preserving the same minimum and maximum steps from the spacing scale. */
+    --ui-doc-line-height-display: 1.1;
+    --ui-doc-line-height-heading: 1.25;
+    --ui-doc-line-height-body: 1.75;
+    --ui-doc-line-height-compact: 1.6;
+    --ui-doc-line-height-code: 1.6;
+    --ui-doc-line-height-inline-code: 1.35;
+    --ui-doc-spacing-paragraph: clamp(var(--ui-ref-space-4), 2vw, var(--ui-ref-space-6));
+    --ui-doc-spacing-heading-top: clamp(var(--ui-ref-space-10), 5vw, var(--ui-ref-space-16));
+    --ui-doc-spacing-heading-bottom: clamp(var(--ui-ref-space-3), 2vw, var(--ui-ref-space-5));
+    --ui-doc-spacing-section: clamp(var(--ui-ref-space-10), 6vw, var(--ui-ref-space-16));
+    --ui-doc-spacing-block: clamp(var(--ui-ref-space-6), 3vw, var(--ui-ref-space-8));
+    --ui-doc-spacing-card: clamp(var(--ui-ref-space-5), 3vw, var(--ui-ref-space-8));
+    --ui-doc-spacing-inline: var(--ui-ref-space-2);
+    --ui-layout-window-width-class: compact;
+    --ui-layout-window-height-class: regular;
+    --ui-layout-margin-inline: var(--ui-ref-space-4);
+    --ui-layout-sidebar-width: 280px;
+    --ui-layout-sidebar-modal-width: min(320px, calc(100vw - var(--ui-ref-space-14)));
+    --ui-layout-toc-pane-width: 220px;
+    --ui-layout-pane-gap: var(--ui-ref-space-8);
+    --ui-layout-content-max-width: 840px;
+    --ui-layout-header-height: 64px;
+    --ui-layout-topbar-height: 44px;
+    --ui-layout-search-docked-width: 600px;
+    /* The search view is a floating surface, never edge-to-edge. */
+    --ui-layout-search-viewport-gutter: var(--ui-ref-space-6);
+    --ui-component-card-min-width: 300px;
+    --ui-component-footer-column-min-width: 150px;
+
+    /* Start-page presentation roles. Keep the landing-page hierarchy and
+     * rhythm themeable without coupling the component to literal values. */
+    --ui-start-color-hero-surface: var(--ui-color-surface-container-lowest);
+    --ui-start-color-hero-ink: var(--ui-color-on-surface);
+    --ui-start-color-hero-muted: var(--ui-color-on-surface-variant);
+    --ui-start-color-accent: var(--ui-color-primary);
+    --ui-start-color-card-surface: var(--ui-color-surface-container-low);
+    --ui-start-color-card-muted: var(--ui-color-on-surface-variant);
+    --ui-start-color-card-hover: var(--ui-color-surface-container-high);
+    --ui-start-hero-min-block-size: 100dvh;
+    --ui-start-hero-padding-block: clamp(80px, 12vw, 144px);
+    --ui-start-hero-padding-inline: clamp(24px, 6vw, 96px);
+    --ui-start-hero-content-max-width: 60rem;
+    --ui-start-eyebrow-size: 0.82rem;
+    --ui-start-eyebrow-tracking: 0.18em;
+    --ui-start-hero-title-size: clamp(3.5rem, 9vw, 7rem);
+    --ui-start-hero-title-weight: 600;
+    --ui-start-hero-title-tracking: -0.06em;
+    --ui-start-hero-title-line-height: 0.98;
+    --ui-start-hero-title-space-after: var(--ui-ref-space-5);
+    --ui-start-lead-max-width: 52ch;
+    --ui-start-lead-size: clamp(1.2rem, 2.4vw, 1.6rem);
+    --ui-start-lead-line-height: 1.55;
+    --ui-start-sections-max-width: 75rem;
+    --ui-start-sections-space-before: clamp(96px, 13vw, 160px);
+    --ui-start-sections-padding-inline: clamp(20px, 5vw, 64px);
+    --ui-start-section-space-after: clamp(128px, 16vw, 224px);
+    --ui-start-section-title-space-after: clamp(20px, 2.5vw, 36px);
+    --ui-start-section-title-size: clamp(2.25rem, 4.8vw, 4rem);
+    --ui-start-section-title-weight: 500;
+    --ui-start-section-title-tracking: -0.06em;
+    --ui-start-section-title-line-height: 1.06;
+    --ui-start-section-layout-gap: clamp(24px, 4vw, 56px);
+    --ui-start-section-media-min-width: 280px;
+    --ui-start-section-media-radius: clamp(24px, 3vw, 36px);
+    --ui-start-section-description-gap: clamp(12px, 1.5vw, 20px);
+    --ui-start-section-description-space-after: clamp(28px, 4vw, 52px);
+    --ui-start-section-description-max-width: 72ch;
+    --ui-start-section-description-size: clamp(1.08rem, 1.6vw, 1.22rem);
+    --ui-start-section-description-line-height: 1.6;
+    --ui-start-card-padding: var(--ui-doc-spacing-card);
+    --ui-start-card-content-gap: var(--ui-doc-spacing-paragraph);
+    --ui-start-card-grid-gap: clamp(16px, 2vw, 28px);
+    --ui-start-card-copy-gap: clamp(10px, 1.25vw, 16px);
+    --ui-start-card-title-size: clamp(1.3rem, 2.2vw, 1.65rem);
+    --ui-start-card-title-tracking: -0.04em;
+    --ui-start-card-title-line-height: 1.18;
+    --ui-start-card-description-size: clamp(1rem, 1.4vw, 1.1rem);
+    --ui-start-card-description-line-height: 1.55;
+    --ui-start-card-icon-size: 40px;
+
+    /* Compatibility aliases. */
+    --ui-surface-container-lowest: var(--ui-color-surface-container-lowest);
+    --ui-surface-container-low: var(--ui-color-surface-container-low);
+    --ui-surface-container: var(--ui-color-surface-container);
+    --ui-surface-container-high: var(--ui-color-surface-container-high);
+    --ui-surface-container-highest: var(--ui-color-surface-container-highest);
+    --ui-bg: var(--ui-color-background);
+    --ui-on-bg: var(--ui-color-on-background);
+    --ui-surface: var(--ui-color-surface);
+    --ui-surface-variant: var(--ui-color-surface-variant);
+    --ui-on-surface: var(--ui-color-on-surface);
+    --ui-on-surface-variant: var(--ui-color-on-surface-variant);
+    --ui-primary: var(--ui-color-primary);
+    --ui-outline: var(--ui-color-outline);
+    --ui-outline-variant: var(--ui-color-outline-variant);
+    --ui-hover: var(--ui-color-state-hover);
+    --ui-code-bg: var(--ui-color-code-surface);
+    --ui-code-label: var(--ui-color-code-label);
+    --ui-code-text: var(--ui-color-code-on-surface);
+    --ui-link: var(--ui-color-link);
+    --ui-link-hover: var(--ui-color-link-hover);
+    --ui-banner-bg: var(--ui-color-banner-surface);
+    --ui-banner-text: var(--ui-color-banner-on-surface);
+    --ui-banner-badge-bg: var(--ui-color-banner-badge);
+    --ui-banner-badge-text: var(--ui-color-banner-on-badge);
+    --ui-banner-border: var(--ui-color-banner-outline);
+    --ease: var(--ui-motion-easing-standard);
+    --duration: var(--ui-motion-duration-medium);
+    --sidebar-width: var(--ui-layout-sidebar-width);
+    --content-max-width: var(--ui-layout-content-max-width);
+    --header-h: var(--ui-layout-header-height);
+    --ui-space-1: var(--ui-ref-space-1);
+    --ui-space-2: var(--ui-ref-space-2);
+    --ui-space-3: var(--ui-ref-space-3);
+    --ui-space-4: var(--ui-ref-space-4);
+    --ui-space-5: var(--ui-ref-space-5);
+    --ui-space-6: var(--ui-ref-space-6);
+    --ui-space-8: var(--ui-ref-space-8);
+    --ui-space-12: var(--ui-ref-space-12);
+    --ui-space-16: var(--ui-ref-space-16);
+    --ui-radius-xs: var(--ui-shape-corner-extra-small);
+    --ui-radius-sm: var(--ui-shape-corner-small);
+    --ui-radius-md: var(--ui-shape-corner-medium);
+    --ui-radius-lg: var(--ui-shape-corner-large);
+    --ui-radius-xl: var(--ui-shape-corner-extra-large);
+    --ui-radius-full: var(--ui-shape-corner-full);
+    --font-sans: var(--ui-typescale-font-sans);
+    --font-mono: var(--ui-typescale-font-monospace);
+    --spacing-paragraph-bottom: var(--ui-doc-spacing-paragraph);
+    --spacing-heading-top: var(--ui-doc-spacing-heading-top);
+    --spacing-heading-bottom: var(--ui-doc-spacing-heading-bottom);
+    --spacing-section-gap: var(--ui-doc-spacing-section);
+    --spacing-block-gap: var(--ui-doc-spacing-block);
+    --spacing-card-padding: var(--ui-doc-spacing-card);
+    --spacing-inline-gap: var(--ui-doc-spacing-inline);
+}
+
+@media (min-width: $ui-window-medium) {
+    :root {
+        --ui-layout-window-width-class: medium;
+        --ui-layout-margin-inline: var(--ui-ref-space-6);
+    }
+}
+
+@media (min-width: $ui-window-expanded) {
+    :root {
+        --ui-layout-window-width-class: expanded;
+        --ui-layout-margin-inline: var(--ui-ref-space-8);
+        --ui-layout-sidebar-width: 280px;
+    }
+}
+
+@media (min-width: $ui-window-large) {
+    :root {
+        --ui-layout-window-width-class: large;
+        --ui-layout-margin-inline: var(--ui-ref-space-10);
+        --ui-layout-sidebar-width: 300px;
+        --ui-layout-toc-pane-width: 240px;
+        --ui-layout-pane-gap: var(--ui-ref-space-10);
+    }
+}
+
+@media (min-width: $ui-window-extra-large) {
+    :root {
+        --ui-layout-window-width-class: extra-large;
+        --ui-layout-margin-inline: var(--ui-ref-space-16);
+        --ui-layout-sidebar-width: 320px;
+        --ui-layout-toc-pane-width: 256px;
+        --ui-layout-pane-gap: var(--ui-ref-space-12);
+    }
+}
+
+@media (max-height: $ui-window-compact-height) {
+    :root { --ui-layout-window-height-class: compact; }
+}
+
+@mixin dark-theme {
+    --ui-color-background: #040406;
+    --ui-color-on-background: #E8E8EB;
+    --ui-color-surface: #0B0B0D;
+    --ui-color-surface-variant: #1A1A1E;
+    --ui-color-surface-container-lowest: #040406;
+    --ui-color-surface-container-low: #08080A;
+    --ui-color-surface-container: #101013;
+    --ui-color-surface-container-high: #1A1A1E;
+    --ui-color-surface-container-highest: #242429;
+    --ui-color-on-surface: #E8E8EB;
+    --ui-color-on-surface-variant: #C8C8CE;
+    --ui-color-primary: #E0E0E6;
+    --ui-color-on-primary: #1A1A1C;
+    --ui-color-outline: #929298;
+    --ui-color-outline-variant: #444449;
+    --ui-color-link: #E8E8EB;
+    --ui-color-link-hover: #FFFFFF;
+    --ui-color-state-hover: rgb(232 232 235 / 0.08);
+    --ui-color-state-focus: rgb(232 232 235 / 0.18);
+    --ui-color-state-selected: rgb(232 232 235 / 0.14);
+    --ui-color-scrim: rgb(0 0 0 / 0.56);
+    --ui-color-code-surface: #08080A;
+    --ui-color-code-inline-surface: #151517;
+    --ui-color-code-on-surface: #E8E8EB;
+    --ui-color-code-outline: rgb(232 232 235 / 0.12);
+    --ui-color-code-label: rgb(232 232 235 / 0.65);
+    --ui-color-banner-surface: #0B0B0D;
+    --ui-color-banner-on-surface: #FFFBF7;
+    --ui-color-banner-badge: #444449;
+    --ui-color-banner-on-badge: #E8E8EB;
+    --ui-color-banner-outline: rgb(255 251 247 / 0.12);
+
+    /* Canonical Matter Chromatic & ANSI Palette (Dark: Luminous Pastel) */
+    --ui-palette-black: #0F0F10;
+    --ui-palette-red: #F38BA8;
+    --ui-palette-green: #A6E3A1;
+    --ui-palette-yellow: #F9E2AF;
+    --ui-palette-blue: #89B4FA;
+    --ui-palette-magenta: #CBA6F7;
+    --ui-palette-cyan: #89DCEB;
+    --ui-palette-white: #E8E8EB;
+    --ui-palette-orange: #FAB387;
+    --ui-palette-muted: #7F848E;
+
+    /* Dark Syntax Highlighting Tokens */
+    --ui-syn-keyword: var(--ui-palette-magenta);
+    --ui-syn-function: var(--ui-palette-blue);
+    --ui-syn-type: var(--ui-palette-red);
+    --ui-syn-string: var(--ui-palette-green);
+    --ui-syn-comment: var(--ui-palette-muted);
+    --ui-syn-variable: var(--ui-palette-blue);
+    --ui-syn-constant: var(--ui-palette-orange);
+    --ui-syn-punctuation: #CDD6F4;
+    --ui-syn-attribute: var(--ui-palette-yellow);
+    --ui-syn-operator: var(--ui-palette-cyan);
+
+    /* Dark Diagram Surface & Node Design Tokens */
+    --ui-diagram-bg: #040406;
+    --ui-diagram-node-bg: #151517;
+    --ui-diagram-node-text: #E8E8EB;
+    --ui-diagram-node-border: #39393E;
+    --ui-diagram-cluster-bg: #0B0B0D;
+    --ui-diagram-cluster-border: rgb(232 232 235 / 0.18);
+    --ui-diagram-line: #A8A8AF;
+    --ui-diagram-accent: var(--ui-palette-blue);
+    --ui-diagram-git-0: var(--ui-palette-magenta);
+    --ui-diagram-git-1: var(--ui-palette-blue);
+    --ui-diagram-git-2: var(--ui-palette-green);
+    --ui-diagram-git-3: var(--ui-palette-orange);
+    --ui-diagram-git-label: #040406;
+
+    --ui-elevation-level-1: 0 1px 3px rgb(0 0 0 / 0.24);
+    --ui-elevation-level-2: 0 2px 10px rgb(0 0 0 / 0.32);
+    --ui-elevation-level-3: 0 8px 32px rgb(0 0 0 / 0.36);
+    --ui-elevation-level-5: 0 24px 48px -12px rgb(0 0 0 / 0.48);
+    --ui-elevation-icon: 0 1px 1px rgb(0 0 0 / 0.48);
+}
+
+[data-theme="dark"] { @include dark-theme; }

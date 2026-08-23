@@ -1,0 +1,506 @@
+/* Shell-level topbar & presentation surfaces: isolated visual islands.
+ * Spacing, typography scale, motion, and shape tokens are inherited from the
+ * main Matter design system for structural rhythm, while color/surface/ink
+ * tokens are strictly isolated within each variant surface. */
+$presentation-variants: () !default;
+$topbar-enabled: false !default;
+
+@if length($presentation-variants) > 0 {
+
+/* Presentation surface base tokens. Deliberately resolve within each
+ * variant surface so document-theme light/dark ink and link tokens never bleed
+ * into topbar or spotlight announcements. */
+.presentation-surface {
+    --topbar-surface: var(--ui-color-banner-surface);
+    --topbar-ink: var(--ui-color-banner-on-surface);
+    --topbar-outline: var(--ui-color-banner-outline);
+    --topbar-action: var(--topbar-ink);
+    --topbar-action-ink: var(--topbar-action);
+    --topbar-action-ink-hover: var(--topbar-action-ink);
+    --topbar-action-surface: transparent;
+    --topbar-action-surface-hover: transparent;
+    --topbar-action-outline: transparent;
+    --topbar-action-shadow: none;
+    --topbar-action-border-width: 0;
+    --topbar-action-min-height: 0;
+    --topbar-action-padding: 0;
+    --topbar-action-radius: 0;
+    --topbar-close: var(--topbar-ink);
+    --topbar-badge-surface: color-mix(in srgb, var(--topbar-ink) 14%, transparent);
+    --topbar-badge-ink: var(--topbar-ink);
+    --topbar-badge-outline: color-mix(in srgb, var(--topbar-ink) 28%, transparent);
+
+    --presentation-surface: var(--topbar-surface);
+    --presentation-ink: var(--topbar-ink);
+    --presentation-outline: var(--topbar-outline);
+    --presentation-action: var(--topbar-action, var(--topbar-ink));
+    --presentation-action-ink: var(--topbar-action-ink, var(--presentation-action));
+    --presentation-action-ink-hover: var(--topbar-action-ink-hover, var(--presentation-action-ink));
+    --presentation-action-surface: var(--topbar-action-surface, transparent);
+    --presentation-action-surface-hover: var(--topbar-action-surface-hover, transparent);
+    --presentation-action-outline: var(--topbar-action-outline, transparent);
+    --presentation-action-shadow: var(--topbar-action-shadow, none);
+    --presentation-action-border-width: var(--topbar-action-border-width, 0);
+    --presentation-action-radius: var(--topbar-action-radius, 0);
+    --topbar-action-font-size: var(--ui-typescale-label-medium-size);
+    --topbar-action-icon-size: 1rem;
+    --topbar-badge-font-size: .6875rem;
+    --topbar-badge-padding: 2px 8px;
+
+    --spotlight-action-font-size: var(--ui-typescale-label-large-size);
+    --spotlight-action-icon-size: 1.25rem;
+    --spotlight-action-padding: 0;
+    --spotlight-badge-font-size: var(--ui-typescale-label-medium-size);
+    --spotlight-badge-padding: var(--ui-ref-space-2) var(--ui-ref-space-3);
+
+    --presentation-action-font-size: var(--topbar-action-font-size);
+    --presentation-action-icon-size: var(--topbar-action-icon-size);
+    --presentation-action-padding: var(--topbar-action-padding);
+    --presentation-badge-font-size: var(--topbar-badge-font-size);
+    --presentation-badge-padding: var(--topbar-badge-padding);
+
+    color: var(--presentation-ink);
+
+    h1, h2, h3, h4, h5, h6, p, strong, em, b, i {
+        color: var(--presentation-ink) !important;
+    }
+
+    span:not(.topbar-badge):not(.presentation-badge):not(.start-spotlight-badge):not(.topbar-action *):not(.presentation-action *):not(.start-spotlight-action *) {
+        color: inherit;
+    }
+
+    a:not(.topbar-action):not(.start-spotlight-action):not(.presentation-action) {
+        color: var(--presentation-action, var(--presentation-ink)) !important;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        transition: opacity var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+
+        &:hover, &:focus-visible {
+            opacity: .82;
+        }
+    }
+
+    code {
+        background: color-mix(in srgb, var(--presentation-ink) 12%, transparent) !important;
+        color: var(--presentation-ink) !important;
+        border: 1px solid color-mix(in srgb, var(--presentation-ink) 22%, transparent) !important;
+        border-radius: var(--ui-shape-corner-extra-small);
+        padding: 1px 5px;
+    }
+}
+
+.presentation-scale-compact {
+    --presentation-action-font-size: var(--topbar-action-font-size, var(--ui-typescale-label-medium-size));
+    --presentation-action-icon-size: var(--topbar-action-icon-size, 1rem);
+    --presentation-action-padding: var(--topbar-action-padding, 0);
+    --presentation-action-min-height: var(--topbar-action-min-height, 0);
+    --presentation-badge-font-size: var(--topbar-badge-font-size, .6875rem);
+    --presentation-badge-padding: var(--topbar-badge-padding, 2px 8px);
+}
+
+.presentation-scale-feature {
+    --presentation-action-font-size: var(--spotlight-action-font-size, var(--ui-typescale-label-large-size));
+    --presentation-action-icon-size: var(--spotlight-action-icon-size, 1.25rem);
+    --presentation-action-padding: var(--spotlight-action-padding, 0);
+    --presentation-action-min-height: var(--spotlight-action-min-height, 0);
+    --presentation-badge-font-size: var(--spotlight-badge-font-size, var(--ui-typescale-label-medium-size));
+    --presentation-badge-padding: var(--spotlight-badge-padding, var(--ui-ref-space-2) var(--ui-ref-space-3));
+}
+
+@if $topbar-enabled {
+.docs-topbar,
+.evin-topbar {
+    --topbar-surface: var(--ui-color-banner-surface);
+    --topbar-ink: var(--ui-color-banner-on-surface);
+    --topbar-outline: var(--ui-color-banner-outline);
+    --topbar-action: var(--topbar-ink);
+    --topbar-action-ink: var(--topbar-action);
+    --topbar-action-ink-hover: var(--topbar-action-ink);
+    --topbar-action-surface: transparent;
+    --topbar-action-surface-hover: transparent;
+    --topbar-action-outline: transparent;
+    --topbar-action-shadow: none;
+    --topbar-action-border-width: 0;
+    --topbar-action-min-height: 0;
+    --topbar-action-padding: 0;
+    --topbar-action-radius: 0;
+    --topbar-action-font-size: var(--ui-typescale-label-medium-size);
+    --topbar-action-icon-size: 1rem;
+    --topbar-badge-font-size: .6875rem;
+    --topbar-badge-padding: 2px 8px;
+    --topbar-close: var(--topbar-ink);
+    --topbar-badge-surface: color-mix(in srgb, var(--topbar-ink) 14%, transparent);
+    --topbar-badge-ink: var(--topbar-ink);
+    --topbar-badge-outline: color-mix(in srgb, var(--topbar-ink) 28%, transparent);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 100%;
+    padding-inline: var(--ui-ref-space-4) var(--ui-ref-space-12);
+    height: var(--ui-layout-topbar-height);
+    min-height: var(--ui-layout-topbar-height);
+    overflow: hidden;
+    isolation: isolate;
+    background: var(--topbar-surface);
+    border-bottom: 1px solid var(--topbar-outline);
+    box-shadow: var(--ui-elevation-level-2);
+    color: var(--topbar-ink);
+    font-size: var(--ui-typescale-body-small-size);
+    font-weight: 500;
+    transition: height var(--ui-motion-duration-medium) var(--ui-motion-easing-standard), opacity var(--ui-motion-duration-medium) var(--ui-motion-easing-standard), transform var(--ui-motion-duration-medium) var(--ui-motion-easing-standard);
+}
+
+.docs-topbar.is-hidden,
+.evin-topbar.is-hidden { height: 0; min-height: 0; opacity: 0; transform: translateY(-6px); border-bottom-width: 0; }
+.topbar-content { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: var(--ui-ref-space-3); min-width: 0; max-width: min(100%, 1040px); line-height: 1; white-space: nowrap; }
+.topbar-message,
+.docs-topbar p,
+.evin-topbar p { min-width: 0; margin-block: 0 !important; overflow: hidden; color: var(--topbar-ink) !important; font: inherit; line-height: 1.35; text-overflow: ellipsis; }
+.topbar-badge { display: inline-flex; align-items: center; flex: 0 0 auto; padding: var(--topbar-badge-padding, 2px 8px); border: 1px solid var(--topbar-badge-outline); border-radius: var(--ui-shape-corner-small); background: var(--topbar-badge-surface) !important; color: var(--topbar-badge-ink) !important; font-size: var(--topbar-badge-font-size, .6875rem); font-weight: 700; letter-spacing: .06em; line-height: 1; text-transform: uppercase; }
+.topbar-badge span, .topbar-badge * { color: var(--topbar-badge-ink) !important; }
+.topbar-action { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; box-sizing: border-box; min-height: var(--topbar-action-min-height); padding: var(--topbar-action-padding); border: var(--topbar-action-border-width) solid var(--topbar-action-outline); border-radius: var(--topbar-action-radius); background: var(--topbar-action-surface); box-shadow: var(--topbar-action-shadow); color: var(--topbar-action-ink) !important; font-size: var(--topbar-action-font-size, var(--ui-typescale-label-medium-size)); font-weight: 700; line-height: 1.25; text-decoration: none !important; text-shadow: none; }
+.topbar-action span, .topbar-action svg { color: var(--topbar-action-ink) !important; }
+.topbar-action:hover, .topbar-action:focus-visible { background: var(--topbar-action-surface-hover); color: var(--topbar-action-ink-hover) !important; }
+.topbar-action:hover span, .topbar-action:focus-visible span, .topbar-action:hover svg, .topbar-action:focus-visible svg { color: var(--topbar-action-ink-hover) !important; text-decoration: underline; }
+.topbar-action:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.topbar-action .docs-icon,
+.topbar-action .evin-icon { width: var(--topbar-action-icon-size, 1rem); height: var(--topbar-action-icon-size, 1rem); }
+.topbar-close {
+    position: absolute;
+    z-index: 4;
+    right: var(--ui-ref-space-3);
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--ui-shape-corner-full);
+    background: transparent;
+    color: var(--topbar-close) !important;
+    cursor: pointer;
+    opacity: .8;
+    transition: opacity var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+                background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+                transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+}
+.topbar-close:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--topbar-close) 18%, transparent);
+    transform: translateY(-50%) scale(1.08);
+}
+.topbar-close:focus-visible {
+    opacity: 1;
+    outline: 2px solid var(--topbar-close);
+    outline-offset: 2px;
+}
+.topbar-close .docs-icon,
+.topbar-close .evin-icon,
+.topbar-close svg {
+    width: 16px;
+    height: 16px;
+    color: var(--topbar-close) !important;
+    pointer-events: none;
+}
+}
+
+.presentation-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+@if $topbar-enabled { .topbar-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; } }
+
+/* Scientific / industrial collection. */
+@if index($presentation-variants, "deepspace") {
+.topbar--deepspace, .presentation-surface--deepspace {
+    --topbar-surface: var(--ui-topbar-deepspace-surface);
+    --topbar-ink: var(--ui-topbar-deepspace-ink);
+    --topbar-outline: var(--ui-topbar-deepspace-outline);
+    --topbar-action: var(--ui-topbar-deepspace-cyan);
+    --topbar-action-ink: var(--ui-topbar-deepspace-cyan);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-close: var(--ui-topbar-deepspace-purple);
+    --topbar-badge-surface: var(--ui-topbar-deepspace-badge-surface);
+    --topbar-badge-ink: var(--ui-topbar-deepspace-badge);
+    --topbar-badge-outline: var(--ui-topbar-deepspace-badge-outline);
+}
+.topbar--deepspace .topbar-layer-one, .presentation-surface.topbar--deepspace .presentation-layer-one, .presentation-surface--deepspace .presentation-layer-one { background-image: radial-gradient(1px 1px at 5% 35%, var(--ui-topbar-white), transparent), radial-gradient(1px 1px at 24% 62%, var(--ui-topbar-deepspace-purple), transparent), radial-gradient(1px 1px at 68% 25%, var(--ui-topbar-deepspace-cyan), transparent), radial-gradient(1px 1px at 93% 64%, var(--ui-topbar-white), transparent); background-size: 280px 44px; }
+.topbar--deepspace .topbar-layer-two, .presentation-surface.topbar--deepspace .presentation-layer-two, .presentation-surface--deepspace .presentation-layer-two { background: radial-gradient(ellipse at 50% 50%, var(--ui-topbar-deepspace-purple-soft), var(--ui-topbar-deepspace-cyan-soft) 38%, transparent 68%); filter: blur(8px); }
+}
+
+@if index($presentation-variants, "collider") {
+.topbar--collider, .presentation-surface--collider {
+    --topbar-surface: var(--ui-topbar-collider-surface);
+    --topbar-ink: var(--ui-topbar-ink-light);
+    --topbar-outline: var(--ui-topbar-collider-outline);
+    --topbar-action: var(--ui-topbar-collider-link);
+    --topbar-action-ink: var(--ui-topbar-collider-link);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-close: var(--ui-topbar-collider-cyan);
+    --topbar-badge-surface: var(--ui-topbar-collider-badge-surface);
+    --topbar-badge-ink: var(--ui-topbar-collider-cyan);
+    --topbar-badge-outline: var(--ui-topbar-collider-badge-outline);
+}
+.topbar--collider .topbar-layer-one, .presentation-surface.topbar--collider .presentation-layer-one, .presentation-surface--collider .presentation-layer-one { top: 0; bottom: auto; height: 1px; background: var(--ui-topbar-collider-track); }
+.topbar--collider .topbar-layer-two, .presentation-surface.topbar--collider .presentation-layer-two, .presentation-surface--collider .presentation-layer-two { top: -3px; bottom: auto; width: 140px; height: 8px; margin-left: -140px; background: linear-gradient(90deg, transparent, var(--ui-topbar-collider-cyan), var(--ui-topbar-collider-pink), transparent); filter: blur(3px); opacity: .42; animation: topbar-particle 3.2s cubic-bezier(.4, 0, .2, 1) infinite; }
+@keyframes topbar-particle { from { transform: translateX(-20vw); opacity: 0; } 20%, 80% { opacity: .42; } to { transform: translateX(120vw); opacity: 0; } }
+}
+
+@if index($presentation-variants, "industrial") {
+.topbar--industrial, .presentation-surface--industrial {
+    --topbar-surface: var(--ui-topbar-industrial-surface);
+    --topbar-ink: var(--ui-topbar-industrial-ink);
+    --topbar-outline: var(--ui-topbar-industrial-outline);
+    --topbar-action: var(--ui-topbar-industrial-action);
+    --topbar-action-ink: var(--ui-topbar-industrial-action);
+    --topbar-action-ink-hover: var(--ui-topbar-black);
+    --topbar-action-surface: var(--ui-topbar-industrial-action-surface);
+    --topbar-action-surface-hover: var(--ui-topbar-industrial-amber);
+    --topbar-action-outline: var(--ui-topbar-industrial-amber);
+    --topbar-action-border-width: 1px;
+    --topbar-action-padding: 2px 10px;
+    --topbar-action-radius: var(--ui-shape-corner-extra-small);
+    --topbar-close: var(--ui-topbar-industrial-amber);
+    --topbar-badge-surface: var(--ui-topbar-industrial-amber);
+    --topbar-badge-ink: var(--ui-topbar-black);
+    --topbar-badge-outline: var(--ui-topbar-industrial-amber);
+}
+.start-spotlight.presentation-surface.topbar--industrial, .start-spotlight.presentation-surface--industrial, .presentation-scale-feature.presentation-surface--industrial { --spotlight-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); --presentation-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); }
+.topbar--industrial .topbar-layer-one, .presentation-surface.topbar--industrial .presentation-layer-one, .presentation-surface--industrial .presentation-layer-one { right: auto; width: 24px; background: repeating-linear-gradient(-45deg, var(--ui-topbar-industrial-amber) 0 6px, var(--ui-topbar-industrial-stripe) 6px 12px); }
+.topbar--industrial .topbar-layer-two, .presentation-surface.topbar--industrial .presentation-layer-two, .presentation-surface--industrial .presentation-layer-two { display: none; }
+.topbar--industrial .topbar-badge, .topbar--industrial .topbar-action, .presentation-surface.topbar--industrial .start-spotlight-badge, .presentation-surface.topbar--industrial .start-spotlight-action, .presentation-surface--industrial .start-spotlight-badge, .presentation-surface--industrial .start-spotlight-action { font-family: var(--ui-typescale-font-monospace); font-weight: 700; }
+.topbar--industrial .topbar-action:hover span, .presentation-surface.topbar--industrial .start-spotlight-action:hover span, .presentation-surface--industrial .start-spotlight-action:hover span { text-decoration: none; }
+}
+
+@if index($presentation-variants, "genome") {
+.topbar--genome, .presentation-surface--genome {
+    --topbar-surface: radial-gradient(ellipse at 12% 50%, var(--ui-topbar-genome-glow), transparent 40%), var(--ui-topbar-genome-surface);
+    --topbar-ink: var(--ui-topbar-genome-ink);
+    --topbar-outline: var(--ui-topbar-genome-outline);
+    --topbar-action: var(--ui-topbar-genome-action);
+    --topbar-action-ink: var(--ui-topbar-genome-action);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-close: var(--ui-topbar-genome-action);
+    --topbar-badge-surface: var(--ui-topbar-genome-glow);
+    --topbar-badge-ink: var(--ui-topbar-genome-ink);
+    --topbar-badge-outline: var(--ui-topbar-genome-action);
+}
+.topbar--genome .topbar-layer-one, .presentation-surface.topbar--genome .presentation-layer-one, .presentation-surface--genome .presentation-layer-one { left: 8%; right: auto; width: 180px; background: radial-gradient(circle, var(--ui-topbar-genome-pulse), transparent 60%); opacity: .6; animation: topbar-pulse 4s ease-in-out infinite; }
+.topbar--genome .topbar-layer-two, .presentation-surface.topbar--genome .presentation-layer-two, .presentation-surface--genome .presentation-layer-two { left: auto; right: 14%; width: 120px; background: radial-gradient(circle, var(--ui-topbar-genome-accent), transparent 65%); opacity: .4; animation: topbar-pulse 4s ease-in-out infinite 2s; }
+@keyframes topbar-pulse { 0%, 100% { transform: scale(1); opacity: .4; } 50% { transform: scale(1.35); opacity: .75; } }
+}
+
+@if index($presentation-variants, "blueprint") {
+.topbar--blueprint, .presentation-surface--blueprint {
+    --topbar-surface: var(--ui-topbar-blueprint-surface);
+    --topbar-ink: var(--ui-topbar-blueprint-ink);
+    --topbar-outline: var(--ui-topbar-blueprint-outline);
+    --topbar-action: var(--ui-topbar-blueprint-cyan);
+    --topbar-action-ink: var(--ui-topbar-blueprint-cyan);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-close: var(--ui-topbar-blueprint-cyan);
+    --topbar-badge-surface: var(--ui-topbar-blueprint-glass);
+    --topbar-badge-ink: var(--ui-topbar-blueprint-cyan);
+    --topbar-badge-outline: var(--ui-topbar-blueprint-glass-outline);
+    font-family: var(--ui-typescale-font-monospace);
+}
+.topbar--blueprint .topbar-layer-one, .presentation-surface.topbar--blueprint .presentation-layer-one, .presentation-surface--blueprint .presentation-layer-one { background-image: linear-gradient(var(--ui-topbar-blueprint-grid) 1px, transparent 1px), linear-gradient(90deg, var(--ui-topbar-blueprint-grid) 1px, transparent 1px); background-size: 20px 20px; }
+.topbar--blueprint .topbar-layer-two, .presentation-surface.topbar--blueprint .presentation-layer-two, .presentation-surface--blueprint .presentation-layer-two { background-image: linear-gradient(var(--ui-topbar-blueprint-grid-fine) 1px, transparent 1px), linear-gradient(90deg, var(--ui-topbar-blueprint-grid-fine) 1px, transparent 1px); background-size: 4px 4px; }
+}
+
+@if index($presentation-variants, "crt") {
+.topbar--crt, .presentation-surface--crt {
+    --topbar-surface: var(--ui-topbar-crt-surface);
+    --topbar-ink: var(--ui-topbar-crt-ink);
+    --topbar-outline: var(--ui-topbar-crt-outline);
+    --topbar-action: var(--ui-topbar-crt-action);
+    --topbar-action-ink: var(--ui-topbar-black);
+    --topbar-action-ink-hover: var(--ui-topbar-black);
+    --topbar-action-surface: var(--ui-topbar-crt-action);
+    --topbar-action-surface-hover: var(--ui-topbar-crt-action-hover);
+    --topbar-action-outline: transparent;
+    --topbar-action-shadow: var(--ui-topbar-crt-action-shadow);
+    --topbar-action-border-width: 1px;
+    --topbar-action-padding: 2px 8px;
+    --topbar-action-radius: var(--ui-shape-corner-extra-small);
+    --topbar-close: var(--ui-topbar-crt-ink);
+    --topbar-badge-surface: transparent;
+    --topbar-badge-ink: var(--ui-topbar-crt-ink);
+    --topbar-badge-outline: var(--ui-topbar-crt-outline);
+    font-family: var(--ui-typescale-font-monospace);
+    font-weight: 700;
+    text-shadow: 0 0 4px var(--ui-topbar-crt-glow);
+}
+.topbar--crt .topbar-layer-one, .presentation-surface.topbar--crt .presentation-layer-one, .presentation-surface--crt .presentation-layer-one { background: repeating-linear-gradient(0deg, var(--ui-topbar-crt-scan) 0 1px, transparent 1px 3px); }
+.topbar--crt .topbar-layer-two, .presentation-surface.topbar--crt .presentation-layer-two, .presentation-surface--crt .presentation-layer-two { background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--ui-topbar-crt-action) 16%, transparent), transparent 62%); }
+.start-spotlight.presentation-surface.topbar--crt, .start-spotlight.presentation-surface--crt, .presentation-scale-feature.presentation-surface--crt { --presentation-text-shadow: 0 0 4px var(--ui-topbar-crt-glow); --spotlight-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); --presentation-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); }
+.topbar--crt .topbar-action:hover span, .presentation-surface.topbar--crt .start-spotlight-action:hover span, .presentation-surface--crt .start-spotlight-action:hover span { text-decoration: none; }
+}
+
+/* Modern / abstract collection. */
+@if index($presentation-variants, "aurora") {
+.topbar--aurora, .presentation-surface--aurora {
+    --topbar-surface: var(--ui-topbar-aurora-surface);
+    --topbar-ink: var(--ui-topbar-white);
+    --topbar-outline: var(--ui-topbar-aurora-outline);
+    --topbar-action: var(--ui-topbar-white);
+    --topbar-action-ink: var(--ui-topbar-white);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-close: var(--ui-topbar-white);
+    --topbar-badge-surface: var(--ui-topbar-aurora-glass);
+    --topbar-badge-ink: var(--ui-topbar-white);
+    --topbar-badge-outline: var(--ui-topbar-aurora-glass-outline);
+}
+.topbar--aurora .topbar-layer-one, .presentation-surface.topbar--aurora .presentation-layer-one, .presentation-surface--aurora .presentation-layer-one { inset: -70% -10%; background: radial-gradient(circle at 20% 50%, var(--ui-topbar-aurora-indigo), transparent 35%), radial-gradient(circle at 50% 30%, var(--ui-topbar-aurora-pink), transparent 40%), radial-gradient(circle at 80% 60%, var(--ui-topbar-aurora-blue), transparent 35%); filter: blur(22px); animation: topbar-aurora 12s ease infinite alternate; }
+@keyframes topbar-aurora { from { transform: translate(0, 0) rotate(0); } to { transform: translate(-30px, 10px) rotate(4deg); } }
+}
+
+@if index($presentation-variants, "cyber") {
+.topbar--cyber, .presentation-surface--cyber {
+    --topbar-surface: var(--ui-topbar-cyber-surface);
+    --topbar-ink: var(--ui-topbar-cyber-ink);
+    --topbar-outline: var(--ui-topbar-cyber-outline);
+    --topbar-action: var(--ui-topbar-cyber-green);
+    --topbar-action-ink: var(--ui-topbar-cyber-action-ink);
+    --topbar-action-ink-hover: var(--ui-topbar-cyber-action-ink);
+    --topbar-action-surface: var(--ui-topbar-cyber-green);
+    --topbar-action-surface-hover: var(--ui-topbar-cyber-action-hover);
+    --topbar-action-outline: transparent;
+    --topbar-action-border-width: 1px;
+    --topbar-action-padding: 2px 10px;
+    --topbar-action-radius: var(--ui-shape-corner-extra-small);
+    --topbar-close: var(--ui-topbar-cyber-code);
+    --topbar-badge-surface: var(--ui-topbar-cyber-code-surface);
+    --topbar-badge-ink: var(--ui-topbar-cyber-code);
+    --topbar-badge-outline: var(--ui-topbar-cyber-code-outline);
+    font-family: var(--ui-typescale-font-monospace);
+    font-weight: 700;
+}
+.start-spotlight.presentation-surface.topbar--cyber, .start-spotlight.presentation-surface--cyber, .presentation-scale-feature.presentation-surface--cyber { --spotlight-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); --presentation-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); }
+.topbar--cyber .topbar-layer-one, .presentation-surface.topbar--cyber .presentation-layer-one, .presentation-surface--cyber .presentation-layer-one { background-image: linear-gradient(var(--ui-topbar-cyber-grid) 1px, transparent 1px), linear-gradient(90deg, var(--ui-topbar-cyber-grid) 1px, transparent 1px); background-size: 16px 16px; }
+.topbar--cyber .topbar-layer-two, .presentation-surface.topbar--cyber .presentation-layer-two, .presentation-surface--cyber .presentation-layer-two { left: 12%; right: auto; width: 1px; background: var(--ui-topbar-cyber-green); box-shadow: 0 0 16px var(--ui-topbar-cyber-green); }
+.topbar--cyber .topbar-action:hover span, .presentation-surface.topbar--cyber .start-spotlight-action:hover span, .presentation-surface--cyber .start-spotlight-action:hover span { text-decoration: none; }
+}
+
+@if index($presentation-variants, "prismatic") {
+.topbar--prismatic, .presentation-surface--prismatic {
+    --topbar-surface: var(--ui-topbar-prismatic-surface);
+    --topbar-ink: var(--ui-topbar-white);
+    --topbar-outline: var(--ui-topbar-prismatic-outline);
+    --topbar-action: var(--ui-topbar-prismatic-link);
+    --topbar-action-ink: var(--ui-topbar-prismatic-link);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-close: var(--ui-topbar-prismatic-close);
+    --topbar-badge-surface: linear-gradient(90deg, var(--ui-topbar-prismatic-badge-start), var(--ui-topbar-prismatic-badge-end));
+    --topbar-badge-ink: var(--ui-topbar-white);
+    --topbar-badge-outline: transparent;
+}
+.topbar--prismatic .topbar-layer-one, .presentation-surface.topbar--prismatic .presentation-layer-one, .presentation-surface--prismatic .presentation-layer-one { inset: auto 0 0; height: 2px; background: linear-gradient(90deg, var(--ui-topbar-prismatic-pink), var(--ui-topbar-prismatic-purple), var(--ui-topbar-prismatic-blue), var(--ui-topbar-prismatic-cyan), var(--ui-topbar-prismatic-pink)); background-size: 300% 100%; animation: topbar-gradient 5s linear infinite; }
+@keyframes topbar-gradient { to { background-position: 300% 0; } }
+}
+
+@if index($presentation-variants, "brutalist") {
+.topbar--brutalist, .presentation-surface--brutalist {
+    --topbar-surface: var(--ui-topbar-brutalist-surface);
+    --topbar-ink: var(--ui-topbar-black);
+    --topbar-outline: var(--ui-topbar-black);
+    --topbar-action: var(--ui-topbar-white);
+    --topbar-action-ink: var(--ui-topbar-white);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-action-surface: var(--ui-topbar-black);
+    --topbar-action-surface-hover: var(--ui-topbar-brutalist-action-hover);
+    --topbar-action-outline: var(--ui-topbar-black);
+    --topbar-action-shadow: 2px 2px 0 var(--ui-topbar-white);
+    --topbar-action-border-width: 1px;
+    --topbar-action-padding: 3px 12px;
+    --topbar-action-radius: 0;
+    --topbar-close: var(--ui-topbar-black);
+    --topbar-badge-surface: var(--ui-topbar-black);
+    --topbar-badge-ink: var(--ui-topbar-brutalist-surface);
+    --topbar-badge-outline: var(--ui-topbar-black);
+}
+.start-spotlight.presentation-surface.topbar--brutalist, .start-spotlight.presentation-surface--brutalist, .presentation-scale-feature.presentation-surface--brutalist { --spotlight-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-6); --presentation-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-6); }
+@if $topbar-enabled {
+.docs-topbar.topbar--brutalist,
+.evin-topbar.topbar--brutalist { --topbar-ink: var(--ui-topbar-black); border-bottom-width: 2px; box-shadow: 4px 4px 0 var(--ui-topbar-black); }
+}
+.topbar--brutalist .topbar-layer-one, .presentation-surface.topbar--brutalist .presentation-layer-one, .presentation-surface--brutalist .presentation-layer-one { background-image: linear-gradient(45deg, var(--ui-topbar-brutalist-pattern) 25%, transparent 25%); background-size: 6px 6px; }
+.topbar--brutalist .topbar-badge, .topbar--brutalist .topbar-action, .presentation-surface.topbar--brutalist .start-spotlight-badge, .presentation-surface.topbar--brutalist .start-spotlight-action, .presentation-surface--brutalist .start-spotlight-badge, .presentation-surface--brutalist .start-spotlight-action { border-radius: 0; font-weight: 700; text-transform: uppercase; }
+.topbar--brutalist .topbar-action:hover, .presentation-surface.topbar--brutalist .start-spotlight-action:hover, .presentation-surface--brutalist .start-spotlight-action:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--ui-topbar-white) !important; }
+.topbar--brutalist .topbar-action:hover span, .presentation-surface.topbar--brutalist .start-spotlight-action:hover span, .presentation-surface--brutalist .start-spotlight-action:hover span { text-decoration: none; }
+}
+
+@if index($presentation-variants, "holo") {
+.topbar--holo, .presentation-surface--holo {
+    --topbar-surface: linear-gradient(135deg, var(--ui-topbar-holo-surface-start), var(--ui-topbar-holo-surface-end));
+    --topbar-ink: var(--ui-topbar-white);
+    --topbar-outline: var(--ui-topbar-holo-outline);
+    --topbar-action: var(--ui-topbar-white);
+    --topbar-action-ink: var(--ui-topbar-white);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-action-surface: var(--ui-topbar-holo-glass);
+    --topbar-action-surface-hover: var(--ui-topbar-holo-glass-hover);
+    --topbar-action-outline: var(--ui-topbar-holo-glass-outline);
+    --topbar-action-border-width: 1px;
+    --topbar-action-padding: 3px 10px;
+    --topbar-action-radius: var(--ui-shape-corner-full);
+    --topbar-close: var(--ui-topbar-holo-close);
+    --topbar-badge-surface: var(--ui-topbar-holo-glass);
+    --topbar-badge-ink: var(--ui-topbar-holo-ink-start);
+    --topbar-badge-outline: var(--ui-topbar-holo-glass-outline);
+}
+.start-spotlight.presentation-surface.topbar--holo, .start-spotlight.presentation-surface--holo, .presentation-scale-feature.presentation-surface--holo { --spotlight-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); --presentation-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); }
+.topbar--holo .topbar-layer-one, .presentation-surface.topbar--holo .presentation-layer-one, .presentation-surface--holo .presentation-layer-one { background: radial-gradient(circle at 20% 50%, var(--ui-topbar-holo-gold), transparent 28%), radial-gradient(circle at 55% 50%, var(--ui-topbar-holo-magenta), transparent 30%), radial-gradient(circle at 80% 50%, var(--ui-topbar-holo-cyan), transparent 28%); }
+.topbar--holo .topbar-layer-two, .presentation-surface.topbar--holo .presentation-layer-two, .presentation-surface--holo .presentation-layer-two { background: linear-gradient(110deg, transparent 20%, var(--ui-topbar-holo-sheen) 40%, var(--ui-topbar-holo-gold) 45%, var(--ui-topbar-holo-magenta) 50%, var(--ui-topbar-holo-cyan) 55%, var(--ui-topbar-holo-sheen) 60%, transparent 80%); background-size: 200% 100%; animation: topbar-sheen 6s linear infinite; }
+.topbar--holo .topbar-message { background: linear-gradient(90deg, var(--ui-topbar-holo-ink-start), var(--ui-topbar-holo-ink-end)); background-clip: text; color: transparent; }
+.start-spotlight.presentation-surface.topbar--holo h2, .start-spotlight.presentation-surface--holo h2 { background: linear-gradient(90deg, var(--ui-topbar-holo-ink-start), var(--ui-topbar-holo-ink-end)); background-clip: text; color: transparent !important; }
+.topbar--holo .topbar-action:hover span, .presentation-surface.topbar--holo .start-spotlight-action:hover span, .presentation-surface--holo .start-spotlight-action:hover span { text-decoration: none; }
+@keyframes topbar-sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+}
+
+@if index($presentation-variants, "geo") {
+.topbar--geo, .presentation-surface--geo {
+    --topbar-surface: var(--ui-topbar-geo-surface);
+    --topbar-ink: var(--ui-topbar-geo-ink);
+    --topbar-outline: var(--ui-topbar-geo-outline);
+    --topbar-action: var(--ui-topbar-geo-orange);
+    --topbar-action-ink: var(--ui-topbar-geo-orange);
+    --topbar-action-ink-hover: var(--ui-topbar-geo-action-hover);
+    --topbar-close: var(--ui-topbar-geo-close);
+    --topbar-badge-surface: var(--ui-topbar-geo-orange);
+    --topbar-badge-ink: var(--ui-topbar-white);
+    --topbar-badge-outline: var(--ui-topbar-geo-orange);
+}
+.topbar--geo .topbar-layer-one, .presentation-surface.topbar--geo .presentation-layer-one, .presentation-surface--geo .presentation-layer-one { right: auto; width: 140px; background: repeating-linear-gradient(-45deg, var(--ui-topbar-geo-orange) 0 6px, var(--ui-topbar-geo-blue) 6px 12px, var(--ui-topbar-geo-purple) 12px 18px); mask-image: linear-gradient(90deg, var(--ui-topbar-black) 40%, transparent); -webkit-mask-image: linear-gradient(90deg, var(--ui-topbar-black) 40%, transparent); opacity: .8; }
+.topbar--geo .topbar-layer-two, .presentation-surface.topbar--geo .presentation-layer-two, .presentation-surface--geo .presentation-layer-two { display: none; }
+}
+
+@if index($presentation-variants, "luxury") {
+.topbar--luxury, .presentation-surface--luxury {
+    --topbar-surface: var(--ui-topbar-luxury-surface);
+    --topbar-ink: var(--ui-topbar-ink-light);
+    --topbar-outline: var(--ui-topbar-luxury-outline);
+    --topbar-action: var(--ui-topbar-luxury-link);
+    --topbar-action-ink: var(--ui-topbar-luxury-link);
+    --topbar-action-ink-hover: var(--ui-topbar-white);
+    --topbar-close: var(--ui-topbar-luxury-close);
+    --topbar-badge-surface: transparent;
+    --topbar-badge-ink: var(--ui-topbar-luxury-sparkle);
+    --topbar-badge-outline: var(--ui-topbar-luxury-sparkle);
+}
+.topbar--luxury .topbar-layer-one, .presentation-surface.topbar--luxury .presentation-layer-one, .presentation-surface--luxury .presentation-layer-one { width: 280px; margin-inline: auto; background: radial-gradient(ellipse at center, var(--ui-topbar-luxury-glow), transparent 70%); }
+.topbar--luxury .topbar-layer-two, .presentation-surface.topbar--luxury .presentation-layer-two, .presentation-surface--luxury .presentation-layer-two { background-image: radial-gradient(var(--ui-topbar-luxury-sparkle) 1px, transparent 1px); background-size: 56px 44px; opacity: .55; }
+}
+
+@if $topbar-enabled {
+@media (max-width: 600px) {
+    .topbar-content { justify-content: flex-start; gap: var(--ui-ref-space-2); max-width: calc(100% - 48px); }
+    .topbar-action { display: none; }
+    .topbar-badge { max-width: 7rem; overflow: hidden; text-overflow: ellipsis; }
+}
+
+@media (prefers-reduced-motion: reduce) { .docs-topbar, .docs-topbar *, .evin-topbar, .evin-topbar * { transition-duration: .01ms !important; animation: none !important; } }
+}
+}

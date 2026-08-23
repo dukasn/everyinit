@@ -1,0 +1,16 @@
+<div class="code-surface"{{data_language}}>
+  <div class="code-header">
+    <span class="lang-label">{{display_language}}</span>
+    <div class="code-actions">
+      <button class="icon-btn btn-download" type="button" aria-label="Download code" title="Download code" data-action="code:download" data-extension="{{extension}}" data-language="{{display_language}}">
+        <svg class="evin-icon" aria-hidden="true"><use href="#icon-download"></use></svg>
+      </button>
+      <button class="icon-btn btn-copy" type="button" aria-label="Copy code" title="Copy code" data-action="code:copy">
+        <svg class="evin-icon" aria-hidden="true"><use href="#icon-copy"></use></svg>
+      </button>
+    </div>
+  </div>
+  <div class="code-scroll">
+    <pre><code>{{code}}</code></pre>
+  </div>
+</div>

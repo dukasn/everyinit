@@ -1,0 +1,23 @@
+[package]
+name = "evin-pipeline"
+version = { workspace = true }
+edition = { workspace = true }
+publish = { workspace = true }
+
+[dependencies]
+async-trait = { workspace = true }
+evin-action-sdk = { workspace = true }
+serde = { workspace = true }
+marked-yaml = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+evin-config = { workspace = true }
+evin-locales = { workspace = true }
+evin-gitrules = { workspace = true }
+evin-yaml = { workspace = true }
+evin-diagnostic = { workspace = true }
+regex.workspace = true
+evin-dotenv = { workspace = true }
+tokio-util = { workspace = true }
+libc = { workspace = true }
+esh = { workspace = true }

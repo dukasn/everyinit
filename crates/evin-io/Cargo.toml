@@ -1,0 +1,12 @@
+[package]
+name = "evin-io"
+version = { workspace = true }
+edition = { workspace = true }
+publish = { workspace = true }
+
+[dependencies]
+thiserror = { workspace = true }
+glob = { workspace = true }
+parking_lot = { workspace = true }
+include_dir = { workspace = true }
+

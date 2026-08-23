@@ -1,0 +1,27 @@
+[package]
+name = "evin-doc"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "Core AST, parsers, and multi-format serializers for Evin documentation"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+pulldown-cmark = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }
+unicode-width = { workspace = true }
+globset = { workspace = true }
+latex2mathml = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "compiler"
+harness = false

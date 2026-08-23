@@ -1,0 +1,20 @@
+[package]
+name = "evin-ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+console.workspace = true
+crossterm.workspace = true
+textwrap.workspace = true
+tokio.workspace = true
+human_format.workspace = true
+async-trait.workspace = true
+evin-diagnostic = { workspace = true }
+evin-locales = { workspace = true }
+evin-io = { workspace = true }
+
+

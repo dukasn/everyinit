@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="<page-language></page-language>" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <page-title></page-title>
+    <page-meta></page-meta>
+    <favicons></favicons>
+    <font-preloads></font-preloads>
+    <depth-prefix></depth-prefix>
+
+    <script>
+        const savedTheme = localStorage.getItem('m3-docs-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+
+    <css></css>
+</head>
+<body data-page-kind="<page-kind></page-kind>">
+    <icons-sprite></icons-sprite>
+    <topbar></topbar>
+
+    <dialog id="searchModal" class="m3-dialog dialog-wide" aria-label="Search documentation">
+        <div class="dialog-header">
+            <div class="dialog-title-group">
+                <svg class="docs-icon dialog-title-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                <div class="dialog-search-field">
+                    <input type="text" id="docs-search-input" class="dialog-search-input" aria-label="Search documentation" autocomplete="off">
+                    <span id="docs-search-prompt" class="dialog-search-prompt" aria-hidden="true"></span>
+                </div>
+            </div>
+            <button id="searchClose" class="icon-btn" type="button" aria-label="Close search" data-action="search:close">
+                <svg class="docs-icon" aria-hidden="true"><use href="#icon-x"></use></svg>
+            </button>
+        </div>
+        <div class="dialog-content" id="docs-search-results"></div>
+    </dialog>
+
+    <div class="app-layout" id="appLayout">
+        <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" tabindex="-1" aria-label="Close navigation" data-action="sidebar:close"></button>
+
+        <aside class="sidebar" id="sidebar" aria-label="Main navigation" aria-hidden="true" tabindex="-1">
+            <div class="sidebar-top">
+                <a class="brand-title" href="<home-href></home-href>" aria-label="Go to <site-brand></site-brand> documentation home">
+                    <brand-logo></brand-logo>
+                    <span><site-brand></site-brand></span>
+                </a>
+            </div>
+
+            <div class="sidebar-divider"></div>
+
+            <nav class="sidebar-middle" aria-label="Main Navigation">
+                <sidebar-nav></sidebar-nav>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <header class="header-toolbar">
+                <div style="display:flex; align-items:center;">
+                    <button id="sidebarToggle" class="icon-btn sidebar-toggle-btn" type="button" aria-expanded="false" aria-controls="sidebar" aria-label="Open navigation" data-action="sidebar:toggle">
+                        <svg class="docs-icon sidebar-icon sidebar-icon-default control-icon-motion" aria-hidden="true"><use href="#icon-layout-sidebar"></use></svg>
+                        <svg class="docs-icon sidebar-icon sidebar-icon-collapse control-icon-motion" aria-hidden="true"><use href="#icon-layout-sidebar-left-collapse"></use></svg>
+                        <svg class="docs-icon sidebar-icon sidebar-icon-expand control-icon-motion" aria-hidden="true"><use href="#icon-layout-sidebar-left-expand"></use></svg>
+                    </button>
+                    <a class="header-brand" href="<home-href></home-href>" aria-label="Go to <site-brand></site-brand> documentation home"><site-brand></site-brand></a>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button id="searchToggle" class="search-trigger" type="button" aria-haspopup="dialog" aria-controls="searchModal" aria-label="Search documentation" title="Search (Ctrl+K)" data-action="search:open">
+                        <svg class="docs-icon control-icon-motion" aria-hidden="true"><use href="#icon-search"></use></svg>
+                        <span class="search-trigger-label">Search</span>
+                        <kbd class="search-kbd">Ctrl K</kbd>
+                    </button>
+
+                    <button id="themeToggle" class="icon-btn theme-toggle-btn" aria-label="Toggle Dark Mode" title="Toggle Theme (Alt+T)" data-action="theme:toggle">
+                        <svg class="docs-icon theme-icon theme-icon-sun" aria-hidden="true"><use href="#icon-brightness-up"></use></svg>
+                        <svg class="docs-icon theme-icon theme-icon-moon" aria-hidden="true"><use href="#icon-moon"></use></svg>
+                        <svg class="docs-icon theme-icon-frame" aria-hidden="true"><use href="#icon-sun-moon"></use></svg>
+                    </button>
+
+                </div>
+            </header>
+
+            <div class="scroll-pane">
+                <div class="document-layout">
+                    <article class="content-inner">
+                        <div class="breadcrumbs" style="margin-bottom:1rem;"><breadcrumbs></breadcrumbs></div>
+                        <inline-toc></inline-toc>
+                        <div class="prose">
+                            <content></content>
+                        </div>
+
+                        <div class="doc-pagination-divider"></div>
+
+                        <pagination></pagination>
+
+                    </article>
+                    <toc-rail></toc-rail>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <search-data></search-data>
+    <search-js></search-js>
+    <component-js></component-js>
+    <live-reload></live-reload>
+</body>
+</html>

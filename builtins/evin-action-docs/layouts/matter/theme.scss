@@ -1,0 +1,14 @@
+$evin-presentation-variants: () !default;
+$evin-topbar-enabled: false !default;
+
+@use "tokens/tokens" with ($presentation-variants: $evin-presentation-variants);
+@use "tokens/motion";
+@use "core/foundation";
+@use "core/layout" with ($topbar-enabled: $evin-topbar-enabled);
+@use "core/sidebar-nav";
+@use "core/controls";
+@use "core/dialog";
+@use "core/search";
+@use "core/toc";
+@use "core/responsive" with ($topbar-enabled: $evin-topbar-enabled);
+@use "core/prose";

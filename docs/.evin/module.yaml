@@ -1,0 +1,42 @@
+module:
+  name: docs
+  version: "1.0.0-canary.100"
+
+values:
+  site_title: "EVIN Documentation"
+  site_url: "https://dukasn.github.io/evin/"
+
+tasks:
+  build:
+    stage: Docs
+    description: "Generate static documentation site and audit links"
+    needs:
+      - w:build
+    steps:
+      - uses: evin/docs@v1
+        with:
+          title: "${site_title}"
+          site_url: "${site_url}"
+          strict_filenames: true
+
+  serve:
+    stage: Docs
+    description: "Serve live-reloading documentation dev server"
+    needs:
+      - w:build
+    # Restart the complete task pipeline when EVIN itself changes. Changes to
+    # docs/ remain handled by the docs action's faster internal live reload.
+    watch:
+      paths:
+        - crates/**
+        - builtins/**
+        - Cargo.toml
+        - Cargo.lock
+      debounce: 300ms
+    steps:
+      - uses: evin/docs@v1
+        with:
+          mode: serve
+          title: "${site_title}"
+          site_url: "${site_url}"
+          strict_filenames: true

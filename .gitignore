@@ -10,15 +10,28 @@
 !/crates/
 !/.evin/
 !/builtins/
+!/locales/
 !/CHANGELOG.md
 !/LICENSE
+!/package.json
+!/package-lock.json
+!/playwright.config.mjs
+!/scripts/
+!/tests/
 
 # (progress.md and STACK.md remain excluded by the /* rule)
 
-# Standard Rust ignores for allowed directories
+# Standard Rust & editor ignores for allowed directories
 target/
+node_modules/
+__pycache__/
+*.pyc
 **/*.rs.bk
 **/*.log
 **/*.tmp
 **/*.bak
+**/*~
+**/*.swp
+**/.DS_Store
 **/.evin/trace.json
+**/.evin/build/

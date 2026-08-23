@@ -1,0 +1,174 @@
+.start-feature {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+    align-items: start;
+    gap: var(--ui-start-section-layout-gap);
+    margin: 0 0 var(--ui-start-section-space-after);
+    padding: 0 0 clamp(48px, 6vw, 88px) 0;
+
+    &--left .start-feature-content { order: 2; }
+    &--left .start-feature-aside { order: 1; }
+
+    /* Matter Sub-atomic Section Divider Line */
+    &::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 5%;
+        right: 5%;
+        height: 1px;
+        background: linear-gradient(
+            90deg,
+            transparent 0%,
+            color-mix(in srgb, var(--ui-color-outline-variant) 30%, transparent) 15%,
+            var(--ui-color-outline-variant) 50%,
+            color-mix(in srgb, var(--ui-color-outline-variant) 30%, transparent) 85%,
+            transparent 100%
+        );
+        opacity: 0.8;
+    }
+
+    /* Matter Central Quantum Focal Node */
+    &::before {
+        content: '';
+        position: absolute;
+        bottom: -2.5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 6px;
+        height: 6px;
+        border-radius: var(--ui-shape-corner-full);
+        background-color: var(--start-accent);
+        box-shadow:
+            0 0 6px color-mix(in srgb, var(--start-accent) 75%, transparent),
+            0 0 16px color-mix(in srgb, var(--start-accent) 40%, transparent);
+        opacity: 0.85;
+        z-index: 1;
+        pointer-events: none;
+    }
+}
+
+.start-feature-content {
+    min-width: 0;
+    align-self: start;
+    justify-self: start;
+    text-align: left;
+
+    h2 {
+        margin: var(--ui-ref-space-4) 0 var(--ui-ref-space-4) 0 !important;
+        color: var(--ui-color-on-surface);
+        font-size: clamp(1.75rem, 3vw, 2.5rem);
+        line-height: 1.12;
+        letter-spacing: -0.04em;
+    }
+
+    p {
+        margin: 0;
+        color: var(--ui-color-on-surface-variant);
+        font-size: var(--ui-start-section-description-size);
+        line-height: var(--ui-start-section-description-line-height);
+    }
+}
+
+.start-feature-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--ui-ref-space-3);
+    margin-top: var(--ui-ref-space-6);
+}
+
+.start-feature-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 var(--ui-ref-space-5);
+    border: 1px solid var(--ui-color-outline-variant);
+    border-radius: var(--ui-shape-corner-full);
+    background-color: var(--ui-color-surface-container-low);
+    color: var(--ui-color-on-surface);
+    font-size: var(--ui-typescale-body-medium-size);
+    font-weight: 600;
+    text-decoration: none;
+    text-decoration-line: none;
+    box-sizing: border-box;
+    transition:
+        background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+        border-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+        color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+
+    &:hover {
+        border-color: var(--ui-color-outline);
+        background-color: var(--ui-color-surface-container-high);
+        color: var(--ui-color-on-surface);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--ui-color-primary);
+        outline-offset: 2px;
+        border-color: var(--ui-color-outline);
+        background-color: var(--ui-color-surface-container-high);
+        color: var(--ui-color-on-surface);
+    }
+
+    &--secondary {
+        border-color: transparent;
+        background: transparent;
+        color: var(--ui-color-on-surface-variant);
+
+        &:hover {
+            border-color: transparent;
+            background-color: var(--ui-color-state-hover);
+            color: var(--ui-color-on-surface);
+        }
+
+        &:focus-visible {
+            border-color: transparent;
+            background-color: var(--ui-color-state-hover);
+            color: var(--ui-color-on-surface);
+        }
+    }
+}
+
+// The document prose rule intentionally underlines ordinary links; feature
+// actions are controls and must remain visually distinct from body links.
+.prose .start-feature-actions a,
+.prose .start-feature-actions a:hover,
+.prose .start-feature-actions a:focus-visible {
+    text-decoration: none !important;
+    text-decoration-line: none !important;
+    text-decoration-color: transparent !important;
+    text-decoration-thickness: 0 !important;
+    text-underline-offset: 0;
+}
+
+.start-feature-aside {
+    min-width: 0;
+
+    .start-feature-media,
+    .code-surface,
+    .terminal-tape {
+        margin: 0;
+    }
+
+    .start-feature-media {
+        overflow: hidden;
+        border-radius: var(--ui-start-section-media-radius);
+        background: var(--ui-color-surface-container);
+
+        img,
+        video { display: block; width: 100%; height: auto; }
+    }
+}
+
+@media (max-width: 840px) {
+    .start-feature,
+    .start-feature--left {
+        grid-template-columns: 1fr;
+
+        .start-feature-content,
+        .start-feature-aside { order: initial; }
+    }
+}

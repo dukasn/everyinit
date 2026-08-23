@@ -1,0 +1,11 @@
+[package]
+name = "evin-policy"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+evin-diagnostic = { workspace = true }
+evin-git = { workspace = true }
+evin-gitrules = { workspace = true }
+evin-locales = { workspace = true }
+tokio = { workspace = true, features = ["process"] }

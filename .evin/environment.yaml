@@ -1,0 +1,6 @@
+version: 1
+environments:
+  release_name:
+    type: string
+    default: "evin"
+    scopes: ["Internal"]

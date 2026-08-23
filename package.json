@@ -1,0 +1,11 @@
+{
+  "name": "evin-development",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:docs-responsive": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

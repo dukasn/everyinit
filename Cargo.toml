@@ -1,0 +1,91 @@
+[workspace.package]
+version = "1.0.0-canary.100"
+edition = "2024"
+authors = ["Du <github.com/dukasn>"]
+publish = false
+license = "GNU GPLv3"
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/*",
+    "builtins/*",
+]
+
+[workspace.dependencies]
+tokio = { version = "1.53.1", features = ["full"] }
+serde = { version = "1.0.229", features = ["derive"] }
+marked-yaml = { version = "0.8.0", features = ["serde"] }
+serde_json = "1.0.151"
+thiserror = "2.0.19"
+miette = { version = "7.6.0", features = ["fancy"] }
+clap = { version = "4.6.5", features = ["derive"] }
+crossterm = "0.29.0"
+console = "0.16.4"
+strsim = "0.11.1"
+human_format = "1.2.1"
+regex = "1.13.1"
+async-trait = "0.1.91"
+tar = "0.4.46"
+flate2 = "1.1.9"
+glob = "0.3.4"
+globset = "0.4.15"
+rayon = "1.12.0"
+image = { version = "0.25.9", default-features = false, features = ["jpeg", "png"] }
+ravif = { version = "0.12.0", default-features = false }
+semver = "1.0.28"
+fluent-bundle = "0.16"
+unic-langid = { version = "0.9.5", features = ["macros"] }
+include_dir = "0.7.4"
+url = "2.5.8"
+
+
+tempfile = "3.27.0"
+textwrap = "0.16.2"
+chrono = "0.4.45"
+parking_lot = "0.12.3"
+serde_yaml = "0.9.34"
+tokio-util = "0.7.19"
+libc = "0.2.189"
+signal-hook = "0.3.18"
+peak_alloc = "0.3.0"
+humansize = "2.1.3"
+pulldown-cmark = "0.13"
+grass = "0.13.4"
+syntect = { version = "5.2.0", default-features = false, features = ["parsing", "html", "default-syntaxes", "regex-fancy"] }
+criterion = "0.5"
+sha2 = "0.10"
+md-5 = "0.10"
+crc32fast = "1.4"
+base64 = "0.22"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+svgbob = "0.6.7"
+unicode-width = "0.2"
+latex2mathml = "0.2"
+portable-pty = "0.9"
+
+# Internal workspace dependencies
+evin-io = { path = "crates/evin-io" }
+evin-action-sdk = { path = "crates/evin-action-sdk" }
+evin-locales = { path = "crates/evin-locales" }
+evin-action-changelog = { path = "builtins/evin-action-changelog" }
+evin-action-archive = { path = "builtins/evin-action-archive" }
+evin-action-version-bumper = { path = "builtins/evin-action-version-bumper" }
+evin-action-git-release = { path = "builtins/evin-action-git-release" }
+evin-action-docs = { path = "builtins/evin-action-docs" }
+evin-config = { path = "crates/evin-config" }
+evin-pipeline = { path = "crates/evin-pipeline" }
+evin-dotenv = { path = "crates/evin-dotenv" }
+evin-git = { path = "crates/evin-git" }
+evin-gitrules = { path = "crates/evin-gitrules" }
+evin-policy = { path = "crates/evin-policy" }
+evin-yaml = { path = "crates/evin-yaml" }
+evin-diagnostic = { path = "crates/evin-diagnostic" }
+evin-ui = { path = "crates/evin-ui" }
+evin-doc = { path = "crates/evin-doc" }
+esh = { path = "crates/esh" }
+
+[profile.dev.package."*"]
+# Compile dependencies without debug info and with slight optimization to speed up compilation
+debug = 0
+opt-level = 1

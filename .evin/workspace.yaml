@@ -1,0 +1,87 @@
+workspace:
+  name: w
+  version: "1.0.0-canary.100"
+  rules: ".evin/gitrules.yaml"
+  install_hint: "cargo install --path crates/evin"
+  modules:
+    - docs/
+    - crates/evin/
+
+stages:
+  - Build
+  - Check
+  - Test
+  - Docs
+  - Publish
+
+tasks:
+  build:
+    stage: Build
+    description: "Check workspace compilation"
+    presets: [rust]
+    steps:
+      - run: cargo check --workspace
+
+  fmt:
+    stage: Check
+    description: "Enforce Rust formatting"
+    presets: [rust]
+    needs:
+      - build
+    on:
+      hooks:
+        - pre-commit
+    steps:
+      - run: cargo fmt -- --check
+
+  lint:
+    stage: Check
+    description: "Run strict Clippy lints"
+    presets: [rust]
+    needs:
+      - build
+    on:
+      hooks:
+        - pre-commit
+    steps:
+      - run: cargo clippy -- -D warnings
+
+  test:
+    stage: Test
+    description: "Run test suites across all crates"
+    presets: [rust]
+    needs:
+      - fmt
+      - lint
+    on:
+      hooks:
+        - pre-commit
+    steps:
+      - run: cargo test --workspace
+
+  bump:
+    stage: Publish
+    description: "Calculate version and mutate files"
+    needs:
+      - test
+    steps:
+      - uses: evin/version-bumper@v1
+        with:
+          initial_version: "1.0.0-canary.100"
+          files:
+            - "Cargo.toml"
+            - path: ".evin/workspace.yaml"
+              match: 'version:\s*"${previous_version}"'
+              write: 'version: "${version}"'
+      - run: cargo update --workspace
+
+  changelog:
+    stage: Publish
+    description: "Generate Changelog"
+    needs:
+      - bump
+    steps:
+      - uses: evin/changelog@v1
+        with:
+          path: CHANGELOG.md
+          version: ${bump.version}

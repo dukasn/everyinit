@@ -1,0 +1,24 @@
+module:
+  name: esh
+  version: "1.0.0-canary.100"
+
+tasks:
+  build-catalog:
+    stage: Docs
+    description: "Compile ESH reST documentation into pre-rendered LSP JSON catalog"
+    steps:
+      - uses: evin/docs@v1
+        with:
+          target: lsp
+          source_dir: ../../docs/reference/esh
+          include:
+            - "100.runtime-reference.3010.md"
+          out: assets/builtins-catalog.json
+
+  build:
+    stage: Build
+    description: "Compile hermetic ESH binary with baked catalog"
+    needs:
+      - build-catalog
+    steps:
+      - run: cargo build -p esh

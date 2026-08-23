@@ -1,0 +1,39 @@
+module:
+  name: evin
+  version: "1.0.0-canary.100"
+
+tasks:
+  build-release:
+    stage: Publish
+    description: "Compile release binary"
+    needs:
+      - bump
+    steps:
+      - run: cargo build --release
+
+  publish:
+    stage: Publish
+    description: "Commit and Tag Release"
+    needs:
+      - changelog
+      - package
+    steps:
+      - uses: evin/git-release@v1
+        with:
+          stage: all
+          tag: ${bump.tag}
+
+  package:
+    stage: Publish
+    description: "Package release binary"
+    needs:
+      - build-release
+    steps:
+      - uses: evin/archive@v1
+        with:
+          format: tar.gz
+          path: "target/release/evin-linux-amd64.tar.gz"
+          include:
+            - "target/release/evin"
+          layout: flat
+          prefix: "${env.release_name}-${bump.version}"

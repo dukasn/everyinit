@@ -1,0 +1,13 @@
+[package]
+name = "evin-git"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+evin-locales.workspace = true
+tokio = { workspace = true }
+[dev-dependencies]
+tempfile = { workspace = true }

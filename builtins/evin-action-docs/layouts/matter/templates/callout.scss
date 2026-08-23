@@ -1,0 +1,99 @@
+/* Color-Semantic Admonitions / Callouts (GitHub-Inspired, Theme-Cohesive) */
+.evin-callout,
+.m3-directive {
+    margin: var(--ui-doc-spacing-paragraph) 0;
+    padding: var(--ui-ref-space-4) var(--ui-ref-space-5);
+    border-radius: var(--ui-shape-corner-medium);
+    border: 1px solid var(--callout-border);
+    border-left: 4px solid var(--callout-accent);
+    background-color: var(--callout-bg);
+    color: var(--ui-color-on-surface);
+    transition: background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+                border-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+
+    // 1. Note / Information (Default Blue)
+    --callout-accent: var(--ui-palette-blue);
+    --callout-border: color-mix(in srgb, var(--ui-palette-blue) 30%, var(--ui-color-outline-variant));
+    --callout-bg: color-mix(in srgb, var(--ui-palette-blue) 6%, var(--ui-color-surface-container));
+
+    // 2. Tip / Best Practice / Hint (Emerald Green)
+    &[data-kind="tip"],
+    &[data-kind="hint"] {
+        --callout-accent: var(--ui-palette-green);
+        --callout-border: color-mix(in srgb, var(--ui-palette-green) 30%, var(--ui-color-outline-variant));
+        --callout-bg: color-mix(in srgb, var(--ui-palette-green) 6%, var(--ui-color-surface-container));
+    }
+
+    // 3. Important / Highlight (Magenta / Purple)
+    &[data-kind="important"] {
+        --callout-accent: var(--ui-palette-magenta);
+        --callout-border: color-mix(in srgb, var(--ui-palette-magenta) 30%, var(--ui-color-outline-variant));
+        --callout-bg: color-mix(in srgb, var(--ui-palette-magenta) 6%, var(--ui-color-surface-container));
+    }
+
+    // 4. Warning / Attention (Amber / Yellow)
+    &[data-kind="warning"],
+    &[data-kind="attention"] {
+        --callout-accent: var(--ui-palette-yellow);
+        --callout-border: color-mix(in srgb, var(--ui-palette-yellow) 35%, var(--ui-color-outline-variant));
+        --callout-bg: color-mix(in srgb, var(--ui-palette-yellow) 7%, var(--ui-color-surface-container));
+    }
+
+    // 5. Caution / Danger / Critical (Red / Crimson)
+    &[data-kind="caution"],
+    &[data-kind="danger"],
+    &[data-kind="error"] {
+        --callout-accent: var(--ui-palette-red);
+        --callout-border: color-mix(in srgb, var(--ui-palette-red) 30%, var(--ui-color-outline-variant));
+        --callout-bg: color-mix(in srgb, var(--ui-palette-red) 6%, var(--ui-color-surface-container));
+    }
+
+    .callout-header,
+    .directive-title {
+        display: flex;
+        align-items: center;
+        gap: var(--ui-ref-space-2);
+        font-weight: 700;
+        font-size: 0.95rem;
+        margin-bottom: var(--ui-ref-space-2);
+        color: var(--callout-accent);
+
+        .callout-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            flex-shrink: 0;
+            display: inline-block;
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .callout-title {
+            line-height: 1.3;
+        }
+    }
+
+    .callout-content,
+    .directive-content {
+        font-size: var(--ui-typescale-body-large-size);
+        line-height: var(--ui-doc-line-height-body);
+        color: var(--ui-color-on-surface-variant);
+
+        > :first-child { margin-top: 0; }
+        > :last-child { margin-bottom: 0; }
+
+        p {
+            margin-bottom: var(--ui-doc-spacing-paragraph);
+            &:last-child { margin-bottom: 0; }
+        }
+
+        .doc-list,
+        .doc-list-ol,
+        .doc-list-task {
+            margin-top: var(--ui-ref-space-2);
+            margin-bottom: var(--ui-ref-space-2);
+        }
+    }
+}

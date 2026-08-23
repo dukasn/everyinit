@@ -1,0 +1,11 @@
+
+[package]
+name = "evin-diagnostic"
+version = { workspace = true }
+edition = "2024"
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true }
+

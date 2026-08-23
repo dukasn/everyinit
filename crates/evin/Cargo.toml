@@ -1,0 +1,45 @@
+[package]
+name = "evin"
+version = { workspace = true }
+edition = { workspace = true }
+publish = { workspace = true }
+
+[[bin]]
+name = "evin"
+path = "src/main.rs"
+
+[dependencies]
+evin-yaml = { workspace = true }
+evin-io = { workspace = true }
+clap = { workspace = true }
+
+evin-ui = { workspace = true }
+console = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+marked-yaml = { workspace = true }
+serde_json = { workspace = true }
+strsim = { workspace = true }
+evin-pipeline = { workspace = true }
+evin-action-changelog = { workspace = true }
+evin-action-archive = { workspace = true }
+evin-git = { workspace = true }
+evin-config = { workspace = true }
+evin-locales = { workspace = true }
+evin-action-version-bumper = { workspace = true }
+evin-action-git-release = { workspace = true }
+evin-action-docs = { workspace = true }
+evin-action-sdk = { workspace = true }
+evin-diagnostic = { workspace = true }
+evin-policy = { workspace = true }
+async-trait.workspace = true
+serde_yaml = { workspace = true }
+peak_alloc = { workspace = true }
+humansize = { workspace = true }
+tokio-util = { workspace = true }
+globset = { workspace = true }
+chrono = { workspace = true }
+signal-hook = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

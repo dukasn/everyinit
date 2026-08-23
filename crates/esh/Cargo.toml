@@ -1,0 +1,61 @@
+[package]
+name = "esh"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "The deterministic, cross-platform Evin shell language runtime"
+readme = "README.md"
+keywords = ["shell", "scripting", "evin"]
+categories = ["command-line-utilities", "parser-implementations"]
+
+[dependencies]
+evin-diagnostic = { workspace = true }
+evin-ui = { workspace = true }
+evin-io = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+parking_lot = { workspace = true }
+bumpalo = { version = "3.17", features = ["collections"] }
+phf = { version = "0.11", features = ["macros"] }
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+rustc-hash = "2.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tempfile = { workspace = true }
+tokio-util = { workspace = true }
+regex = { workspace = true }
+glob = { workspace = true }
+sha2 = { workspace = true }
+md-5 = { workspace = true }
+crc32fast = { workspace = true }
+base64 = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }
+zip = { workspace = true }
+semver = { workspace = true }
+chrono = { workspace = true }
+crossterm = { workspace = true }
+libc = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
+
+[build-dependencies]
+evin-doc = { workspace = true }
+serde_json = { workspace = true }
+
+[[bench]]
+name = "bench_lexer"
+harness = false
+
+[[bench]]
+name = "bench_parser"
+harness = false
+
+[[bench]]
+name = "bench_runtime"
+harness = false

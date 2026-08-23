@@ -1,0 +1,47 @@
+[package]
+name = "evin-action-docs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+evin-diagnostic = { workspace = true }
+evin-yaml = { workspace = true }
+evin-action-sdk = { workspace = true }
+evin-locales = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+grass = { workspace = true }
+include_dir = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+chrono = { workspace = true }
+syntect = { workspace = true }
+regex = { workspace = true }
+url = { workspace = true }
+unic-langid = { workspace = true }
+marked-yaml = { workspace = true }
+pulldown-cmark = { workspace = true }
+globset = { workspace = true }
+image = { workspace = true }
+ravif = { workspace = true }
+rayon = { workspace = true }
+evin-doc = { workspace = true }
+esh = { workspace = true }
+svgbob = { workspace = true }
+unicode-width = { workspace = true }
+latex2mathml = { workspace = true }
+portable-pty = { workspace = true }
+base64 = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+criterion = { workspace = true }
+
+[[bench]]
+name = "publishing"
+harness = false
