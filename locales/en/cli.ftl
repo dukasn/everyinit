@@ -1,7 +1,7 @@
 # CLI locale messages
 
-app-description = EVIN - Native Execution Engine
-init-command-help = Initialize an EVIN workspace and generate default configurations
+app-description = Evin — The Workflow Engine
+init-command-help = Initialize .evin configuration for this repository
 init-workspace-help = Generate a default .evin/workspace.yaml
 init-gitrules-help = Generate a default .evin/gitrules.yaml
 init-env-help = Generate a default .evin/environment.yaml
@@ -9,16 +9,16 @@ init-module-help = Generate a default .evin/module.yaml in the specified path
 init-all-help = Generate all default workspace configuration files
 init-path-help = Target directory path for workspace initialization
 
-sync-command-help = Synchronizes workspace configurations and git hooks
+sync-command-help = Install and update Git hooks declared by this repository
 
-run-command-help = Runs a specific target task manually
-run-target-help = The name of the target task to run
-run-args-help = Arguments passed to the task after '--'
-run-parallel-help = Force parallel execution of ready tasks
-run-sequential-help = Force linear (sequential) execution of tasks
-dry-run-help = Plan the task graph without filesystem, Git, or shell side effects
-debug-help = Enable detailed debug logging and pipeline metrics
-verbose-help = Show output of all tasks even on success
+run-command-help = Run a declared task, stage, or Git-hook workflow
+run-target-help = Task, stage, or Git hook to run
+run-args-help = Arguments passed to the target after '--'
+run-parallel-help = Run ready tasks in parallel
+run-sequential-help = Run ready tasks sequentially
+dry-run-help = Plan the workflow without filesystem, Git, or shell side effects
+debug-help = Show detailed workflow diagnostics and metrics
+verbose-help = Show successful task output too
 phase-resolving-configuration = Resolving configuration
 phase-initialize-workspace = Initializing workspace
 

@@ -1,6 +1,10 @@
 # ESH — Evin Shell
 
-ESH is Evin's deterministic, embeddable shell for project automation. It runs one language runtime on Linux, macOS, and Windows, so an ESH script does not depend on `sh`, Bash, `cmd.exe`, PowerShell, MSYS2, or WSL semantics.
+ESH is Evin's portable, deterministic runtime for project automation. It runs
+one language runtime on Linux, macOS, and Windows, so an ESH script does not
+depend on `sh`, Bash, `cmd.exe`, PowerShell, MSYS2, or WSL semantics. ESH also
+works directly as a standalone-capable shell when a project needs portable
+automation outside an Evin workflow.
 
 It is an implemented parser, planner, runtime, CLI, and language server. Its built-in command and keyword documentation is compiled into the runtime and used by editor hover help.
 

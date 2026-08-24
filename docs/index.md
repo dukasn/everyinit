@@ -1,6 +1,6 @@
 ---
 title: EVIN
-description: Define once. Run everywhere.
+description: Evin — The Workflow Engine for software repositories.
 search_prompts:
   - What would you like to build with EVIN?
   - Need a hand getting your workflow running?
@@ -9,7 +9,7 @@ topbar:
   id: first-public-canary
   variant: holo
   badge: Canary
-  message: EVIN’s first public canary release is coming soon.
+  message: Evin’s first public canary release is coming soon.
   action:
     label: Watch releases
     href: https://github.com/dukasn/evin/releases
@@ -18,13 +18,15 @@ topbar:
 
 # EVIN
 
-The orchestration workspace and portable runtime for modern development workflows.
+The Workflow Engine
 
 > [!FEATURE]
 >
-> ## Deterministic task orchestration
+> ## Repository workflows, defined once
 >
-> Define stages, dependencies, tasks, and environments in a single declarative file. Run reproducible pipelines locally and in CI with zero drift.
+> Define tasks, stages, dependencies, and environments in repository
+> configuration. Evin resolves the work needed for a target and makes its path
+> visible whether it runs locally, from a Git hook, or in CI.
 >
 > - [Get started in 5 minutes](/book/installation)
 > - [Build your first workspace](/book/first-workspace)
@@ -59,19 +61,21 @@ The orchestration workspace and portable runtime for modern development workflow
 >       - run: cargo build --release
 > ```
 
-## The EVIN Book
+## Learn Evin
 
-Master workspace architecture, task dependencies, Git hooks, and self-auditing documentation with chapter-by-chapter guides.
+Learn how to organize repository work, automate Git lifecycle checks, and keep
+delivery routines close to the code they support.
 
 - [Workspaces & Environments](/book/workspaces) — Organize tasks, dependencies, environment matrices, and values into clear definitions.
 - [Pipelines & Git Hooks](/book/pipelines-and-hooks) — Trigger stage graphs, single tasks, or native Git hooks with automatic dependency resolution.
-- [Documentation Site](/book/documentation-site) — Generate documentation, create archives, bump semantic versions, and publish changelogs without third-party tools.
+- [Documentation Site](/book/documentation-site) — Add documentation publishing to the same declared workflow.
 
 > [!FEATURE]
 >
-> ## A cross-platform shell runtime
+> ## Portable automation through ESH
 >
-> Write automation once and run it reliably across Linux, macOS, and Windows. ESH bundles JSON querying, YAML parsing, hashing, and units without external dependencies.
+> ESH is Evin's portable, deterministic runtime for project automation. Use it
+> inside Evin workflows or directly in scripts across Linux, macOS, and Windows.
 >
 > - [Explore the ESH language](/reference/esh)
 > - [Runtime built-in reference](/reference/esh/runtime-reference)
@@ -86,9 +90,10 @@ Master workspace architecture, task dependencies, Git hooks, and self-auditing d
 
 > [!FEATURE]
 >
-> ## Self-auditing documentation that ships with code
+> ## Built-in actions for delivery work
 >
-> Turn Markdown sources into ultra-fast static documentation with binary search indexes, automated link verification, and pre-compiled LSP catalogs.
+> Keep recurring delivery work in the same task graph. Built-in actions cover
+> documentation, versions, changelogs, archives, and Git releases.
 >
 > - [Documentation guide](/book/documentation-site)
 > - [Action reference](/reference/actions/documentation-action)
@@ -101,9 +106,10 @@ Master workspace architecture, task dependencies, Git hooks, and self-auditing d
 > wait
 > ```
 
-## Technical Reference & Ecosystem
+## Technical reference and ecosystem
 
-Explore normative RFC specifications, language grammar, and contribute to the open-source platform.
+Explore the contracts behind repository workflows, ESH, configuration, and
+diagnostics, then help improve the project in the open.
 
 - [ESH Language Reference](/reference/esh/language-reference) — POSIX syntax, parameter expansions, arithmetic operations, and parallel pipelines.
 - [Configuration & Diagnostic RFCs](/reference) — Complete normative reference for schema parameters, diagnostics, and modules.
@@ -111,15 +117,16 @@ Explore normative RFC specifications, language grammar, and contribute to the op
 
 > [!SPOTLIGHT] holo
 >
-> ## Ready to unify your workflow?
+> ## Make repository work repeatable
 >
-> Bring deterministic pipelines, portable scripting, and self-auditing docs into your repository today.
+> Define the work around your code once, then run it through one visible,
+> portable workflow.
 >
 > [Read The EVIN Book](/book)
 
 ## Footer
 
-Open-source orchestration for the work around your code.
+Open-source workflow automation for software repositories.
 
 ### Project
 

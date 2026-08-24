@@ -3,7 +3,7 @@ module:
   version: "1.0.0-canary.100"
 
 values:
-  site_title: "EVIN Documentation"
+  site_title: "Evin Workflow Engine"
   site_url: "https://dukasn.github.io/evin/"
 
 tasks:

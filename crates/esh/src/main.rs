@@ -132,7 +132,7 @@ async fn main() {
 }
 
 fn print_help() {
-    println!("esh - Evin Shell v{}", env!("CARGO_PKG_VERSION"));
+    println!("esh — portable shell for project automation");
     println!("\nUsage:");
     println!("  esh -c '<script>'                 Execute inline script string");
     println!("  esh <file.esh> [args...]          Execute script file with positional arguments");

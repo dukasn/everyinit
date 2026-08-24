@@ -3,6 +3,15 @@ name = "evin"
 version = { workspace = true }
 edition = { workspace = true }
 publish = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+description = "The workflow engine for software repositories"
+readme = "../../README.md"
+repository = "https://github.com/dukasn/evin"
+homepage = "https://github.com/dukasn/evin"
+documentation = "https://dukasn.github.io/evin/"
+keywords = ["workflow", "automation", "git-hooks", "task-runner"]
+categories = ["command-line-utilities", "development-tools::build-utils"]
 
 [[bin]]
 name = "evin"
