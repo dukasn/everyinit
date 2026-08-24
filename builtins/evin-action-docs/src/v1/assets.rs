@@ -364,7 +364,9 @@ fn generate_asset(
                 .to_rgba8();
             let pixels = image
                 .as_raw()
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|pixel| RGBA8::new(pixel[0], pixel[1], pixel[2], pixel[3]))
                 .collect::<Vec<_>>();
             Encoder::new()

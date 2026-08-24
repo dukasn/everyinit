@@ -189,6 +189,9 @@ pub fn validate_config(
         })
 }
 
+// This entry point implements the SDK Action contract, whose error type is
+// Diagnostic. Boxing here would be immediately undone by the adapter.
+#[allow(clippy::result_large_err)]
 pub async fn execute(
     ctx: &RunnerContext,
     with: Option<evin_yaml::SpannedValue>,

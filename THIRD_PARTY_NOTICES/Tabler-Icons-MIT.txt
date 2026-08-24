@@ -1,12 +1,11 @@
-# Tabler Icons Attribution & License
+Tabler Icons
+Copyright (c) 2020-present Paweł Kuna
 
-The icon assets in this directory (with the exception of project logo SVGs) are sourced from **[Tabler Icons](https://github.com/tabler/tabler-icons)** created by Paweł Kuna and contributors.
-
-## License
+The icon assets in builtins/evin-action-docs/icons/ are sourced from Tabler
+Icons (https://github.com/tabler/tabler-icons), created by Paweł Kuna and
+contributors.
 
 MIT License
-
-Copyright (c) 2020-present Paweł Kuna
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
