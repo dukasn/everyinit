@@ -58,8 +58,12 @@ impl CssOptimizer {
         }
 
         // Stage 1: Compile SCSS through grass (resolves @use via our EmbeddedFs)
-        let mut processed = grass::from_string(composite_scss, &options)
+        let compiled = grass::from_string(composite_scss, &options)
             .map_err(|e| format!("Failed to compile theme styles: {}", e))?;
+        // A byte-order mark is meaningful at the start of a standalone CSS file,
+        // but an inline <style> parser treats it as part of the first selector.
+        // That turns `:root` into `\u{feff}:root`, so its tokens never apply.
+        let mut processed = compiled.trim_start_matches('\u{feff}').to_string();
 
         // Stage 2: Append theme overrides so they win in @layer overrides
         if !overrides.is_empty() {
@@ -220,6 +224,16 @@ mod tests {
         assert_eq!(
             CssOptimizer::normalize_override_name("font-mono"),
             "--ui-typescale-font-monospace"
+        );
+    }
+
+    #[test]
+    fn leading_byte_order_mark_is_removed_from_css() {
+        let css = "\u{feff}:root { --example: value; }";
+
+        assert_eq!(
+            css.trim_start_matches('\u{feff}'),
+            ":root { --example: value; }"
         );
     }
 }
