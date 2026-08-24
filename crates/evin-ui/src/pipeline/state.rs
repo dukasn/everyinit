@@ -748,7 +748,7 @@ impl PipelineState {
                             task.display_name.clone(),
                             task.daemon_output.clone(),
                             task.buffer.clone(),
-                            task.debug_buffer.drain(..).collect::<Vec<_>>(),
+                            std::mem::take(&mut task.debug_buffer),
                             task.daemon_had_error,
                             task.command.clone(),
                         )

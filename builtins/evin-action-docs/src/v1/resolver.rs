@@ -442,8 +442,10 @@ mod tests {
         let explicit_logo = temp_dir.path().join("my-logo.svg");
         std::fs::write(&explicit_logo, "<svg id='explicit'></svg>").unwrap();
 
-        let mut config = DocsConfig::default();
-        config.logo = Some("my-logo.svg".to_string());
+        let config = DocsConfig {
+            logo: Some("my-logo.svg".to_string()),
+            ..DocsConfig::default()
+        };
 
         let resolver = ResourceResolver::new(temp_dir.path(), &config).unwrap();
         let mut diagnostics = Vec::new();
@@ -476,8 +478,10 @@ mod tests {
     #[test]
     fn test_resource_resolver_missing_explicit_fails() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let mut config = DocsConfig::default();
-        config.logo = Some("missing-logo.svg".to_string());
+        let config = DocsConfig {
+            logo: Some("missing-logo.svg".to_string()),
+            ..DocsConfig::default()
+        };
 
         let resolver = ResourceResolver::new(temp_dir.path(), &config).unwrap();
         let mut diagnostics = Vec::new();

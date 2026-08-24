@@ -1158,10 +1158,7 @@ mod tests {
         assert_eq!(config.out, "dist/docs");
         assert_eq!(config.theme, "matter");
         assert!(!config.strict_filenames);
-        assert_eq!(
-            config.minify.unwrap_or(config.mode == DocsMode::Build),
-            true
-        );
+        assert!(config.minify.unwrap_or(config.mode == DocsMode::Build));
     }
 
     #[test]
@@ -1347,7 +1344,8 @@ mod tests {
 
     #[test]
     fn bundled_themes_support_component_tree_shaking() {
-        for theme in ["matter"] {
+        {
+            let theme = "matter";
             let (_, raw_css, _, embedded_fs) = resolve_layout_assets(Path::new("."), theme, None);
             let registry =
                 templates::ComponentRegistry::load_from_layout(&LAYOUTS_DIR, theme, None);
@@ -1572,7 +1570,8 @@ mod tests {
             regex::Regex::new(r"@media\s*\(\s*(?:min|max)-width:\s*(\d+)px\s*\)").unwrap();
         let allowed = [600_u16, 840, 1200, 1600];
 
-        for theme in ["matter"] {
+        {
+            let theme = "matter";
             let (_, raw_css, _, embedded_fs) = resolve_layout_assets(Path::new("."), theme, None);
             let css = CssOptimizer::process(&raw_css, &HashMap::new(), &embedded_fs, false)
                 .unwrap_or_else(|error| panic!("{theme} theme did not compile: {error}"));
@@ -1668,11 +1667,13 @@ mod tests {
         let echo_rst = "echo\n====\n\n:synopsis: echo [args...]\n:summary: Print text\n:category: flow\n:handler: builtins::echo\n\nPrints strings.\n";
         std::fs::write(docs_dir.join("echo.rst"), echo_rst).unwrap();
 
-        let mut config = DocsConfig::default();
-        config.target = DocsTarget::Lsp;
-        config.source_dir = docs_dir.to_str().unwrap().to_string();
         let out_json = temp_dir.path().join("assets/builtins-catalog.json");
-        config.out = out_json.to_str().unwrap().to_string();
+        let config = DocsConfig {
+            target: DocsTarget::Lsp,
+            source_dir: docs_dir.to_str().unwrap().to_string(),
+            out: out_json.to_str().unwrap().to_string(),
+            ..DocsConfig::default()
+        };
 
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
@@ -1703,12 +1704,14 @@ mod tests {
         let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
         let esh_dir = workspace_root.join("docs/reference/esh");
 
-        let mut config = DocsConfig::default();
-        config.target = DocsTarget::Lsp;
-        config.source_dir = esh_dir.to_str().unwrap().to_string();
-        config.include = vec!["100.runtime-reference.3010.md".to_string()];
         let out_json = workspace_root.join("crates/esh/assets/builtins-catalog.json");
-        config.out = out_json.to_str().unwrap().to_string();
+        let config = DocsConfig {
+            target: DocsTarget::Lsp,
+            source_dir: esh_dir.to_str().unwrap().to_string(),
+            include: vec!["100.runtime-reference.3010.md".to_string()],
+            out: out_json.to_str().unwrap().to_string(),
+            ..DocsConfig::default()
+        };
 
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
@@ -1751,10 +1754,12 @@ mod tests {
         )
         .unwrap();
 
-        let mut config = DocsConfig::default();
-        config.source_dir = docs_dir.to_string_lossy().to_string();
-        config.out = temp_dir.path().join("site").to_string_lossy().to_string();
-        config.site_url = "https://example.com/".to_string();
+        let config = DocsConfig {
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            out: temp_dir.path().join("site").to_string_lossy().to_string(),
+            site_url: "https://example.com/".to_string(),
+            ..DocsConfig::default()
+        };
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
             temp_dir.path(),
@@ -1846,10 +1851,12 @@ mod tests {
         .unwrap();
         std::fs::write(docs_dir.join("legacy.md"), "# Legacy\n").unwrap();
 
-        let mut config = DocsConfig::default();
-        config.source_dir = docs_dir.to_string_lossy().to_string();
-        config.out = temp_dir.path().join("site").to_string_lossy().to_string();
-        config.site_url = "https://example.com/".to_string();
+        let config = DocsConfig {
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            out: temp_dir.path().join("site").to_string_lossy().to_string(),
+            site_url: "https://example.com/".to_string(),
+            ..DocsConfig::default()
+        };
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
             temp_dir.path(),
@@ -1902,10 +1909,12 @@ mod tests {
         .unwrap();
         std::fs::write(docs_dir.join("page-one.md"), "# Page 1\n\nDetails here.\n").unwrap();
 
-        let mut config = DocsConfig::default();
-        config.source_dir = docs_dir.to_string_lossy().to_string();
-        config.out = temp_dir.path().join("site").to_string_lossy().to_string();
-        config.site_url = "https://example.com/".to_string();
+        let config = DocsConfig {
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            out: temp_dir.path().join("site").to_string_lossy().to_string(),
+            site_url: "https://example.com/".to_string(),
+            ..DocsConfig::default()
+        };
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
             temp_dir.path(),
@@ -1984,10 +1993,12 @@ mod tests {
         )
         .unwrap();
 
-        let mut config = DocsConfig::default();
-        config.source_dir = docs_dir.to_string_lossy().to_string();
-        config.out = temp_dir.path().join("site").to_string_lossy().to_string();
-        config.site_url = "https://example.com/".to_string();
+        let config = DocsConfig {
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            out: temp_dir.path().join("site").to_string_lossy().to_string(),
+            site_url: "https://example.com/".to_string(),
+            ..DocsConfig::default()
+        };
         let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
             temp_dir.path(),

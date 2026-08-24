@@ -5,10 +5,12 @@
 !/.gitignore
 !/Cargo.toml
 !/Cargo.lock
+# Public repository entry point; the root deny-all rule otherwise excludes it.
 !/README.md
 !/docs/
 !/crates/
 !/.evin/
+!/.github/
 !/builtins/
 !/locales/
 !/CHANGELOG.md

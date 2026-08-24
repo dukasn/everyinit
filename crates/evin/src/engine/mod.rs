@@ -20,15 +20,15 @@ use evin_diagnostic::Diagnostic;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 #[derive(Clone)]
 pub struct PipelineEmitter {
-    sender: broadcast::Sender<PipelineEvent>,
+    sender: mpsc::UnboundedSender<PipelineEvent>,
 }
 
 impl PipelineEmitter {
-    pub fn new(sender: broadcast::Sender<PipelineEvent>) -> Self {
+    pub fn new(sender: mpsc::UnboundedSender<PipelineEvent>) -> Self {
         Self { sender }
     }
 
@@ -108,7 +108,7 @@ pub enum PipelineCompletion {
 }
 
 impl PipelineEngine {
-    pub fn new(sender: broadcast::Sender<PipelineEvent>) -> Self {
+    pub fn new(sender: mpsc::UnboundedSender<PipelineEvent>) -> Self {
         Self {
             emitter: PipelineEmitter::new(sender),
         }
@@ -257,7 +257,7 @@ mod tests {
 
     #[tokio::test]
     async fn cancelled_watch_session_emits_summary_before_interrupting() {
-        let (sender, mut receiver) = broadcast::channel(16);
+        let (sender, mut receiver) = mpsc::unbounded_channel();
         let engine = PipelineEngine::new(sender);
         let ctx = CliContext {
             targets: vec!["docs:serve".to_string()],
@@ -293,7 +293,7 @@ mod tests {
 
     #[tokio::test]
     async fn restarted_watch_session_skips_completion_summary() {
-        let (sender, mut receiver) = broadcast::channel(16);
+        let (sender, mut receiver) = mpsc::unbounded_channel();
         let engine = PipelineEngine::new(sender);
         let ctx = CliContext {
             targets: vec!["docs:serve".to_string()],
@@ -317,5 +317,27 @@ mod tests {
                 .iter()
                 .any(|event| matches!(event, PipelineEvent::PipelineSessionInterrupted))
         );
+    }
+
+    #[test]
+    fn pipeline_emitter_preserves_lifecycle_events_after_large_output_bursts() {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let emitter = PipelineEmitter::new(sender);
+
+        for index in 0..256 {
+            emitter.emit(PipelineEvent::RawOutput {
+                task: "test".to_string(),
+                stream: evin_action_sdk::OutputStream::Stdout,
+                line: format!("output {index}"),
+            });
+        }
+        emitter.emit(PipelineEvent::PipelineCancelled);
+
+        let events: Vec<_> = std::iter::from_fn(|| receiver.try_recv().ok()).collect();
+        assert_eq!(events.len(), 257);
+        assert!(matches!(
+            events.last(),
+            Some(PipelineEvent::PipelineCancelled)
+        ));
     }
 }

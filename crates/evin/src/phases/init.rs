@@ -244,7 +244,7 @@ mod tests {
     #[tokio::test]
     async fn test_init_default_only_workspace() {
         let dir = tempdir().unwrap();
-        let (tx, _rx) = tokio::sync::broadcast::channel(10);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let emitter = PipelineEmitter::new(tx);
         let mut ctx = CliContext::default();
 
@@ -267,7 +267,7 @@ mod tests {
     #[tokio::test]
     async fn test_init_all_flags() {
         let dir = tempdir().unwrap();
-        let (tx, _rx) = tokio::sync::broadcast::channel(10);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let emitter = PipelineEmitter::new(tx);
         let mut ctx = CliContext::default();
 
@@ -290,7 +290,7 @@ mod tests {
     #[tokio::test]
     async fn test_init_selective_flags() {
         let dir = tempdir().unwrap();
-        let (tx, _rx) = tokio::sync::broadcast::channel(10);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let emitter = PipelineEmitter::new(tx);
         let mut ctx = CliContext::default();
 

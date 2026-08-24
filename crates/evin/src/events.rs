@@ -22,7 +22,7 @@ use evin_ui::mode::Mode;
 use evin_ui::pipeline::{PipelineLogLevel, PipelineUI};
 use std::path::PathBuf;
 use std::time::Duration;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub enum PipelineEvent {
@@ -155,7 +155,7 @@ fn render_activity(record: &ActivityRecord) -> String {
 }
 
 pub async fn run_ui_reporter(
-    mut rx: broadcast::Receiver<PipelineEvent>,
+    mut rx: mpsc::UnboundedReceiver<PipelineEvent>,
     mode: Mode,
     verbose: bool,
     watch_mode: bool,
@@ -191,7 +191,7 @@ pub async fn run_ui_reporter(
             }
             event = rx.recv(), if !shutting_down => {
                 match event {
-                    Ok(event) => {
+                    Some(event) => {
                         match event {
                             PipelineEvent::Header { version, mode, os, arch, shell } => {
                                 ui.handle_event(UIEvent::Header { version, mode, os, arch, shell }).await;
@@ -387,8 +387,7 @@ pub async fn run_ui_reporter(
                                 // We wait for PipelineCancelled event to shut down
                             }
                             PipelineEvent::PipelineCancelled => {
-                                ui.handle_event(UIEvent::OutroCancel { message: evin_locales::t!("pipeline-rejected") }).await;
-                                ui.handle_event(UIEvent::PipelineState { success: false }).await;
+                                ui.finalize_cancelled(evin_locales::t!("pipeline-rejected")).await;
                                 shutting_down = true;
                                 exit_code = false;
                             }
@@ -444,7 +443,7 @@ pub async fn run_ui_reporter(
                             }
                         }
                     }
-                    Err(_) => {
+                    None => {
                         shutting_down = true;
                         exit_code = false;
                     }

@@ -813,6 +813,24 @@ mod tests {
             1
         );
     }
+
+    #[tokio::test]
+    async fn cancellation_finalization_flushes_queued_task_starts() {
+        let backend = Arc::new(RecordingBackend::new(false));
+        let mut ui = PipelineUI::with_backend(Mode::Normal, false, false, true, backend);
+
+        ui.handle_event(UIEvent::ItemStarted {
+            name: "test".to_string(),
+            description: None,
+            command: Some("cargo test".to_string()),
+        })
+        .await;
+
+        ui.finalize_cancelled("Execution aborted".to_string()).await;
+
+        assert!(ui.is_idle());
+        assert_eq!(ui.state.tracker.running_count(), 0);
+    }
 }
 
 impl PipelineUI {
@@ -867,6 +885,11 @@ impl PipelineUI {
     /// deliberately distinct from an intermediate failed watch session, which
     /// keeps its gutter open while waiting for another change.
     pub async fn finalize_cancelled(&mut self, message: String) {
+        // A cancellation may arrive before the next UI tick has applied a
+        // queued ItemStarted event. Apply queued lifecycle events first so a
+        // stale start cannot reopen a task after PipelineState clears it.
+        self.tick(true).await;
+
         let daemons: Vec<_> = self.state.daemons.iter().cloned().collect();
         for name in daemons {
             let duration = self

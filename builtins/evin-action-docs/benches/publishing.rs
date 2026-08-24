@@ -80,6 +80,8 @@ fn publishing_benchmarks(criterion: &mut Criterion) {
                 None,
                 None,
                 None,
+                None,
+                None,
                 &seo,
             ))
         })
@@ -96,6 +98,8 @@ fn publishing_benchmarks(criterion: &mut Criterion) {
         &registry,
         false,
         false,
+        None,
+        None,
         None,
         None,
         None,

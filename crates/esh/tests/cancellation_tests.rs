@@ -82,6 +82,43 @@ async fn test_captured_external_command_cancels_without_waiting_for_pipe_descend
 
 #[cfg(unix)]
 #[tokio::test]
+async fn test_captured_external_command_finishes_when_a_descendant_keeps_its_pipes_open() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = tokio::time::timeout(
+        Duration::from_secs(2),
+        engine.eval_str("sh -c 'sleep 30 &'", &mut ctx),
+    )
+    .await
+    .expect("captured command waited for a background descendant")
+    .expect("eval failed");
+
+    assert_eq!(status, 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_captured_external_command_is_not_stopped_by_terminal_job_control() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = tokio::time::timeout(
+        Duration::from_secs(2),
+        engine.eval_str("sh -c 'kill -TTIN $$; printf resumed'", &mut ctx),
+    )
+    .await
+    .expect("captured command was stopped by terminal job control")
+    .expect("eval failed");
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().as_deref(), Some("resumed"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn test_cancellation_terminates_the_external_process_group() {
     let temp = tempfile::tempdir().unwrap();
     let pid_file = temp.path().join("descendant.pid");

@@ -21,99 +21,12 @@ use crate::planner::ir::{
 use crate::runtime::context::{ExecutionContext, TrapSignal};
 use crate::runtime::streams::StreamTarget;
 use crate::runtime::traits::{BoxFuture, Executable, ScopeManager};
+use evin_process::{
+    EnvironmentPolicy, OutputPolicy, ProcessHandle, ProcessMode, ProcessSpec, ProcessTermination,
+    StdinPolicy,
+};
 use std::fs;
-use std::process::Stdio;
-use tokio::io::AsyncReadExt;
 use tokio::task::JoinSet;
-
-const PROCESS_TERMINATION_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
-
-fn terminate_process_tree(pid: u32) {
-    #[cfg(unix)]
-    unsafe {
-        libc::kill(-(pid as i32), libc::SIGTERM);
-    }
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T"])
-            .status();
-    }
-}
-
-fn kill_process_tree(pid: u32) {
-    #[cfg(unix)]
-    unsafe {
-        libc::kill(-(pid as i32), libc::SIGKILL);
-    }
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .status();
-    }
-}
-
-struct ProcessTreeGuard {
-    pid: Option<u32>,
-}
-
-impl ProcessTreeGuard {
-    fn disarm(&mut self) {
-        self.pid = None;
-    }
-}
-
-impl Drop for ProcessTreeGuard {
-    fn drop(&mut self) {
-        if let Some(pid) = self.pid {
-            kill_process_tree(pid);
-        }
-    }
-}
-
-/// RAII guard that reclaims the terminal foreground process group for the ESH
-/// parent after a child process finishes or is cancelled. Dropped automatically
-/// at the end of the `CommandTarget::External` scope.
-#[cfg(unix)]
-struct TerminalForegroundGuard {
-    enabled: bool,
-    parent_pgrp: libc::pid_t,
-}
-
-#[cfg(unix)]
-impl TerminalForegroundGuard {
-    fn new(enabled: bool) -> Self {
-        let parent_pgrp = if enabled {
-            unsafe { libc::getpgrp() }
-        } else {
-            0
-        };
-        Self {
-            enabled,
-            parent_pgrp,
-        }
-    }
-}
-
-#[cfg(unix)]
-impl Drop for TerminalForegroundGuard {
-    fn drop(&mut self) {
-        if self.enabled {
-            unsafe {
-                // Block SIGTTOU on this thread so that tcsetpgrp() from a
-                // background process group does not suspend the parent.
-                let mut block_mask: libc::sigset_t = std::mem::zeroed();
-                let mut old_mask: libc::sigset_t = std::mem::zeroed();
-                libc::sigemptyset(&mut block_mask);
-                libc::sigaddset(&mut block_mask, libc::SIGTTOU);
-                libc::pthread_sigmask(libc::SIG_BLOCK, &block_mask, &mut old_mask);
-                libc::tcsetpgrp(libc::STDIN_FILENO, self.parent_pgrp);
-                libc::pthread_sigmask(libc::SIG_SETMASK, &old_mask, std::ptr::null_mut());
-            }
-        }
-    }
-}
 
 impl Executable for ExecutionPlan {
     fn execute<'a>(
@@ -880,153 +793,50 @@ async fn dispatch_node_target(
         }
 
         CommandTarget::External(bin_path) => {
-            let mut cmd = tokio::process::Command::new(bin_path);
-            cmd.args(args);
-            cmd.current_dir(ctx.cwd());
-            cmd.envs(ctx.env_vars());
-            cmd.kill_on_drop(true);
-
             let input_data = ctx.take_stdin();
             let stdin_is_piped = input_data.is_some();
-            if stdin_is_piped {
-                cmd.stdin(Stdio::piped());
-            } else {
-                cmd.stdin(Stdio::inherit());
-            }
-
-            // When stdin is inherited from a real TTY, hand the terminal
-            // foreground to the child's new process group so it can freely
-            // read from the terminal without receiving SIGTTIN.
-            #[cfg(unix)]
-            let needs_fg_handoff =
-                !stdin_is_piped && unsafe { libc::isatty(libc::STDIN_FILENO) == 1 };
-
-            #[cfg(unix)]
-            {
-                cmd.process_group(0);
-
-                if needs_fg_handoff {
-                    unsafe {
-                        cmd.pre_exec(|| {
-                            let child_pgrp = libc::getpid();
-                            // Block SIGTTOU so tcsetpgrp does not stop the child
-                            // before it execs the target binary.
-                            let mut mask: libc::sigset_t = std::mem::zeroed();
-                            let mut old_mask: libc::sigset_t = std::mem::zeroed();
-                            libc::sigemptyset(&mut mask);
-                            libc::sigaddset(&mut mask, libc::SIGTTOU);
-                            libc::pthread_sigmask(libc::SIG_BLOCK, &mask, &mut old_mask);
-                            libc::tcsetpgrp(libc::STDIN_FILENO, child_pgrp);
-                            libc::pthread_sigmask(
-                                libc::SIG_SETMASK,
-                                &old_mask,
-                                std::ptr::null_mut(),
-                            );
-                            Ok(())
-                        });
-                    }
-                }
-            }
-
-            // Capture the parent's pgrp now (before spawn) so the guard
-            // can restore it reliably after the child exits or is killed.
-            #[cfg(unix)]
-            let _fg_guard = TerminalForegroundGuard::new(needs_fg_handoff);
-
             let capture = ctx.is_capturing();
-            if capture {
-                cmd.stdout(Stdio::piped());
-                cmd.stderr(Stdio::piped());
-            }
-
-            let mut child = cmd.spawn().map_err(|e| {
-                ExecError::IoError(format!("Failed to spawn '{}': {}", raw_name, e))
-            })?;
-            let pid = child.id();
-            let mut process_guard = ProcessTreeGuard { pid };
-
-            if let Some(data) = input_data
-                && let Some(mut stdin) = child.stdin.take()
-            {
-                tokio::spawn(async move {
-                    use tokio::io::AsyncWriteExt;
-                    let _ = stdin.write_all(&data).await;
-                });
-            }
-
-            let stdout_reader = child.stdout.take().map(|mut stdout| {
-                tokio::spawn(async move {
-                    let mut bytes = Vec::new();
-                    stdout.read_to_end(&mut bytes).await.map(|_| bytes)
-                })
-            });
-            let stderr_reader = child.stderr.take().map(|mut stderr| {
-                tokio::spawn(async move {
-                    let mut bytes = Vec::new();
-                    stderr.read_to_end(&mut bytes).await.map(|_| bytes)
-                })
-            });
-
-            let token = ctx.token().clone();
-
-            let (status, cancelled) = tokio::select! {
-                biased;
-                _ = token.cancelled() => {
-                    if let Some(pid) = pid {
-                        terminate_process_tree(pid);
-                    }
-                    let graceful = tokio::time::timeout(PROCESS_TERMINATION_GRACE, child.wait()).await;
-                    if !matches!(graceful, Ok(Ok(_))) {
-                        if let Some(pid) = pid {
-                            kill_process_tree(pid);
-                        }
-                        let _ = child.wait().await;
-                    }
-                    (130, true)
-                }
-                res = child.wait() => {
-                    let exit_status = res.map_err(|e| {
-                        ExecError::IoError(format!("Failed to wait for '{}': {}", raw_name, e))
-                    })?;
-                    (exit_status.code().unwrap_or(1), false)
-                }
+            let mode = if capture || stdin_is_piped {
+                ProcessMode::SupervisedAutomation
+            } else {
+                ProcessMode::InteractiveForeground
+            };
+            let mut spec = ProcessSpec::new(bin_path, ctx.cwd(), mode)
+                .args(args.iter().map(String::as_str))
+                .environment(EnvironmentPolicy::InheritAndOverride, ctx.env_vars());
+            spec.stdin = match input_data {
+                Some(bytes) => StdinPolicy::Bytes(bytes),
+                None if capture => StdinPolicy::Null,
+                None => StdinPolicy::Inherit,
+            };
+            spec.stdout = if capture {
+                OutputPolicy::Capture
+            } else {
+                OutputPolicy::Inherit
+            };
+            spec.stderr = if capture {
+                OutputPolicy::Capture
+            } else {
+                OutputPolicy::Inherit
             };
 
-            if let Some(reader) = stdout_reader {
-                match reader.await {
-                    Ok(Ok(bytes)) => ctx.write_stdout(&bytes),
-                    Ok(Err(error)) if !cancelled => {
-                        return Err(ExecError::IoError(format!(
-                            "Failed to read command stdout: {error}"
-                        )));
-                    }
-                    Err(error) if !cancelled => {
-                        return Err(ExecError::IoError(format!(
-                            "Failed to join stdout reader: {error}"
-                        )));
-                    }
-                    _ => {}
-                }
+            let result = ProcessHandle::spawn(spec, None)
+                .map_err(|error| ExecError::IoError(error.to_string()))?
+                .wait(ctx.token().clone())
+                .await
+                .map_err(|error| ExecError::IoError(error.to_string()))?;
+
+            if let Some(stdout) = result.stdout {
+                ctx.write_stdout(&stdout);
             }
-            if let Some(reader) = stderr_reader {
-                match reader.await {
-                    Ok(Ok(bytes)) => ctx.write_stderr(&bytes),
-                    Ok(Err(error)) if !cancelled => {
-                        return Err(ExecError::IoError(format!(
-                            "Failed to read command stderr: {error}"
-                        )));
-                    }
-                    Err(error) if !cancelled => {
-                        return Err(ExecError::IoError(format!(
-                            "Failed to join stderr reader: {error}"
-                        )));
-                    }
-                    _ => {}
-                }
+            if let Some(stderr) = result.stderr {
+                ctx.write_stderr(&stderr);
             }
 
-            process_guard.disarm();
-            Ok(status)
+            Ok(match result.termination {
+                ProcessTermination::Exited(status) => status.code().unwrap_or(1),
+                ProcessTermination::Cancelled => 130,
+            })
         }
     }
 }

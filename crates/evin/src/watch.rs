@@ -22,8 +22,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
-use tokio::sync::broadcast;
-#[cfg(not(unix))]
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -476,7 +474,7 @@ impl RunSession {
 /// signal. The reporter is intentionally owned by the caller and therefore
 /// survives every session boundary.
 pub async fn supervise(
-    sender: broadcast::Sender<PipelineEvent>,
+    sender: mpsc::UnboundedSender<PipelineEvent>,
     request: RunSession,
     initial_spec: WatchSpec,
 ) -> bool {
@@ -550,7 +548,7 @@ pub async fn supervise(
 }
 
 pub async fn run_once_with_signals(
-    sender: broadcast::Sender<PipelineEvent>,
+    sender: mpsc::UnboundedSender<PipelineEvent>,
     request: RunSession,
 ) -> PipelineCompletion {
     let mut signals = SignalCoordinator::install();

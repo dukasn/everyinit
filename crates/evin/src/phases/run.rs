@@ -407,7 +407,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_config_phase_sync_command() {
-        let (tx, _rx) = tokio::sync::broadcast::channel(10);
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let emitter = PipelineEmitter::new(tx);
         let mut ctx = CliContext {
             targets: vec!["sync".to_string()],

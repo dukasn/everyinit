@@ -129,7 +129,9 @@ async fn main() {
     };
     let watch_mode = initial_watch_spec.is_some();
 
-    let (tx, rx) = tokio::sync::broadcast::channel::<crate::events::PipelineEvent>(100);
+    // The UI is the sole consumer and lifecycle events must not be dropped
+    // when a verbose command publishes a large burst of captured output.
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<crate::events::PipelineEvent>();
 
     let ui_handle = tokio::spawn(crate::events::run_ui_reporter(
         rx,

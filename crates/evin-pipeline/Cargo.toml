@@ -16,8 +16,8 @@ evin-locales = { workspace = true }
 evin-gitrules = { workspace = true }
 evin-yaml = { workspace = true }
 evin-diagnostic = { workspace = true }
+evin-process = { workspace = true }
 regex.workspace = true
 evin-dotenv = { workspace = true }
 tokio-util = { workspace = true }
-libc = { workspace = true }
 esh = { workspace = true }

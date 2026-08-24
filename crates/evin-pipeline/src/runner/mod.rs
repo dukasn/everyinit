@@ -13,17 +13,19 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
-use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
+use std::ffi::OsString;
 
-const PROCESS_TERMINATION_GRACE: std::time::Duration = std::time::Duration::from_millis(1500);
+use evin_process::{
+    EnvironmentPolicy, OutputChunk, OutputStream, ProcessHandle, ProcessMode, ProcessSpec,
+    ProcessTermination,
+};
+use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 mod tests;
 
 pub trait RunnerStrategy {
-    fn build_command(&self, script: &str) -> Command;
+    fn command(&self, script: &str) -> (OsString, Vec<OsString>);
 }
 
 /// Target-dependent process runner implementation.
@@ -33,10 +35,8 @@ pub struct OsRunner;
 
 #[cfg(unix)]
 impl RunnerStrategy for OsRunner {
-    fn build_command(&self, script: &str) -> Command {
-        let mut cmd = Command::new("sh");
-        cmd.arg("-c").arg(script);
-        cmd
+    fn command(&self, script: &str) -> (OsString, Vec<OsString>) {
+        ("sh".into(), vec!["-c".into(), script.into()])
     }
 }
 
@@ -45,10 +45,8 @@ pub struct OsRunner;
 
 #[cfg(windows)]
 impl RunnerStrategy for OsRunner {
-    fn build_command(&self, script: &str) -> Command {
-        let mut cmd = Command::new("cmd.exe");
-        cmd.arg("/c").arg(script);
-        cmd
+    fn command(&self, script: &str) -> (OsString, Vec<OsString>) {
+        ("cmd.exe".into(), vec!["/c".into(), script.into()])
     }
 }
 
@@ -217,50 +215,6 @@ impl ShellRunner<OsRunner> {
     }
 }
 
-pub fn kill_process_group(pid: u32) {
-    #[cfg(unix)]
-    {
-        let pgid = pid as i32;
-        unsafe {
-            libc::kill(-pgid, libc::SIGKILL);
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .status();
-    }
-}
-
-pub fn terminate_process_group(pid: u32) {
-    #[cfg(unix)]
-    {
-        let pgid = pid as i32;
-        unsafe {
-            libc::kill(-pgid, libc::SIGTERM);
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T"])
-            .status();
-    }
-}
-
-struct ProcessGroupGuard {
-    pid: Option<u32>,
-}
-
-impl Drop for ProcessGroupGuard {
-    fn drop(&mut self) {
-        if let Some(pid) = self.pid {
-            kill_process_group(pid);
-        }
-    }
-}
-
 impl<S: RunnerStrategy> ShellRunner<S> {
     pub fn new_with_strategy(strategy: S) -> Self {
         Self { strategy }
@@ -284,12 +238,6 @@ impl<S: RunnerStrategy> ShellRunner<S> {
             return Ok(());
         }
 
-        let mut cmd = self.strategy.build_command(script);
-
-        // Apply environment and isolation
-        cmd.env_clear();
-        cmd.envs(&env);
-
         let cwd_str = ctx.cwd.as_deref().unwrap_or(".");
         let shell_binary = if cfg!(windows) { "cmd.exe" } else { "sh" };
         ctx.log
@@ -308,104 +256,43 @@ impl<S: RunnerStrategy> ShellRunner<S> {
                 });
         }
 
-        if let Some(cwd) = &ctx.cwd {
-            cmd.current_dir(cwd);
-        }
-
         let start_time = std::time::Instant::now();
-
-        // The Zombie Reaper: Tie child process lifecycle to the Command future
-        cmd.kill_on_drop(true);
-        #[cfg(unix)]
-        cmd.process_group(0);
-
-        // Async I/O Multiplexing
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-
-        let mut child = cmd.spawn().map_err(|e| {
+        let (program, args) = self.strategy.command(script);
+        let spec = ProcessSpec::new(
+            program,
+            ctx.cwd.as_deref().unwrap_or("."),
+            ProcessMode::SupervisedAutomation,
+        )
+        .args(args)
+        .environment(EnvironmentPolicy::Replace, env);
+        let (output_sender, output_receiver) = tokio::sync::mpsc::unbounded_channel();
+        let handle = ProcessHandle::spawn(spec, Some(output_sender)).map_err(|error| {
             evin_diagnostic::IssueCode::new("issue-process-spawn-failed")
-                .arg("error", e.to_string())
+                .arg("error", error.to_string())
         })?;
 
-        let pid = child.id();
-        let mut guard = ProcessGroupGuard { pid };
-
-        let stdout = child.stdout.take().unwrap();
-        let stderr = child.stderr.take().unwrap();
-
-        let log_out = ctx.log.clone();
-        let log_err = ctx.log.clone();
-
         let redaction_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let output_task = tokio::spawn(forward_process_output(
+            output_receiver,
+            ctx.log.clone(),
+            ctx.secrets.clone(),
+            redaction_count.clone(),
+        ));
+        let cancellation = cancel_token.cloned().unwrap_or_else(CancellationToken::new);
+        let result = handle.wait(cancellation).await.map_err(|error| {
+            evin_diagnostic::IssueCode::new("issue-process-wait-failed")
+                .arg("error", error.to_string())
+        })?;
+        let _ = output_task.await;
 
-        let secrets_out = ctx.secrets.clone();
-        let red_out = redaction_count.clone();
-        let stdout_handle = tokio::spawn(async move {
-            let mut reader = BufReader::new(stdout).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                let safe_line = secrets_out.redact(&line);
-                if safe_line != line {
-                    red_out.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                }
-                log_out.raw_output(evin_action_sdk::OutputStream::Stdout, &safe_line);
+        let status = match result.termination {
+            ProcessTermination::Cancelled => {
+                return Err(evin_diagnostic::IssueCode::new(
+                    "issue-execution-interrupted",
+                ));
             }
-        });
-
-        let secrets_err = ctx.secrets.clone();
-        let red_err = redaction_count.clone();
-        let stderr_handle = tokio::spawn(async move {
-            let mut reader = BufReader::new(stderr).lines();
-            while let Ok(Some(line)) = reader.next_line().await {
-                let safe_line = secrets_err.redact(&line);
-                if safe_line != line {
-                    red_err.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                }
-                log_err.raw_output(evin_action_sdk::OutputStream::Stderr, &safe_line);
-            }
-        });
-
-        let (status_res, cancelled) = if let Some(token) = cancel_token {
-            tokio::select! {
-                res = child.wait() => (res.map(Some).map_err(|e| {
-                    evin_diagnostic::IssueCode::new("issue-process-wait-failed").arg("error", e.to_string())
-                }), false),
-                _ = token.cancelled() => {
-                    if let Some(p) = guard.pid {
-                        terminate_process_group(p);
-                    }
-                    let graceful = tokio::time::timeout(PROCESS_TERMINATION_GRACE, child.wait()).await;
-                    if !matches!(graceful, Ok(Ok(_))) {
-                        if let Some(p) = guard.pid {
-                            kill_process_group(p);
-                        }
-                        let _ = child.wait().await;
-                    }
-                    (Ok(None), true)
-                }
-            }
-        } else {
-            (
-                child.wait().await.map(Some).map_err(|e| {
-                    evin_diagnostic::IssueCode::new("issue-process-wait-failed")
-                        .arg("error", e.to_string())
-                }),
-                false,
-            )
+            ProcessTermination::Exited(status) => status,
         };
-
-        // Wait for output streams to finish flushing
-        let _ = stdout_handle.await;
-        let _ = stderr_handle.await;
-        guard.pid = None;
-
-        if cancelled {
-            return Err(evin_diagnostic::IssueCode::new(
-                "issue-execution-interrupted",
-            ));
-        }
-
-        let status = status_res?.expect("completed process must have an exit status");
 
         let duration = start_time.elapsed();
         ctx.log
@@ -430,4 +317,81 @@ impl<S: RunnerStrategy> ShellRunner<S> {
 
         Ok(())
     }
+}
+
+async fn forward_process_output(
+    mut receiver: tokio::sync::mpsc::UnboundedReceiver<OutputChunk>,
+    log: evin_action_sdk::Logger,
+    secrets: std::sync::Arc<evin_action_sdk::secrets::SecretsProvider>,
+    redaction_count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+) {
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    while let Some(chunk) = receiver.recv().await {
+        let (buffer, stream) = match chunk.stream {
+            OutputStream::Stdout => (&mut stdout, evin_action_sdk::OutputStream::Stdout),
+            OutputStream::Stderr => (&mut stderr, evin_action_sdk::OutputStream::Stderr),
+        };
+        buffer.extend_from_slice(&chunk.bytes);
+        emit_complete_lines(buffer, stream, &log, &secrets, &redaction_count);
+    }
+    emit_final_line(
+        &mut stdout,
+        evin_action_sdk::OutputStream::Stdout,
+        &log,
+        &secrets,
+        &redaction_count,
+    );
+    emit_final_line(
+        &mut stderr,
+        evin_action_sdk::OutputStream::Stderr,
+        &log,
+        &secrets,
+        &redaction_count,
+    );
+}
+
+fn emit_complete_lines(
+    buffer: &mut Vec<u8>,
+    stream: evin_action_sdk::OutputStream,
+    log: &evin_action_sdk::Logger,
+    secrets: &evin_action_sdk::secrets::SecretsProvider,
+    redaction_count: &std::sync::atomic::AtomicUsize,
+) {
+    while let Some(newline) = buffer.iter().position(|byte| *byte == b'\n') {
+        let mut bytes: Vec<_> = buffer.drain(..=newline).collect();
+        bytes.pop();
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+        emit_line(&bytes, stream, log, secrets, redaction_count);
+    }
+}
+
+fn emit_final_line(
+    buffer: &mut Vec<u8>,
+    stream: evin_action_sdk::OutputStream,
+    log: &evin_action_sdk::Logger,
+    secrets: &evin_action_sdk::secrets::SecretsProvider,
+    redaction_count: &std::sync::atomic::AtomicUsize,
+) {
+    if !buffer.is_empty() {
+        emit_line(buffer, stream, log, secrets, redaction_count);
+        buffer.clear();
+    }
+}
+
+fn emit_line(
+    bytes: &[u8],
+    stream: evin_action_sdk::OutputStream,
+    log: &evin_action_sdk::Logger,
+    secrets: &evin_action_sdk::secrets::SecretsProvider,
+    redaction_count: &std::sync::atomic::AtomicUsize,
+) {
+    let line = String::from_utf8_lossy(bytes);
+    let safe_line = secrets.redact(&line);
+    if safe_line != line {
+        redaction_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+    log.raw_output(stream, &safe_line);
 }

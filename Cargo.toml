@@ -83,6 +83,7 @@ evin-yaml = { path = "crates/evin-yaml" }
 evin-diagnostic = { path = "crates/evin-diagnostic" }
 evin-ui = { path = "crates/evin-ui" }
 evin-doc = { path = "crates/evin-doc" }
+evin-process = { path = "crates/evin-process" }
 esh = { path = "crates/esh" }
 
 [profile.dev.package."*"]

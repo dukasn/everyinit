@@ -882,6 +882,7 @@ dependencies = [
  "evin-diagnostic",
  "evin-doc",
  "evin-io",
+ "evin-process",
  "evin-ui",
  "flate2",
  "glob",
@@ -1190,8 +1191,8 @@ dependencies = [
  "evin-dotenv",
  "evin-gitrules",
  "evin-locales",
+ "evin-process",
  "evin-yaml",
- "libc",
  "marked-yaml",
  "regex",
  "serde",
@@ -1209,6 +1210,18 @@ dependencies = [
  "evin-gitrules",
  "evin-locales",
  "tokio",
+]
+
+[[package]]
+name = "evin-process"
+version = "1.0.0-canary.100"
+dependencies = [
+ "libc",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "tokio-util",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
