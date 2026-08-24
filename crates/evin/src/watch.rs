@@ -699,9 +699,8 @@ impl SignalCoordinator {
         let _ = self.receiver.recv().await;
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn inject(&self) {
-        #[cfg(unix)]
         self.pending.store(true, Ordering::SeqCst);
     }
 }

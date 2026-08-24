@@ -1577,7 +1577,7 @@ mod tests {
                 .unwrap_or_else(|error| panic!("{theme} theme did not compile: {error}"));
             let boundaries: Vec<u16> = width_query
                 .captures_iter(&css)
-                .map(|capture| capture[1].parse().unwrap())
+                .map(|capture| capture[1].parse::<u16>().unwrap())
                 .collect();
 
             assert!(!boundaries.is_empty(), "{theme} emitted no width classes");

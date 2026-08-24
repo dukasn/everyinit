@@ -1,0 +1,55 @@
+name: Linux musl artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build x86_64 musl binaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      TARGET: x86_64-unknown-linux-musl
+      PACKAGE: evin-x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          targets: x86_64-unknown-linux-musl
+      - name: Install musl toolchain
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools
+      - name: Build static release binaries
+        run: cargo build --release --locked --target "$TARGET" -p evin -p esh
+      - name: Verify static binaries
+        run: |
+          for binary in "target/$TARGET/release/evin" "target/$TARGET/release/esh"; do
+            test -x "$binary"
+            if readelf -l "$binary" | grep -q 'Requesting program interpreter'; then
+              echo "$binary is dynamically linked"
+              exit 1
+            fi
+          done
+          "target/$TARGET/release/evin" --help >/dev/null
+          "target/$TARGET/release/esh" --help >/dev/null
+      - name: Package archive
+        run: |
+          mkdir -p "dist/$PACKAGE/THIRD_PARTY_NOTICES"
+          cp "target/$TARGET/release/evin" "target/$TARGET/release/esh" "dist/$PACKAGE/"
+          cp LICENSE "dist/$PACKAGE/"
+          cp THIRD_PARTY_NOTICES/* "dist/$PACKAGE/THIRD_PARTY_NOTICES/"
+          (
+            cd dist
+            sha256sum "$PACKAGE/evin" "$PACKAGE/esh" "$PACKAGE/LICENSE" > "$PACKAGE/SHA256SUMS"
+            tar -czf "$PACKAGE.tar.gz" "$PACKAGE"
+          )
+      - uses: actions/upload-artifact@v7
+        with:
+          name: evin-linux-x86_64-musl
+          path: dist/evin-x86_64-unknown-linux-musl.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+          archive: false
