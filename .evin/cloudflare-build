@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Bootstrap Rust in Cloudflare Pages, then build docs from this checkout.
+set -eu
+
+if ! command -v cargo >/dev/null 2>&1; then
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+  exec "$HOME/.cargo/bin/cargo" evin-dev run docs:build
+fi
+
+exec cargo evin-dev run docs:build

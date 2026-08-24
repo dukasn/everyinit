@@ -3,6 +3,9 @@ workspace:
   version: "1.0.0-canary.100"
   rules: ".evin/gitrules.yaml"
   install_hint: "cargo install --path crates/evin"
+  hook_runner:
+    command: cargo
+    args: [evin-dev]
   modules:
     - docs/
     - crates/evin/

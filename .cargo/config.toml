@@ -1,0 +1,3 @@
+[alias]
+# Run the Evin binary from this checkout with the pinned dependency graph.
+evin-dev = "run --locked -p evin --"

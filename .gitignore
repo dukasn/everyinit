@@ -11,6 +11,7 @@
 !/README.md
 !/docs/
 !/crates/
+!/.cargo/
 !/.evin/
 !/.github/
 !/builtins/

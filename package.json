@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "./.evin/cloudflare-build",
+    "docs:build": "cargo evin-dev run docs:build",
     "test:docs-responsive": "playwright test"
   },
   "devDependencies": {

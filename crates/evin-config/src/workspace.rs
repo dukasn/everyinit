@@ -22,6 +22,19 @@ pub enum ExecutionMode {
     Parallel,
 }
 
+/// Command used by generated Git hooks to invoke Evin.
+///
+/// The default is the `evin` executable found in `PATH`. Repositories that
+/// develop Evin itself can instead point hooks at a Cargo alias, so hooks
+/// always execute the source tree that is being changed on every platform.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HookRunner {
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkspaceConfig {
@@ -29,8 +42,32 @@ pub struct WorkspaceConfig {
     pub version: String,
     pub modules: Option<Vec<String>>,
     pub install_hint: Option<String>,
+    pub hook_runner: Option<HookRunner>,
     pub rules: Option<String>,
     pub execution: Option<ExecutionMode>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WorkspaceConfig;
+
+    #[test]
+    fn hook_runner_deserializes_with_arguments() {
+        let config: WorkspaceConfig = serde_yaml::from_str(
+            r#"
+name: example
+version: 1.0.0
+hook_runner:
+  command: cargo
+  args: [run, --locked, -p, evin, --]
+"#,
+        )
+        .unwrap();
+
+        let runner = config.hook_runner.unwrap();
+        assert_eq!(runner.command, "cargo");
+        assert_eq!(runner.args, ["run", "--locked", "-p", "evin", "--"]);
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

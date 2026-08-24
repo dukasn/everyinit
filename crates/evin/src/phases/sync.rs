@@ -148,8 +148,10 @@ impl Phase for SyncGitHooksPhase {
                 )
             })?;
         let manager = evin_git::manager::HookManager::new(env);
-        let dynamic_payload =
-            crate::sync::payload::build_hook_payload(config.install_hint.as_deref());
+        let dynamic_payload = crate::sync::payload::build_hook_payload(
+            config.hook_runner.as_ref(),
+            config.install_hint.as_deref(),
+        );
 
         let plans = crate::sync::hooks::plan_hooks(&manager, &ctx.hook_summaries, &dynamic_payload)
             .await
