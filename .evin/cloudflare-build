@@ -1,10 +1,22 @@
 #!/usr/bin/env sh
-# Bootstrap Rust in Cloudflare Pages, then build docs from this checkout.
+# Bootstrap Rust in Cloudflare Pages, then install and run this checkout.
 set -eu
 
 if ! command -v cargo >/dev/null 2>&1; then
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
-  exec "$HOME/.cargo/bin/cargo" evin-dev run docs:build
+  cargo_bin_dir="$HOME/.cargo/bin"
+  cargo_command="$cargo_bin_dir/cargo"
+else
+  cargo_bin_dir=
+  cargo_command=cargo
 fi
 
-exec cargo evin-dev run docs:build
+repository_root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "Cloudflare build must run inside a Git worktree." >&2
+  exit 1
+}
+install_root="$repository_root/.evin/build"
+"$cargo_command" install --locked --path "$repository_root/crates/evin" --root "$install_root" --force
+export PATH="$install_root/bin${cargo_bin_dir:+:$cargo_bin_dir}:$PATH"
+
+exec evin run docs:build
