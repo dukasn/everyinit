@@ -87,12 +87,6 @@ fn spawn_inner(spec: &ProcessSpec) -> io::Result<SpawnedProcess> {
     startup.lpAttributeList = attributes.pointer();
 
     let batch = is_batch_program(&spec.program);
-    let application_program = if batch {
-        OsString::from("cmd.exe")
-    } else {
-        spec.program.clone()
-    };
-    let application = wide_null(&application_program)?;
     let mut command_line = if batch {
         make_batch_command_line(&spec.program, &spec.args)?
     } else {
@@ -113,7 +107,7 @@ fn spawn_inner(spec: &ProcessSpec) -> io::Result<SpawnedProcess> {
     // exposed to the suspended child.
     let created = unsafe {
         CreateProcessW(
-            application.as_ptr(),
+            std::ptr::null(),
             command_line.as_mut_ptr(),
             std::ptr::null(),
             std::ptr::null(),

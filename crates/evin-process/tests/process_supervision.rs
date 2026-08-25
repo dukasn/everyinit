@@ -331,6 +331,30 @@ async fn windows_interactive_mode_accepts_inherited_standard_handles() {
     assert!(matches!(result.termination, ProcessTermination::Exited(status) if status.success()));
 }
 
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_spawns_executable_from_system_path() {
+    let spec = ProcessSpec::new(
+        "cmd.exe",
+        std::env::current_dir().unwrap(),
+        ProcessMode::SupervisedAutomation,
+    )
+    .args(["/d", "/c", "echo", "path-resolved"]);
+    let result = ProcessHandle::spawn(spec, None)
+        .unwrap()
+        .wait(CancellationToken::new())
+        .await
+        .unwrap();
+    assert!(matches!(result.termination, ProcessTermination::Exited(status) if status.success()));
+    assert_eq!(
+        result
+            .stdout
+            .as_deref()
+            .map(|b| b.strip_suffix(b"\r\n").unwrap_or(b)),
+        Some(b"path-resolved".as_slice())
+    );
+}
+
 #[test]
 fn rejects_non_inherited_interactive_stdio() {
     let mut spec = ProcessSpec::new(
