@@ -7,6 +7,61 @@
     const playIconSvg = '<svg class="evin-icon" aria-hidden="true"><use href="#icon-player-play"></use></svg>';
     const copyIconSvg = '<svg class="evin-icon" aria-hidden="true"><use href="#icon-copy"></use></svg>';
     const checkIconSvg = '<svg class="evin-icon" style="color:var(--ui-color-primary)" aria-hidden="true"><use href="#icon-check"></use></svg>';
+    const tapePlayers = window.EvinTapePlayers || (window.EvinTapePlayers = new WeakMap());
+
+    function createTapePlayer(tape) {
+        const svg = tape.querySelector('.evin-terminal-tape[data-tape-duration-ms]');
+        const duration = Number(svg?.dataset.tapeDurationMs);
+        const frames = [...(svg?.querySelectorAll('.tape-frame') || [])].map((frame) => ({
+            element: frame,
+            start: Number(frame.dataset.tapeFrameStartMs),
+        }));
+        if (!svg || !Number.isFinite(duration) || duration <= 0 || frames.length === 0) return null;
+
+        let animationFrame = 0;
+        let paused = false;
+        let elapsed = 0;
+        let startedAt = performance.now();
+        let activeFrame = -1;
+
+        const frameIndexAt = (time) => {
+            const loopTime = time % duration;
+            for (let index = frames.length - 1; index >= 0; index -= 1) {
+                if (frames[index].start <= loopTime) return index;
+            }
+            return 0;
+        };
+
+        const showFrame = (index) => {
+            if (index === activeFrame) return;
+            frames.forEach((frame, frameIndex) => {
+                frame.element.style.display = frameIndex === index ? 'inline' : 'none';
+            });
+            activeFrame = index;
+        };
+
+        const tick = (now) => {
+            if (paused) return;
+            elapsed = now - startedAt;
+            showFrame(frameIndexAt(elapsed));
+            animationFrame = requestAnimationFrame(tick);
+        };
+
+        showFrame(0);
+        animationFrame = requestAnimationFrame(tick);
+        return {
+            setPaused(nextPaused) {
+                if (paused === nextPaused) return;
+                paused = nextPaused;
+                if (paused) {
+                    cancelAnimationFrame(animationFrame);
+                } else {
+                    startedAt = performance.now() - elapsed;
+                    animationFrame = requestAnimationFrame(tick);
+                }
+            },
+        };
+    }
 
     function fallbackCopy(text, onSuccess) {
         try {
@@ -54,6 +109,7 @@
         const tape = button.closest('.terminal-tape');
         if (!tape) return;
 
+        tapePlayers.get(tape)?.setPaused(paused);
         tape.classList.toggle('is-paused', paused);
         button.innerHTML = paused ? playIconSvg : pauseIconSvg;
         button.setAttribute('aria-pressed', String(paused));
@@ -89,18 +145,25 @@
         });
     };
 
-    function disablePlaybackForReducedMotion() {
-        if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-        document.querySelectorAll('.tape-playback').forEach(function(button) {
-            button.disabled = true;
-            button.setAttribute('aria-label', 'Playback disabled because reduced motion is enabled');
-            button.setAttribute('title', 'Playback disabled because reduced motion is enabled');
+    function initializePlayback() {
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+            document.querySelectorAll('.tape-playback').forEach(function(button) {
+                button.disabled = true;
+                button.setAttribute('aria-label', 'Playback disabled because reduced motion is enabled');
+                button.setAttribute('title', 'Playback disabled because reduced motion is enabled');
+            });
+            return;
+        }
+        document.querySelectorAll('.terminal-tape').forEach(function(tape) {
+            if (tapePlayers.has(tape)) return;
+            const player = createTapePlayer(tape);
+            if (player) tapePlayers.set(tape, player);
         });
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', disablePlaybackForReducedMotion);
+        document.addEventListener('DOMContentLoaded', initializePlayback);
     } else {
-        disablePlaybackForReducedMotion();
+        initializePlayback();
     }
 })();

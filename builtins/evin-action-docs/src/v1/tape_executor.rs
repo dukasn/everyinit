@@ -1013,7 +1013,7 @@ mod tests {
         assert!(svg.contains("/tmp"));
         assert!(svg.contains("term-command"));
         assert_eq!(final_frame.matches(">cd</tspan>").count(), 1);
-        assert!(svg.contains("prefers-reduced-motion"));
+        assert!(svg.contains("data-tape-duration-ms"));
     }
 
     #[test]
@@ -1069,7 +1069,7 @@ mod tests {
         assert!(svg.contains("/workspace"));
         assert!(!svg.contains(&workspace));
         assert!(svg.contains("term-builtin"));
-        assert!(svg.contains("prefers-reduced-motion"));
+        assert!(svg.contains("data-tape-duration-ms"));
     }
 
     #[test]

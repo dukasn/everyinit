@@ -87,40 +87,33 @@ pub fn render_svg(config: &TapeConfig, frames: &[TerminalFrame], description: &s
     let title = config.title.as_deref().unwrap_or("Terminal recording");
     let tape_id = stable_tape_id(config, frames, description);
     let mut output = format!(
-        "<svg class=\"evin-terminal-tape\" role=\"img\" aria-labelledby=\"tape-title-{tape_id:016x} tape-desc-{tape_id:016x}\" style=\"user-select:none;-webkit-user-select:none;pointer-events:none\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\"><title id=\"tape-title-{tape_id:016x}\">{}</title><desc id=\"tape-desc-{tape_id:016x}\">{}</desc><style>",
+        "<svg class=\"evin-terminal-tape\" data-tape-duration-ms=\"{duration}\" role=\"img\" aria-labelledby=\"tape-title-{tape_id:016x} tape-desc-{tape_id:016x}\" style=\"user-select:none;-webkit-user-select:none;pointer-events:none\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\"><title id=\"tape-title-{tape_id:016x}\">{}</title><desc id=\"tape-desc-{tape_id:016x}\">{}</desc><style>",
         escape(title),
         escape(description)
     );
-    output.push_str(".evin-terminal-tape{--term-bg:var(--ui-color-code-surface);--term-fg:var(--ui-color-code-on-surface);background:var(--term-bg)}.tape-frame{visibility:hidden;animation-duration:");
-    output.push_str(&format!(
-        "{duration}ms;animation-iteration-count:infinite;animation-timing-function:steps(1,end)}}"
-    ));
+    output.push_str(".evin-terminal-tape{--term-bg:var(--ui-color-code-surface);--term-fg:var(--ui-color-code-on-surface);background:var(--term-bg);overflow:hidden}.evin-terminal-tape,.tape-frame,.tape-frame text,.tape-frame tspan{font-family:'IBM Plex Mono','Cascadia Mono','Cascadia Code','Fira Code',ui-monospace,Menlo,Monaco,Consolas,monospace;font-kerning:none;font-variant-ligatures:none;font-synthesis:none;text-anchor:start;dominant-baseline:alphabetic}");
     output.push_str(".term-default{fill:var(--term-fg)}.term-command,.term-builtin{fill:var(--ui-syn-function)}.term-keyword{fill:var(--ui-syn-keyword)}.term-flag,.term-punctuation{fill:var(--ui-syn-punctuation)}.term-variable{fill:var(--ui-syn-variable)}.term-string{fill:var(--ui-syn-string)}.term-number{fill:var(--ui-syn-constant)}.term-operator{fill:var(--ui-syn-operator)}.term-comment{fill:var(--ui-syn-comment)}.term-ansi-0{fill:var(--ui-palette-black);stroke:var(--ui-palette-black)}.term-ansi-1{fill:var(--ui-palette-red);stroke:var(--ui-palette-red)}.term-ansi-2{fill:var(--ui-palette-green);stroke:var(--ui-palette-green)}.term-ansi-3{fill:var(--ui-palette-yellow);stroke:var(--ui-palette-yellow)}.term-ansi-4{fill:var(--ui-palette-blue);stroke:var(--ui-palette-blue)}.term-ansi-5{fill:var(--ui-palette-magenta);stroke:var(--ui-palette-magenta)}.term-ansi-6{fill:var(--ui-palette-cyan);stroke:var(--ui-palette-cyan)}.term-ansi-7,.term-ansi-8,.term-ansi-15{fill:var(--ui-palette-white);stroke:var(--ui-palette-white)}.term-ansi-9{fill:var(--ui-palette-red);stroke:var(--ui-palette-red)}.term-ansi-10{fill:var(--ui-palette-green);stroke:var(--ui-palette-green)}.term-ansi-11{fill:var(--ui-palette-yellow);stroke:var(--ui-palette-yellow)}.term-ansi-12{fill:var(--ui-palette-blue);stroke:var(--ui-palette-blue)}.term-ansi-13{fill:var(--ui-palette-magenta);stroke:var(--ui-palette-magenta)}.term-ansi-14{fill:var(--ui-palette-cyan);stroke:var(--ui-palette-cyan)}.term-bold{font-weight:700}.term-dim{opacity:0.7}.term-italic{font-style:italic}.term-underline{text-decoration:underline}.term-strikethrough{text-decoration:line-through}.term-overline{text-decoration:overline}.term-hidden{opacity:0}.term-invert-fg{fill:var(--term-bg)}.term-invert-bg{fill:var(--term-fg)}.term-underline-curly{fill:none;stroke-width:1.2;stroke-linecap:round}");
-    for (index, timestamp) in timeline.iter().enumerate() {
-        let start = percent(*timestamp, duration);
-        let end = timeline
-            .get(index + 1)
-            .map(|next| percent(*next, duration))
-            .unwrap_or(100.0);
-        let visible_end = (end - 0.001).max(start);
-        output.push_str(&format!("@keyframes tape-{tape_id:016x}-{index}{{0%,{start:.3}%{{visibility:hidden}}{start:.3}%,{visible_end:.3}%{{visibility:visible}}{end:.3}%,100%{{visibility:hidden}}}}.tape-frame-{tape_id:016x}-{index}{{animation-name:tape-{tape_id:016x}-{index}}}"));
-    }
-    output.push_str(&format!("@media(prefers-reduced-motion:reduce){{.tape-frame{{animation:none;display:none}}.tape-frame-{}{{display:block;visibility:visible}}}}</style>", frames.len() - 1));
+    output.push_str("</style>");
     output.push_str(&format!(
         "<rect width=\"{width}\" height=\"{height}\" fill=\"var(--term-bg)\"/>"
     ));
     for (index, frame) in frames.iter().enumerate() {
-        output.push_str(&format!("<g class=\"tape-frame tape-frame-{tape_id:016x}-{index}\" style=\"font-family:'IBM Plex Mono',monospace;font-kerning:none;font-variant-ligatures:none;font-synthesis:none\" font-size=\"{}\" xml:space=\"preserve\">", metrics.font_size));
+        let display = if index + 1 == frames.len() {
+            "inline"
+        } else {
+            "none"
+        };
+        output.push_str(&format!("<g class=\"tape-frame\" data-tape-frame-start-ms=\"{}\" display=\"{display}\" font-size=\"{}\" xml:space=\"preserve\">", timeline[index], metrics.font_size));
         for row in 0..frame.rows.min(rendered_rows) {
             let start = usize::from(row) * usize::from(frame.cols);
             let cells = &frame.cells[start..start + usize::from(frame.cols)];
             write_row_backgrounds(&mut output, cells, row, metrics);
             output.push_str(&format!(
-                "<text x=\"{}\" y=\"{}\" textLength=\"{row_width}\" lengthAdjust=\"spacingAndGlyphs\">",
+                "<text x=\"{}\" y=\"{}\">",
                 metrics.inset,
                 metrics.inset + u32::from(row) * metrics.row_height + metrics.baseline
             ));
-            write_row(&mut output, cells);
+            write_row(&mut output, cells, metrics);
             output.push_str("</text>");
             write_row_underlines(&mut output, cells, row, metrics);
             write_row_decorations(&mut output, cells, row, metrics);
@@ -166,24 +159,45 @@ fn occupied_rows(frame: &TerminalFrame) -> u16 {
         .max(frame.cursor_row.saturating_add(1))
 }
 
-fn write_row(output: &mut String, cells: &[super::screen::TerminalCell]) {
-    let mut active: Option<&CellAttributes> = None;
-    for cell in cells.iter().filter(|cell| !cell.continuation) {
-        if active != Some(&cell.attributes) {
-            if active.is_some() {
-                output.push_str("</tspan>");
+fn write_row(output: &mut String, cells: &[super::screen::TerminalCell], metrics: TerminalMetrics) {
+    let mut column = 0;
+    while column < cells.len() {
+        if cells[column].continuation {
+            column += 1;
+            continue;
+        }
+
+        let attributes = &cells[column].attributes;
+        let mut positions = String::new();
+        let mut content = String::new();
+        while column < cells.len() {
+            let cell = &cells[column];
+            if cell.continuation {
+                column += 1;
+                continue;
             }
-            output.push_str(&format!("<tspan {}>", style(&cell.attributes)));
-            active = Some(&cell.attributes);
+            if &cell.attributes != attributes {
+                break;
+            }
+
+            if !positions.is_empty() {
+                positions.push(' ');
+            }
+            positions.push_str(
+                &(metrics.inset + u32::try_from(column).unwrap_or(u32::MAX) * metrics.cell_width)
+                    .to_string(),
+            );
+            if cell.attributes.hidden {
+                content.push(' ');
+            } else {
+                content.push_str(&escape_char(cell.ch));
+            }
+            column += 1;
         }
-        if cell.attributes.hidden {
-            output.push(' ');
-        } else {
-            output.push_str(&escape_char(cell.ch));
-        }
-    }
-    if active.is_some() {
-        output.push_str("</tspan>");
+        output.push_str(&format!(
+            "<tspan x=\"{positions}\" {}>{content}</tspan>",
+            style(attributes)
+        ));
     }
 }
 
@@ -605,10 +619,6 @@ fn indexed_color(index: u8) -> String {
     format!("rgb({red} {green} {blue})")
 }
 
-fn percent(time: u32, duration: u32) -> f64 {
-    f64::from(time) / f64::from(duration.max(1)) * 100.0
-}
-
 fn escape(value: &str) -> String {
     value.chars().map(escape_char).collect()
 }
@@ -636,7 +646,7 @@ mod tests {
             &[screen.capture(40)],
             "A command recording",
         );
-        assert!(svg.contains("prefers-reduced-motion"));
+        assert!(svg.contains("data-tape-duration-ms"));
         assert!(svg.contains("var(--ui-color-code-surface)"));
         assert!(svg.contains("term-ansi-1"));
         assert!(svg.contains(".term-command,.term-builtin{fill:var(--ui-syn-function)}"));
@@ -686,7 +696,7 @@ mod tests {
     }
 
     #[test]
-    fn metrics_define_text_fitting_and_cursor_geometry() {
+    fn metrics_define_discrete_text_grid_and_cursor_geometry() {
         let mut screen = VirtualScreen::new(1, 8);
         screen.write_str("界");
         let config = TapeConfig {
@@ -696,8 +706,12 @@ mod tests {
         };
         let svg = render_svg(&config, &[screen.capture(40)], "metrics");
 
-        assert!(svg.contains("font-family:'IBM Plex Mono',monospace"));
-        assert!(svg.contains("textLength=\"72\" lengthAdjust=\"spacingAndGlyphs\""));
+        assert!(svg.contains("'IBM Plex Mono','Cascadia Mono','Cascadia Code','Fira Code'"));
+        assert!(svg.contains("data-tape-duration-ms=\"1040\""));
+        assert!(svg.contains("<text x=\"16\" y=\"31\">"));
+        assert!(svg.contains("<tspan x=\"16 34 43 52 61 70 79\""));
+        assert!(!svg.contains("textLength="));
+        assert!(!svg.contains("lengthAdjust="));
         assert!(svg.contains("y=\"31\""));
         assert!(svg.contains("class=\"term-cursor\" x=\"34\" y=\"16\" width=\"2\" height=\"20\""));
     }
@@ -714,8 +728,10 @@ mod tests {
             "visible final output",
         );
 
-        assert!(svg.contains("animation-duration:1200ms"));
-        assert!(svg.contains("16.667%,99.999%{visibility:visible}"));
+        assert!(svg.contains("data-tape-duration-ms=\"1200\""));
+        assert!(svg.contains("data-tape-frame-start-ms=\"200\" display=\"inline\""));
+        assert!(!svg.contains("@keyframes"));
+        assert!(!svg.contains("animation:"));
     }
 
     #[test]
@@ -726,22 +742,40 @@ mod tests {
         let typed = screen.capture(0);
         let svg = render_svg(&TapeConfig::default(), &[initial, typed], "no overlap");
 
-        assert!(svg.contains("0.000%,0.099%{visibility:visible}0.100%,100%{visibility:hidden}"));
-        assert!(svg.contains("0.100%,99.999%{visibility:visible}"));
+        assert!(svg.contains("data-tape-frame-start-ms=\"0\" display=\"none\""));
+        assert!(svg.contains("data-tape-frame-start-ms=\"1\" display=\"inline\""));
     }
 
     #[test]
-    fn namespaces_multiple_tape_timelines() {
+    fn namespaces_multiple_tape_records() {
         let screen = VirtualScreen::new(1, 8);
         let first = render_svg(&TapeConfig::default(), &[screen.capture(0)], "first tape");
         let second = render_svg(&TapeConfig::default(), &[screen.capture(0)], "second tape");
 
-        let animation_name = |svg: &str| {
-            let start = svg.find("@keyframes ").unwrap() + "@keyframes ".len();
-            svg[start..svg[start..].find('{').unwrap() + start].to_string()
-        };
-        assert_ne!(animation_name(&first), animation_name(&second));
+        assert_ne!(first, second);
         assert!(!first.contains("aria-labelledby=\"tape-title tape-desc\""));
+        assert!(!first.contains("visibility:hidden"));
+        assert!(!first.contains("@keyframes"));
+        assert!(first.contains("data-tape-frame-start-ms=\"0\" display=\"inline\""));
+    }
+
+    #[test]
+    fn emits_complete_frames_at_shared_coordinates_for_script_selection() {
+        let mut screen = VirtualScreen::new(1, 8);
+        let initial = screen.capture(0);
+        screen.write_str("done");
+        let final_frame = screen.capture(200);
+        let config = TapeConfig {
+            rows: 1,
+            cols: 8,
+            ..TapeConfig::default()
+        };
+
+        let svg = render_svg(&config, &[initial, final_frame], "scripted frame selection");
+
+        assert_eq!(svg.matches("class=\"tape-frame\"").count(), 2);
+        assert!(svg.contains("data-tape-frame-start-ms=\"0\" display=\"none\""));
+        assert!(svg.contains("data-tape-frame-start-ms=\"200\" display=\"inline\""));
     }
 
     #[test]
