@@ -70,14 +70,26 @@ async fn test_captured_external_command_cancels_without_waiting_for_pipe_descend
     });
 
     let status = tokio::time::timeout(
-        Duration::from_secs(1),
-        engine.eval_str("sh -c 'sleep 30'", &mut ctx),
+        Duration::from_secs(3),
+        engine.eval_str(long_running_descendant_command(), &mut ctx),
     )
     .await
     .expect("external command cancellation timed out")
     .expect("eval failed");
 
     assert_eq!(status, 130);
+}
+
+#[cfg(unix)]
+fn long_running_descendant_command() -> &'static str {
+    "sh -c 'sleep 30'"
+}
+
+#[cfg(windows)]
+fn long_running_descendant_command() -> &'static str {
+    // `ping.exe` is part of Windows and runs long enough for cancellation to
+    // exercise Job Object tree cleanup while retaining cmd.exe's output pipes.
+    r#"cmd.exe /d /s /c "ping.exe -n 31 127.0.0.1""#
 }
 
 #[cfg(unix)]

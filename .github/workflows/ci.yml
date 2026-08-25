@@ -26,19 +26,31 @@ jobs:
         run: cargo test --workspace --locked
 
   quality:
-    name: Formatting and Clippy
+    name: Formatting, Clippy, and browser checks
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy, rustfmt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run strict Clippy lints
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Build documentation site
+        run: cargo evin-dev run docs:build
+      - name: Install browser test dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run Chromium documentation checks
+        run: npm run test:docs-responsive
 
   process-stress:
     name: Process stress (${{ matrix.os }})

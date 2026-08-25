@@ -77,5 +77,6 @@ async fn test_grep_and_glob() {
     assert_eq!(code, 0);
     let output = ctx.get_captured_stdout().unwrap();
     assert!(output.contains("println!(\"Hello Evin!\");"));
-    assert!(output.contains("src/main.rs") || output.contains("src/lib.rs"));
+    let normalized_output = output.replace('\\', "/");
+    assert!(normalized_output.contains("src/main.rs") || normalized_output.contains("src/lib.rs"));
 }

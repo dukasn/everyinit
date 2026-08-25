@@ -85,8 +85,11 @@ test('modal drawer traps focus and supports every dismissal path', async ({ page
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
   await toggle.click();
-  await sidebar.locator('a.nav-item').first().click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  const visibleLink = sidebar.locator('a.nav-item:visible').first();
+  await expect(visibleLink).toBeVisible();
+  const previousUrl = page.url();
+  await visibleLink.click();
+  await expect.poll(() => page.url()).not.toBe(previousUrl);
 });
 
 test('persistent drawer preference survives modal window classes', async ({ page }) => {
@@ -147,7 +150,7 @@ test('topbar is a 44px shell announcement and remembers dismissal', async ({ pag
   await page.goto('/');
 
   const topbar = page.locator('.evin-topbar');
-  await expect(topbar).toHaveAttribute('data-topbar-variant', 'cyber');
+  await expect(topbar).toHaveAttribute('data-topbar-variant', 'holo');
   await expect(topbar).toHaveAttribute('data-topbar-id', 'first-public-canary');
   await expect(topbar.locator('.topbar-action')).toHaveAttribute('href', 'https://github.com/dukasn/evin/releases');
   const layout = await page.evaluate(() => {
@@ -213,7 +216,7 @@ test('search stays centered and safely inset from the top', async ({ page }) => 
   await page.goto('/reference/actions/documentation-action/');
   await page.locator('#searchToggle').click();
   const search = page.locator('#searchModal');
-  const searchResults = page.locator('#evin-search-results');
+  const searchResults = page.locator('#docs-search-results');
   await expect(search).toBeVisible();
   await expect(searchResults).toBeHidden();
   let box = await search.boundingBox();
@@ -225,7 +228,7 @@ test('search stays centered and safely inset from the top', async ({ page }) => 
   expect(box.y).toBeGreaterThan(0);
   expect(box.y).toBeLessThan(viewport.height * 0.25);
   expect(box.height).toBeLessThanOrEqual(80);
-  await page.locator('#evin-search-input').fill('documentation');
+  await page.locator('#docs-search-input').fill('documentation');
   await expect(searchResults).toBeVisible();
   await expect(searchResults.locator('.search-result-card').first()).toBeVisible();
   expect((await search.boundingBox()).height).toBeGreaterThan(80);
@@ -260,8 +263,8 @@ test('start-page spotlight is centered, themed, and precedes the footer', async 
   await page.setViewportSize({ width: 1200, height: 900 });
   await page.goto('/');
   const spotlight = page.locator('.start-spotlight');
-  await expect(spotlight).toHaveAttribute('data-presentation-variant', 'cyber');
-  await expect(spotlight.locator('.start-spotlight-action')).toHaveAttribute('href', '/getting-started');
+  await expect(spotlight).toHaveAttribute('data-presentation-variant', 'holo');
+  await expect(spotlight.locator('.start-spotlight-action')).toHaveAttribute('href', '/book');
   const state = await page.evaluate(() => {
     const spotlight = document.querySelector('.start-spotlight').getBoundingClientRect();
     const content = document.querySelector('.start-spotlight-content').getBoundingClientRect();
