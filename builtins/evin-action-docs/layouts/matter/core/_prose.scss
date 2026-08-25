@@ -1,31 +1,83 @@
 h1, h2, h3, h4, h5, h6 {
     position: relative;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 0.4em;
     scroll-margin-top: calc(var(--ui-layout-header-height) + var(--ui-ref-space-6));
     color: var(--ui-color-on-surface);
 
-    .anchor-link {
-        position: absolute;
-        right: 100%;
-        top: 0;
-        bottom: 0;
+    .heading-content {
+        min-width: 0;
+    }
+
+    .heading-permalink {
         display: inline-flex;
         align-items: center;
-        padding-right: 0.3em;
-        color: var(--ui-color-primary);
-        font-weight: 500;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 1.75rem;
+        height: 1.75rem;
+        margin-inline-start: 0.1em;
+        border-radius: var(--ui-shape-corner-full);
+        color: var(--ui-color-on-surface-variant);
         text-decoration: none;
         user-select: none;
         opacity: 0;
-        transition: opacity var(--ui-motion-duration-short, 0.15s) var(--ui-motion-easing-standard, ease);
+        transform: translateX(-0.2em);
+        transition:
+            background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+            color var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+            opacity var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
+            transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+
+        .evin-icon {
+            width: 0.875rem;
+            height: 0.875rem;
+        }
 
         &:hover,
         &:focus-visible {
             opacity: 1;
+            transform: none;
+            background: var(--ui-color-state-hover);
+            color: var(--ui-color-primary);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--ui-color-primary);
+            outline-offset: 2px;
         }
     }
 
-    &:hover .anchor-link {
-        opacity: 0.75;
+    &:hover .heading-permalink,
+    .heading-permalink:focus-visible {
+        opacity: 0.8;
+        transform: none;
+    }
+}
+
+/* A targeted heading is the destination of a shared link. Keep its affordance
+ * visible long enough to orient the reader after navigation. */
+h1:target .heading-permalink,
+h2:target .heading-permalink,
+h3:target .heading-permalink,
+h4:target .heading-permalink,
+h5:target .heading-permalink,
+h6:target .heading-permalink {
+    opacity: 1;
+    transform: none;
+    color: var(--ui-color-primary);
+}
+
+/* Hover-only disclosure makes the control unobtrusive on a pointer device, but
+ * touch devices need a visible, reliably tappable affordance. */
+@media (hover: none), (pointer: coarse) {
+    h1, h2, h3, h4, h5, h6 {
+        .heading-permalink {
+            opacity: 0.72;
+            transform: none;
+        }
     }
 }
 
@@ -163,6 +215,18 @@ a {
 .prose a:focus-visible {
     color: var(--ui-color-link-hover);
     text-decoration-color: var(--ui-color-link-hover);
+}
+
+/* Heading permalinks are controls, not prose links. Keep their compact icon
+ * treatment even though they live inside the document's normal link scope. */
+.prose h1 .heading-permalink,
+.prose h2 .heading-permalink,
+.prose h3 .heading-permalink,
+.prose h4 .heading-permalink,
+.prose h5 .heading-permalink,
+.prose h6 .heading-permalink {
+    font-weight: inherit;
+    text-decoration: none;
 }
 
 pre:not(.code-surface pre) {
@@ -434,4 +498,3 @@ hr, .m3-divider {
         color: var(--ui-color-primary);
     }
 }
-

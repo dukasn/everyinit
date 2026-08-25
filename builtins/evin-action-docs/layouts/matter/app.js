@@ -23,11 +23,27 @@ const App = (() => {
 
     const isModal = () => ['compact', 'medium'].includes(root.dataset.windowSize);
 
+    const updateTopbarMessageOverflow = () => {
+        $$('.docs-topbar, .evin-topbar').forEach(tb => {
+            const message = $('.topbar-message', tb);
+            const track = $('.topbar-message-track', tb);
+            if (!message || !track) return;
+            tb.classList.remove('has-overflowing-message');
+            tb.style.removeProperty('--topbar-message-scroll-distance');
+            const distance = track.scrollWidth - message.clientWidth;
+            if (distance > 1) {
+                tb.style.setProperty('--topbar-message-scroll-distance', `-${distance}px`);
+                tb.classList.add('has-overflowing-message');
+            }
+        });
+    };
+
     const setDrawer = (open, restore = false) => {
         drawerOpen = !!open;
         const modal = isModal();
-        $('#appLayout')?.classList.toggle('sidebar-open', modal && drawerOpen);
-        $('#appLayout')?.classList.toggle('sidebar-closed', !modal && !drawerOpen);
+        const layout = $('#appLayout');
+        layout?.classList.toggle('sidebar-open', drawerOpen);
+        layout?.classList.toggle('sidebar-closed', !modal && !drawerOpen);
         body.classList.toggle('modal-drawer-open', modal && drawerOpen);
         $('#sidebarToggle')?.setAttribute('aria-expanded', String(drawerOpen));
         $('#sidebar')?.setAttribute('aria-hidden', String(!drawerOpen));
@@ -161,37 +177,27 @@ const App = (() => {
     // 4. SEARCH RENDERING & SCORING
     const searchInput = () => $('#docs-search-input, #evin-search-input');
     const searchResults = () => $('#docs-search-results, #evin-search-results');
-    const promptLayer = () => $('#docs-search-prompt, #evin-search-prompt');
     const ICONS = ['description', 'code', 'heading'];
     let promptIdx = 0;
 
-    const updatePromptVisibility = () => {
-        const l = promptLayer(), i = searchInput();
-        if (l) l.hidden = !!(i && i.value);
-    };
-
-    const cyclePrompt = (animate) => {
-        const l = promptLayer(), i = searchInput();
-        if (!l) return;
+    const cyclePrompt = () => {
+        const i = searchInput();
+        if (!i || i.value) return;
         const p = searchData?.prompts || ['Search documentation...'];
-        l.hidden = !!(i && i.value);
-        const setTxt = () => { l.textContent = p[promptIdx % p.length] || 'Search documentation...'; l.classList.remove('is-transitioning'); };
-        if (animate && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            l.classList.add('is-transitioning');
-            setTimeout(setTxt, 120);
-        } else setTxt();
+        i.placeholder = matchMedia('(max-width: 639px)').matches
+            ? 'Search documentation...'
+            : (p[promptIdx % p.length] || 'Search documentation...');
     };
 
     const managePrompt = (start) => {
         clearInterval(promptTimer);
-        const i = searchInput(), l = promptLayer();
-        if (l) l.hidden = !!(i && i.value);
+        const i = searchInput();
         if (start && (!i || !i.value)) {
             promptIdx = 0;
             cyclePrompt();
             promptTimer = setInterval(() => {
                 promptIdx = (promptIdx + 1) % (searchData?.prompts?.length || 1);
-                cyclePrompt(true);
+                cyclePrompt();
             }, 3000);
         }
     };
@@ -302,14 +308,15 @@ const App = (() => {
         results.innerHTML = scored.map(([docId], idx) => {
             const [slug, page_title, section_title, anchor, reference_id, snippet, kind] = resolveDoc(docId);
             const href = `${depth}${slug === 'index' ? 'index.html' : slug + '/index.html'}${anchor ? '#' + anchor : ''}`;
+            const title = anchor && section_title !== page_title ? section_title : page_title;
+            const source = title === page_title ? '' : `<span class="search-result-source">${escape(page_title)}</span>`;
             return `<button class="dialog-item search-result-card ${idx ? '' : 'selected'}" data-href="${href}">
                 <div class="search-result-left"><svg class="docs-icon" aria-hidden="true"><use href="#icon-${ICONS[kind] || 'description'}"></use></svg></div>
                 <div class="search-result-body">
                     <div class="search-result-header">
-                        ${reference_id ? `<span class="m3-reference-badge">${highlightText(reference_id, terms)}</span>` : ''}
-                        <span class="m3-category-badge">${escape(page_title)}</span>
-                        ${anchor && section_title !== page_title ? `<span class="search-result-title">${highlightText(section_title, terms)}</span>` : ''}
+                        <span class="search-result-title">${highlightText(title, terms)}</span>
                     </div>
+                    ${(reference_id || source) ? `<div class="search-result-meta">${reference_id ? `<span class="m3-reference-badge">${highlightText(reference_id, terms)}</span>` : ''}${source}</div>` : ''}
                     <div class="search-result-snippet">${extractSnippet(snippet, terms)}</div>
                 </div>
             </button>`;
@@ -431,15 +438,20 @@ const App = (() => {
                 setDrawer(isModal() ? false : (body.dataset.pageKind !== 'start' ? drawerOpen : false));
             }
         };
-        window.addEventListener('resize', applyWindow, { passive: true });
+        window.addEventListener('resize', () => {
+            applyWindow();
+            updateTopbarMessageOverflow();
+            cyclePrompt();
+        }, { passive: true });
         applyWindow();
+        requestAnimationFrame(updateTopbarMessageOverflow);
+        document.fonts?.ready.then(updateTopbarMessageOverflow);
 
         $$('.nav-group-toggle, .nav-subgroup-toggle').forEach(t => {
             const group = t.closest('.nav-group')?.dataset.navGroup || t.closest('.nav-subgroup')?.dataset.navSubgroup;
             const list = document.getElementById(t.getAttribute('aria-controls'));
-            const isPersistedCollapsed = group && navState[group] === false;
             const isActive = list?.dataset.activeGroup === 'true' || Boolean(list?.querySelector('.nav-item.active, [data-active-group="true"]'));
-            const exp = isActive || !isPersistedCollapsed;
+            const exp = isActive || (group && navState[group] === true);
             t.setAttribute('aria-expanded', String(Boolean(exp)));
             if (list) list.hidden = !exp;
             t.dataset.action = 'nav:toggle';
@@ -485,7 +497,6 @@ const App = (() => {
 
         const input = searchInput();
         input?.addEventListener('input', () => {
-            updatePromptVisibility();
             performSearch();
             if (!input.value && modal?.open) managePrompt(true);
             else clearInterval(promptTimer);

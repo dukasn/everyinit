@@ -6,7 +6,7 @@ const viewports = [
   { name: 'expanded', width: 1024, height: 900, windowClass: 'expanded', outline: 'inline' },
   { name: 'large', width: 1366, height: 900, windowClass: 'large', outline: 'rail' },
   { name: 'extra-large', width: 1728, height: 1100, windowClass: 'extra-large', outline: 'rail' },
-  { name: 'compact-height', width: 844, height: 430, windowClass: 'expanded', heightClass: 'compact', outline: 'inline' },
+  { name: 'compact-height', width: 844, height: 430, windowClass: 'expanded', outline: 'inline' },
 ];
 
 async function isVisible(locator) {
@@ -16,10 +16,10 @@ async function isVisible(locator) {
 for (const viewport of viewports) {
   test(`${viewport.name} scaffold is predictable`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto('/builtins/documentation-action/');
+    await page.goto('/reference/actions/documentation-action/');
 
     await expect(page.locator('html')).toHaveAttribute('data-window-size', viewport.windowClass);
-    await expect(page.locator('html')).toHaveAttribute('data-window-height', viewport.heightClass || 'regular');
+    await expect(page.locator('html')).not.toHaveAttribute('data-window-height');
     await expect(page.locator('.header-toolbar')).toBeVisible();
 
     const modalDrawer = viewport.windowClass === 'compact' || viewport.windowClass === 'medium';
@@ -64,7 +64,7 @@ for (const viewport of viewports) {
 
 test('modal drawer traps focus and supports every dismissal path', async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 900 });
-  await page.goto('/builtins/documentation-action/');
+  await page.goto('/reference/actions/documentation-action/');
 
   const toggle = page.locator('#sidebarToggle');
   const sidebar = page.locator('#sidebar');
@@ -91,7 +91,7 @@ test('modal drawer traps focus and supports every dismissal path', async ({ page
 
 test('persistent drawer preference survives modal window classes', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.goto('/builtins/documentation-action/');
+  await page.goto('/reference/actions/documentation-action/');
   const toggle = page.locator('#sidebarToggle');
 
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -117,6 +117,29 @@ test('start page keeps the persistent drawer closed by default', async ({ page }
     overflow: getComputedStyle(element).overflow,
     childMinWidth: getComputedStyle(element.firstElementChild).minInlineSize,
   }))).toEqual({ overflow: 'hidden', childMinWidth: '280px' });
+
+  const drawerToggle = page.locator('#sidebarToggle');
+  await drawerToggle.click();
+  await expect(drawerToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#appLayout')).toHaveClass(/sidebar-open/);
+  await expect(page.locator('#sidebar')).toBeVisible();
+
+  const groups = page.locator('.nav-group-toggle');
+  await expect(groups).not.toHaveCount(0);
+  expect(await groups.evaluateAll((toggles) => toggles.map((toggle) => toggle.getAttribute('aria-expanded'))))
+    .toEqual(Array(await groups.count()).fill('false'));
+  await groups.first().click();
+  await expect(groups.first()).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('documentation navigation opens the current document path', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto('/reference/actions/documentation-action/');
+
+  const current = page.locator('.nav-item[aria-current="page"]');
+  await expect(current).toHaveCount(1);
+  await expect(current.locator('xpath=ancestor::section[contains(@class, "nav-group")]/button')).toHaveAttribute('aria-expanded', 'true');
+  await expect(current.locator('xpath=ancestor::li[contains(@class, "nav-subgroup")]/button')).toHaveAttribute('aria-expanded', 'true');
 });
 
 test('topbar is a 44px shell announcement and remembers dismissal', async ({ page }) => {
@@ -146,9 +169,48 @@ test('topbar is a 44px shell announcement and remembers dismissal', async ({ pag
   await expect(topbar).toHaveClass(/is-hidden/);
 });
 
+test('terminal tape player displays one frame and pauses without movement', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+
+  const tape = page.locator('.terminal-tape').first();
+  const svg = tape.locator('.evin-terminal-tape');
+  await expect(svg).toBeVisible();
+
+  const state = await svg.evaluate((element) => {
+    return {
+      duration: Number(element.dataset.tapeDurationMs),
+      frames: element.querySelectorAll('.tape-frame').length,
+      visibleFrames: [...element.querySelectorAll('.tape-frame')]
+        .filter((frame) => getComputedStyle(frame).display !== 'none').length,
+      starts: [...element.querySelectorAll('.tape-frame')]
+        .map((frame) => Number(frame.dataset.tapeFrameStartMs)),
+    };
+  });
+
+  expect(state.duration).toBeGreaterThan(0);
+  expect(state.frames).toBeGreaterThan(1);
+  expect(state.visibleFrames).toBe(1);
+  expect(state.starts).toEqual([...state.starts].sort((a, b) => a - b));
+
+  const playback = tape.locator('.tape-playback');
+  const visibleFrame = () => svg.locator('.tape-frame').evaluateAll((frames) => (
+    frames.findIndex((frame) => getComputedStyle(frame).display !== 'none')
+  ));
+  await playback.click();
+  await expect(playback).toHaveAttribute('aria-pressed', 'true');
+  const pausedFrame = await visibleFrame();
+  await page.waitForTimeout(250);
+  expect(await visibleFrame()).toBe(pausedFrame);
+
+  await playback.click();
+  await expect(playback).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(visibleFrame).not.toBe(pausedFrame);
+});
+
 test('search stays centered and safely inset from the top', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/builtins/documentation-action/');
+  await page.goto('/reference/actions/documentation-action/');
   await page.locator('#searchToggle').click();
   const search = page.locator('#searchModal');
   const searchResults = page.locator('#evin-search-results');

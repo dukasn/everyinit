@@ -154,10 +154,13 @@ $topbar-enabled: false !default;
 
 .docs-topbar.is-hidden,
 .evin-topbar.is-hidden { height: 0; min-height: 0; opacity: 0; transform: translateY(-6px); border-bottom-width: 0; }
-.topbar-content { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: var(--ui-ref-space-3); min-width: 0; max-width: min(100%, 1040px); line-height: 1; white-space: nowrap; }
+.docs-topbar > .presentation-content,
+.evin-topbar > .presentation-content { display: flex; justify-content: center; min-width: 0; width: 100%; }
+.topbar-content { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: var(--ui-ref-space-3); width: fit-content; max-width: 100%; min-width: 0; line-height: 1; white-space: nowrap; }
 .topbar-message,
 .docs-topbar p,
-.evin-topbar p { min-width: 0; margin-block: 0 !important; overflow: hidden; color: var(--topbar-ink) !important; font: inherit; line-height: 1.35; text-overflow: ellipsis; }
+.evin-topbar p { position: relative; flex: 0 1 auto; min-width: 0; margin-block: 0 !important; overflow: hidden; contain: paint; color: var(--topbar-ink) !important; font: inherit; line-height: 1.35; text-align: center; text-overflow: ellipsis; }
+.topbar-message-track { display: inline-flex; flex: 0 0 auto; flex-wrap: nowrap; min-width: max-content; gap: var(--ui-ref-space-8); white-space: nowrap; }
 .topbar-badge { display: inline-flex; align-items: center; flex: 0 0 auto; padding: var(--topbar-badge-padding, 2px 8px); border: 1px solid var(--topbar-badge-outline); border-radius: var(--ui-shape-corner-small); background: var(--topbar-badge-surface) !important; color: var(--topbar-badge-ink) !important; font-size: var(--topbar-badge-font-size, .6875rem); font-weight: 700; letter-spacing: .06em; line-height: 1; text-transform: uppercase; }
 .topbar-badge span, .topbar-badge * { color: var(--topbar-badge-ink) !important; }
 .topbar-action { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; box-sizing: border-box; min-height: var(--topbar-action-min-height); padding: var(--topbar-action-padding); border: var(--topbar-action-border-width) solid var(--topbar-action-outline); border-radius: var(--topbar-action-radius); background: var(--topbar-action-surface); box-shadow: var(--topbar-action-shadow); color: var(--topbar-action-ink) !important; font-size: var(--topbar-action-font-size, var(--ui-typescale-label-medium-size)); font-weight: 700; line-height: 1.25; text-decoration: none !important; text-shadow: none; }
@@ -454,7 +457,7 @@ $topbar-enabled: false !default;
 .start-spotlight.presentation-surface.topbar--holo, .start-spotlight.presentation-surface--holo, .presentation-scale-feature.presentation-surface--holo { --spotlight-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); --presentation-action-padding: var(--ui-ref-space-3) var(--ui-ref-space-5); }
 .topbar--holo .topbar-layer-one, .presentation-surface.topbar--holo .presentation-layer-one, .presentation-surface--holo .presentation-layer-one { background: radial-gradient(circle at 20% 50%, var(--ui-topbar-holo-gold), transparent 28%), radial-gradient(circle at 55% 50%, var(--ui-topbar-holo-magenta), transparent 30%), radial-gradient(circle at 80% 50%, var(--ui-topbar-holo-cyan), transparent 28%); }
 .topbar--holo .topbar-layer-two, .presentation-surface.topbar--holo .presentation-layer-two, .presentation-surface--holo .presentation-layer-two { background: linear-gradient(110deg, transparent 20%, var(--ui-topbar-holo-sheen) 40%, var(--ui-topbar-holo-gold) 45%, var(--ui-topbar-holo-magenta) 50%, var(--ui-topbar-holo-cyan) 55%, var(--ui-topbar-holo-sheen) 60%, transparent 80%); background-size: 200% 100%; animation: topbar-sheen 6s linear infinite; }
-.topbar--holo .topbar-message { background: linear-gradient(90deg, var(--ui-topbar-holo-ink-start), var(--ui-topbar-holo-ink-end)); background-clip: text; color: transparent; }
+.topbar--holo .topbar-message-track { background: linear-gradient(90deg, var(--ui-topbar-holo-ink-start), var(--ui-topbar-holo-ink-end)); background-clip: text; -webkit-background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
 .start-spotlight.presentation-surface.topbar--holo h2, .start-spotlight.presentation-surface--holo h2 { background: linear-gradient(90deg, var(--ui-topbar-holo-ink-start), var(--ui-topbar-holo-ink-end)); background-clip: text; color: transparent !important; }
 .topbar--holo .topbar-action:hover span, .presentation-surface.topbar--holo .start-spotlight-action:hover span, .presentation-surface--holo .start-spotlight-action:hover span { text-decoration: none; }
 @keyframes topbar-sheen { from { background-position: 200% 0; } to { background-position: -200% 0; } }
@@ -496,11 +499,18 @@ $topbar-enabled: false !default;
 
 @if $topbar-enabled {
 @media (max-width: 600px) {
-    .topbar-content { justify-content: flex-start; gap: var(--ui-ref-space-2); max-width: calc(100% - 48px); }
+    .topbar-content { justify-content: flex-start; gap: var(--ui-ref-space-2); width: 100%; }
+    .topbar-message { flex: 1 1 auto; text-align: start; }
     .topbar-action { display: none; }
-    .topbar-badge { max-width: 7rem; overflow: hidden; text-overflow: ellipsis; }
+    .topbar-badge { max-width: min(7rem, 40%); overflow: hidden; text-overflow: ellipsis; }
+    .docs-topbar.has-overflowing-message .topbar-message-track,
+    .evin-topbar.has-overflowing-message .topbar-message-track { will-change: transform; animation: topbar-message-marquee 9s ease-in-out infinite alternate; }
 }
 
-@media (prefers-reduced-motion: reduce) { .docs-topbar, .docs-topbar *, .evin-topbar, .evin-topbar * { transition-duration: .01ms !important; animation: none !important; } }
+@keyframes topbar-message-marquee { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(var(--topbar-message-scroll-distance), 0, 0); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .docs-topbar, .docs-topbar *, .evin-topbar, .evin-topbar * { transition-duration: .01ms !important; animation: none !important; }
+}
 }
 }

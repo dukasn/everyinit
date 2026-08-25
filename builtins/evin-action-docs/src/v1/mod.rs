@@ -622,6 +622,7 @@ fn default_icons() -> HashSet<String> {
         "arrow-left",
         "arrow-right",
         "heading",
+        "link",
         "zoom-in",
         "zoom-out",
         "refresh",
@@ -1824,6 +1825,8 @@ mod tests {
         assert!(page.contains("ESH"));
         assert!(page.contains("data-action=\"tape:toggle-playback\""));
         assert!(page.contains("data-action=\"tape:copy\""));
+        assert!(page.contains("data-tape-duration-ms"));
+        assert!(page.contains("requestAnimationFrame"));
         assert!(page.contains("icon-player-pause"));
         assert!(
             page.contains("rel=\"preload\" href=\"../assets/fonts/IBMPlexMono-Regular.woff2\"")
@@ -1831,7 +1834,6 @@ mod tests {
         assert!(page.contains("<template class=\"tape-copy-script\">pwd\n</template>"));
         assert!(!page.contains("tape-window-controls"));
         assert!(css.contains(".terminal-tape"));
-        assert!(css.contains(".is-paused .tape-frame"));
         assert!(css.contains("font-family:'IBM Plex Mono'"));
         for font in &tape_fonts::FONTS {
             assert!(output.join("assets/fonts").join(font.filename).is_file());

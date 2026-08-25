@@ -130,16 +130,17 @@ impl IconSpriteBuilder {
             String::new()
         };
 
-        // Extract contents inside <svg ...> ... </svg>
-        let inner = if let Some(start) = raw_svg.find('>') {
-            if let Some(end) = raw_svg.rfind("</svg>") {
-                &raw_svg[start + 1..end]
-            } else {
-                raw_svg
-            }
-        } else {
-            raw_svg
-        };
+        // Extract the contents of the actual SVG element. Bundled Tabler icons
+        // begin with a metadata comment, so searching for the first `>` would
+        // otherwise stop at `-->` and nest a complete `<svg>` in the symbol.
+        let inner = raw_svg
+            .find("<svg")
+            .and_then(|svg_start| {
+                let opening_end = raw_svg[svg_start..].find('>')? + svg_start;
+                let closing_start = raw_svg[opening_end + 1..].rfind("</svg>")? + opening_end + 1;
+                Some(&raw_svg[opening_end + 1..closing_start])
+            })
+            .unwrap_or(raw_svg);
 
         format!(
             "  <symbol id=\"icon-{}\" viewBox=\"{}\"{}{}{}{}{}>{}\n  </symbol>",
@@ -218,5 +219,15 @@ mod tests {
         assert!(symbol.contains("id=\"icon-test\""));
         assert!(symbol.contains("viewBox=\"0 0 24 24\""));
         assert!(symbol.contains("<path d=\"M0 0h24v24H0z\"/>"));
+    }
+
+    #[test]
+    fn test_convert_to_symbol_ignores_leading_metadata_comments() {
+        let raw = "<!-- icon metadata -->\n<svg viewBox=\"0 0 24 24\"><path d=\"M1 1\"/></svg>";
+        let symbol = IconSpriteBuilder::convert_to_symbol("commented", raw);
+
+        assert!(symbol.contains("<path d=\"M1 1\"/>"));
+        assert!(!symbol.contains("<svg viewBox"));
+        assert!(!symbol.contains("icon metadata"));
     }
 }

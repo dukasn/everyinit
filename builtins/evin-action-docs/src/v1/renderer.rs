@@ -662,14 +662,16 @@ impl NavigationNode {
                 let level_attr = format!(" style=\"--nav-level: {};\"", level);
 
                 out.push_str(&format!(
-                    "<li class=\"nav-subgroup\" data-nav-subgroup=\"{}\">\n<button class=\"nav-subgroup-toggle\" type=\"button\" aria-expanded=\"true\" aria-controls=\"{}\"{}>\n<span>{}</span>\n<svg class=\"nav-group-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" aria-hidden=\"true\"><path d=\"M6 9l6 6 6-6\"/></svg>\n</button>\n<ul class=\"nav-subgroup-list\" id=\"{}\" style=\"--nav-level: {};\"{}>\n",
+                    "<li class=\"nav-subgroup\" data-nav-subgroup=\"{}\">\n<button class=\"nav-subgroup-toggle\" type=\"button\" aria-expanded=\"{}\" aria-controls=\"{}\"{}>\n<span>{}</span>\n<svg class=\"nav-group-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" aria-hidden=\"true\"><path d=\"M6 9l6 6 6-6\"/></svg>\n</button>\n<ul class=\"nav-subgroup-list\" id=\"{}\" style=\"--nav-level: {};\"{}{}>\n",
                     escaped_key,
+                    active,
                     subgroup_id,
                     level_attr,
                     escaped_label,
                     subgroup_id,
                     level,
                     if active { " data-active-group=\"true\"" } else { "" },
+                    if active { "" } else { " hidden" },
                 ));
 
                 if let Some(pos) = index_page {
@@ -724,12 +726,14 @@ impl NavigationGroup {
         let escaped_label = HtmlRenderer::escape_html(&self.label);
         let group_id = format!("nav-group-{}", self.key.replace('/', "-"));
         out.push_str(&format!(
-            "<section class=\"nav-group\" data-nav-group=\"{}\">\n<button class=\"nav-group-toggle\" type=\"button\" aria-expanded=\"true\" aria-controls=\"{}\" style=\"--nav-level: 1;\">\n<span>{}</span>\n<svg class=\"nav-group-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" aria-hidden=\"true\"><path d=\"M6 9l6 6 6-6\"/></svg>\n</button>\n<ul class=\"nav-group-list\" id=\"{}\" style=\"--nav-level: 1;\"{}>\n",
+            "<section class=\"nav-group\" data-nav-group=\"{}\">\n<button class=\"nav-group-toggle\" type=\"button\" aria-expanded=\"{}\" aria-controls=\"{}\" style=\"--nav-level: 1;\">\n<span>{}</span>\n<svg class=\"nav-group-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" aria-hidden=\"true\"><path d=\"M6 9l6 6 6-6\"/></svg>\n</button>\n<ul class=\"nav-group-list\" id=\"{}\" style=\"--nav-level: 1;\"{}{}>\n",
             HtmlRenderer::escape_html(&self.key),
+            active,
             group_id,
             escaped_label,
             group_id,
             if active { " data-active-group=\"true\"" } else { "" },
+            if active { "" } else { " hidden" },
         ));
 
         if let Some(pos) = self.index_page {
@@ -1507,9 +1511,9 @@ impl HtmlRenderer {
             Self::escape_into(&mut html, badge);
             html.push_str("</span>");
         }
-        html.push_str("<p class=\"topbar-message\">");
+        html.push_str("<p class=\"topbar-message\"><span class=\"topbar-message-track\">");
         Self::escape_into(&mut html, &topbar.message);
-        html.push_str("</p>");
+        html.push_str("</span></p>");
         if let Some(action) = &topbar.action {
             let href = Self::resolve_rendered_href(context, page_slug, &action.href);
             html.push_str("<a class=\"topbar-action presentation-action\" href=\"");
@@ -1844,6 +1848,21 @@ impl HtmlRenderer {
                         used_components,
                     )
                 }
+                StartPageFeatureAside::Diagram {
+                    kind,
+                    code,
+                    title,
+                    caption,
+                    alt,
+                } => Self::render_diagram(
+                    kind,
+                    code,
+                    title.as_deref(),
+                    caption.as_deref(),
+                    alt.as_deref(),
+                    registry,
+                    used_components,
+                ),
             };
             let placement = if feature_index % 2 == 0 {
                 "right"
@@ -2183,6 +2202,106 @@ impl HtmlRenderer {
             ));
         }
         toc
+    }
+
+    fn render_diagram(
+        kind: &evin_doc::ast::DiagramKind,
+        code: &str,
+        title: Option<&str>,
+        caption: Option<&str>,
+        alt: Option<&str>,
+        registry: &ComponentRegistry,
+        used_tracker: &mut HashSet<String>,
+    ) -> String {
+        let display_title = if let Some(title) = title {
+            Self::escape_html(title)
+        } else {
+            match kind {
+                evin_doc::ast::DiagramKind::Svgbob => "Svgbob".to_string(),
+                evin_doc::ast::DiagramKind::Mermaid => "Mermaid".to_string(),
+                _ => "Diagram".to_string(),
+            }
+        };
+
+        let filename = title
+            .map(|title| {
+                let slug: String = title
+                    .chars()
+                    .map(|character| {
+                        if character.is_alphanumeric() || character == '-' {
+                            character
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect();
+                let trimmed = slug.trim_matches('_');
+                if trimmed.is_empty() {
+                    "diagram.svg".to_string()
+                } else {
+                    format!("{trimmed}.svg")
+                }
+            })
+            .unwrap_or_else(|| "diagram.svg".to_string());
+
+        let caption_html = caption
+            .map(|caption| {
+                format!(
+                    "<p class=\"evin-diagram-caption\">{}</p>",
+                    Self::escape_html(caption)
+                )
+            })
+            .unwrap_or_default();
+        let alt_attr = alt
+            .map(|alt| format!(" aria-label=\"{}\" role=\"img\"", Self::escape_html(alt)))
+            .unwrap_or_default();
+
+        match kind {
+            evin_doc::ast::DiagramKind::Svgbob => {
+                used_tracker.insert("diagram_svgbob".to_string());
+                let sanitized_code = evin_doc::render::sanitize_svgbob_code(code);
+                let settings = svgbob::Settings {
+                    include_styles: false,
+                    include_backdrop: false,
+                    ..Default::default()
+                };
+                let svg = svgbob::to_svg_with_settings(&sanitized_code, &settings);
+                registry.render(
+                    "diagram_svgbob",
+                    &[
+                        ("svg", &svg),
+                        ("display_title", &display_title),
+                        ("filename", &filename),
+                        ("caption_html", &caption_html),
+                        ("alt_attr", &alt_attr),
+                        ("id_attr", ""),
+                    ],
+                    used_tracker,
+                )
+            }
+            evin_doc::ast::DiagramKind::Mermaid => {
+                used_tracker.insert("diagram_mermaid".to_string());
+                let escaped_code = Self::escape_html(code);
+                registry.render(
+                    "diagram_mermaid",
+                    &[
+                        ("code", &escaped_code),
+                        ("display_title", &display_title),
+                        ("filename", &filename),
+                        ("caption_html", &caption_html),
+                        ("alt_attr", &alt_attr),
+                        ("id_attr", ""),
+                    ],
+                    used_tracker,
+                )
+            }
+            evin_doc::ast::DiagramKind::Pikchr => {
+                let mut output = String::from("<pre class=\"language-pikchr\"><code>");
+                push_escaped_html(&mut output, code);
+                output.push_str("</code></pre>");
+                output
+            }
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2980,116 +3099,16 @@ impl HtmlRenderer {
                     caption,
                     alt,
                 } => {
-                    let display_title = if let Some(t) = title {
-                        let mut escaped = String::new();
-                        push_escaped_html(&mut escaped, t);
-                        escaped
-                    } else {
-                        match kind {
-                            evin_doc::ast::DiagramKind::Svgbob => "Svgbob".to_string(),
-                            evin_doc::ast::DiagramKind::Mermaid => "Mermaid".to_string(),
-                            _ => "Diagram".to_string(),
-                        }
-                    };
-
-                    let filename = if let Some(t) = title {
-                        let slug: String = t
-                            .chars()
-                            .map(|c| {
-                                if c.is_alphanumeric() || c == '-' {
-                                    c
-                                } else {
-                                    '_'
-                                }
-                            })
-                            .collect();
-                        let trimmed = slug.trim_matches('_');
-                        if trimmed.is_empty() {
-                            "diagram.svg".to_string()
-                        } else {
-                            format!("{}.svg", trimmed)
-                        }
-                    } else {
-                        "diagram.svg".to_string()
-                    };
-
-                    let title_html = if let Some(t) = title {
-                        let mut escaped = String::new();
-                        push_escaped_html(&mut escaped, t);
-                        format!(
-                            "<figcaption class=\"evin-diagram-title\">{}</figcaption>",
-                            escaped
-                        )
-                    } else {
-                        String::new()
-                    };
-
-                    let caption_html = if let Some(c) = caption {
-                        let mut escaped = String::new();
-                        push_escaped_html(&mut escaped, c);
-                        format!("<p class=\"evin-diagram-caption\">{}</p>", escaped)
-                    } else {
-                        String::new()
-                    };
-
-                    let alt_attr = if let Some(a) = alt {
-                        let mut escaped = String::new();
-                        push_escaped_html(&mut escaped, a);
-                        format!(" aria-label=\"{}\" role=\"img\"", escaped)
-                    } else {
-                        String::new()
-                    };
-
-                    match kind {
-                        evin_doc::ast::DiagramKind::Svgbob => {
-                            let sanitized_code = evin_doc::render::sanitize_svgbob_code(code);
-                            let settings = svgbob::Settings {
-                                include_styles: false,
-                                include_backdrop: false,
-                                ..Default::default()
-                            };
-                            let svg = svgbob::to_svg_with_settings(&sanitized_code, &settings);
-                            registry.render_to(
-                                "diagram_svgbob",
-                                &[
-                                    ("svg", &svg),
-                                    ("display_title", &display_title),
-                                    ("filename", &filename),
-                                    ("title_html", &title_html),
-                                    ("caption_html", &caption_html),
-                                    ("alt_attr", &alt_attr),
-                                    ("id_attr", ""),
-                                ],
-                                used_tracker,
-                                out,
-                            );
-                            out.push('\n');
-                        }
-                        evin_doc::ast::DiagramKind::Mermaid => {
-                            let mut escaped_code = String::new();
-                            push_escaped_html(&mut escaped_code, code);
-                            registry.render_to(
-                                "diagram_mermaid",
-                                &[
-                                    ("code", &escaped_code),
-                                    ("display_title", &display_title),
-                                    ("filename", &filename),
-                                    ("title_html", &title_html),
-                                    ("caption_html", &caption_html),
-                                    ("alt_attr", &alt_attr),
-                                    ("id_attr", ""),
-                                ],
-                                used_tracker,
-                                out,
-                            );
-                            out.push('\n');
-                        }
-                        evin_doc::ast::DiagramKind::Pikchr => {
-                            out.push_str("<pre class=\"language-pikchr\"><code>");
-                            push_escaped_html(out, code);
-                            out.push_str("</code></pre>\n");
-                        }
-                    }
+                    out.push_str(&Self::render_diagram(
+                        kind,
+                        code,
+                        title.as_deref(),
+                        caption.as_deref(),
+                        alt.as_deref(),
+                        registry,
+                        used_tracker,
+                    ));
+                    out.push('\n');
                 }
                 DocNode::MathBlock { latex } => {
                     used_tracker.insert("math".to_string());
@@ -3506,8 +3525,11 @@ mod tests {
             workspace_html
                 .contains("<span class=\"document-badge formal-reference-prefix\">REF-4500</span>")
         );
-        assert!(workspace_html.contains("Workspace configuration</h2>"));
-        assert!(workspace_html.contains(">References</h2>"));
+        assert!(
+            workspace_html
+                .contains("<span class=\"heading-content\">Workspace configuration</span>")
+        );
+        assert!(workspace_html.contains("<h2 class=\"formal-reference-label\">References</h2>"));
         assert!(!workspace_html.contains("Reference relationships"));
         assert!(!workspace_html.contains(">Depends on<"));
         let pagination = HtmlRenderer::render_pagination(&site, "reference/workspace-yaml");
@@ -4411,6 +4433,55 @@ mod tests {
         assert!(html.contains("btn-copy"));
         assert!(html.contains("class=\"code-scroll\""));
         assert!(html.contains("println!"));
+    }
+
+    #[test]
+    fn headings_render_an_inline_accessible_permalink() {
+        let site = DocSiteAst {
+            version: "1".to_string(),
+            title: Some("Heading Test".to_string()),
+            reference_prefix: "REF".to_string(),
+            pages: vec![DocPage {
+                slug: "heading".to_string(),
+                source_path: "heading.md".to_string(),
+                format: DocFormat::Markdown,
+                metadata: HashMap::new(),
+                reference: None,
+                toc: vec![],
+                ast: vec![DocNode::Heading {
+                    level: 2,
+                    text: "A linked section".to_string(),
+                    anchor: "a-linked-section".to_string(),
+                    children: vec![InlineNode::Text {
+                        content: "A linked section".to_string(),
+                    }],
+                }],
+            }],
+        };
+
+        let registry = ComponentRegistry::load_from_layout(&LAYOUTS_DIR, "matter", None);
+        let pages = HtmlRenderer::render_site(
+            &site,
+            "<body><content></content></body>",
+            "",
+            "",
+            "",
+            &registry,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            &seo(&site),
+        );
+        let html = pages.get("heading/index.html").unwrap();
+
+        assert!(html.contains("<span class=\"heading-content\">A linked section</span>"));
+        assert!(html.contains("href=\"#a-linked-section\" class=\"heading-permalink\""));
+        assert!(html.contains("aria-label=\"Link to this section\""));
+        assert!(html.contains("href=\"#icon-link\""));
+        assert!(!html.contains("class=\"anchor-link\""));
     }
 
     #[test]

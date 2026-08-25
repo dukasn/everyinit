@@ -58,9 +58,19 @@
     h2 {
         margin: var(--ui-ref-space-4) 0 var(--ui-ref-space-4) 0 !important;
         color: var(--ui-color-on-surface);
-        font-size: clamp(1.75rem, 3vw, 2.5rem);
-        line-height: 1.12;
-        letter-spacing: -0.04em;
+        // Give start-page features a compact display treatment while retaining
+        // the theme's responsive headline scale as their source of truth.
+        --start-feature-heading-min: calc(var(--ui-typescale-headline-small-size) + 0.75rem);
+        --start-feature-heading-max: calc(var(--ui-typescale-headline-medium-size) + 1.25rem);
+        font-size: clamp(
+            var(--start-feature-heading-min),
+            4.5vw,
+            var(--start-feature-heading-max)
+        );
+        font-weight: 560;
+        line-height: 1.02;
+        letter-spacing: -0.06em;
+        text-wrap: balance;
     }
 
     p {
@@ -149,7 +159,8 @@
 
     .start-feature-media,
     .code-surface,
-    .terminal-tape {
+    .terminal-tape,
+    .evin-diagram-figure {
         margin: 0;
     }
 

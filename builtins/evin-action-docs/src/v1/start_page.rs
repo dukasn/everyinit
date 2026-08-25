@@ -81,6 +81,13 @@ pub enum StartPageFeatureAside {
         config: TapeConfig,
         rendered_svg: Option<String>,
     },
+    Diagram {
+        kind: evin_doc::ast::DiagramKind,
+        code: String,
+        title: Option<String>,
+        caption: Option<String>,
+        alt: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,7 +131,7 @@ pub enum FooterDestination {
     External(String),
 }
 
-const START_PAGE_HINT: &str = "Use docs/index.md or docs/index.rst with: a single H1, one lead paragraph, then H2 sections containing optional paragraphs and one optional HTTPS image or video (or a registered local image under /assets/) before an unordered list of `Link — description` cards. `[!FEATURE]` blockquotes may appear after the lead or between sections; each contains an H2 title, one paragraph, a one- or two-link unordered action list, and exactly one image, video, tape, or code-block aside. A single `> [!SPOTLIGHT] variant | optional badge` blockquote may appear between the lead, card sections, and final Footer. Reserve a final H2 named Footer for an optional description paragraph followed by H3 link columns using internal, HTTPS, or mailto links.";
+const START_PAGE_HINT: &str = "Use docs/index.md or docs/index.rst with: a single H1, one lead paragraph, then H2 sections containing optional paragraphs and one optional HTTPS image or video (or a registered local image under /assets/) before an unordered list of `Link - description` cards. Spaced en-dash and em-dash separators are also accepted. `[!FEATURE]` blockquotes may appear after the lead or between sections; each contains an H2 title, one paragraph, a one- or two-link unordered action list, and exactly one image, video, tape, code-block, or Mermaid/Svgbob diagram aside. A single `> [!SPOTLIGHT] variant | optional badge` blockquote may appear between the lead, card sections, and final Footer. Reserve a final H2 named Footer for an optional description paragraph followed by H3 link columns using internal, HTTPS, or mailto links.";
 
 pub fn transform(
     site_ast: &DocSiteAst,
@@ -512,7 +519,8 @@ fn parse_feature_aside(
         DocNode::Paragraph { children } => {
             let Some(InlineNode::Image { src, alt, title }) = standalone_image(children) else {
                 return Err(
-                    "aside must be one standalone image, video, tape, or code block".to_string(),
+                    "aside must be one standalone image, video, tape, code block, or diagram"
+                        .to_string(),
                 );
             };
             let media =
@@ -546,7 +554,20 @@ fn parse_feature_aside(
             config: config.clone(),
             rendered_svg: rendered_svg.clone(),
         }),
-        _ => Err("aside must be one image, video, tape, or code block".to_string()),
+        DocNode::Diagram {
+            kind,
+            code,
+            title,
+            caption,
+            alt,
+        } => Ok(StartPageFeatureAside::Diagram {
+            kind: *kind,
+            code: code.clone(),
+            title: title.clone(),
+            caption: caption.clone(),
+            alt: alt.clone(),
+        }),
+        _ => Err("aside must be one image, video, tape, code block, or diagram".to_string()),
     }
 }
 
@@ -988,7 +1009,7 @@ fn parse_footer_link(
     };
     if item.len() != 1 || !(children.len() == 1 || children.len() == 2) {
         violations.push(format!(
-            "{} must use one link with an optional ` — description`",
+            "{} must use one link with an optional spaced-dash description",
             label
         ));
         return None;
@@ -1000,7 +1021,7 @@ fn parse_footer_link(
     let title = content.trim();
     let description = match children.get(1) {
         None => None,
-        Some(InlineNode::Text { content }) => content.strip_prefix(" — ").map(str::trim),
+        Some(InlineNode::Text { content }) => strip_card_description_prefix(content),
         Some(_) => None,
     };
     if title.is_empty()
@@ -1074,7 +1095,7 @@ fn parse_card_content<'a>(
     };
     if item.len() != 1 || children.len() != 2 {
         violations.push(format!(
-            "{} must use exactly one link followed by ` — description`",
+            "{} must use exactly one link followed by a spaced-dash description",
             label
         ));
         return None;
@@ -1087,24 +1108,31 @@ fn parse_card_content<'a>(
     ) = (&children[0], &children[1])
     else {
         violations.push(format!(
-            "{} must use exactly one link followed by ` — description`",
+            "{} must use exactly one link followed by a spaced-dash description",
             label
         ));
         return None;
     };
     let title = content.trim();
-    let description = description
-        .strip_prefix(" — ")
-        .map(str::trim)
-        .unwrap_or_default();
+    let description = strip_card_description_prefix(description).unwrap_or_default();
     if title.is_empty() || description.is_empty() {
         violations.push(format!(
-            "{} needs a non-empty link title and plain-text description after ` — `",
+            "{} needs a non-empty link title and plain-text description after a spaced dash",
             label
         ));
         return None;
     }
     Some((title, description, href))
+}
+
+/// Accept keyboard-friendly and typographic separators for start-page card
+/// descriptions. Restricting this normalization to the card grammar keeps
+/// ordinary prose and link text untouched.
+fn strip_card_description_prefix(content: &str) -> Option<&str> {
+    [" - ", " – ", " — "]
+        .into_iter()
+        .find_map(|separator| content.strip_prefix(separator))
+        .map(str::trim)
 }
 
 pub fn normalize_route(href: &str, valid_routes: &HashSet<&str>) -> Result<String, &'static str> {
@@ -1259,6 +1287,34 @@ mod tests {
     }
 
     #[test]
+    fn accepts_ascii_and_typographic_card_description_separators() {
+        for separator in [" - ", " – ", " — "] {
+            let item = vec![DocNode::Paragraph {
+                children: vec![
+                    InlineNode::Link {
+                        href: "/workspace_yaml".to_string(),
+                        title: None,
+                        content: "Configure".to_string(),
+                    },
+                    InlineNode::Text {
+                        content: format!("{separator}Create a workspace."),
+                    },
+                ],
+            }];
+            let mut violations = Vec::new();
+
+            let (title, description, href) =
+                parse_card_content(&item, "section 'Get started', card 1", &mut violations)
+                    .expect("separator should be accepted");
+
+            assert_eq!(title, "Configure");
+            assert_eq!(description, "Create a workspace.");
+            assert_eq!(href, "/workspace_yaml");
+            assert!(violations.is_empty());
+        }
+    }
+
+    #[test]
     fn preserves_a_spotlight_blockquote_at_its_authored_position() {
         let mut site = valid_site("workspace_yaml");
         site.pages[0].ast.insert(
@@ -1352,9 +1408,22 @@ mod tests {
                 },
             ),
         );
+        site.pages[0].ast.insert(
+            4,
+            feature(
+                "Task graph",
+                DocNode::Diagram {
+                    kind: evin_doc::ast::DiagramKind::Mermaid,
+                    code: "flowchart LR\nCheck --> Build".to_string(),
+                    title: Some("Task graph".to_string()),
+                    caption: None,
+                    alt: Some("Check flows into build".to_string()),
+                },
+            ),
+        );
 
         let model = transform(&site, Path::new("docs")).unwrap();
-        assert_eq!(model.features.len(), 2);
+        assert_eq!(model.features.len(), 3);
         assert!(
             model
                 .features
@@ -1369,6 +1438,13 @@ mod tests {
         assert!(matches!(
             model.features[1].aside,
             StartPageFeatureAside::Code { .. }
+        ));
+        assert!(matches!(
+            model.features[2].aside,
+            StartPageFeatureAside::Diagram {
+                kind: evin_doc::ast::DiagramKind::Mermaid,
+                ..
+            }
         ));
     }
 

@@ -7,15 +7,15 @@
     border-radius: 28px;
     background-color: var(--ui-color-surface-container-high);
     border: 1px solid color-mix(in srgb, var(--ui-color-outline) 60%, transparent);
-    box-shadow: var(--ui-elevation-level-5), 0 0 0 1px var(--ui-color-outline);
+    box-shadow: var(--ui-elevation-level-5);
     overflow: hidden;
 }
 
 #searchModal .dialog-header {
     height: 64px;
     padding: 0 16px 0 20px;
-    background-color: var(--ui-color-surface-container-high);
-    border-bottom: none;
+    background: transparent;
+    border-bottom: 1px solid color-mix(in srgb, var(--ui-color-outline) 40%, transparent);
 }
 
 #searchModal .dialog-title-icon {
@@ -30,8 +30,6 @@
     color: var(--ui-color-on-surface);
     height: 48px;
 }
-
-#searchModal .dialog-search-prompt { font-size: var(--ui-typescale-title-medium-size); }
 
 #searchModal .dialog-content {
     display: none;
@@ -49,13 +47,13 @@
 /* M3 Search Result Card List Item */
 .search-result-card {
     height: auto !important;
-    min-height: 60px;
-    padding: 10px 14px !important;
+    min-height: 0;
+    padding: 12px 14px !important;
     margin-bottom: 4px !important;
-    border-radius: 14px !important;
+    border-radius: var(--ui-shape-corner-medium) !important;
     display: flex !important;
-    align-items: center !important;
-    gap: 14px !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
     border: 1px solid transparent;
     background-color: transparent !important;
     box-shadow: none !important;
@@ -64,14 +62,14 @@
 
 /* Transparent Leading Icon */
 .search-result-left {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
     color: var(--ui-color-on-surface-variant);
-    opacity: 0.75;
+    opacity: 0.65;
     background: transparent !important;
     border-radius: 0 !important;
     transition: color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), opacity var(--ui-motion-duration-short) var(--ui-motion-easing-standard), transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
@@ -79,8 +77,8 @@
 
 .search-result-left .docs-icon,
 .search-result-left .evin-icon {
-    width: 22px;
-    height: 22px;
+    width: 18px;
+    height: 18px;
 }
 
 /* Hover & Keyboard Selected States */
@@ -108,49 +106,42 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
 }
 
 .search-result-header {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 0;
 }
 
-.m3-category-badge {
-    display: inline-flex;
+.search-result-meta {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    padding: 2px 8px;
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--ui-color-primary) 12%, transparent);
-    color: var(--ui-color-primary);
+    gap: var(--ui-ref-space-2);
+    min-width: 0;
+    color: var(--ui-color-on-surface-variant);
     font-size: var(--ui-typescale-label-medium-size);
-    font-weight: 600;
-    letter-spacing: 0.3px;
-    line-height: 1.3;
-    flex-shrink: 0;
+    line-height: 1.35;
 }
 
 .m3-reference-badge {
     display: inline-flex;
     align-items: center;
-    color: var(--ui-color-on-surface);
+    color: var(--ui-color-primary);
     font-family: var(--ui-typescale-font-monospace);
     font-size: var(--ui-typescale-label-medium-size);
     font-weight: 700;
-    flex-shrink: 0;
 }
+
+.search-result-source { min-width: 0; overflow-wrap: anywhere; }
 
 .search-result-title {
     color: var(--ui-color-on-surface);
     font-size: 0.9375rem;
     font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
 }
 
 .search-result-snippet {
@@ -193,11 +184,11 @@
 
 ::highlight(search-highlight),
 .search-highlight {
-    background-color: color-mix(in srgb, var(--ui-color-primary) 24%, transparent);
+    background-color: color-mix(in srgb, var(--ui-color-primary) 18%, transparent);
     color: var(--ui-color-primary);
-    font-weight: 700;
-    border-radius: 3px;
-    padding: 1px 4px;
+    font-weight: 600;
+    border-radius: 2px;
+    padding: 0 1px;
 }
 
 .search-empty-state {
