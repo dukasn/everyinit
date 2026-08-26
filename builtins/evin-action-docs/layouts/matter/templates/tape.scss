@@ -146,6 +146,7 @@
         padding: 0 var(--ui-ref-space-3) var(--ui-ref-space-3) var(--ui-ref-space-3);
         overflow-x: auto;
         overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
         scrollbar-color: var(--ui-color-code-outline) transparent;
         border-bottom-left-radius: var(--ui-shape-corner-large);
@@ -164,8 +165,10 @@
     .evin-terminal-tape {
         display: block;
         width: 100%;
+        min-width: clamp(280px, calc(var(--tape-cols, 80) * 7.2px + var(--ui-ref-space-6, 24px)), 100%);
         max-width: 100%;
         height: auto;
+        aspect-ratio: var(--tape-aspect, auto);
         font-family: var(--ui-typescale-font-monospace);
         font-kerning: none;
         font-variant-ligatures: none;

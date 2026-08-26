@@ -86,8 +86,9 @@ pub fn render_svg(config: &TapeConfig, frames: &[TerminalFrame], description: &s
         .unwrap_or(FINAL_FRAME_HOLD_MS);
     let title = config.title.as_deref().unwrap_or("Terminal recording");
     let tape_id = stable_tape_id(config, frames, description);
+    let cols = config.cols;
     let mut output = format!(
-        "<svg class=\"evin-terminal-tape\" data-tape-duration-ms=\"{duration}\" role=\"img\" aria-labelledby=\"tape-title-{tape_id:016x} tape-desc-{tape_id:016x}\" style=\"user-select:none;-webkit-user-select:none;pointer-events:none\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\"><title id=\"tape-title-{tape_id:016x}\">{}</title><desc id=\"tape-desc-{tape_id:016x}\">{}</desc><style>",
+        "<svg class=\"evin-terminal-tape\" data-tape-duration-ms=\"{duration}\" data-tape-cols=\"{cols}\" data-tape-rows=\"{rendered_rows}\" role=\"img\" aria-labelledby=\"tape-title-{tape_id:016x} tape-desc-{tape_id:016x}\" style=\"--tape-width:{width}px;--tape-height:{height}px;--tape-cols:{cols};--tape-rows:{rendered_rows};--tape-aspect:{width}/{height};user-select:none;-webkit-user-select:none;pointer-events:none\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\"><title id=\"tape-title-{tape_id:016x}\">{}</title><desc id=\"tape-desc-{tape_id:016x}\">{}</desc><style>",
         escape(title),
         escape(description)
     );
@@ -647,6 +648,10 @@ mod tests {
             "A command recording",
         );
         assert!(svg.contains("data-tape-duration-ms"));
+        assert!(svg.contains("data-tape-cols=\"80\""));
+        assert!(svg.contains("--tape-width:"));
+        assert!(svg.contains("--tape-cols:80"));
+        assert!(svg.contains("--tape-aspect:"));
         assert!(svg.contains("var(--ui-color-code-surface)"));
         assert!(svg.contains("term-ansi-1"));
         assert!(svg.contains(".term-command,.term-builtin{fill:var(--ui-syn-function)}"));
