@@ -621,6 +621,7 @@ mod tests {
                     href: href.to_string(),
                     title: None,
                     content: "Reference".to_string(),
+                    code: false,
                 }],
             }],
         };
@@ -665,11 +666,13 @@ mod tests {
                     href: "environment-configuration#details".to_string(),
                     title: None,
                     content: "Environment".to_string(),
+                    code: false,
                 },
                 InlineNode::Link {
                     href: "/esh/runtime-reference.3010#catalog".to_string(),
                     title: None,
                     content: "Built-ins".to_string(),
+                    code: false,
                 },
             ],
         }];

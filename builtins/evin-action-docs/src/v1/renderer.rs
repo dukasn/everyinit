@@ -1791,7 +1791,11 @@ impl HtmlRenderer {
                     Self::render_media(&mut output, "start-feature-media", &media);
                     output
                 }
-                StartPageFeatureAside::Code { language, code } => {
+                StartPageFeatureAside::Code {
+                    language,
+                    title,
+                    code,
+                } => {
                     let data_language = language
                         .as_ref()
                         .map(|language| {
@@ -1800,11 +1804,13 @@ impl HtmlRenderer {
                         .unwrap_or_default();
                     let (display_language, extension) =
                         Self::format_language_details(language.as_deref());
+                    let display_title = title.as_deref().map(Self::escape_html).unwrap_or_default();
                     let highlighted = context.highlighter.highlight(language.as_deref(), code);
                     registry.render(
                         "code_block",
                         &[
                             ("data_language", &data_language),
+                            ("display_title", &display_title),
                             ("display_language", &display_language),
                             ("extension", &extension),
                             ("code", &highlighted),
@@ -1854,12 +1860,14 @@ impl HtmlRenderer {
                     title,
                     caption,
                     alt,
+                    rendered_mermaid,
                 } => Self::render_diagram(
                     kind,
                     code,
                     title.as_deref(),
                     caption.as_deref(),
                     alt.as_deref(),
+                    rendered_mermaid.as_ref(),
                     registry,
                     used_components,
                 ),
@@ -1892,6 +1900,7 @@ impl HtmlRenderer {
             href,
             title,
             content,
+            code,
         } = inline
         else {
             let root_page = context
@@ -1928,7 +1937,13 @@ impl HtmlRenderer {
             out.push('"');
         }
         out.push('>');
+        if *code {
+            out.push_str("<code>");
+        }
         Self::escape_into(out, content);
+        if *code {
+            out.push_str("</code>");
+        }
         out.push_str("</a>");
     }
 
@@ -2204,12 +2219,14 @@ impl HtmlRenderer {
         toc
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_diagram(
         kind: &evin_doc::ast::DiagramKind,
         code: &str,
         title: Option<&str>,
         caption: Option<&str>,
         alt: Option<&str>,
+        rendered_mermaid: Option<&evin_doc::ast::RenderedMermaid>,
         registry: &ComponentRegistry,
         used_tracker: &mut HashSet<String>,
     ) -> String {
@@ -2282,10 +2299,13 @@ impl HtmlRenderer {
             evin_doc::ast::DiagramKind::Mermaid => {
                 used_tracker.insert("diagram_mermaid".to_string());
                 let escaped_code = Self::escape_html(code);
+                let rendered = rendered_mermaid
+                    .expect("web Mermaid nodes must be compiled before HTML rendering");
                 registry.render(
                     "diagram_mermaid",
                     &[
                         ("code", &escaped_code),
+                        ("svg", &rendered.svg),
                         ("display_title", &display_title),
                         ("filename", &filename),
                         ("caption_html", &caption_html),
@@ -2428,18 +2448,24 @@ impl HtmlRenderer {
                     out.push('\n');
                 }
                 DocNode::RawHtml { .. } => {}
-                DocNode::CodeBlock { language, code, .. } => {
+                DocNode::CodeBlock {
+                    language,
+                    title,
+                    code,
+                } => {
                     let data_lang = language
                         .as_ref()
                         .map(|l| format!(" data-language=\"{}\"", Self::escape_html(l)))
                         .unwrap_or_default();
                     let (display_lang, extension) =
                         Self::format_language_details(language.as_deref());
+                    let display_title = title.as_deref().map(Self::escape_html).unwrap_or_default();
                     let highlighted_code = highlighter.highlight(language.as_deref(), code);
                     registry.render_to(
                         "code_block",
                         &[
                             ("data_language", &data_lang),
+                            ("display_title", &display_title),
                             ("display_language", &display_lang),
                             ("extension", &extension),
                             ("code", &highlighted_code),
@@ -3098,6 +3124,7 @@ impl HtmlRenderer {
                     title,
                     caption,
                     alt,
+                    rendered_mermaid,
                 } => {
                     out.push_str(&Self::render_diagram(
                         kind,
@@ -3105,6 +3132,7 @@ impl HtmlRenderer {
                         title.as_deref(),
                         caption.as_deref(),
                         alt.as_deref(),
+                        rendered_mermaid.as_ref(),
                         registry,
                         used_tracker,
                     ));
@@ -3232,6 +3260,7 @@ impl HtmlRenderer {
                 href,
                 title,
                 content,
+                code,
             } => {
                 let href = Self::resolve_rendered_href(context, &page.slug, href);
                 out.push_str("<a href=\"");
@@ -3243,7 +3272,13 @@ impl HtmlRenderer {
                     out.push('"');
                 }
                 out.push('>');
+                if *code {
+                    out.push_str("<code>");
+                }
                 push_escaped_html(out, content);
+                if *code {
+                    out.push_str("</code>");
+                }
                 out.push_str("</a>");
             }
             InlineNode::Image { src, alt, title } => {
@@ -3461,6 +3496,7 @@ mod tests {
                 href: "REF-4500#task-forms".to_string(),
                 title: None,
                 content: "Task forms".to_string(),
+                code: false,
             }],
         }];
         let mut workspace = page(
@@ -4103,6 +4139,7 @@ mod tests {
                 }],
                 aside: StartPageFeatureAside::Code {
                     language: Some("esh".to_string()),
+                    title: None,
                     code: "echo feature".to_string(),
                 },
             }],
@@ -4116,6 +4153,7 @@ mod tests {
                         href: "guide".to_string(),
                         title: None,
                         content: "essentials".to_string(),
+                        code: false,
                     },
                 ]],
                 media: Some(StartPageMedia {
@@ -4280,6 +4318,7 @@ mod tests {
                         title: Some("Svgbob Flow".to_string()),
                         caption: Some("Figure 1: Architecture".to_string()),
                         alt: Some("Architecture flowchart".to_string()),
+                        rendered_mermaid: None,
                     },
                     DocNode::Diagram {
                         kind: DiagramKind::Mermaid,
@@ -4287,6 +4326,9 @@ mod tests {
                         title: Some("Mermaid Sequence".to_string()),
                         caption: Some("Figure 2: Protocol".to_string()),
                         alt: Some("Protocol sequence".to_string()),
+                        rendered_mermaid: Some(evin_doc::ast::RenderedMermaid {
+                            svg: "<svg id=\"sequence-diagram\"></svg>".to_string(),
+                        }),
                     },
                 ],
             }],
@@ -4319,13 +4361,33 @@ mod tests {
         assert!(html.contains("Svgbob Flow"));
         assert!(html.contains("Figure 1: Architecture"));
 
-        // 2. Verify Mermaid container, alt metadata, and component JS bundled
+        // 2. Verify offline Mermaid SVG, source, metadata, and controls.
         assert!(html.contains("class=\"evin-diagram-figure evindoc-mermaid\""));
         assert!(html.contains("aria-label=\"Protocol sequence\" role=\"img\""));
-        assert!(html.contains("sequenceDiagram"));
+        assert!(html.contains("class=\"evin-mermaid-source\" hidden>sequenceDiagram"));
+        assert!(
+            html.contains("<div class=\"evin-mermaid-svg-target\"><svg id=\"sequence-diagram\"")
+        );
         assert!(html.contains("Mermaid Sequence"));
         assert!(html.contains("Figure 2: Protocol"));
-        assert!(html.contains("mermaid.esm.min.mjs"));
+        assert!(html.contains("diagram:copy"));
+        assert!(html.contains("diagram:download"));
+        for forbidden in [
+            ["mermaid", ".esm"].concat(),
+            ["window", ".mermaid"].concat(),
+            ["js", "delivr"].concat(),
+        ] {
+            assert!(!html.contains(&forbidden));
+        }
+
+        // 3. Verify CSS rules for Mermaid background transparency
+        let mut used = std::collections::HashSet::new();
+        used.insert("diagram_mermaid".to_string());
+        used.insert("diagram_svgbob".to_string());
+        let css = registry.collect_css(&used);
+        assert!(css.contains(".evindoc-mermaid"));
+        assert!(css.contains(".evin-mermaid-svg-target"));
+        assert!(css.contains("transparent !important"));
     }
 
     #[test]
@@ -4402,7 +4464,7 @@ mod tests {
                 ast: vec![DocNode::CodeBlock {
                     language: Some("rust".to_string()),
                     code: "fn main() {\n    println!(\"Hello\");\n}".to_string(),
-                    title: None,
+                    title: Some("Main <entry>".to_string()),
                 }],
             }],
         };
@@ -4427,6 +4489,7 @@ mod tests {
 
         assert!(html.contains("class=\"code-surface\" data-language=\"rust\""));
         assert!(html.contains("class=\"code-header\""));
+        assert!(html.contains("class=\"code-title\">Main &lt;entry&gt;</span>"));
         assert!(html.contains("class=\"lang-label\">Rust</span>"));
         assert!(html.contains("btn-download"));
         assert!(html.contains("data-extension=\"rs\""));
@@ -4609,6 +4672,7 @@ mod tests {
                         title: None,
                         alt: None,
                         caption: None,
+                        rendered_mermaid: None,
                     },
                 ],
             }],
@@ -4623,7 +4687,9 @@ mod tests {
         let rich_js = registry.collect_js(&rich_used);
         assert!(rich_js.contains("code:copy"));
         assert!(rich_js.contains("code:download"));
-        assert!(rich_js.contains("initMermaid"));
+        assert!(rich_js.contains("diagram:copy"));
+        assert!(rich_js.contains("diagram:download"));
+        assert!(!rich_js.contains(&["init", "Mermaid"].concat()));
         assert!(!rich_js.contains("initHeroParticles"));
 
         let tape_site = DocSiteAst {

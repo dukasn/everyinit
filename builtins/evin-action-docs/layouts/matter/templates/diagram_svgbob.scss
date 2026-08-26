@@ -1,4 +1,4 @@
-/* Diagrams (Svgbob & Mermaid) */
+/* Diagrams (Svgbob) */
 .evin-diagram-figure {
     position: relative;
     margin: var(--ui-ref-space-6) 0;
@@ -39,8 +39,7 @@
     gap: var(--ui-ref-space-1);
 }
 
-.evin-diagram-svg-wrapper,
-.evin-diagram-container {
+.evin-diagram-svg-wrapper {
     position: relative;
     padding: var(--ui-ref-space-3) var(--ui-ref-space-6) var(--ui-ref-space-6) var(--ui-ref-space-6);
     display: flex;
@@ -61,22 +60,13 @@
         background: var(--ui-color-code-outline);
         border-radius: var(--ui-shape-corner-full);
     }
-}
 
-.evin-mermaid-svg-target {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow-x: auto;
-}
-
-.evin-diagram-svg-wrapper svg,
-.evin-mermaid-svg-target svg {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin: 0 auto;
+    svg {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 0 auto;
+    }
 }
 
 .evindoc-svgbob .evin-diagram-svg-wrapper > svg {
@@ -122,7 +112,7 @@
     letter-spacing: 0.04em;
     color: var(--ui-color-code-label);
     border-top: none;
-    background-color: var(--ui-color-code-surface);
+    background-color: var(--ui-diagram-bg, var(--ui-color-code-surface));
     border-bottom-left-radius: var(--ui-shape-corner-large);
     border-bottom-right-radius: var(--ui-shape-corner-large);
     text-align: center;

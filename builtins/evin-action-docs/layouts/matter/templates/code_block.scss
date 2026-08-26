@@ -22,6 +22,26 @@
 }
 
 /* Refined Language Label */
+.code-heading {
+    display: flex;
+    align-items: baseline;
+    gap: var(--ui-ref-space-3);
+    min-width: 0;
+}
+
+.code-title {
+    color: var(--ui-color-code-on-surface);
+    font-size: var(--ui-typescale-title-small-size);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:empty {
+        display: none;
+    }
+}
+
 .lang-label {
     font-size: var(--ui-typescale-label-medium-size);
     font-weight: 600;

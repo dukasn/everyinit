@@ -21,6 +21,7 @@ pub mod fs;
 pub mod icons;
 pub mod js_minification;
 pub mod lsp;
+pub mod mermaid;
 pub mod presentation;
 pub mod reference;
 pub mod renderer;
@@ -670,6 +671,12 @@ pub(crate) fn render_docs(
         evin_diagnostic::Diagnostic::new(
             message.clone(),
             evin_diagnostic::IssueCode::new("issue-docs-tape-failed").arg("error", message),
+        )
+    })?;
+    mermaid::compile_site(&mut rendered_site).map_err(|message| {
+        evin_diagnostic::Diagnostic::new(
+            message.clone(),
+            evin_diagnostic::IssueCode::new("issue-docs-mermaid-failed").arg("error", message),
         )
     })?;
     let mut start_page = start_page::transform_with_assets_and_index(
@@ -1782,6 +1789,102 @@ mod tests {
             "evin-callout",
         ] {
             assert!(html.contains(expected), "fixture did not render {expected}");
+        }
+        assert!(html.matches("class=\"evin-mermaid-svg-target\"").count() >= 1);
+        for forbidden in [
+            ["mermaid", ".esm"].concat(),
+            ["window", ".mermaid"].concat(),
+            ["js", "delivr"].concat(),
+        ] {
+            assert!(!html.contains(&forbidden));
+        }
+    }
+
+    #[test]
+    fn malformed_mermaid_fails_even_when_link_validation_is_disabled() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let docs_dir = temp_dir.path().join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("index.md"),
+            "# Test docs\n\nA valid start page.\n\n## Explore\n\n- [Broken](/broken) — Broken diagram.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            docs_dir.join("broken.md"),
+            "# Broken\n\n```mermaid \"Bad graph\"\nflowchart LR\n  A --\n```\n",
+        )
+        .unwrap();
+
+        let output = temp_dir.path().join("site");
+        let config = DocsConfig {
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            out: output.to_string_lossy().to_string(),
+            site_url: "https://example.com/".to_string(),
+            validate_links: false,
+            ..DocsConfig::default()
+        };
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
+            temp_dir.path(),
+        ));
+        let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
+        let mut stats = DocsDebugStats::default();
+        let site = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
+        let error = render_docs(temp_dir.path(), &config, &site, &logger, &mut stats).unwrap_err();
+        let error = format!("{error:?}");
+
+        assert!(error.contains("issue-docs-mermaid-failed"));
+        assert!(error.contains("broken.md"));
+        assert!(error.contains("Bad graph"));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn mermaid_is_offline_in_separated_and_single_file_bundles() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let docs_dir = temp_dir.path().join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("index.md"),
+            "# Test docs\n\nA valid start page.\n\n## Explore\n\n- [Graph](/graph) — Compiled diagram.\n",
+        )
+        .unwrap();
+        std::fs::write(
+            docs_dir.join("graph.md"),
+            "# Graph\n\n```mermaid \"Offline graph\"\nflowchart LR\n  A --> B\n```\n",
+        )
+        .unwrap();
+
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
+            temp_dir.path(),
+        ));
+        let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
+
+        for bundle in ["separated", "single-file"] {
+            let config = DocsConfig {
+                source_dir: docs_dir.to_string_lossy().to_string(),
+                out: temp_dir.path().join(bundle).to_string_lossy().to_string(),
+                site_url: "https://example.com/".to_string(),
+                bundle: bundle.to_string(),
+                ..DocsConfig::default()
+            };
+            let mut stats = DocsDebugStats::default();
+            let site = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
+            let output = render_docs(temp_dir.path(), &config, &site, &logger, &mut stats).unwrap();
+            let html = std::fs::read_to_string(output.join("graph/index.html")).unwrap();
+
+            assert_eq!(html.matches("class=\"evin-mermaid-svg-target\"").count(), 1);
+            assert!(html.contains("class=\"evin-mermaid-source\" hidden>flowchart LR"));
+            assert!(html.contains("<svg id=\"evin-graph-mermaid-1\""));
+            for forbidden in [
+                ["mermaid", ".esm"].concat(),
+                ["window", ".mermaid"].concat(),
+                ["js", "delivr"].concat(),
+            ] {
+                assert!(!html.contains(&forbidden));
+            }
         }
     }
 

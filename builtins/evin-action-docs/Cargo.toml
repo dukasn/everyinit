@@ -32,6 +32,7 @@ rayon = { workspace = true }
 evin-doc = { workspace = true }
 esh = { workspace = true }
 svgbob = { workspace = true }
+merman = { workspace = true }
 unicode-width = { workspace = true }
 latex2mathml = { workspace = true }
 portable-pty = { workspace = true }

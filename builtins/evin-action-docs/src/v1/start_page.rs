@@ -74,6 +74,7 @@ pub enum StartPageFeatureAside {
     Media(StartPageMedia),
     Code {
         language: Option<String>,
+        title: Option<String>,
         code: String,
     },
     Tape {
@@ -87,6 +88,7 @@ pub enum StartPageFeatureAside {
         title: Option<String>,
         caption: Option<String>,
         alt: Option<String>,
+        rendered_mermaid: Option<evin_doc::ast::RenderedMermaid>,
     },
 }
 
@@ -541,8 +543,13 @@ fn parse_feature_aside(
             poster.as_deref(),
             assets,
         )?)),
-        DocNode::CodeBlock { language, code, .. } => Ok(StartPageFeatureAside::Code {
+        DocNode::CodeBlock {
+            language,
+            title,
+            code,
+        } => Ok(StartPageFeatureAside::Code {
             language: language.clone(),
+            title: title.clone(),
             code: code.clone(),
         }),
         DocNode::Tape {
@@ -560,12 +567,14 @@ fn parse_feature_aside(
             title,
             caption,
             alt,
+            rendered_mermaid,
         } => Ok(StartPageFeatureAside::Diagram {
             kind: *kind,
             code: code.clone(),
             title: title.clone(),
             caption: caption.clone(),
             alt: alt.clone(),
+            rendered_mermaid: rendered_mermaid.clone(),
         }),
         _ => Err("aside must be one image, video, tape, code block, or diagram".to_string()),
     }
@@ -1265,6 +1274,7 @@ mod tests {
                                         href: href.to_string(),
                                         title: None,
                                         content: "Configure".to_string(),
+                                        code: false,
                                     },
                                     InlineNode::Text {
                                         content: " — Create a workspace.".to_string(),
@@ -1295,6 +1305,7 @@ mod tests {
                         href: "/workspace_yaml".to_string(),
                         title: None,
                         content: "Configure".to_string(),
+                        code: false,
                     },
                     InlineNode::Text {
                         content: format!("{separator}Create a workspace."),
@@ -1339,6 +1350,7 @@ mod tests {
                             href: "/workspace_yaml".to_string(),
                             title: None,
                             content: "Start now".to_string(),
+                            code: false,
                         }],
                     },
                 ],
@@ -1380,6 +1392,7 @@ mod tests {
                             href: "workspace_yaml".to_string(),
                             title: None,
                             content: "Read more".to_string(),
+                            code: false,
                         }],
                     }]],
                 },
@@ -1418,6 +1431,9 @@ mod tests {
                     title: Some("Task graph".to_string()),
                     caption: None,
                     alt: Some("Check flows into build".to_string()),
+                    rendered_mermaid: Some(evin_doc::ast::RenderedMermaid {
+                        svg: "<svg id=\"feature-diagram\"></svg>".to_string(),
+                    }),
                 },
             ),
         );
@@ -1440,11 +1456,12 @@ mod tests {
             StartPageFeatureAside::Code { .. }
         ));
         assert!(matches!(
-            model.features[2].aside,
+            &model.features[2].aside,
             StartPageFeatureAside::Diagram {
                 kind: evin_doc::ast::DiagramKind::Mermaid,
+                rendered_mermaid: Some(rendered),
                 ..
-            }
+            } if rendered.svg.contains("feature-diagram")
         ));
     }
 
@@ -1666,6 +1683,7 @@ mod tests {
                             href: "https://example.com/source".to_string(),
                             title: None,
                             content: "Source".to_string(),
+                            code: false,
                         }],
                     }],
                     vec![DocNode::Paragraph {
@@ -1674,6 +1692,7 @@ mod tests {
                                 href: "workspace_yaml".to_string(),
                                 title: None,
                                 content: "Reference".to_string(),
+                                code: false,
                             },
                             InlineNode::Text {
                                 content: " — Read the reference.".to_string(),
@@ -1720,6 +1739,7 @@ mod tests {
                             href: "http://example.com".to_string(),
                             title: None,
                             content: "Insecure".to_string(),
+                            code: false,
                         },
                         InlineNode::Text {
                             content: " — Unsupported.".to_string(),
@@ -1742,6 +1762,7 @@ mod tests {
                         href: "http://example.com".to_string(),
                         title: None,
                         content: "Insecure".to_string(),
+                        code: false,
                     }],
                 }]],
             },
@@ -1761,6 +1782,7 @@ mod tests {
                             href: "workspace_yaml".to_string(),
                             title: None,
                             content: "Reference".to_string(),
+                            code: false,
                         },
                         InlineNode::Text {
                             content: " — Read the reference.".to_string(),

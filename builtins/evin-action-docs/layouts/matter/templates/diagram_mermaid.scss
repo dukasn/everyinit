@@ -1,4 +1,4 @@
-/* Diagrams (Svgbob & Mermaid) */
+/* Diagrams (Mermaid) */
 .evin-diagram-figure {
     position: relative;
     margin: var(--ui-ref-space-6) 0;
@@ -39,7 +39,6 @@
     gap: var(--ui-ref-space-1);
 }
 
-.evin-diagram-svg-wrapper,
 .evin-diagram-container {
     position: relative;
     padding: var(--ui-ref-space-3) var(--ui-ref-space-6) var(--ui-ref-space-6) var(--ui-ref-space-6);
@@ -63,55 +62,26 @@
     }
 }
 
-.evin-mermaid-svg-target {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow-x: auto;
+.evindoc-mermaid {
+    .evin-mermaid-svg-target {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow-x: auto;
+
+        svg {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            background: transparent !important;
+        }
+    }
 }
 
-.evin-diagram-svg-wrapper svg,
-.evin-mermaid-svg-target svg {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    margin: 0 auto;
-}
-
-.evindoc-svgbob .evin-diagram-svg-wrapper > svg {
-    font-family: var(--ui-typescale-font-monospace);
-    color: var(--ui-diagram-node-text, var(--ui-color-code-on-surface));
-
-    line, path, circle, rect:not(.filled), polygon {
-        stroke: var(--ui-diagram-line, var(--ui-color-code-label));
-        stroke-width: 1.5px;
-        fill: none;
-    }
-
-    polygon.arrowhead, marker path, rect.filled, circle.filled, polygon.filled, path.filled {
-        fill: var(--ui-diagram-accent, var(--ui-color-primary));
-        stroke: var(--ui-diagram-accent, var(--ui-color-primary));
-    }
-
-    text {
-        fill: var(--ui-diagram-node-text, var(--ui-color-code-on-surface));
-        font-family: var(--ui-typescale-font-monospace);
-        font-size: var(--ui-typescale-body-small-size);
-        font-weight: 500;
-        letter-spacing: -0.1px;
-        dominant-baseline: auto;
-        text-anchor: start;
-        stroke: none;
-    }
-
-    .solid {
-        stroke-dasharray: none;
-    }
-
-    .dashed {
-        stroke-dasharray: 8 8;
-    }
+.evin-mermaid-source[hidden] {
+    display: none !important;
 }
 
 .evin-diagram-caption {
@@ -122,7 +92,7 @@
     letter-spacing: 0.04em;
     color: var(--ui-color-code-label);
     border-top: none;
-    background-color: var(--ui-color-code-surface);
+    background-color: var(--ui-diagram-bg, var(--ui-color-code-surface));
     border-bottom-left-radius: var(--ui-shape-corner-large);
     border-bottom-right-radius: var(--ui-shape-corner-large);
     text-align: center;
