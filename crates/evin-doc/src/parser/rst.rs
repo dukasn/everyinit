@@ -792,6 +792,7 @@ impl RstParser {
                 title,
                 caption,
                 alt,
+                rendered_mermaid: None,
             })
         } else if name == "tape" {
             let mut tape_options = options;
@@ -841,12 +842,18 @@ impl RstParser {
                     title,
                     caption,
                     alt,
+                    rendered_mermaid: None,
                 })
             } else {
+                let non_option_lines: Vec<&str> = trimmed_body_lines
+                    .iter()
+                    .copied()
+                    .filter(|line| !line.trim().starts_with(':'))
+                    .collect();
                 Some(DocNode::CodeBlock {
                     language: args.first().cloned(),
-                    title: None,
-                    code: body_str,
+                    title: options.get("title").cloned(),
+                    code: non_option_lines.join("\n"),
                 })
             }
         } else if name == "list-table" {
@@ -937,6 +944,7 @@ impl RstParser {
                             href: format!("{}/index.html", slug),
                             title: None,
                             content: text,
+                            code: false,
                         }],
                     })
                     .collect(),
@@ -1324,12 +1332,14 @@ impl RstParser {
                         href: href.trim().to_string(),
                         title: None,
                         content: target[..open_angle].trim().to_string(),
+                        code: false,
                     });
                 } else {
                     inlines.push(InlineNode::Link {
                         href: target.trim().to_string(),
                         title: None,
                         content: target.trim().to_string(),
+                        code: false,
                     });
                 }
                 i += 6 + end_offset + 1;
@@ -1353,12 +1363,14 @@ impl RstParser {
                         href: format!("#{}", anchor.trim()),
                         title: None,
                         content: target[..open_angle].trim().to_string(),
+                        code: false,
                     });
                 } else {
                     inlines.push(InlineNode::Link {
                         href: format!("#{}", target.trim()),
                         title: None,
                         content: target.trim().to_string(),
+                        code: false,
                     });
                 }
                 i += 6 + end_offset + 1;
@@ -1385,6 +1397,7 @@ impl RstParser {
                             href: href.trim().to_string(),
                             title: None,
                             content: label.to_string(),
+                            code: false,
                         });
                         i += end_offset + 3;
                         continue;
@@ -1897,12 +1910,14 @@ mod tests {
                 title,
                 caption,
                 code,
+                rendered_mermaid,
                 ..
             } => {
                 assert_eq!(*kind, DiagramKind::Svgbob);
                 assert_eq!(title.as_deref(), Some("Pipeline Flow"));
                 assert_eq!(caption.as_deref(), Some("Figure 1: DAG"));
                 assert!(code.contains("+---+ ---> +---+"));
+                assert!(rendered_mermaid.is_none());
             }
             other => panic!("Expected Svgbob Diagram node, found {:?}", other),
         }
@@ -1912,12 +1927,14 @@ mod tests {
                 title,
                 caption,
                 code,
+                rendered_mermaid,
                 ..
             } => {
                 assert_eq!(*kind, DiagramKind::Mermaid);
                 assert_eq!(title.as_deref(), Some("Auth Sequence"));
                 assert_eq!(caption.as_deref(), Some("Figure 2: Auth"));
                 assert!(code.contains("sequenceDiagram"));
+                assert!(rendered_mermaid.is_none());
             }
             other => panic!("Expected Mermaid Diagram node, found {:?}", other),
         }
@@ -2279,6 +2296,20 @@ timeout : duration (e.g. 30s, 5m)
             }
             other => panic!("Expected Paragraph, found {:?}", other),
         }
+    }
+
+    #[test]
+    fn parses_a_titled_code_block_directive() {
+        let rst = ".. code-block:: rust\n   :title: Configuration loader\n\n   fn load() {}";
+        let res = RstParser::parse(rst);
+
+        assert!(matches!(
+            res.ast.as_slice(),
+            [DocNode::CodeBlock { language: Some(language), title: Some(title), code }]
+                if language == "rust"
+                    && title == "Configuration loader"
+                    && code.trim() == "fn load() {}"
+        ));
     }
 
     #[test]

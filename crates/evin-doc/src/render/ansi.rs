@@ -292,10 +292,18 @@ fn render_inline(inline: &InlineNode, out: &mut String) {
             out.push_str("\x1b[0m");
         }
         InlineNode::Code { content } => out.push_str(&format!("\x1b[33m{}\x1b[0m", content)),
-        InlineNode::Link { href, content, .. } => out.push_str(&format!(
-            "\x1b[4;34m{}\x1b[0m (\x1b[90m{}\x1b[0m)",
-            content, href
-        )),
+        InlineNode::Link {
+            href,
+            content,
+            code,
+            ..
+        } => {
+            let style = if *code { "\x1b[4;33m" } else { "\x1b[4;34m" };
+            out.push_str(&format!(
+                "{style}{}\x1b[0m (\x1b[90m{}\x1b[0m)",
+                content, href
+            ));
+        }
         InlineNode::Image { alt, .. } => out.push_str(&format!("\x1b[90m[Image: {}]\x1b[0m", alt)),
         InlineNode::Math { latex } => {
             let unicode = crate::render::unicode_math::latex_to_unicode(latex);

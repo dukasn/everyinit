@@ -863,6 +863,7 @@ mod tests {
                     href: "REF-1000#details".to_owned(),
                     title: None,
                     content: "proposal".to_owned(),
+                    code: false,
                 }],
             }],
         }];

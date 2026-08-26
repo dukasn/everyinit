@@ -171,6 +171,8 @@ pub enum DocNode {
         title: Option<String>,
         caption: Option<String>,
         alt: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rendered_mermaid: Option<RenderedMermaid>,
     },
     MathBlock {
         latex: String,
@@ -193,6 +195,11 @@ pub enum DiagramKind {
     Mermaid,
     Svgbob,
     Pikchr,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedMermaid {
+    pub svg: String,
 }
 
 impl std::fmt::Display for DiagramKind {
@@ -231,6 +238,8 @@ pub enum InlineNode {
         href: String,
         title: Option<String>,
         content: String,
+        #[serde(default, skip_serializing_if = "is_false")]
+        code: bool,
     },
     Image {
         src: String,
@@ -240,6 +249,10 @@ pub enum InlineNode {
     Math {
         latex: String,
     },
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl InlineNode {

@@ -31,6 +31,27 @@ pub struct MarkdownParseResult {
 pub struct MarkdownParser;
 
 impl MarkdownParser {
+    fn parse_fence_info(info: &str) -> (Option<String>, Option<String>) {
+        let info = info.trim();
+        if info.is_empty() {
+            return (None, None);
+        }
+        let language_end = info.find(char::is_whitespace).unwrap_or(info.len());
+        let language = Some(info[..language_end].to_string());
+        let raw_title = info[language_end..].trim();
+        let title = (!raw_title.is_empty()).then(|| {
+            if raw_title.len() >= 2
+                && ((raw_title.starts_with('"') && raw_title.ends_with('"'))
+                    || (raw_title.starts_with('\'') && raw_title.ends_with('\'')))
+            {
+                raw_title[1..raw_title.len() - 1].to_string()
+            } else {
+                raw_title.to_string()
+            }
+        });
+        (language, title.filter(|title| !title.is_empty()))
+    }
+
     pub fn parse(content: &str, extract_frontmatter: bool) -> MarkdownParseResult {
         let (mut metadata, markdown_body) = if extract_frontmatter {
             Self::extract_yaml_frontmatter(content)
@@ -273,18 +294,11 @@ impl MarkdownParser {
                         || l.starts_with("svgbob")
                         || l.starts_with("pikchr"))
                 {
-                    let parts: Vec<&str> = l.split_whitespace().collect();
-                    let kind_str = parts.first().copied().unwrap_or("mermaid");
-                    let kind = match kind_str {
+                    let (diagram_language, title) = Self::parse_fence_info(l);
+                    let kind = match diagram_language.as_deref().unwrap_or("mermaid") {
                         "svgbob" => DiagramKind::Svgbob,
                         "pikchr" => DiagramKind::Pikchr,
                         _ => DiagramKind::Mermaid,
-                    };
-                    let title = if parts.len() > 1 {
-                        let raw_title = parts[1..].join(" ");
-                        Some(raw_title.trim_matches('"').trim_matches('\'').to_string())
-                    } else {
-                        None
                     };
 
                     Some((
@@ -294,6 +308,7 @@ impl MarkdownParser {
                             title,
                             caption: None,
                             alt: None,
+                            rendered_mermaid: None,
                         },
                         start,
                     ))
@@ -382,10 +397,14 @@ impl MarkdownParser {
                         start,
                     ))
                 } else {
+                    let (language, title) = lang
+                        .as_deref()
+                        .map(Self::parse_fence_info)
+                        .unwrap_or((None, None));
                     Some((
                         DocNode::CodeBlock {
-                            language: lang,
-                            title: None,
+                            language,
+                            title,
                             code,
                         },
                         start,
@@ -680,6 +699,8 @@ impl MarkdownParser {
                     Some(title.to_string())
                 };
                 let mut text = String::new();
+                let mut code_events = 0usize;
+                let mut non_code_events = 0usize;
                 let mut idx = start + 1;
                 while idx < events.len() {
                     match &events[idx] {
@@ -687,8 +708,15 @@ impl MarkdownParser {
                             idx += 1;
                             break;
                         }
-                        Event::Text(t) => text.push_str(t),
-                        _ => {}
+                        Event::Code(code) => {
+                            text.push_str(code);
+                            code_events += 1;
+                        }
+                        Event::Text(t) => {
+                            text.push_str(t);
+                            non_code_events += 1;
+                        }
+                        _ => non_code_events += 1,
                     }
                     idx += 1;
                 }
@@ -697,6 +725,7 @@ impl MarkdownParser {
                         href,
                         title: title_opt,
                         content: text,
+                        code: code_events == 1 && non_code_events == 0,
                     },
                     idx,
                 ))
@@ -1169,6 +1198,13 @@ impl MarkdownParser {
     }
 
     fn try_parse_def_list(inlines: &[InlineNode]) -> Option<DocNode> {
+        if !inlines
+            .iter()
+            .any(|inline| matches!(inline, InlineNode::Text { content } if content.contains(" : ")))
+        {
+            return None;
+        }
+
         let plain = inlines.iter().map(|n| n.plain_text()).collect::<String>();
         let lines: Vec<&str> = plain.lines().filter(|l| !l.trim().is_empty()).collect();
         if lines.len() < 2 {
@@ -1410,14 +1446,34 @@ sequenceDiagram
         }
         match &res.ast[1] {
             DocNode::Diagram {
-                kind, title, code, ..
+                kind,
+                title,
+                code,
+                rendered_mermaid,
+                ..
             } => {
                 assert_eq!(*kind, DiagramKind::Mermaid);
                 assert_eq!(title.as_deref(), Some("Auth Sequence"));
                 assert!(code.contains("sequenceDiagram"));
+                assert!(rendered_mermaid.is_none());
             }
             other => panic!("Expected Mermaid Diagram node, found {:?}", other),
         }
+    }
+
+    #[test]
+    fn parses_and_renders_a_titled_code_fence() {
+        let md = "```rust \"Configuration loader\"\nfn load() {}\n```";
+        let res = MarkdownParser::parse(md, false);
+
+        assert!(matches!(
+            res.ast.as_slice(),
+            [DocNode::CodeBlock { language: Some(language), title: Some(title), code }]
+                if language == "rust"
+                    && title == "Configuration loader"
+                    && code == "fn load() {}\n"
+        ));
+        assert_eq!(crate::render::render_markdown(&res.ast), md);
     }
 
     #[test]
@@ -1576,6 +1632,44 @@ $$
             }
             other => panic!("Expected Paragraph, found {:?}", other),
         }
+    }
+
+    #[test]
+    fn preserves_inline_code_link_labels_in_paragraphs_and_tables() {
+        let md = "See [`evin/docs@v1`](/reference/actions/documentation-action).\n\n| Action | Purpose |\n| --- | --- |\n| [`evin/archive@v1`](/reference/actions/archive-action) | Package files |";
+        let res = MarkdownParser::parse(md, false);
+
+        let DocNode::Paragraph { children } = &res.ast[0] else {
+            panic!("expected paragraph");
+        };
+        assert!(matches!(
+            &children[1],
+            InlineNode::Link { href, content, code: true, .. }
+                if href == "/reference/actions/documentation-action"
+                    && content == "evin/docs@v1"
+        ));
+
+        let DocNode::Table { rows, .. } = &res.ast[1] else {
+            panic!("expected table");
+        };
+        assert!(matches!(
+            &rows[0][0][0],
+            InlineNode::Link { href, content, code: true, .. }
+                if href == "/reference/actions/archive-action"
+                    && content == "evin/archive@v1"
+        ));
+
+        let rendered = crate::render::render_markdown(&res.ast);
+        assert!(rendered.contains("[`evin/docs@v1`](/reference/actions/documentation-action)"));
+        assert!(rendered.contains("[`evin/archive@v1`](/reference/actions/archive-action)"));
+    }
+
+    #[test]
+    fn classifier_syntax_inside_prose_remains_a_paragraph() {
+        let md = "Definition-list headers use `term : classifier` followed by indented body text.\nField-list lines use `:name: value`. Option-list lines begin directly with a\nflag and separate their description with two spaces.";
+        let res = MarkdownParser::parse(md, false);
+
+        assert!(matches!(res.ast.as_slice(), [DocNode::Paragraph { .. }]));
     }
 
     #[test]

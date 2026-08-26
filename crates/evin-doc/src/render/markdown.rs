@@ -48,10 +48,19 @@ fn render_node(node: &DocNode, out: &mut String) {
                 render_inline(child, out);
             }
         }
-        DocNode::CodeBlock { language, code, .. } => {
+        DocNode::CodeBlock {
+            language,
+            title,
+            code,
+        } => {
             out.push_str("```");
             if let Some(lang) = language {
                 out.push_str(lang);
+            }
+            if let Some(title) = title {
+                out.push_str(" \"");
+                out.push_str(title);
+                out.push('"');
             }
             out.push('\n');
             out.push_str(code.trim_end());
@@ -296,7 +305,18 @@ fn render_inline(inline: &InlineNode, out: &mut String) {
             out.push('*');
         }
         InlineNode::Code { content } => out.push_str(&format!("`{}`", content)),
-        InlineNode::Link { href, content, .. } => out.push_str(&format!("[{}]({})", content, href)),
+        InlineNode::Link {
+            href,
+            content,
+            code,
+            ..
+        } => {
+            if *code {
+                out.push_str(&format!("[`{}`]({})", content, href));
+            } else {
+                out.push_str(&format!("[{}]({})", content, href));
+            }
+        }
         InlineNode::Image { src, alt, .. } => out.push_str(&format!("![{}]({})", alt, src)),
         InlineNode::Math { latex } => out.push_str(&format!("${}$", latex)),
     }
