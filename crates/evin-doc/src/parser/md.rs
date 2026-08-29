@@ -489,7 +489,7 @@ impl MarkdownParser {
                                     }
                                     Event::SoftBreak | Event::HardBreak => {
                                         inlines.push(InlineNode::Text {
-                                            content: " ".to_string(),
+                                            content: "\n".to_string(),
                                         });
                                         start += 1;
                                     }
@@ -1790,6 +1790,49 @@ max_threads : integer : optional (default: 4)
             }
             other => panic!("Expected Stepper, found {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_parse_markdown_tight_steps_with_descriptions() {
+        let md = r#"
+````steps
+1. **Parse configuration and remote state** [done]
+   Read `state` as JSON and require protocol version `v: 1`.
+2. **Collect local release inputs** [active]
+   Parse the changelog, invoke the local `git` executable, and scan artifact files.
+````
+"#;
+
+        let res = MarkdownParser::parse(md, false);
+        let DocNode::Stepper { steps } = &res.ast[0] else {
+            panic!("Expected Stepper, found {:?}", res.ast[0]);
+        };
+
+        assert_eq!(steps.len(), 2);
+        assert_eq!(steps[0].status.as_deref(), Some("done"));
+        assert_eq!(steps[1].status.as_deref(), Some("active"));
+        assert_eq!(
+            steps[0]
+                .title
+                .iter()
+                .map(InlineNode::plain_text)
+                .collect::<String>(),
+            "Parse configuration and remote state"
+        );
+        assert_eq!(steps[0].body.len(), 1);
+        let DocNode::Paragraph { children } = &steps[0].body[0] else {
+            panic!(
+                "Expected description paragraph, found {:?}",
+                steps[0].body[0]
+            );
+        };
+        assert_eq!(
+            children
+                .iter()
+                .map(InlineNode::plain_text)
+                .collect::<String>(),
+            "Read state as JSON and require protocol version v: 1."
+        );
     }
 
     #[test]

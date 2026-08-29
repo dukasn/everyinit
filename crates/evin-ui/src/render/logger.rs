@@ -30,6 +30,26 @@ impl Logger {
         }
     }
 
+    async fn write_line(&self, text: &str) {
+        if self.backend.is_terminal() {
+            self.backend.write_line(text).await;
+        } else {
+            self.backend
+                .write_line(console::strip_ansi_codes(text).as_ref())
+                .await;
+        }
+    }
+
+    async fn write_str(&self, text: &str) {
+        if self.backend.is_terminal() {
+            self.backend.write_str(text).await;
+        } else {
+            self.backend
+                .write_str(console::strip_ansi_codes(text).as_ref())
+                .await;
+        }
+    }
+
     async fn print_prefix(&self, prefix: &str, msg: &str) {
         let wrapped = self.layout.wrap_lines(msg);
         let mut is_first = true;
@@ -40,14 +60,10 @@ impl Logger {
             .to_string();
         for line in wrapped {
             if is_first {
-                self.backend
-                    .write_line(&format!("{}  {}", prefix, line))
-                    .await;
+                self.write_line(&format!("{}  {}", prefix, line)).await;
                 is_first = false;
             } else {
-                self.backend
-                    .write_line(&format!("{}  {}", frame, line))
-                    .await;
+                self.write_line(&format!("{}  {}", frame, line)).await;
             }
         }
     }
@@ -69,20 +85,18 @@ impl Logger {
             dim.apply_to("shell:"),
             shell
         );
-        self.backend.write_line(&line1).await;
-        self.backend.write_line(&format!("{}\n", line2)).await;
+        self.write_line(&line1).await;
+        self.write_line(&format!("{}\n", line2)).await;
         self.backend.flush().await;
     }
 
     pub async fn footer(&self, command: &str, flags: &[String]) {
         let dim = console::Style::new().color256(244);
-        self.backend.write_line("").await;
-        self.backend
-            .write_line(&format!("{} {}", dim.apply_to("execution:"), command))
+        self.write_line("").await;
+        self.write_line(&format!("{} {}", dim.apply_to("execution:"), command))
             .await;
         if !flags.is_empty() {
-            self.backend
-                .write_line(&format!("{} {}", dim.apply_to("flags:"), flags.join(", ")))
+            self.write_line(&format!("{} {}", dim.apply_to("flags:"), flags.join(", ")))
                 .await;
         }
         self.backend.flush().await;
@@ -96,7 +110,7 @@ impl Logger {
             .frame_color
             .apply_to(SYMBOL_FRAME_BAR)
             .to_string();
-        self.backend.write_line(&frame).await;
+        self.write_line(&frame).await;
         self.backend.flush().await;
     }
 
@@ -142,11 +156,9 @@ impl Logger {
             .to_string();
 
         if !items.is_empty() {
-            self.backend.write_line(&format!("{}  ", frame)).await;
+            self.write_line(&format!("{}  ", frame)).await;
             for item in items {
-                self.backend
-                    .write_line(&format!("{}    • {}", frame, item))
-                    .await;
+                self.write_line(&format!("{}    • {}", frame, item)).await;
             }
         }
 
@@ -202,8 +214,7 @@ impl Logger {
             for (index, msg) in messages.iter().enumerate() {
                 let styled_line = dim_style.apply_to(msg).to_string();
                 if index == 0 {
-                    self.backend
-                        .write_line(&format!("{}   {}  {}", debug_sym, debug_text, styled_line))
+                    self.write_line(&format!("{}   {}  {}", debug_sym, debug_text, styled_line))
                         .await;
                 } else {
                     let frame = self
@@ -211,8 +222,7 @@ impl Logger {
                         .frame_color
                         .apply_to(SYMBOL_FRAME_BAR)
                         .to_string();
-                    self.backend
-                        .write_line(&format!("{}         {}", frame, styled_line))
+                    self.write_line(&format!("{}         {}", frame, styled_line))
                         .await;
                 }
             }
@@ -228,8 +238,7 @@ impl Logger {
             for line in wrapped {
                 let styled_line = dim_style.apply_to(line).to_string();
                 if first {
-                    self.backend
-                        .write_line(&format!("{}   {}  {}", debug_sym, debug_text, styled_line))
+                    self.write_line(&format!("{}   {}  {}", debug_sym, debug_text, styled_line))
                         .await;
                     first = false;
                 } else {
@@ -238,8 +247,7 @@ impl Logger {
                         .frame_color
                         .apply_to(SYMBOL_FRAME_BAR)
                         .to_string();
-                    self.backend
-                        .write_line(&format!("{}         {}", frame, styled_line))
+                    self.write_line(&format!("{}         {}", frame, styled_line))
                         .await;
                 }
             }
@@ -249,9 +257,7 @@ impl Logger {
 
     pub async fn remark<T: Display>(&self, message: T) {
         let prefix = self.theme.remark_color.apply_to(SYMBOL_REMARK).to_string();
-        self.backend
-            .write_line(&format!("{}   {}", prefix, message))
-            .await;
+        self.write_line(&format!("{}   {}", prefix, message)).await;
         self.bar().await;
     }
 
@@ -263,16 +269,15 @@ impl Logger {
             .apply_to(SYMBOL_SEQUENTIAL)
             .to_string();
         let dim = console::Style::new().color256(COLOR_DIM);
-        self.backend
-            .write_line(&format!(
-                "{} {} {}  {}  {}",
-                daemon_sym,
-                dim.apply_to("daemon -"),
-                name,
-                arrow,
-                dim.apply_to(duration_str)
-            ))
-            .await;
+        self.write_line(&format!(
+            "{} {} {}  {}  {}",
+            daemon_sym,
+            dim.apply_to("daemon -"),
+            name,
+            arrow,
+            dim.apply_to(duration_str)
+        ))
+        .await;
         self.bar().await;
     }
 
@@ -294,17 +299,16 @@ impl Logger {
         } else {
             ""
         };
-        self.backend
-            .write_str(&format!(
-                "{}{} {} {}  {}  {}",
-                prefix,
-                sym,
-                dim.apply_to("daemon -"),
-                name,
-                arrow,
-                dim.apply_to(elapsed_str)
-            ))
-            .await;
+        self.write_str(&format!(
+            "{}{} {} {}  {}  {}",
+            prefix,
+            sym,
+            dim.apply_to("daemon -"),
+            name,
+            arrow,
+            dim.apply_to(elapsed_str)
+        ))
+        .await;
         self.backend.flush().await;
     }
 
@@ -323,16 +327,15 @@ impl Logger {
             .apply_to(SYMBOL_SEQUENTIAL)
             .to_string();
         let dim = console::Style::new().color256(COLOR_DIM);
-        self.backend
-            .write_line(&format!(
-                "{} {} {}  {}  {}",
-                prefix,
-                dim.apply_to("daemon -"),
-                name,
-                arrow,
-                dim.apply_to(duration_str)
-            ))
-            .await;
+        self.write_line(&format!(
+            "{} {} {}  {}  {}",
+            prefix,
+            dim.apply_to("daemon -"),
+            name,
+            arrow,
+            dim.apply_to(duration_str)
+        ))
+        .await;
         self.bar().await;
     }
 
@@ -348,16 +351,15 @@ impl Logger {
             .apply_to(SYMBOL_SEQUENTIAL)
             .to_string();
         let dim = console::Style::new().color256(COLOR_DIM);
-        self.backend
-            .write_line(&format!(
-                "{} {} {}  {}  {}",
-                symbol,
-                dim.apply_to("reload -"),
-                name,
-                arrow,
-                dim.apply_to(duration_str)
-            ))
-            .await;
+        self.write_line(&format!(
+            "{} {} {}  {}  {}",
+            symbol,
+            dim.apply_to("reload -"),
+            name,
+            arrow,
+            dim.apply_to(duration_str)
+        ))
+        .await;
         self.bar().await;
     }
 
@@ -367,7 +369,7 @@ impl Logger {
             .frame_color
             .apply_to(SYMBOL_FRAME_BAR)
             .to_string();
-        self.backend.write_line(&frame).await;
+        self.write_line(&frame).await;
         self.backend.flush().await;
     }
 
@@ -379,7 +381,7 @@ impl Logger {
         command: Option<&str>,
     ) {
         for line in self.fenced_lines(title, lines, is_error, command) {
-            self.backend.write_line(&line).await;
+            self.write_line(&line).await;
         }
         self.backend.flush().await;
     }

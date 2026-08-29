@@ -521,8 +521,9 @@ mod tests {
                 .any(|line| line.contains("│") && line.contains("Scanning documentation files"))
         );
         assert!(lines.iter().any(|line| {
-            line.contains("daemon - Serve live-reloading documentation dev server")
-                && !line.contains("│")
+            let plain = console::strip_ansi_codes(line);
+            plain.contains("daemon - Serve live-reloading documentation dev server")
+                && !plain.contains("│")
         }));
     }
 

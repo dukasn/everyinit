@@ -1,0 +1,24 @@
+[package]
+name = "evin-action-ci"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+evin-action-sdk = { workspace = true }
+evin-ci = { workspace = true }
+evin-diagnostic = { workspace = true }
+evin-git = { workspace = true }
+evin-gitrules = { workspace = true }
+evin-locales = { workspace = true }
+evin-yaml = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+semver = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

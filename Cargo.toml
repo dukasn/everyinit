@@ -74,6 +74,8 @@ evin-action-archive = { path = "builtins/evin-action-archive" }
 evin-action-version-bumper = { path = "builtins/evin-action-version-bumper" }
 evin-action-git-release = { path = "builtins/evin-action-git-release" }
 evin-action-docs = { path = "builtins/evin-action-docs" }
+evin-action-ci = { path = "builtins/evin-action-ci" }
+evin-ci = { path = "crates/evin-ci" }
 evin-config = { path = "crates/evin-config" }
 evin-pipeline = { path = "crates/evin-pipeline" }
 evin-dotenv = { path = "crates/evin-dotenv" }

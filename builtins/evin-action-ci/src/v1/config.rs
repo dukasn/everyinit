@@ -1,0 +1,110 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use serde::Deserialize;
+
+fn default_state_path() -> String {
+    ".evin/actions/ci/remote-state.v1.json".to_string()
+}
+
+fn default_plan_out_path() -> String {
+    ".evin/actions/ci/plan.v1.json".to_string()
+}
+
+fn default_notes_dir() -> String {
+    ".evin/actions/ci/notes".to_string()
+}
+
+fn default_artifacts_dir() -> String {
+    "dist".to_string()
+}
+
+fn default_changelog_path() -> String {
+    "CHANGELOG.md".to_string()
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CiConfig {
+    #[serde(default = "default_state_path")]
+    pub state: String,
+
+    #[serde(default = "default_plan_out_path")]
+    pub plan_out: String,
+
+    #[serde(default = "default_notes_dir")]
+    pub notes_dir: String,
+
+    #[serde(default = "default_artifacts_dir")]
+    pub artifacts_dir: String,
+
+    #[serde(default = "default_changelog_path")]
+    pub changelog: String,
+
+    #[serde(default)]
+    pub dry_run: bool,
+
+    #[serde(default)]
+    pub prune_orphans: bool,
+}
+
+impl Default for CiConfig {
+    fn default() -> Self {
+        Self {
+            state: default_state_path(),
+            plan_out: default_plan_out_path(),
+            notes_dir: default_notes_dir(),
+            artifacts_dir: default_artifacts_dir(),
+            changelog: default_changelog_path(),
+            dry_run: false,
+            prune_orphans: false,
+        }
+    }
+}
+
+impl CiConfig {
+    pub fn from_with(
+        with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<Self, evin_yaml::ConfigError> {
+        let config: Self =
+            evin_action_sdk::parse_config(with).map_err(|e| evin_yaml::ConfigError {
+                message: e.to_string(),
+                span: None,
+            })?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    pub fn validate(&self) -> Result<(), evin_yaml::ConfigError> {
+        if self.state.trim().is_empty() {
+            return Err(evin_yaml::ConfigError {
+                message: "state file path must not be empty".to_string(),
+                span: None,
+            });
+        }
+        if self.plan_out.trim().is_empty() {
+            return Err(evin_yaml::ConfigError {
+                message: "plan_out path must not be empty".to_string(),
+                span: None,
+            });
+        }
+        if self.notes_dir.trim().is_empty() {
+            return Err(evin_yaml::ConfigError {
+                message: "notes_dir path must not be empty".to_string(),
+                span: None,
+            });
+        }
+        Ok(())
+    }
+}

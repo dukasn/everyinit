@@ -70,6 +70,7 @@ pub(crate) fn builtin_actions()
             Arc::new(evin_action_git_release::GitReleaseAction),
         ),
         ("evin/docs@v1", Arc::new(evin_action_docs::DocsAction)),
+        ("evin/ci@v1", Arc::new(evin_action_ci::CiAction)),
     ]
     .into_iter()
     .map(|(name, action)| (name.to_string(), action))
