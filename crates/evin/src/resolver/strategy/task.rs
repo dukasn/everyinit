@@ -28,7 +28,7 @@ impl TargetStrategy for TaskStrategy {
         !target.is_empty()
             && target
                 .chars()
-                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == ':')
     }
 
     fn resolve(&self, target: &str, tasks: &[TaskObject]) -> Result<Vec<String>, Diagnostic> {

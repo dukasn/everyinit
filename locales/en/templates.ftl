@@ -93,7 +93,7 @@ init-template-module =
     # EVIN Module Configuration
     module:
       name: my-module
-      version: "0.1.0"
+      # version: "0.1.0" # Optional independent version; otherwise inherit the workspace.
 
     tasks:
       build:

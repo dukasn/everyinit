@@ -26,6 +26,8 @@ pub enum GitRulesSource {
 
 pub struct EverInitConfig {
     pub workspace_name: String,
+    pub workspace_version: String,
+    pub stages: Vec<String>,
     pub execution: Option<crate::workspace::ExecutionMode>,
     pub tasks: Vec<TaskObject>,
     pub expose: Vec<String>,
@@ -38,24 +40,43 @@ pub struct EverInitConfig {
     pub gitrules_source: GitRulesSource,
     pub warnings: Vec<String>,
     pub modules_discovered: Vec<(String, String, usize)>,
+    pub module_versions: HashMap<String, String>,
+}
+
+fn resolved_module_version(
+    module: &crate::workspace::ModuleConfig,
+    workspace_version: &str,
+) -> String {
+    module
+        .version
+        .clone()
+        .unwrap_or_else(|| workspace_version.to_string())
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct TaskParseContext<'a> {
+    pub namespace: Option<&'a str>,
+    pub cwd: Option<&'a str>,
+    pub source_file: Option<&'a str>,
+    pub module_env: Option<&'a HashMap<String, String>>,
+    pub module_values: Option<&'a HashMap<String, String>>,
+    pub valid_stages: &'a [evin_yaml::Spanned<String>],
+    pub workspace_name: Option<&'a str>,
 }
 
 pub fn parse_tasks(
     tasks: HashMap<evin_yaml::Spanned<String>, TaskObject>,
-    namespace: Option<&str>,
-    cwd: Option<&str>,
-    module_env: Option<&HashMap<String, String>>,
-    module_values: Option<&HashMap<String, String>>,
-    valid_stages: &[evin_yaml::Spanned<String>],
-    workspace_name: Option<&str>,
+    cx: TaskParseContext<'_>,
 ) -> Result<Vec<TaskObject>, evin_diagnostic::Diagnostic> {
     let mut parsed_tasks = Vec::new();
     let local_task_names: std::collections::HashSet<String> =
         tasks.keys().map(|k| k.value.clone()).collect();
 
     for (task_name, mut task) in tasks {
-        let config_path = cwd
-            .map(|p| format!("{}/.evin/module.yaml", p))
+        let config_path = cx
+            .source_file
+            .map(|s| s.to_string())
+            .or_else(|| cx.cwd.map(|p| format!("{}/.evin/module.yaml", p)))
             .unwrap_or_else(|| ".evin/workspace.yaml".to_string());
 
         task.source_file = Some(config_path.clone());
@@ -81,7 +102,7 @@ pub fn parse_tasks(
         }
 
         // 1. Assign fully qualified name
-        task.name = if let Some(ns) = namespace {
+        task.name = if let Some(ns) = cx.namespace {
             format!("{}:{}", ns, task_name.value)
         } else {
             task_name.value.clone()
@@ -91,7 +112,7 @@ pub fn parse_tasks(
         if let Some(needs) = &mut task.needs {
             for dep in needs.iter_mut() {
                 // Rule 1: Explicit workspace reference via workspace name prefix (e.g. "evin-monorepo:build")
-                if let Some(ws_name) = workspace_name {
+                if let Some(ws_name) = cx.workspace_name {
                     let ws_prefix = format!("{}:", ws_name);
                     if let Some(bare) = dep.strip_prefix(&ws_prefix) {
                         *dep = bare.to_string();
@@ -99,7 +120,7 @@ pub fn parse_tasks(
                     }
                 }
                 // Rule 2: Auto-qualify if name is local to this module
-                if let Some(ns) = namespace
+                if let Some(ns) = cx.namespace
                     && local_task_names.contains(dep.as_str())
                 {
                     *dep = format!("{}:{}", ns, dep);
@@ -110,31 +131,31 @@ pub fn parse_tasks(
 
         // 3. Inherit defaults if missing
         if task.cwd.is_none()
-            && let Some(dir) = cwd
+            && let Some(dir) = cx.cwd
         {
             task.cwd = Some(dir.to_string());
         }
 
         if task.module_env.is_none()
-            && let Some(env) = module_env
+            && let Some(env) = cx.module_env
         {
             task.module_env = Some(env.clone());
         }
 
         if task.module_values.is_none()
-            && let Some(values) = module_values
+            && let Some(values) = cx.module_values
         {
             task.module_values = Some(values.clone());
         }
 
         // 4. Validate stage
         if let Some(stage) = &task.stage
-            && !valid_stages.is_empty()
-            && !valid_stages.iter().any(|s| &s.value == stage)
+            && !cx.valid_stages.is_empty()
+            && !cx.valid_stages.iter().any(|s| &s.value == stage)
         {
             let stages_str = format!(
                 "{:?}",
-                valid_stages
+                cx.valid_stages
                     .iter()
                     .map(|s| s.value.clone())
                     .collect::<Vec<_>>()
@@ -170,6 +191,8 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
     if !workspace_path.exists() {
         return Ok(EverInitConfig {
             workspace_name: "".to_string(),
+            workspace_version: "".to_string(),
+            stages: Vec::new(),
             execution: None,
             tasks: Vec::new(),
             expose: Vec::new(),
@@ -182,6 +205,7 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
             gitrules_source: GitRulesSource::Fallback,
             warnings: Vec::new(),
             modules_discovered: Vec::new(),
+            module_versions: HashMap::new(),
         });
     }
 
@@ -259,16 +283,73 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
     if let Some(tasks) = workspace.tasks {
         global_tasks.extend(parse_tasks(
             tasks,
-            None,
-            None,
-            None,
-            None,
-            &valid_stages,
-            Some(&workspace.workspace.name),
+            TaskParseContext {
+                valid_stages: &valid_stages,
+                workspace_name: Some(&workspace.workspace.name),
+                ..Default::default()
+            },
         )?);
     }
 
     let mut modules_discovered = Vec::new();
+    let mut module_versions = HashMap::new();
+
+    if let Some(ref include) = workspace.workspace.include {
+        let includes: Vec<(Option<String>, String)> = match include {
+            crate::workspace::IncludeConfig::List(list) => {
+                list.iter().map(|path| (None, path.clone())).collect()
+            }
+            crate::workspace::IncludeConfig::Map(map) => {
+                let mut entries: Vec<_> = map
+                    .iter()
+                    .map(|(k, v)| (Some(k.clone()), v.clone()))
+                    .collect();
+                entries.sort_by(|a, b| a.1.cmp(&b.1));
+                entries
+            }
+        };
+
+        for (explicit_name, file_path) in includes {
+            let ns_path = std::path::PathBuf::from(&file_path);
+            if !ns_path.exists() {
+                return Err(evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                        .arg("file_path", &file_path)
+                        .arg("error", "included namespace file does not exist"),
+                )
+                .with_file_location(&file_path, None, None));
+            }
+
+            let namespace_doc =
+                <crate::workspace::NamespaceYaml as evin_yaml::YamlDocument>::from_file(&ns_path)?;
+
+            let ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
+
+            let mut merged_values = namespace_doc.values;
+            if let Some(ns_values) = namespace_doc.namespace.values {
+                merged_values.extend(ns_values);
+            }
+
+            if let Some(tasks) = namespace_doc.tasks {
+                let parsed = parse_tasks(
+                    tasks,
+                    TaskParseContext {
+                        namespace: Some(&ns_name),
+                        source_file: Some(&file_path),
+                        module_env: namespace_doc.namespace.env.as_ref(),
+                        module_values: Some(&merged_values),
+                        valid_stages: &valid_stages,
+                        workspace_name: Some(&workspace.workspace.name),
+                        ..Default::default()
+                    },
+                )?;
+                let count = parsed.len();
+                global_tasks.extend(parsed);
+                modules_discovered.push((ns_name, ns_path.display().to_string(), count));
+            }
+        }
+    }
+
     if let Some(ref modules) = workspace.workspace.modules {
         for module_dir in modules {
             let mod_path = std::path::PathBuf::from(&module_dir).join(".evin/module.yaml");
@@ -277,16 +358,23 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
             }
 
             let module = <ModuleYaml as evin_yaml::YamlDocument>::from_file(&mod_path)?;
+            module_versions.insert(
+                module.module.name.clone(),
+                resolved_module_version(&module.module, &workspace.workspace.version),
+            );
 
             if let Some(tasks) = module.tasks {
                 let parsed = parse_tasks(
                     tasks,
-                    Some(&module.module.name),
-                    Some(module_dir),
-                    module.module.env.as_ref(),
-                    Some(&module.values),
-                    &valid_stages,
-                    Some(&workspace.workspace.name),
+                    TaskParseContext {
+                        namespace: Some(&module.module.name),
+                        cwd: Some(module_dir),
+                        source_file: Some(&mod_path.display().to_string()),
+                        module_env: module.module.env.as_ref(),
+                        module_values: Some(&module.values),
+                        valid_stages: &valid_stages,
+                        workspace_name: Some(&workspace.workspace.name),
+                    },
                 )?;
                 let count = parsed.len();
                 global_tasks.extend(parsed);
@@ -296,11 +384,100 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
                     count,
                 ));
             }
+
+            if let Some(ref include) = module.module.include {
+                let includes: Vec<(Option<String>, String)> = match include {
+                    crate::workspace::IncludeConfig::List(list) => {
+                        list.iter().map(|path| (None, path.clone())).collect()
+                    }
+                    crate::workspace::IncludeConfig::Map(map) => {
+                        let mut entries: Vec<_> = map
+                            .iter()
+                            .map(|(k, v)| (Some(k.clone()), v.clone()))
+                            .collect();
+                        entries.sort_by(|a, b| a.1.cmp(&b.1));
+                        entries
+                    }
+                };
+
+                for (explicit_name, file_path) in includes {
+                    let ns_path = if std::path::Path::new(&file_path).is_absolute() {
+                        std::path::PathBuf::from(&file_path)
+                    } else {
+                        std::path::PathBuf::from(module_dir).join(&file_path)
+                    };
+
+                    if !ns_path.exists() {
+                        return Err(evin_locales::diagnostic(
+                            evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                                .arg("file_path", &file_path)
+                                .arg("error", "included namespace file does not exist"),
+                        )
+                        .with_file_location(&file_path, None, None));
+                    }
+
+                    let namespace_doc =
+                        <crate::workspace::NamespaceYaml as evin_yaml::YamlDocument>::from_file(
+                            &ns_path,
+                        )?;
+
+                    let raw_ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
+                    let full_ns_name = if raw_ns_name == module.module.name {
+                        module.module.name.clone()
+                    } else if raw_ns_name.starts_with(&format!("{}:", module.module.name)) {
+                        raw_ns_name
+                    } else {
+                        format!("{}:{}", module.module.name, raw_ns_name)
+                    };
+
+                    let mut combined_env = module.module.env.clone().unwrap_or_default();
+                    if let Some(ns_env) = &namespace_doc.namespace.env {
+                        combined_env.extend(ns_env.clone());
+                    }
+
+                    let mut combined_values = module.values.clone();
+                    combined_values.extend(namespace_doc.values);
+                    if let Some(ns_vals) = namespace_doc.namespace.values {
+                        combined_values.extend(ns_vals);
+                    }
+
+                    if let Some(tasks) = namespace_doc.tasks {
+                        let parsed = parse_tasks(
+                            tasks,
+                            TaskParseContext {
+                                namespace: Some(&full_ns_name),
+                                cwd: Some(module_dir),
+                                source_file: Some(&ns_path.display().to_string()),
+                                module_env: if combined_env.is_empty() {
+                                    None
+                                } else {
+                                    Some(&combined_env)
+                                },
+                                module_values: Some(&combined_values),
+                                valid_stages: &valid_stages,
+                                workspace_name: Some(&workspace.workspace.name),
+                            },
+                        )?;
+                        let count = parsed.len();
+                        global_tasks.extend(parsed);
+                        modules_discovered.push((
+                            full_ns_name,
+                            ns_path.display().to_string(),
+                            count,
+                        ));
+                    }
+                }
+            }
         }
     }
 
     Ok(EverInitConfig {
         workspace_name: workspace.workspace.name.clone(),
+        workspace_version: workspace.workspace.version.clone(),
+        stages: valid_stages
+            .iter()
+            .map(|stage| stage.value.clone())
+            .collect(),
         execution: workspace.workspace.execution,
         tasks: global_tasks,
         expose,
@@ -313,6 +490,7 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
         gitrules_source,
         warnings,
         modules_discovered,
+        module_versions,
     })
 }
 
@@ -322,10 +500,28 @@ mod tests {
     use evin_yaml::Spanned;
 
     #[test]
+    fn module_version_inherits_or_overrides_workspace_version() {
+        let inherited = crate::workspace::ModuleConfig {
+            name: "inherited".to_string(),
+            version: None,
+            env: None,
+            include: None,
+        };
+        let independent = crate::workspace::ModuleConfig {
+            name: "independent".to_string(),
+            version: Some("2.0.0".to_string()),
+            env: None,
+            include: None,
+        };
+
+        assert_eq!(resolved_module_version(&inherited, "1.2.3"), "1.2.3");
+        assert_eq!(resolved_module_version(&independent, "1.2.3"), "2.0.0");
+    }
+
+    #[test]
     fn test_parse_tasks_empty() {
         let tasks = HashMap::new();
-        let valid_stages = vec![];
-        let result = parse_tasks(tasks, None, None, None, None, &valid_stages, None);
+        let result = parse_tasks(tasks, TaskParseContext::default());
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
     }
@@ -344,7 +540,7 @@ mod tests {
         };
         tasks.insert(key, task);
 
-        let result = parse_tasks(tasks, None, None, None, None, &[], None);
+        let result = parse_tasks(tasks, TaskParseContext::default());
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.len(), 1);
@@ -365,7 +561,7 @@ mod tests {
         };
         tasks.insert(key, task);
 
-        let result = parse_tasks(tasks, None, None, None, None, &[], None);
+        let result = parse_tasks(tasks, TaskParseContext::default());
         assert!(result.is_err());
     }
 
@@ -389,7 +585,13 @@ mod tests {
             span: evin_diagnostic::span::Span::default(),
         }];
 
-        let result = parse_tasks(tasks, None, None, None, None, &valid_stages, None);
+        let result = parse_tasks(
+            tasks,
+            TaskParseContext {
+                valid_stages: &valid_stages,
+                ..Default::default()
+            },
+        );
         assert!(result.is_err());
     }
 
@@ -407,10 +609,44 @@ mod tests {
         };
         tasks.insert(key, task);
 
-        let result = parse_tasks(tasks, Some("my_module"), None, None, None, &[], None);
+        let result = parse_tasks(
+            tasks,
+            TaskParseContext {
+                namespace: Some("my_module"),
+                ..Default::default()
+            },
+        );
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed[0].name, "my_module:lint");
+    }
+
+    #[test]
+    fn test_parse_tasks_with_custom_source_file() {
+        let mut tasks = HashMap::new();
+        let key = Spanned {
+            value: "doctor".to_string(),
+            span: evin_diagnostic::span::Span::default(),
+        };
+        let task = TaskObject {
+            name: "doctor".to_string(),
+            run: Some("cargo run -p esh -- doctor.esh".to_string()),
+            ..Default::default()
+        };
+        tasks.insert(key, task);
+
+        let result = parse_tasks(
+            tasks,
+            TaskParseContext {
+                namespace: Some("release"),
+                source_file: Some(".evin/release.yaml"),
+                ..Default::default()
+            },
+        );
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed[0].name, "release:doctor");
+        assert_eq!(parsed[0].source_file.as_deref(), Some(".evin/release.yaml"));
     }
 
     #[test]
@@ -443,12 +679,11 @@ mod tests {
 
         let result = parse_tasks(
             tasks,
-            Some("my_module"),
-            None,
-            None,
-            None,
-            &[],
-            Some("my_workspace"),
+            TaskParseContext {
+                namespace: Some("my_module"),
+                workspace_name: Some("my_workspace"),
+                ..Default::default()
+            },
         );
         assert!(result.is_ok());
         let parsed = result.unwrap();

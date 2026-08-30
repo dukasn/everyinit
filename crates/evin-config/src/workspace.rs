@@ -35,12 +35,21 @@ pub struct HookRunner {
     pub args: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum IncludeConfig {
+    List(Vec<String>),
+    Map(HashMap<String, String>),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkspaceConfig {
     pub name: String,
     pub version: String,
     pub modules: Option<Vec<String>>,
+    #[serde(default, alias = "includes")]
+    pub include: Option<IncludeConfig>,
     pub install_hint: Option<String>,
     pub hook_runner: Option<HookRunner>,
     pub rules: Option<String>,
@@ -49,7 +58,7 @@ pub struct WorkspaceConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::WorkspaceConfig;
+    use super::{ModuleYaml, WorkspaceConfig};
 
     #[test]
     fn hook_runner_deserializes_with_arguments() {
@@ -67,6 +76,35 @@ hook_runner:
         let runner = config.hook_runner.unwrap();
         assert_eq!(runner.command, "cargo");
         assert_eq!(runner.args, ["run", "--locked", "-p", "evin", "--"]);
+    }
+
+    #[test]
+    fn module_version_is_optional_for_workspace_version_inheritance() {
+        let config: ModuleYaml = serde_yaml::from_str(
+            r#"
+module:
+  name: example
+tasks: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.module.version, None);
+    }
+
+    #[test]
+    fn module_can_still_declare_an_independent_version() {
+        let config: ModuleYaml = serde_yaml::from_str(
+            r#"
+module:
+  name: example
+  version: 2.3.4
+tasks: {}
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.module.version.as_deref(), Some("2.3.4"));
     }
 }
 
@@ -91,8 +129,12 @@ pub struct WorkspaceYaml {
 #[serde(deny_unknown_fields)]
 pub struct ModuleConfig {
     pub name: String,
-    pub version: String,
+    /// Optional module-specific version. When omitted, the module inherits
+    /// the enclosing workspace version.
+    pub version: Option<String>,
     pub env: Option<HashMap<String, String>>,
+    #[serde(default, alias = "includes")]
+    pub include: Option<IncludeConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,5 +147,151 @@ pub struct ModuleYaml {
     pub tasks: Option<HashMap<evin_yaml::Spanned<String>, crate::models::TaskObject>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NamespaceConfig {
+    pub name: String,
+    pub description: Option<String>,
+    pub env: Option<HashMap<String, String>>,
+    pub values: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NamespaceYaml {
+    pub namespace: NamespaceConfig,
+    #[serde(default)]
+    pub values: HashMap<String, String>,
+    #[serde(default)]
+    pub tasks: Option<HashMap<evin_yaml::Spanned<String>, crate::models::TaskObject>>,
+}
+
 impl evin_yaml::YamlDocument for WorkspaceYaml {}
 impl evin_yaml::YamlDocument for ModuleYaml {}
+impl evin_yaml::YamlDocument for NamespaceYaml {}
+
+#[cfg(test)]
+mod include_tests {
+    use super::*;
+
+    #[test]
+    fn workspace_include_deserializes_list_and_map_variants() {
+        let list_config: WorkspaceConfig = serde_yaml::from_str(
+            r#"
+name: example
+version: 1.0.0
+include:
+  - .evin/release.yaml
+  - .evin/maintenance.yaml
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            list_config.include,
+            Some(IncludeConfig::List(vec![
+                ".evin/release.yaml".to_string(),
+                ".evin/maintenance.yaml".to_string(),
+            ]))
+        );
+
+        let map_config: WorkspaceConfig = serde_yaml::from_str(
+            r#"
+name: example
+version: 1.0.0
+includes:
+  release: .evin/release.yaml
+  maintenance: .evin/maintenance.yaml
+"#,
+        )
+        .unwrap();
+
+        let mut expected = HashMap::new();
+        expected.insert("release".to_string(), ".evin/release.yaml".to_string());
+        expected.insert(
+            "maintenance".to_string(),
+            ".evin/maintenance.yaml".to_string(),
+        );
+        assert_eq!(map_config.include, Some(IncludeConfig::Map(expected)));
+    }
+
+    #[test]
+    fn namespace_yaml_deserializes_correctly() {
+        let yaml = r#"
+namespace:
+  name: release
+  description: "Release engineering and distribution pipelines"
+  env:
+    RELEASE_CHANNEL: canary
+  values:
+    staging_dir: "dist/release-stage"
+
+tasks:
+  doctor:
+    description: "Release doctor check"
+    steps:
+      - run: cargo run -p esh -- scripts/release/doctor.esh
+"#;
+        let parsed = <NamespaceYaml as evin_yaml::YamlDocument>::from_str(yaml, None).unwrap();
+        assert_eq!(parsed.namespace.name, "release");
+        assert_eq!(
+            parsed.namespace.description.as_deref(),
+            Some("Release engineering and distribution pipelines")
+        );
+        assert_eq!(
+            parsed
+                .namespace
+                .env
+                .as_ref()
+                .unwrap()
+                .get("RELEASE_CHANNEL"),
+            Some(&"canary".to_string())
+        );
+        assert_eq!(
+            parsed.namespace.values.as_ref().unwrap().get("staging_dir"),
+            Some(&"dist/release-stage".to_string())
+        );
+        assert!(parsed.tasks.is_some());
+        let tasks = parsed.tasks.unwrap();
+        assert_eq!(tasks.len(), 1);
+        let task_name = tasks.keys().next().unwrap();
+        assert_eq!(task_name.value, "doctor");
+    }
+
+    #[test]
+    fn module_include_deserializes_list_and_map_variants() {
+        let list_config: ModuleYaml = serde_yaml::from_str(
+            r#"
+module:
+  name: api
+  include:
+    - .evin/routes.yaml
+    - .evin/db.yaml
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            list_config.module.include,
+            Some(IncludeConfig::List(vec![
+                ".evin/routes.yaml".to_string(),
+                ".evin/db.yaml".to_string()
+            ]))
+        );
+
+        let map_config: ModuleYaml = serde_yaml::from_str(
+            r#"
+module:
+  name: api
+  include:
+    routes: .evin/routes.yaml
+"#,
+        )
+        .unwrap();
+        let mut expected = HashMap::new();
+        expected.insert("routes".to_string(), ".evin/routes.yaml".to_string());
+        assert_eq!(
+            map_config.module.include,
+            Some(IncludeConfig::Map(expected))
+        );
+    }
+}
