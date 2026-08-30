@@ -17,6 +17,25 @@ use crate::runtime::context::ExecutionContext;
 use crate::runtime::traits::BoxFuture;
 use std::path::{Path, PathBuf};
 
+fn is_executable(path: &Path) -> bool {
+    if !path.is_file() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path)
+            .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+    }
+
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
 fn resolve_path(ctx: &ExecutionContext, path: &str) -> PathBuf {
     let p = Path::new(path);
     if p.is_absolute() {
@@ -58,6 +77,7 @@ pub fn test<'a>(
                 "-f" => resolve_path(ctx, arg).is_file(),
                 "-d" => resolve_path(ctx, arg).is_dir(),
                 "-e" => resolve_path(ctx, arg).exists(),
+                "-x" => is_executable(&resolve_path(ctx, arg)),
                 "-s" => {
                     let p = resolve_path(ctx, arg);
                     p.is_file() && std::fs::metadata(&p).map(|m| m.len() > 0).unwrap_or(false)

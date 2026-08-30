@@ -724,7 +724,20 @@ pub fn assert<'a>(
             return Ok(1);
         }
 
-        let sub_script = args.join(" ");
+        let (expression, message) = if let Some(separator) = args.iter().position(|arg| arg == "--")
+        {
+            (&args[..separator], Some(args[separator + 1..].join(" ")))
+        } else if args.first().is_some_and(|arg| arg == "[") {
+            if let Some(closing) = args.iter().position(|arg| arg == "]") {
+                let message = (closing + 1 < args.len()).then(|| args[closing + 1..].join(" "));
+                (&args[..=closing], message)
+            } else {
+                (args, None)
+            }
+        } else {
+            (args, None)
+        };
+        let sub_script = expression.join(" ");
         let plan = match compile_script(&sub_script) {
             Ok(p) => p,
             Err(e) => {
@@ -736,19 +749,21 @@ pub fn assert<'a>(
         match plan.execute(ctx).await {
             Ok(0) => Ok(0),
             Ok(code) => {
+                let detail = message
+                    .as_deref()
+                    .filter(|message| !message.is_empty())
+                    .unwrap_or(&sub_script);
                 ctx.write_stderr(
-                    format!(
-                        "esh: assertion failed: '{}' exited with code {}\n",
-                        sub_script, code
-                    )
-                    .as_bytes(),
+                    format!("esh: assertion failed: {} (exit code {})\n", detail, code).as_bytes(),
                 );
                 Ok(1)
             }
             Err(e) => {
-                ctx.write_stderr(
-                    format!("esh: assertion failed: '{}': {}\n", sub_script, e).as_bytes(),
-                );
+                let detail = message
+                    .as_deref()
+                    .filter(|message| !message.is_empty())
+                    .unwrap_or(&sub_script);
+                ctx.write_stderr(format!("esh: assertion failed: {}: {}\n", detail, e).as_bytes());
                 Ok(1)
             }
         }

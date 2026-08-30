@@ -89,3 +89,22 @@ async fn test_diff_and_assert() {
     assert!(output.contains("diff detected differences"));
     assert!(output.contains("timed command"));
 }
+
+#[tokio::test]
+async fn test_assert_reports_the_documented_message() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let code = engine
+        .eval_str(
+            r#"assert [ -f missing ] "release binary is missing""#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(code, 1);
+    let error = ctx.get_captured_stderr().unwrap();
+    assert!(error.contains("release binary is missing"));
+}

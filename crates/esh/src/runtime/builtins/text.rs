@@ -34,7 +34,9 @@ pub fn grep<'a>(
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
         if args.is_empty() {
-            ctx.write_stderr(b"esh: grep: usage: grep [-i] [-v] [-q] [-n] <pattern> [file...]\n");
+            ctx.write_stderr(
+                b"esh: grep: usage: grep [-F] [-i] [-v] [-q] [-n] <pattern> [file...]\n",
+            );
             return Ok(2);
         }
 
@@ -42,20 +44,51 @@ pub fn grep<'a>(
         let mut invert = false;
         let mut quiet = false;
         let mut line_numbers = false;
+        let mut fixed_strings = false;
         let mut pattern: Option<&str> = None;
         let mut files = Vec::new();
+        let mut options = true;
 
         for arg in args {
-            if arg == "-i" || arg == "--ignore-case" {
+            if options && arg == "--" {
+                options = false;
+            } else if options && (arg == "-i" || arg == "--ignore-case") {
                 case_insensitive = true;
-            } else if arg == "-v" || arg == "--invert-match" {
+            } else if options && (arg == "-v" || arg == "--invert-match") {
                 invert = true;
-            } else if arg == "-q" || arg == "--quiet" || arg == "--silent" {
+            } else if options && (arg == "-q" || arg == "--quiet" || arg == "--silent") {
                 quiet = true;
-            } else if arg == "-n" || arg == "--line-number" {
+            } else if options && (arg == "-n" || arg == "--line-number") {
                 line_numbers = true;
-            } else if arg == "-E" || arg == "--extended-regexp" {
-                // Default in regex crate
+            } else if options && (arg == "-F" || arg == "--fixed-strings") {
+                fixed_strings = true;
+            } else if options && (arg == "-E" || arg == "--extended-regexp") {
+                fixed_strings = false;
+            } else if options
+                && pattern.is_none()
+                && arg.starts_with('-')
+                && arg.len() > 2
+                && !arg.starts_with("--")
+            {
+                for flag in arg[1..].chars() {
+                    match flag {
+                        'i' => case_insensitive = true,
+                        'v' => invert = true,
+                        'q' => quiet = true,
+                        'n' => line_numbers = true,
+                        'F' => fixed_strings = true,
+                        'E' => fixed_strings = false,
+                        _ => {
+                            ctx.write_stderr(
+                                format!("esh: grep: unsupported option '-{}'\n", flag).as_bytes(),
+                            );
+                            return Ok(2);
+                        }
+                    }
+                }
+            } else if options && pattern.is_none() && arg.starts_with('-') {
+                ctx.write_stderr(format!("esh: grep: unsupported option '{}'\n", arg).as_bytes());
+                return Ok(2);
             } else if pattern.is_none() {
                 pattern = Some(arg.as_str());
             } else {
@@ -71,7 +104,12 @@ pub fn grep<'a>(
             }
         };
 
-        let re = match RegexBuilder::new(pat_str)
+        let regex_pattern = if fixed_strings {
+            regex::escape(pat_str)
+        } else {
+            pat_str.to_string()
+        };
+        let re = match RegexBuilder::new(&regex_pattern)
             .case_insensitive(case_insensitive)
             .build()
         {

@@ -80,3 +80,55 @@ async fn test_grep_and_glob() {
     let normalized_output = output.replace('\\', "/");
     assert!(normalized_output.contains("src/main.rs") || normalized_output.contains("src/lib.rs"));
 }
+
+#[tokio::test]
+async fn test_fixed_grep_combined_flags_and_recursive_glob() {
+    let tmp = tempdir().unwrap();
+    let nested = tmp.path().join("tree/one/two");
+    fs::create_dir_all(&nested).unwrap();
+    fs::write(tmp.path().join("literal.txt"), "a.b\naxb\n").unwrap();
+    fs::write(nested.join("leaf.txt"), "leaf\n").unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let _ = ctx.set_cwd(tmp.path());
+
+    let code = engine
+        .eval_str(
+            r#"
+                grep -Fn "a.b" literal.txt
+                grep -Fq "a.b" literal.txt
+                glob "tree/**"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    let output = ctx.get_captured_stdout().unwrap().replace('\\', "/");
+    assert!(output.contains("1:a.b"));
+    assert!(output.contains("tree/one/two/leaf.txt"));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_executable_predicate_checks_permission_bits() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = tempdir().unwrap();
+    let executable = tmp.path().join("tool");
+    let plain = tmp.path().join("plain");
+    fs::write(&executable, "#!/bin/sh\n").unwrap();
+    fs::write(&plain, "text\n").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::set_permissions(&plain, fs::Permissions::from_mode(0o644)).unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    let _ = ctx.set_cwd(tmp.path());
+
+    assert_eq!(engine.eval_str("test -x tool", &mut ctx).await.unwrap(), 0);
+    assert_eq!(engine.eval_str("test -x plain", &mut ctx).await.unwrap(), 1);
+}

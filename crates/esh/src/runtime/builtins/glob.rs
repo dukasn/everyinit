@@ -26,14 +26,19 @@ pub fn glob<'a>(
             return Ok(1);
         }
 
-        let mut matches = Vec::new();
+        let mut matches = std::collections::BTreeSet::new();
         let cwd = ctx.cwd().to_path_buf();
 
         for pat in args {
-            let full_pattern = if std::path::Path::new(pat).is_absolute() {
-                pat.to_string()
+            let recursive_pattern = if pat.ends_with("/**") {
+                format!("{}/*", pat)
             } else {
-                cwd.join(pat).to_string_lossy().to_string()
+                pat.to_string()
+            };
+            let full_pattern = if std::path::Path::new(&recursive_pattern).is_absolute() {
+                recursive_pattern
+            } else {
+                cwd.join(&recursive_pattern).to_string_lossy().to_string()
             };
 
             match glob::glob(&full_pattern) {
@@ -41,9 +46,9 @@ pub fn glob<'a>(
                     for entry in entries.flatten() {
                         // Make path relative to cwd if possible for clean script consumption
                         if let Ok(rel) = entry.strip_prefix(&cwd) {
-                            matches.push(rel.to_string_lossy().to_string());
+                            matches.insert(rel.to_string_lossy().to_string());
                         } else {
-                            matches.push(entry.to_string_lossy().to_string());
+                            matches.insert(entry.to_string_lossy().to_string());
                         }
                     }
                 }
