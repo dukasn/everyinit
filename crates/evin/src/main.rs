@@ -73,6 +73,13 @@ enum Commands {
 
     #[command(about = evin_locales::t!("sync-command-help"))]
     Sync,
+    #[command(about = evin_locales::t!("list-command-help"))]
+    List,
+    #[command(about = evin_locales::t!("explain-command-help"))]
+    Explain {
+        #[arg(help = evin_locales::t!("explain-target-help"))]
+        target: String,
+    },
     #[command(about = evin_locales::t!("run-command-help"))]
     Run {
         #[arg(help = evin_locales::t!("run-target-help"))]
@@ -103,6 +110,21 @@ async fn main() {
         console::set_colors_enabled_stderr(true);
     }
     let cli = Cli::parse();
+    let discovery_result: Option<Result<bool, evin_diagnostic::Diagnostic>> = match &cli.command {
+        Commands::List => Some(crate::commands::discovery::list().await.map(|_| true)),
+        Commands::Explain { target } => Some(crate::commands::discovery::explain(target).await),
+        _ => None,
+    };
+    if let Some(result) = discovery_result {
+        match result {
+            Ok(true) => return,
+            Ok(false) => std::process::exit(1),
+            Err(error) => {
+                evin_ui::diagnostics::print_standalone_diagnostic(&error, &error.to_string(), None);
+                std::process::exit(1);
+            }
+        }
+    }
     let dry_run = cli.dry_run;
     let verbose = cli.verbose;
     let debug_enabled = cli.debug || std::env::var("EVIN_LOG").as_deref() == Ok("debug");
@@ -122,6 +144,7 @@ async fn main() {
                 .await
                 .ok()
                 .flatten(),
+            Commands::List | Commands::Explain { .. } => None,
             _ => None,
         }
     } else {
@@ -227,6 +250,9 @@ async fn main() {
                 mode: presentation_mode,
             });
             commands::run_phases()
+        }
+        Commands::List | Commands::Explain { .. } => {
+            unreachable!("handled before pipeline setup")
         }
     };
 

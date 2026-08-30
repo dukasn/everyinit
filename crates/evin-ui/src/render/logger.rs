@@ -146,23 +146,10 @@ impl Logger {
     }
 
     pub async fn summary(&self, title: &str, items: &[String]) {
-        let prefix = self.theme.success_color.apply_to(SYMBOL_STEP).to_string();
-        self.print_prefix(&prefix, title).await;
-
-        let frame = self
-            .theme
-            .frame_color
-            .apply_to(SYMBOL_FRAME_BAR)
-            .to_string();
-
-        if !items.is_empty() {
-            self.write_line(&format!("{}  ", frame)).await;
-            for item in items {
-                self.write_line(&format!("{}    • {}", frame, item)).await;
-            }
+        for line in crate::render::summary_lines(self.layout, Mode::Normal, title, items) {
+            self.write_line(&line).await;
         }
-
-        self.bar().await;
+        self.backend.flush().await;
     }
 
     pub async fn info<T: Display>(&self, message: T) {

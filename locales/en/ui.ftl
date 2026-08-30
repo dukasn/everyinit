@@ -10,6 +10,45 @@ phase-synchronizing-git-hooks = Synchronizing git hooks
 phase-generating-sync-summary = Generating sync summary
 phase-initialize-workspace = Initializing workspace
 
+discovery-catalog-description = A guided view of this workspace's available commands.
+discovery-modules-title = Modules
+discovery-stages-title = Stages
+discovery-hooks-title = Hooks
+discovery-tasks-at-title = Tasks at
+discovery-catalog-summary-title = Catalog Summary
+discovery-steps-title = Steps
+discovery-execution-plan-title = Execution Plan
+discovery-finished = Finished!
+discovery-failed = Failed!
+discovery-no-description = (no description)
+discovery-no-tasks = No tasks resolved
+discovery-resolved-label = resolved
+discovery-stage-label = stage
+discovery-cwd-label = cwd
+discovery-needs-label = needs
+discovery-environment-label = environment
+discovery-steps-label = steps
+discovery-kind-task = task
+discovery-kind-stage = stage
+discovery-kind-hook = hook
+discovery-kind-workspace = workspace
+discovery-kind-unknown = unknown
+discovery-task-count = { $count } { $count ->
+    [one] task
+   *[other] tasks
+}
+discovery-catalog-all-summary = { $count } { $count ->
+    [one] target
+   *[other] targets
+} available
+discovery-explain-summary = { $tasks } { $tasks ->
+    [one] task
+   *[other] tasks
+} · { $steps } { $steps ->
+    [one] step
+   *[other] steps
+} · nothing was executed
+
 intro-title = {" "} { $category } › { $target }{" "}
 summary-title = Pipeline Summary
 dry-run-summary-title = Dry Run Summary

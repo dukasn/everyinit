@@ -10,6 +10,9 @@ init-all-help = Generate all default workspace configuration files
 init-path-help = Target directory path for workspace initialization
 
 sync-command-help = Install and update Git hooks declared by this repository
+list-command-help = List declared tasks, stages, and Git hooks
+explain-command-help = Explain a target and its resolved dependency plan
+explain-target-help = Task, stage, or Git hook to explain
 
 run-command-help = Run a declared task, stage, or Git-hook workflow
 run-target-help = Task, stage, or Git hook to run
@@ -24,7 +27,7 @@ phase-initialize-workspace = Initializing workspace
 
 
 
-suggestion-hint = Hint: Did you mean '{ $suggestion }'?
+suggestion-hint = Did you mean '{ $suggestion }'?
 invalid-target-title = Invalid Task
 unknown-hook-title = Unknown Hook
 invalid-git-hook = Invalid git hook specified in task '{ $task_name }': '{ $hook }'

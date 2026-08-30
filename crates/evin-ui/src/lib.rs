@@ -13,6 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod diagnostics;
+pub mod discovery;
 pub mod pipeline;
 pub mod prompt;
 pub mod render;
@@ -53,8 +54,8 @@ pub mod diagnostic {
 
 pub mod utils {
     pub use crate::render::{
-        dim, format_duration, format_module_paths, highlight, suggestion, summary, summary_text,
-        wrap_text,
+        dim, format_duration, format_module_paths, highlight, suggestion, summary, summary_lines,
+        summary_text, wrap_text,
     };
 }
 

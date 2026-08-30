@@ -46,6 +46,7 @@ pub const SYMBOL_FENCED_ERROR_PREFIX: &str = "(error) ↩ ";
 pub const SYMBOL_FENCED_RESULT_PREFIX: &str = "(action) ↩ ";
 pub const SYMBOL_PROMPT: &str = "?";
 pub const SYMBOL_POINTER: &str = "›";
+pub const SYMBOL_DISCOVERY_TARGET: &str = "»";
 pub const SYMBOL_SELECT_POINTER: &str = "❯ ";
 pub const SYMBOL_CHECKBOX_CHECKED: &str = "[x] ";
 pub const SYMBOL_CHECKBOX_UNCHECKED: &str = "[ ] ";
@@ -289,6 +290,15 @@ pub fn summary_text(
     title: impl ToString,
     details: &[String],
 ) -> String {
+    summary_lines(layout, mode, title, details).join("\n")
+}
+
+pub fn summary_lines(
+    layout: Layout,
+    mode: Mode,
+    title: impl ToString,
+    details: &[String],
+) -> Vec<String> {
     let wrapped_title = layout.wrap_content(&title.to_string());
     let mut title_lines = wrapped_title.lines();
     let mut output = vec![format!(
@@ -298,15 +308,18 @@ pub fn summary_text(
     )];
     output.extend(title_lines.map(|line| format!("{}  {line}", Theme::frame(SYMBOL_FRAME_BAR))));
 
-    for detail in details {
-        for line in layout.wrap_content(detail).lines() {
-            output.push(format!("{}  {line}", Theme::frame(SYMBOL_FRAME_BAR)));
+    let frame = Theme::frame(SYMBOL_FRAME_BAR);
+    if !details.is_empty() {
+        output.push(format!("{frame}  "));
+        for detail in details {
+            for line in layout.wrap_content(detail).lines() {
+                output.push(format!("{frame}    • {line}"));
+            }
         }
     }
 
     output.push(Theme::frame(SYMBOL_FRAME_BAR));
-    output.push(String::new());
-    output.join("\n")
+    output
 }
 
 pub fn format_module_paths(modules: &[String]) -> String {

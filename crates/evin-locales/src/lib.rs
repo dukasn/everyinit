@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(t!("app-description"), "Evin — The Workflow Engine");
         assert_eq!(
             t!("suggestion-hint", suggestion = "sync"),
-            "Hint: Did you mean 'sync'?"
+            "Did you mean 'sync'?"
         );
         assert_eq!(
             t!(
