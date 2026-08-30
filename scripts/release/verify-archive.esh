@@ -1,0 +1,24 @@
+#!/usr/bin/env esh
+set -e
+
+assert [ "$#" -eq 2 ] "usage: verify-archive.esh <target-triple> <version>"
+TARGET="$1"
+VERSION="$2"
+ARCHIVE="dist/evin-v$VERSION-$TARGET.tar.gz"
+RELEASE_DIR="evin-v$VERSION-$TARGET"
+EXTRACT_DIR=$(mktemp -d)
+
+assert [ -f "$ARCHIVE" ] "release archive is missing: $ARCHIVE"
+tar -xzf "$ARCHIVE" -C "$EXTRACT_DIR"
+assert [ "$(glob "$EXTRACT_DIR/*" | wc -l)" -eq 1 ] "archive must contain exactly one top-level entry"
+ROOT="$EXTRACT_DIR/$RELEASE_DIR"
+assert [ -d "$ROOT" ] "archive top-level directory must be $RELEASE_DIR"
+assert [ "$(glob "$ROOT/*" | wc -l)" -eq 4 ] "archive must contain exactly evin, esh, LICENSE, and THIRD_PARTY_NOTICES"
+assert [ -x "$ROOT/evin" ] "archived EVIN binary is not executable"
+assert [ -x "$ROOT/esh" ] "archived ESH binary is not executable"
+assert [ -f "$ROOT/LICENSE" ] "archive is missing LICENSE"
+assert [ -d "$ROOT/THIRD_PARTY_NOTICES" ] "archive is missing THIRD_PARTY_NOTICES"
+assert "$EXTRACT_DIR/$RELEASE_DIR/evin --version | grep -Fq '$VERSION'" -- "archived EVIN version does not match $VERSION"
+assert "$EXTRACT_DIR/$RELEASE_DIR/esh --version | grep -Fq '$VERSION'" -- "archived ESH version does not match $VERSION"
+
+rm -rf "$EXTRACT_DIR"

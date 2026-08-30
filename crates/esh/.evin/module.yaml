@@ -1,24 +1,43 @@
 module:
   name: esh
-  version: "1.0.0-canary.100"
 
 tasks:
-  build-catalog:
-    stage: Docs
-    description: "Compile ESH reST documentation into pre-rendered LSP JSON catalog"
-    steps:
-      - uses: evin/docs@v1
-        with:
-          target: lsp
-          source_dir: ../../docs/reference/esh
-          include:
-            - "100.runtime-reference.3010.md"
-          out: assets/builtins-catalog.json
-
   build:
     stage: Build
-    description: "Compile hermetic ESH binary with baked catalog"
-    needs:
-      - build-catalog
+    description: "Build the ESH crate"
+    presets: [rust]
     steps:
-      - run: cargo build -p esh
+      - run: cargo build -p esh --locked
+
+  check:
+    stage: Check
+    description: "Check every ESH crate target"
+    presets: [rust]
+    steps:
+      - run: cargo check -p esh --all-targets --locked
+
+  lint:
+    stage: Check
+    description: "Run strict Clippy for every ESH target"
+    presets: [rust]
+    steps:
+      - run: cargo clippy -p esh --all-targets --locked -- -D warnings
+
+  test:
+    stage: Test
+    description: "Run ESH crate tests"
+    presets: [rust]
+    steps:
+      - run: cargo test -p esh --locked
+
+  verify:
+    stage: Test
+    description: "Run all ESH maintenance checks"
+    needs: [check, lint, test]
+
+  lsp:
+    stage: Build
+    description: "Run the ESH language server over stdio"
+    presets: [rust]
+    steps:
+      - run: cargo run --locked -p esh -- lsp

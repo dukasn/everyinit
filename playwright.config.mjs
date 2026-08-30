@@ -14,7 +14,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'cargo evin-dev run docs:serve',
+    // The outer EVIN graph has already built the checked-out CLI. Starting
+    // that binary directly avoids recursively invoking Cargo from Playwright.
+    command: 'target/debug/evin run docs:serve',
     url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 600_000,

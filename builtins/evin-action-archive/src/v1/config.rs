@@ -77,10 +77,24 @@ impl ArchiveConfig {
                 "include-patterns-must-not-be-empty",
             )));
         }
+        for pattern in &self.include {
+            validate_template_syntax(pattern).map_err(|e| {
+                evin_locales::diagnostic(
+                    IssueCode::new("issue-archive-path-invalid").arg("error", e.to_string()),
+                )
+            })?;
+        }
         if self.exclude.iter().any(|value| value.trim().is_empty()) {
             return Err(evin_locales::diagnostic(IssueCode::new(
                 "exclude-patterns-must-not-be-empty",
             )));
+        }
+        for pattern in &self.exclude {
+            validate_template_syntax(pattern).map_err(|e| {
+                evin_locales::diagnostic(
+                    IssueCode::new("issue-archive-path-invalid").arg("error", e.to_string()),
+                )
+            })?;
         }
         if self
             .prefix

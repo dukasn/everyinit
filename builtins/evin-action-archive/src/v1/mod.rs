@@ -62,6 +62,24 @@ pub async fn execute(
             evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string()))
         })?);
     }
+    config.include = config
+        .include
+        .iter()
+        .map(|pattern| {
+            resolve_templates(pattern, ctx).map_err(|e| {
+                evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string()))
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    config.exclude = config
+        .exclude
+        .iter()
+        .map(|pattern| {
+            resolve_templates(pattern, ctx).map_err(|e| {
+                evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string()))
+            })
+        })
+        .collect::<Result<_, _>>()?;
 
     // 1. Resolve Globs & Apply Mapping
     let files = resolve_and_map_files(ctx, &config)?;

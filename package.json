@@ -5,7 +5,8 @@
   "scripts": {
     "build": "./.evin/cloudflare-build",
     "docs:build": "cargo evin-dev run docs:build",
-    "test:docs-responsive": "playwright test"
+    "test:docs-responsive": "cargo evin-dev run docs:test-responsive",
+    "verify": "cargo evin-dev run verify"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0"

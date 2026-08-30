@@ -1,0 +1,7 @@
+#!/usr/bin/env esh
+set -e
+
+assert [ -z "$(git status --porcelain)" ] "release preparation requires a clean working tree"
+assert [ "$(git branch --show-current)" = "main" ] "release preparation requires branch main"
+assert [ -n "$(git config user.name)" ] "Git user.name is not configured"
+assert [ -n "$(git config user.email)" ] "Git user.email is not configured"

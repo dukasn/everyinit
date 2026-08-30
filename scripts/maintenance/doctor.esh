@@ -1,0 +1,18 @@
+#!/usr/bin/env esh
+
+MISSING=0
+for TOOL in git cargo rustc rustfmt cargo-clippy node npm; do
+  if which "$TOOL" >/dev/null; then
+    echo "ok: $TOOL"
+  else
+    echo "missing: $TOOL" >&2
+    MISSING=1
+  fi
+done
+
+if test "$MISSING" -ne 0; then
+  echo "Install the missing prerequisites described in docs/contributing/development." >&2
+  exit 1
+fi
+
+echo "Contributor prerequisites are available."

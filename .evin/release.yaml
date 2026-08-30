@@ -1,0 +1,128 @@
+namespace:
+  name: release
+  description: "Release engineering and distribution pipelines"
+
+tasks:
+  doctor:
+    stage: Publish
+    description: "Report Linux musl release prerequisite availability"
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/doctor.esh
+
+  clean:
+    stage: Publish
+    description: "Require a clean main checkout with Git identity"
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/preflight.esh
+
+  verify:
+    stage: Publish
+    description: "Run the complete source-release validation gate"
+    needs:
+      - release:clean
+      - verify
+    steps:
+      - run: git -c core.whitespace=trailing-space,space-before-tab diff --check
+
+  bump:
+    stage: Publish
+    description: "Calculate and apply the next canary version"
+    needs:
+      - release:verify
+    steps:
+      - uses: evin/version-bumper@v1
+        with:
+          initial_version: "1.0.0-canary.100"
+          channel: canary
+          require_change: true
+          files:
+            - "Cargo.toml"
+            - path: ".evin/workspace.yaml"
+              match: 'version:\s*"${previous_version}"'
+              write: 'version: "${version}"'
+      - run: cargo check --workspace --locked
+
+  changelog:
+    stage: Publish
+    description: "Generate the canonical changelog section"
+    needs:
+      - release:bump
+    steps:
+      - uses: evin/changelog@v1
+        with:
+          path: CHANGELOG.md
+          version: ${release:bump.version}
+
+  prepare:
+    stage: Publish
+    description: "Commit and tag the prepared source release"
+    needs:
+      - release:changelog
+    steps:
+      - run: git add Cargo.toml Cargo.lock .evin/workspace.yaml CHANGELOG.md
+      - uses: evin/git-release@v1
+        with:
+          stage: existing
+          message: "chore(release): ${release:bump.version}"
+          tag: "${release:bump.tag}"
+
+  tag-verify:
+    stage: Publish
+    description: "Verify the tag and shared workspace version"
+    env: [RELEASE_TAG, RELEASE_VERSION]
+    needs:
+      - test
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/verify-tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
+
+  build:
+    stage: Publish
+    description: "Build the static release binaries"
+    env: [RELEASE_TARGET]
+    needs:
+      - release:tag-verify
+    steps:
+      - run: cargo build --release --locked --target "$RELEASE_TARGET" -p evin -p esh
+
+  binaries-verify:
+    stage: Publish
+    description: "Verify static linkage, permissions, and binary versions"
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs:
+      - release:build
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/verify-binaries.esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+
+  stage:
+    stage: Publish
+    description: "Stage the canonical release tree"
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs:
+      - release:binaries-verify
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/stage.esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+
+  package:
+    stage: Publish
+    description: "Create the canonical Linux musl release archive"
+    cwd: dist/release-stage
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs:
+      - release:stage
+    steps:
+      - uses: evin/archive@v1
+        with:
+          path: "../evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}.tar.gz"
+          include:
+            - "evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"
+          layout: relative
+          compression_level: 9
+
+  package-verify:
+    stage: Publish
+    description: "Verify the canonical release archive"
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs:
+      - release:package
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh "$RELEASE_TARGET" "$RELEASE_VERSION"

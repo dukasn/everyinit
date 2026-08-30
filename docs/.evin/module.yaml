@@ -1,17 +1,31 @@
 module:
   name: docs
-  version: "1.0.0-canary.100"
 
 values:
   site_title: "EVIN Workflow Engine"
   site_url: "https://dukasn.github.io/evin/"
 
 tasks:
+  catalog:
+    stage: Docs
+    description: "Generate the tracked ESH runtime catalog intentionally"
+    needs: [main:build]
+    steps:
+      - uses: evin/docs@v1
+        with:
+          target: lsp
+          title: "${site_title}"
+          site_url: "${site_url}"
+          source_dir: docs/reference/esh
+          include: [100.runtime-reference.3010.md]
+          out: crates/esh/assets/builtins-catalog.json
+
   build:
     stage: Docs
-    description: "Generate static documentation site and audit links"
-    needs:
-      - w:build
+    description: "Generate the static documentation site and audit links"
+    needs: [main:build]
+    on:
+      hooks: [pre-commit]
     steps:
       - uses: evin/docs@v1
         with:
@@ -19,13 +33,23 @@ tasks:
           site_url: "${site_url}"
           strict_filenames: true
 
+  test-responsive:
+    stage: Docs
+    description: "Run Chromium documentation responsiveness checks"
+    cwd: .
+    needs: [build]
+    steps:
+      - run: npx playwright test
+
+  verify:
+    stage: Docs
+    description: "Build and validate documentation in Chromium"
+    needs: [test-responsive]
+
   serve:
     stage: Docs
-    description: "Serve live-reloading documentation dev server"
-    needs:
-      - w:build
-    # Restart the complete task pipeline when EVIN itself changes. Changes to
-    # docs/ remain handled by the docs action's faster internal live reload.
+    description: "Serve the live-reloading documentation site"
+    needs: [main:build]
     watch:
       paths:
         - crates/**

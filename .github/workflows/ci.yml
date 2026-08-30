@@ -22,8 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.0
-      - name: Run workspace tests
-        run: cargo test --workspace --locked
+      - name: Run canonical workspace tests
+        run: cargo evin-dev run test
 
   quality:
     name: Formatting, Clippy, and browser checks
@@ -39,18 +39,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Run strict Clippy lints
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: Build documentation site
-        run: cargo evin-dev run docs:build
       - name: Install browser test dependencies
         run: npm ci
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: Run Chromium documentation checks
-        run: npm run test:docs-responsive
+      - name: Run canonical quality gate
+        run: cargo evin-dev run quality
 
   process-stress:
     name: Process stress (${{ matrix.os }})
@@ -64,5 +58,5 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.0
-      - name: Run process-supervision soak suite
-        run: cargo test -p evin-process --test soak --locked -- --ignored --test-threads=1
+      - name: Run canonical process-supervision soak suite
+        run: cargo evin-dev run soak

@@ -55,6 +55,9 @@ releases:
       changelog_section: Performance Improvements
 
   commit_message: "chore(release): {version}"
+  prerelease:
+    channels:
+      canary: "canary.{n}"
 
 branches:
   # The format required for branch names.

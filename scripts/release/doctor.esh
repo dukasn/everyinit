@@ -1,0 +1,8 @@
+#!/usr/bin/env esh
+set -e
+
+assert which musl-gcc -- "musl-gcc is required for Linux musl releases"
+assert which readelf -- "readelf is required to verify static linkage"
+assert 'rustup target list --installed | grep -Fq "x86_64-unknown-linux-musl"' -- "install the x86_64-unknown-linux-musl Rust target"
+
+echo "Linux musl release prerequisites are available."

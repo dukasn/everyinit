@@ -1,5 +1,5 @@
 workspace:
-  name: w
+  name: main
   version: "1.0.0-canary.100"
   rules: ".evin/gitrules.yaml"
   install_hint: "cargo install --path crates/evin"
@@ -9,6 +9,9 @@ workspace:
   modules:
     - docs/
     - crates/evin/
+    - crates/esh/
+  include:
+    - .evin/release.yaml
 
 stages:
   - Build
@@ -20,71 +23,79 @@ stages:
 tasks:
   build:
     stage: Build
-    description: "Check workspace compilation"
+    description: "Build the complete Rust workspace"
     presets: [rust]
     steps:
-      - run: cargo check --workspace
+      - run: cargo build --workspace --locked
+
+  check:
+    stage: Check
+    description: "Check every workspace target"
+    presets: [rust]
+    steps:
+      - run: cargo check --workspace --all-targets --locked
 
   fmt:
     stage: Check
-    description: "Enforce Rust formatting"
+    description: "Enforce workspace Rust formatting"
     presets: [rust]
-    needs:
-      - build
     on:
-      hooks:
-        - pre-commit
+      hooks: [pre-commit]
     steps:
-      - run: cargo fmt -- --check
+      - run: cargo fmt --all -- --check
 
   lint:
     stage: Check
-    description: "Run strict Clippy lints"
+    description: "Run strict Clippy across every workspace target"
     presets: [rust]
-    needs:
-      - build
     on:
-      hooks:
-        - pre-commit
+      hooks: [pre-commit]
     steps:
-      - run: cargo clippy -- -D warnings
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
   test:
     stage: Test
-    description: "Run test suites across all crates"
+    description: "Run the locked workspace test suite"
     presets: [rust]
+    on:
+      hooks: [pre-commit]
+    steps:
+      - run: cargo test --workspace --locked
+
+  quality:
+    stage: Check
+    description: "Run static Rust and browser documentation quality checks"
     needs:
+      - check
       - fmt
       - lint
-    on:
-      hooks:
-        - pre-commit
-    steps:
-      - run: cargo test --workspace
+      - docs:verify
 
-  bump:
-    stage: Publish
-    description: "Calculate version and mutate files"
+  verify:
+    stage: Test
+    description: "Run the complete local validation gate"
     needs:
+      - quality
       - test
-    steps:
-      - uses: evin/version-bumper@v1
-        with:
-          initial_version: "1.0.0-canary.100"
-          files:
-            - "Cargo.toml"
-            - path: ".evin/workspace.yaml"
-              match: 'version:\s*"${previous_version}"'
-              write: 'version: "${version}"'
-      - run: cargo update --workspace
 
-  changelog:
-    stage: Publish
-    description: "Generate Changelog"
-    needs:
-      - bump
+  soak:
+    stage: Test
+    description: "Run the ignored process-supervision soak suite"
+    presets: [rust]
     steps:
-      - uses: evin/changelog@v1
-        with:
-          path: CHANGELOG.md
-          version: ${bump.version}
+      - run: cargo test -p evin-process --test soak --locked -- --ignored --test-threads=1
+
+  doctor:
+    stage: Check
+    description: "Report contributor prerequisite availability"
+    steps:
+      - run: cargo run --locked -p esh -- scripts/maintenance/doctor.esh
+
+  bootstrap:
+    stage: Build
+    description: "Install locked repository dependencies and synchronize hooks"
+    steps:
+      - run: cargo fetch --locked
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: cargo evin-dev sync

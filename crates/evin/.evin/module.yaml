@@ -1,39 +1,36 @@
 module:
   name: evin
-  version: "1.0.0-canary.100"
 
 tasks:
-  build-release:
-    stage: Publish
-    description: "Compile release binary"
-    needs:
-      - bump
+  build:
+    stage: Build
+    description: "Build the EVIN CLI crate"
+    presets: [rust]
     steps:
-      - run: cargo build --release
+      - run: cargo build -p evin --locked
 
-  publish:
-    stage: Publish
-    description: "Commit and Tag Release"
-    needs:
-      - changelog
-      - package
+  check:
+    stage: Check
+    description: "Check every EVIN CLI crate target"
+    presets: [rust]
     steps:
-      - uses: evin/git-release@v1
-        with:
-          stage: all
-          tag: ${bump.tag}
+      - run: cargo check -p evin --all-targets --locked
 
-  package:
-    stage: Publish
-    description: "Package release binary"
-    needs:
-      - build-release
+  lint:
+    stage: Check
+    description: "Run strict Clippy for every EVIN CLI target"
+    presets: [rust]
     steps:
-      - uses: evin/archive@v1
-        with:
-          format: tar.gz
-          path: "target/release/evin-linux-amd64.tar.gz"
-          include:
-            - "target/release/evin"
-          layout: flat
-          prefix: "${env.release_name}-${bump.version}"
+      - run: cargo clippy -p evin --all-targets --locked -- -D warnings
+
+  test:
+    stage: Test
+    description: "Run EVIN CLI crate tests"
+    presets: [rust]
+    steps:
+      - run: cargo test -p evin --locked
+
+  verify:
+    stage: Test
+    description: "Run all EVIN CLI maintenance checks"
+    needs: [check, lint, test]

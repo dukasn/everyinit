@@ -61,6 +61,7 @@ pub struct VersionBumperConfig {
     pub stable: bool,
     pub prerelease: Option<String>,
     pub channel: Option<String>,
+    pub require_change: bool,
 }
 
 impl Default for VersionBumperConfig {
@@ -72,6 +73,7 @@ impl Default for VersionBumperConfig {
             stable: false,
             prerelease: None,
             channel: None,
+            require_change: false,
         }
     }
 }
@@ -445,6 +447,12 @@ pub async fn execute(
                 args.insert("version", previous_version.as_str());
                 let tag = evin_yaml::template::format::render(ctx.tag_format(), &args);
                 ctx.state.set_output("tag", &tag);
+                if config.require_change {
+                    return Err(evin_diagnostic::Diagnostic::new(
+                        "No qualifying commits since the previous release",
+                        evin_diagnostic::IssueCode::new("no-version-change"),
+                    ));
+                }
                 return Ok(());
             }
         }
