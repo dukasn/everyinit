@@ -232,6 +232,7 @@ define_localized_messages! {
     pub struct DocsRebuilding {} => "status-docs-rebuilding";
     pub struct DocsWatchingSucceeded {} => "status-docs-watching-succeeded";
     pub struct DocsWatchingFailed {} => "status-docs-watching-failed";
+    pub struct DocsPlanBuild { output: String } => "plan-docs-build";
     pub struct DocsPlanServer {} => "plan-docs-server";
     pub struct ArchivePlanUnresolved { path: String } => "plan-archive-unresolved";
     pub struct ArchivePlan { files: usize, path: String } => "plan-archive";

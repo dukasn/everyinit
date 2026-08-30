@@ -18,43 +18,51 @@ use crate::v1::DocsConfig;
 use evin_doc::DocSiteAst;
 use std::path::{Path, PathBuf};
 
+fn reproducible_generated_at() -> String {
+    std::env::var("SOURCE_DATE_EPOCH")
+        .ok()
+        .and_then(|value| value.parse::<i64>().ok())
+        .and_then(|seconds| chrono::DateTime::from_timestamp(seconds, 0))
+        .map(|timestamp| timestamp.to_rfc3339())
+        .unwrap_or_else(|| "1970-01-01T00:00:00+00:00".to_string())
+}
+
 pub fn build_lsp_catalog(
-    workspace_root: &Path,
+    fs: &evin_action_sdk::fs::WorkspaceFs,
     config: &DocsConfig,
     site: &DocSiteAst,
     logger: &evin_action_sdk::Logger,
 ) -> Result<PathBuf, evin_diagnostic::Diagnostic> {
     let generator = format!("docs-generator@{}", env!("CARGO_PKG_VERSION"));
-    let generated_at = chrono::Utc::now().to_rfc3339();
+    let generated_at = reproducible_generated_at();
     let catalog = evin_doc::build_lsp_catalog(site, generator, generated_at);
     let out_path = if Path::new(&config.out).is_absolute() {
         PathBuf::from(&config.out)
     } else {
-        workspace_root.join(&config.out)
+        fs.workspace_root().join(&config.out)
     };
-    if let Some(parent) = out_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| {
-            evin_diagnostic::Diagnostic::new(
-                format!("Failed to create output directory: {error}"),
-                evin_diagnostic::IssueCode::new("io-error"),
-            )
-        })?;
-    }
     let json = serde_json::to_string_pretty(&catalog).map_err(|error| {
         evin_diagnostic::Diagnostic::new(
             format!("Failed to serialize LSP catalog JSON: {error}"),
             evin_diagnostic::IssueCode::new("json-error"),
         )
     })?;
-    std::fs::write(&out_path, json).map_err(|error| {
-        evin_diagnostic::Diagnostic::new(
-            format!(
-                "Failed to write LSP catalog to {}: {error}",
-                out_path.display()
-            ),
-            evin_diagnostic::IssueCode::new("io-error"),
-        )
-    })?;
+    let out_request = out_path.to_string_lossy();
+    let unchanged = fs
+        .read_to_string(&out_request)
+        .map(|current| current == json)
+        .unwrap_or(false);
+    if !unchanged {
+        fs.write(&out_request, json).map_err(|error| {
+            evin_diagnostic::Diagnostic::new(
+                format!(
+                    "Failed to write LSP catalog to {}: {error}",
+                    out_path.display()
+                ),
+                evin_diagnostic::IssueCode::new("io-error"),
+            )
+        })?;
+    }
     evin_action_sdk::action_event!(
         logger,
         evin_action_sdk::activity::DocsGenerated {

@@ -1119,11 +1119,30 @@ pub async fn execute(
     let mut stats = DocsDebugStats::default();
     let site_ast = parse_docs(workspace_root, &config, &ctx.log, &mut stats)?;
     if config.target == DocsTarget::Lsp {
-        let out_file = lsp::build_lsp_catalog(workspace_root, &config, &site_ast, &ctx.log)?;
+        let out_file = lsp::build_lsp_catalog(&ctx.fs, &config, &site_ast, &ctx.log)?;
         ctx.state
             .set_output("output_file", &out_file.to_string_lossy());
         ctx.state
             .set_output("symbol_count", &site_ast.pages.len().to_string());
+        return Ok(());
+    }
+    if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
+        let out_dir = if Path::new(&config.out).is_absolute() {
+            PathBuf::from(&config.out)
+        } else {
+            workspace_root.join(&config.out)
+        };
+        ctx.log.plan(evin_action_sdk::activity::DocsPlanBuild {
+            output: out_dir.display().to_string(),
+        });
+        if config.mode == DocsMode::Serve {
+            ctx.log.plan(evin_action_sdk::activity::DocsPlanServer {});
+        }
+        ctx.state
+            .set_output("output_dir", &out_dir.to_string_lossy());
+        ctx.state
+            .set_output("page_count", &site_ast.pages.len().to_string());
+        ctx.mark_unverified("Documentation rendering was skipped in dry-run mode");
         return Ok(());
     }
     let out_dir = render_docs(workspace_root, &config, &site_ast, &ctx.log, &mut stats)?;
@@ -1132,11 +1151,6 @@ pub async fn execute(
     ctx.state
         .set_output("page_count", &site_ast.pages.len().to_string());
     if config.mode == DocsMode::Serve {
-        if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
-            ctx.log.plan(evin_action_sdk::activity::DocsPlanServer {});
-            ctx.mark_unverified("Documentation server was not started in dry-run mode");
-            return Ok(());
-        }
         ctx.state
             .set_output("server_url", &format!("http://127.0.0.1:{}", config.port));
         server::DevServer::start(
@@ -1690,8 +1704,13 @@ mod tests {
         let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
         let mut stats = DocsDebugStats::default();
         let site_ast = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
-        let out_path =
-            lsp::build_lsp_catalog(temp_dir.path(), &config, &site_ast, &logger).unwrap();
+        let fs = evin_action_sdk::fs::WorkspaceFs::new(
+            temp_dir.path().to_path_buf(),
+            temp_dir.path().to_path_buf(),
+            evin_action_sdk::PipelineMode::Normal,
+            logger.clone(),
+        );
+        let out_path = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
 
         assert!(out_path.exists());
         let raw = std::fs::read_to_string(&out_path).unwrap();
@@ -1704,6 +1723,46 @@ mod tests {
         assert_eq!(echo_meta.handler, "builtins::echo");
         assert!(echo_meta.hover_markdown.contains("Prints strings."));
         assert!(echo_meta.terminal_ansi.contains("Prints strings."));
+
+        let first = std::fs::read_to_string(&out_path).unwrap();
+        lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
+        assert_eq!(std::fs::read_to_string(&out_path).unwrap(), first);
+    }
+
+    #[test]
+    fn lsp_catalog_dry_run_never_writes_the_physical_output() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let docs_dir = temp_dir.path().join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("echo.rst"),
+            "echo\n====\n\n:synopsis: echo\n:summary: Print text\n:category: flow\n:handler: builtins::echo\n",
+        )
+        .unwrap();
+        let config = DocsConfig {
+            target: DocsTarget::Lsp,
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            out: "assets/catalog.json".to_string(),
+            ..DocsConfig::default()
+        };
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
+            temp_dir.path(),
+        ));
+        let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
+        let fs = evin_action_sdk::fs::WorkspaceFs::new(
+            temp_dir.path().to_path_buf(),
+            temp_dir.path().to_path_buf(),
+            evin_action_sdk::PipelineMode::DryRun,
+            logger.clone(),
+        );
+        let mut stats = DocsDebugStats::default();
+        let site_ast = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
+
+        let output = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
+
+        assert!(!output.exists());
+        assert!(fs.exists("assets/catalog.json"));
     }
 
     #[test]
@@ -1711,8 +1770,9 @@ mod tests {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
         let esh_dir = workspace_root.join("docs/reference/esh");
+        let temp_dir = tempfile::tempdir().unwrap();
 
-        let out_json = workspace_root.join("crates/esh/assets/builtins-catalog.json");
+        let out_json = temp_dir.path().join("builtins-catalog.json");
         let config = DocsConfig {
             target: DocsTarget::Lsp,
             source_dir: esh_dir.to_str().unwrap().to_string(),
@@ -1728,7 +1788,13 @@ mod tests {
         let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
         let mut stats = DocsDebugStats::default();
         let site_ast = parse_docs(workspace_root, &config, &logger, &mut stats).unwrap();
-        let out_path = lsp::build_lsp_catalog(workspace_root, &config, &site_ast, &logger).unwrap();
+        let fs = evin_action_sdk::fs::WorkspaceFs::new(
+            temp_dir.path().to_path_buf(),
+            temp_dir.path().to_path_buf(),
+            evin_action_sdk::PipelineMode::Normal,
+            logger.clone(),
+        );
+        let out_path = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
 
         assert!(out_path.exists());
         let raw = std::fs::read_to_string(&out_path).unwrap();
