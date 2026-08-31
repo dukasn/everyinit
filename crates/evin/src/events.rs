@@ -304,9 +304,8 @@ pub async fn run_ui_reporter(
                                 let rendered = evin_locales::render_issue(&diagnostic.code);
                                 ui.handle_event(UIEvent::Diagnostic {
                                     item_name: task,
-                                    title: diagnostic.title.clone(),
+                                    diagnostic,
                                     message: rendered.clone(),
-                                    hint: diagnostic.hint.clone(),
                                 }).await;
                             }
                             PipelineEvent::TelemetryReport { telemetry, workspace_root } => {
@@ -379,9 +378,8 @@ pub async fn run_ui_reporter(
                                 let rendered = evin_locales::render_issue(&diagnostic.code);
                                 ui.handle_event(UIEvent::Diagnostic {
                                     item_name: "Pipeline".into(),
-                                    title: diagnostic.title.clone(),
+                                    diagnostic,
                                     message: rendered.clone(),
-                                    hint: diagnostic.hint.clone(),
                                 }).await;
                                 ui.handle_event(UIEvent::PipelineState { success: false }).await;
                                 // We wait for PipelineCancelled event to shut down

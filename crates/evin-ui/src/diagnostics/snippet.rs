@@ -46,7 +46,16 @@ impl<'a> SnippetRenderer<'a> {
 
     /// Render the snippet as a list of self-contained strings.
     /// The caller is responsible for embedding this within any outer frames.
-    pub fn render(&self, diagnostic: &Diagnostic, _message: &str) -> Option<Vec<String>> {
+    pub fn render(&self, diagnostic: &Diagnostic, message: &str) -> Option<Vec<String>> {
+        self.render_with_layout(diagnostic, message, Layout::current())
+    }
+
+    pub(crate) fn render_with_layout(
+        &self,
+        diagnostic: &Diagnostic,
+        _message: &str,
+        layout: Layout,
+    ) -> Option<Vec<String>> {
         let location = diagnostic.location.as_ref()?;
 
         let file_path = match location {
@@ -83,7 +92,6 @@ impl<'a> SnippetRenderer<'a> {
             }
         };
 
-        let layout = Layout::current();
         let line_number = source_file.line_for_offset(span_start);
         let column = source_file.column_for_offset(span_start);
 

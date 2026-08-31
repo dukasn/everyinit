@@ -18,6 +18,7 @@ pub mod telemetry;
 pub mod context;
 pub mod dag;
 pub mod env;
+pub mod preflight;
 pub mod runner;
 pub mod test_fixture;
 

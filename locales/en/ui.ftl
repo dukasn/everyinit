@@ -49,6 +49,61 @@ discovery-explain-summary = { $tasks } { $tasks ->
    *[other] steps
 } · nothing was executed
 
+check-description = Statically validating repository workflow contracts, manifests, and task graphs.
+check-checked-manifest = Checked { $path } ({ $tasks } { $tasks ->
+    [one] task
+   *[other] tasks
+})
+check-checked-rules = Checked { $path }
+check-checked-env = Checked { $path }
+check-summary-title = Validation Summary
+check-finished-success = All workflow contracts are sound!
+check-finished-failure = Failed!
+check-errors-title = Validation failed
+check-warnings-title = Validation warnings
+check-status-label = Status
+check-targets-label = Targets
+check-graph-label = Graph
+check-status-valid = Valid
+check-status-invalid = Invalid
+check-status-summary = { $status } ({ $errors } { $errors ->
+    [one] error
+   *[other] errors
+}, { $warnings } { $warnings ->
+    [one] warning
+   *[other] warnings
+})
+check-result-summary = { $tasks } { $tasks ->
+    [one] task
+   *[other] tasks
+} · { $errors } { $errors ->
+    [one] error
+   *[other] errors
+} · { $warnings } { $warnings ->
+    [one] warning
+   *[other] warnings
+} · nothing was executed
+check-selection-summary = No manifests were checked
+check-kind-unknown-module = Unknown module
+check-kind-unknown-target = Unknown target
+check-workspace-unresolved = (unresolved)
+check-fence-aborted = aborted
+check-fence-review = review
+check-all-summary = { $tasks } { $tasks ->
+    [one] task
+   *[other] tasks
+}, { $stages } { $stages ->
+    [one] stage
+   *[other] stages
+}, { $modules } { $modules ->
+    [one] module
+   *[other] modules
+}, { $namespaces } { $namespaces ->
+    [one] namespace
+   *[other] namespaces
+}
+check-graph-summary = { $nodes } nodes, { $edges } edges, { $cycles } cycles detected
+
 intro-title = {" "} { $category } › { $target }{" "}
 summary-title = Pipeline Summary
 dry-run-summary-title = Dry Run Summary

@@ -33,11 +33,9 @@ pub fn validate_config(
     let payload = with_payload
         .cloned()
         .unwrap_or(evin_yaml::SpannedValue::Null(Default::default()));
-    let config: ArchiveConfig =
-        evin_action_sdk::parse_config(Some(&payload)).map_err(|e| evin_yaml::ConfigError {
-            message: evin_locales::t!("invalid-config", error = e.to_string()),
-            span: None,
-        })?;
+    let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&payload)).map_err(|error| {
+        error.map_message(|message| evin_locales::t!("invalid-config", error = message))
+    })?;
     config.validate().map_err(|d| evin_yaml::ConfigError {
         message: evin_locales::render_issue(&d.code),
         span: None,

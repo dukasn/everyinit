@@ -5,10 +5,12 @@
 // the Free Software Foundation, version 3.
 
 use crate::render::{
-    Layout, Mode, SYMBOL_DISCOVERY_TARGET, SYMBOL_FRAME_BAR, SYMBOL_INTRO, SYMBOL_OUTRO,
-    SYMBOL_STEP, SYMBOL_SUCCESS, Theme,
+    Layout, Mode, SYMBOL_DISCOVERY_TARGET, SYMBOL_ERROR, SYMBOL_FRAME_BAR, SYMBOL_INTRO,
+    SYMBOL_OUTRO, SYMBOL_STEP, SYMBOL_SUCCESS, SYMBOL_WARN, Theme,
 };
 use console::{Style, style};
+use evin_diagnostic::{Diagnostic, Severity};
+use evin_io::SourceCache;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkspaceIdentity {
@@ -86,6 +88,249 @@ pub struct FailedExplanationView {
     pub workspace: WorkspaceIdentity,
     pub target: String,
     pub hint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ManifestKind {
+    Workspace,
+    Module,
+    Namespace,
+    GitRules,
+    Environment,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckedManifest {
+    pub path: String,
+    pub task_count: usize,
+    pub kind: ManifestKind,
+    pub issues: Vec<CheckIssueView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckReportView {
+    pub workspace: WorkspaceIdentity,
+    pub checked_files: Vec<CheckedManifest>,
+    pub total_tasks: usize,
+    pub total_stages: usize,
+    pub total_modules: usize,
+    pub total_namespaces: usize,
+    pub graph_nodes: usize,
+    pub graph_edges: usize,
+    pub graph_cycles: usize,
+    pub issues: Vec<CheckIssueView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckIssueView {
+    pub diagnostic: Diagnostic,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckSelectionFailureView {
+    pub workspace: WorkspaceIdentity,
+    pub target: String,
+    pub kind: String,
+    pub detail: String,
+}
+
+impl CheckReportView {
+    pub fn error_count(&self) -> usize {
+        self.all_issues()
+            .iter()
+            .filter(|issue| issue.diagnostic.severity == Severity::Error)
+            .count()
+    }
+
+    pub fn warning_count(&self) -> usize {
+        self.all_issues()
+            .iter()
+            .filter(|issue| issue.diagnostic.severity == Severity::Warning)
+            .count()
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.error_count() == 0
+    }
+
+    fn all_issues(&self) -> Vec<&CheckIssueView> {
+        self.checked_files
+            .iter()
+            .flat_map(|manifest| manifest.issues.iter())
+            .chain(self.issues.iter())
+            .collect()
+    }
+}
+
+pub fn render_check(
+    view: &CheckReportView,
+    width: usize,
+    source_cache: Option<&SourceCache>,
+) -> String {
+    let layout = Layout::with_width(width);
+    let mut lines = header(&view.workspace);
+    intro(&mut lines, "Workspace › Check");
+    framed_text(
+        &mut lines,
+        &layout,
+        &evin_locales::t!("check-description"),
+        0,
+        None,
+    );
+    bar(&mut lines);
+
+    for manifest in &view.checked_files {
+        let msg = match manifest.kind {
+            ManifestKind::Workspace | ManifestKind::Module | ManifestKind::Namespace => {
+                evin_locales::t!(
+                    "check-checked-manifest",
+                    path = manifest.path.as_str(),
+                    tasks = manifest.task_count
+                )
+            }
+            ManifestKind::GitRules => {
+                evin_locales::t!("check-checked-rules", path = manifest.path.as_str())
+            }
+            ManifestKind::Environment => {
+                evin_locales::t!("check-checked-env", path = manifest.path.as_str())
+            }
+        };
+        let manifest_errors = manifest
+            .issues
+            .iter()
+            .filter(|issue| issue.diagnostic.severity == Severity::Error)
+            .count();
+        let manifest_warnings = manifest
+            .issues
+            .iter()
+            .filter(|issue| issue.diagnostic.severity == Severity::Warning)
+            .count();
+        if manifest_errors > 0 {
+            severity_title(&mut lines, &layout, SYMBOL_ERROR, Severity::Error, &msg);
+        } else if manifest_warnings > 0 {
+            severity_title(&mut lines, &layout, SYMBOL_WARN, Severity::Warning, &msg);
+        } else {
+            check_manifest_section(&mut lines, &layout, &msg);
+        }
+        for issue in &manifest.issues {
+            lines.extend(check_issue_fence(
+                issue,
+                layout,
+                source_cache,
+                manifest_errors > 0,
+            ));
+        }
+    }
+
+    let errors = view.error_count();
+    let warnings = view.warning_count();
+    if !view.issues.is_empty() {
+        let (symbol, severity, title) = if errors > 0 {
+            (
+                SYMBOL_ERROR,
+                Severity::Error,
+                evin_locales::t!("check-errors-title"),
+            )
+        } else {
+            (
+                SYMBOL_WARN,
+                Severity::Warning,
+                evin_locales::t!("check-warnings-title"),
+            )
+        };
+        severity_title(&mut lines, &layout, symbol, severity, &title);
+        for issue in &view.issues {
+            lines.extend(check_issue_fence(issue, layout, source_cache, errors > 0));
+        }
+    }
+
+    let status_text = evin_locales::t!(
+        "check-status-summary",
+        status = if errors == 0 {
+            evin_locales::t!("check-status-valid")
+        } else {
+            evin_locales::t!("check-status-invalid")
+        },
+        errors = errors,
+        warnings = warnings
+    );
+
+    let targets_text = evin_locales::t!(
+        "check-all-summary",
+        tasks = view.total_tasks,
+        stages = view.total_stages,
+        modules = view.total_modules,
+        namespaces = view.total_namespaces
+    );
+
+    let graph_text = evin_locales::t!(
+        "check-graph-summary",
+        nodes = view.graph_nodes,
+        edges = view.graph_edges,
+        cycles = view.graph_cycles
+    );
+
+    lines.extend(crate::render::summary_lines(
+        layout,
+        Mode::Normal,
+        evin_locales::t!("check-summary-title"),
+        &[
+            format!(
+                "{}: {status_text}",
+                dim(&evin_locales::t!("check-status-label"))
+            ),
+            format!(
+                "{}: {targets_text}",
+                dim(&evin_locales::t!("check-targets-label"))
+            ),
+            format!(
+                "{}: {graph_text}",
+                dim(&evin_locales::t!("check-graph-label"))
+            ),
+        ],
+    ));
+
+    if errors == 0 {
+        outro(&mut lines, &evin_locales::t!("discovery-finished"));
+    } else {
+        lines.push(format!(
+            "{}  {}",
+            Theme::frame(SYMBOL_OUTRO),
+            Style::new()
+                .red()
+                .apply_to(evin_locales::t!("check-finished-failure"))
+        ));
+    }
+    lines.push(String::new());
+    lines.push(dim(&evin_locales::t!(
+        "check-result-summary",
+        tasks = view.total_tasks,
+        errors = errors,
+        warnings = warnings
+    )));
+    lines.push(String::new());
+    lines.join("\n")
+}
+
+pub fn render_check_selection_failure(view: &CheckSelectionFailureView, width: usize) -> String {
+    let layout = Layout::with_width(width);
+    let mut lines = header(&view.workspace);
+    intro(&mut lines, "Workspace › Check");
+    let title = format!("{}  {}", view.target, dim(&format!("<{}>", view.kind)));
+    error_title(&mut lines, &layout, &title);
+    suggestion_lines(&mut lines, &layout, &view.detail);
+    lines.push(format!(
+        "{}  {}",
+        Theme::frame(SYMBOL_OUTRO),
+        Style::new()
+            .red()
+            .apply_to(evin_locales::t!("check-finished-failure"))
+    ));
+    lines.push(String::new());
+    lines.push(dim(&evin_locales::t!("check-selection-summary")));
+    lines.push(String::new());
+    lines.join("\n")
 }
 
 pub fn render_catalog(view: &CatalogView, width: usize) -> String {
@@ -280,6 +525,94 @@ fn error_title(lines: &mut Vec<String>, layout: &Layout, title: &str) {
     bar(lines);
 }
 
+fn severity_title(
+    lines: &mut Vec<String>,
+    layout: &Layout,
+    symbol: &str,
+    severity: Severity,
+    title: &str,
+) {
+    let wrapped = layout.wrap_with_margin(title, 3);
+    for (index, line) in wrapped.iter().enumerate() {
+        if index == 0 {
+            lines.push(format!(
+                "{}   {}",
+                Theme::severity_style(severity, symbol),
+                Style::new().bold().apply_to(line)
+            ));
+        } else {
+            lines.push(format!("{}   {line}", Theme::frame(SYMBOL_FRAME_BAR)));
+        }
+    }
+    bar(lines);
+}
+
+fn suggestion_lines(lines: &mut Vec<String>, layout: &Layout, hint: &str) {
+    let hint = console::strip_ansi_codes(hint);
+    let wrapped = layout.wrap_with_margin(&hint, 3);
+    for (index, line) in wrapped.iter().enumerate() {
+        if index == 0 {
+            lines.push(format!("{}   {line}", Style::new().blue().apply_to("•")));
+        } else {
+            lines.push(format!("{}   {line}", Theme::frame(SYMBOL_FRAME_BAR)));
+        }
+    }
+    bar(lines);
+}
+
+fn check_issue_fence(
+    issue: &CheckIssueView,
+    layout: Layout,
+    source_cache: Option<&SourceCache>,
+    aborting: bool,
+) -> Vec<String> {
+    let severity = issue.diagnostic.severity;
+    let label = match severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+        Severity::Info => "info",
+    };
+    let title = format!(
+        "({label}) ↩ {} [{}]",
+        issue.diagnostic.title, issue.diagnostic.code
+    );
+    let mut body = layout.wrap_with_margin(&issue.message, 6);
+    if let Some(hint) = &issue.diagnostic.hint {
+        body.push(String::new());
+        let hint = console::strip_ansi_codes(hint);
+        let wrapped = layout.wrap_with_margin(&hint, 8);
+        for (index, line) in wrapped.iter().enumerate() {
+            if index == 0 {
+                body.push(format!("{} {line}", Theme::remark_symbol()));
+            } else {
+                body.push(format!("  {line}"));
+            }
+        }
+    }
+    if issue.diagnostic.location.is_some()
+        && let Some(snippet) = crate::diagnostics::snippet::SnippetRenderer::new()
+            .with_cache(source_cache)
+            .render_with_layout(&issue.diagnostic, &issue.message, layout)
+    {
+        body.push(String::new());
+        body.extend(snippet);
+    }
+    let footer = if severity == Severity::Warning && !aborting {
+        evin_locales::t!("check-fence-review")
+    } else {
+        evin_locales::t!("check-fence-aborted")
+    };
+    crate::render::fenced_lines(
+        layout,
+        &Theme::default(),
+        &title,
+        &body,
+        Some(severity),
+        Some(&footer),
+        true,
+    )
+}
+
 fn status_title(lines: &mut Vec<String>, layout: &Layout, symbol: &str, title: &str) {
     let wrapped = layout.wrap_with_margin(title, 3);
     for (index, line) in wrapped.iter().enumerate() {
@@ -311,6 +644,22 @@ fn success_section(lines: &mut Vec<String>, title: &str) {
         Style::new().green().apply_to(SYMBOL_SUCCESS),
         Style::new().bold().apply_to(title)
     ));
+    bar(lines);
+}
+
+fn check_manifest_section(lines: &mut Vec<String>, layout: &Layout, title: &str) {
+    let wrapped = layout.wrap_with_margin(title, 3);
+    for (index, line) in wrapped.iter().enumerate() {
+        if index == 0 {
+            lines.push(format!(
+                "{}  {}",
+                Style::new().green().apply_to(SYMBOL_SUCCESS),
+                Style::new().bold().apply_to(line)
+            ));
+        } else {
+            lines.push(format!("{}   {line}", Theme::frame(SYMBOL_FRAME_BAR)));
+        }
+    }
     bar(lines);
 }
 
@@ -507,6 +856,7 @@ fn dim(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use evin_diagnostic::IssueCode;
 
     fn workspace() -> WorkspaceIdentity {
         WorkspaceIdentity {
@@ -599,5 +949,154 @@ mod tests {
         assert!(output.contains("×   Testy  unknown"));
         assert!(output.contains("•   Did you mean 'Test'?"));
         assert!(output.contains("╰  Failed!"));
+    }
+
+    #[test]
+    fn check_view_renders_validation_card() {
+        let output = render_check(
+            &CheckReportView {
+                workspace: workspace(),
+                checked_files: vec![
+                    CheckedManifest {
+                        path: ".evin/workspace.yaml".into(),
+                        task_count: 5,
+                        kind: ManifestKind::Workspace,
+                        issues: Vec::new(),
+                    },
+                    CheckedManifest {
+                        path: ".evin/gitrules.yaml".into(),
+                        task_count: 0,
+                        kind: ManifestKind::GitRules,
+                        issues: Vec::new(),
+                    },
+                ],
+                total_tasks: 5,
+                total_stages: 2,
+                total_modules: 0,
+                total_namespaces: 0,
+                graph_nodes: 5,
+                graph_edges: 3,
+                graph_cycles: 0,
+                issues: Vec::new(),
+            },
+            80,
+            None,
+        );
+        let output = console::strip_ansi_codes(&output);
+        assert!(output.contains("╭   Workspace › Check "));
+        assert!(output.contains("Checked .evin/workspace.yaml (5 tasks)"));
+        assert!(output.contains("Checked .evin/gitrules.yaml"));
+        assert!(output.contains("Validation Summary"));
+        assert!(output.contains("Status: Valid (0 errors, 0 warnings)"));
+        assert!(output.contains("5 tasks, 2 stages, 0 modules, 0 namespaces"));
+        assert!(output.contains("5 nodes, 3 edges, 0 cycles detected"));
+        assert!(output.contains("╰  Finished!"));
+    }
+
+    #[test]
+    fn check_error_renders_a_fenced_source_diagnostic() {
+        let source_cache = SourceCache::default();
+        let source = "tasks:\n  publish:\n    steps:\n      - uses: example/action@v1\n        with: '{{ old.syntax }}'\n";
+        source_cache.insert(".evin/workspace.yaml", source);
+        let offset = source.find("{{ old.syntax }}").unwrap();
+        let diagnostic = Diagnostic::new(
+            "Invalid action configuration",
+            IssueCode::new("issue-action-config-invalid"),
+        )
+        .with_file_span(
+            ".evin/workspace.yaml",
+            offset,
+            16,
+            Some("invalid template expression".into()),
+        );
+        let issue = CheckIssueView {
+            diagnostic,
+            message: "Task 'publish' contains an invalid action template".into(),
+        };
+        let output = render_check(
+            &CheckReportView {
+                workspace: workspace(),
+                checked_files: vec![CheckedManifest {
+                    path: ".evin/workspace.yaml".into(),
+                    task_count: 1,
+                    kind: ManifestKind::Workspace,
+                    issues: vec![issue],
+                }],
+                total_tasks: 1,
+                total_stages: 1,
+                total_modules: 0,
+                total_namespaces: 0,
+                graph_nodes: 1,
+                graph_edges: 0,
+                graph_cycles: 0,
+                issues: Vec::new(),
+            },
+            80,
+            Some(&source_cache),
+        );
+        let output = console::strip_ansi_codes(&output);
+
+        assert!(output.contains("╭─(error) ↩ Invalid action configuration"));
+        assert!(output.contains("×   Checked .evin/workspace.yaml (1 task)"));
+        assert!(output.contains(".evin/workspace.yaml"));
+        assert!(output.contains("with: '{{ old.syntax }}'"));
+        assert!(output.contains("invalid template express"));
+        assert!(output.contains("╰─(action) ↩ aborted"));
+        assert!(output.contains("╰  Failed!"));
+        assert!(output.contains("1 task · 1 error · 0 warnings · nothing was executed"));
+    }
+
+    #[test]
+    fn warning_only_check_finishes_successfully() {
+        let diagnostic = Diagnostic::new(
+            "Workspace warning",
+            IssueCode::new("issue-check-workspace-warning"),
+        )
+        .with_severity(Severity::Warning);
+        let output = render_check(
+            &CheckReportView {
+                workspace: workspace(),
+                checked_files: Vec::new(),
+                total_tasks: 2,
+                total_stages: 1,
+                total_modules: 0,
+                total_namespaces: 0,
+                graph_nodes: 2,
+                graph_edges: 1,
+                graph_cycles: 0,
+                issues: vec![CheckIssueView {
+                    diagnostic,
+                    message: "A deprecated field is still accepted".into(),
+                }],
+            },
+            48,
+            None,
+        );
+        let output = console::strip_ansi_codes(&output);
+
+        assert!(output.contains("╭─(warning) ↩ Workspace warning"));
+        assert!(output.contains("╰─(action) ↩ review"));
+        assert!(output.contains("Status: Valid (0 errors, 1 warning)"));
+        assert!(output.contains("╰  Finished!"));
+    }
+
+    #[test]
+    fn check_selection_failure_uses_the_compact_discovery_frame() {
+        let output = render_check_selection_failure(
+            &CheckSelectionFailureView {
+                workspace: workspace(),
+                target: "releaze".into(),
+                kind: "unknown module".into(),
+                detail: "Did you mean 'release'?".into(),
+            },
+            44,
+        );
+        let output = console::strip_ansi_codes(&output);
+
+        assert!(output.contains("╭   Workspace › Check "));
+        assert!(output.contains("×   releaze  <unknown module>"));
+        assert!(output.contains("•   Did you mean 'release'?"));
+        assert!(output.contains("╰  Failed!"));
+        assert!(output.contains("No manifests were checked"));
     }
 }

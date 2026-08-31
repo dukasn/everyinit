@@ -118,6 +118,13 @@ impl Display for ConfigError {
 impl std::error::Error for ConfigError {}
 
 impl ConfigError {
+    pub fn map_message(self, map: impl FnOnce(String) -> String) -> Self {
+        Self {
+            message: map(self.message),
+            span: self.span,
+        }
+    }
+
     pub fn into_diagnostic(
         self,
         _title: impl Into<String>,

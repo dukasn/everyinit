@@ -20,7 +20,7 @@ tasks:
     description: "Run the complete source-release validation gate"
     needs:
       - release:clean
-      - verify
+      - main:verify
     steps:
       - run: git -c core.whitespace=trailing-space,space-before-tab diff --check
 

@@ -23,7 +23,6 @@ pub const SPANNED_SPAN_FIELD: &str = "$__span";
 
 thread_local! {
     pub static SPANNED_VALUE_EXCHANGE: std::cell::RefCell<Option<SpannedValue>> = const { std::cell::RefCell::new(None) };
-    pub static CURRENT_SPAN_STACK: std::cell::RefCell<Vec<Span>> = const { std::cell::RefCell::new(Vec::new()) };
     pub static CONFIG_REPORT: std::cell::RefCell<crate::ConfigReport> = const { std::cell::RefCell::new(crate::ConfigReport { overrides: Vec::new(), defaults: Vec::new() }) };
 }
 
@@ -191,10 +190,9 @@ impl<'de> de::Deserializer<'de> for Deserializer {
 
 impl de::Error for ConfigError {
     fn custom<T: std::fmt::Display>(msg: T) -> Self {
-        let span = CURRENT_SPAN_STACK.with(|stack| stack.borrow().last().cloned());
         ConfigError {
             message: msg.to_string(),
-            span,
+            span: None,
         }
     }
 }
@@ -319,12 +317,6 @@ impl<'de> MapAccess<'de> for MapDeserializer {
     {
         match self.iter.next() {
             Some((k, v)) => {
-                let span = k.span();
-                CURRENT_SPAN_STACK.with(|stack| {
-                    if let Some(top) = stack.borrow_mut().last_mut() {
-                        *top = span;
-                    }
-                });
                 self.value = Some(v);
                 seed.deserialize(Deserializer::from_spanned_value(k))
                     .map(Some)
@@ -341,5 +333,35 @@ impl<'de> MapAccess<'de> for MapDeserializer {
             Some(value) => seed.deserialize(Deserializer::from_spanned_value(value)),
             None => Err(ConfigError::custom("value is missing")),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct StrictConfig {
+        #[serde(rename = "expected")]
+        _expected: String,
+    }
+
+    #[test]
+    fn unknown_fields_use_the_exact_mapping_key_span() {
+        let value = crate::parse_yaml("typo: value\n").unwrap();
+
+        let error = from_spanned_value::<StrictConfig>(value).unwrap_err();
+
+        assert!(error.message.contains("unknown field"));
+        assert_eq!(
+            error.span,
+            Some(Span {
+                line: 1,
+                column: 1,
+                offset: 0,
+                length: 4,
+            })
+        );
     }
 }

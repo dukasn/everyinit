@@ -380,61 +380,15 @@ impl Logger {
         is_error: bool,
         command: Option<&str>,
     ) -> Vec<String> {
-        if lines.is_empty() {
-            return Vec::new();
-        }
-
-        let border_color = if is_error {
-            &self.theme.error_color
-        } else {
-            &self.theme.frame_color
-        };
-        let bar = self
-            .theme
-            .frame_color
-            .apply_to(SYMBOL_FRAME_BAR)
-            .to_string();
-        let _width = self.layout.inner_width();
-
-        let top_border = border_color
-            .apply_to(format!("{}{}", SYMBOL_FENCED_TOP, title))
-            .to_string();
-
-        let inner_bar = border_color.apply_to(SYMBOL_FRAME_BAR).to_string();
-        let bottom_border_symbol = border_color.apply_to(SYMBOL_FENCED_BOTTOM).to_string();
-
-        let mut rendered = vec![format!("{}  {}", bar, top_border)];
-        for line in lines {
-            for wrapped_line in self.layout.wrap_with_margin(line, 2) {
-                rendered.push(format!("{}  {} {}", bar, inner_bar, wrapped_line));
-            }
-        }
-
-        if let Some(cmd) = command {
-            let (prefix_sym, label) = if let Some(script) = cmd.strip_prefix("(cmd) ") {
-                (SYMBOL_FENCED_CMD_PREFIX, script)
-            } else {
-                (SYMBOL_FENCED_RESULT_PREFIX, cmd)
-            };
-            let cmd_prefix = border_color
-                .apply_to(format!("{}{}", SYMBOL_FENCED_BOTTOM, prefix_sym))
-                .to_string();
-            let mut first = true;
-            for line in label.lines() {
-                let styled_line = border_color.apply_to(line).to_string();
-                if first {
-                    rendered.push(format!("{}  {}{}", bar, cmd_prefix, styled_line));
-                    first = false;
-                } else {
-                    rendered.push(format!("{}           {}", bar, styled_line));
-                }
-            }
-        } else {
-            rendered.push(format!("{}  {}", bar, bottom_border_symbol));
-        }
-
-        rendered.push(bar);
-        rendered
+        crate::render::fenced_lines(
+            self.layout,
+            &self.theme,
+            title,
+            lines,
+            is_error.then_some(evin_diagnostic::Severity::Error),
+            command,
+            false,
+        )
     }
 }
 

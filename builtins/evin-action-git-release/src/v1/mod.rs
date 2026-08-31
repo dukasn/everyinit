@@ -34,10 +34,14 @@ struct GitReleaseConfig {
 }
 
 impl GitReleaseConfig {
-    fn from_with(with: Option<evin_yaml::SpannedValue>) -> Result<Self, String> {
-        let config: Self =
-            evin_action_sdk::parse_config(with.as_ref()).map_err(|e| e.to_string())?;
-        config.validate()?;
+    fn from_with(with: Option<evin_yaml::SpannedValue>) -> Result<Self, evin_yaml::ConfigError> {
+        let config: Self = evin_action_sdk::parse_config(with.as_ref())?;
+        config
+            .validate()
+            .map_err(|message| evin_yaml::ConfigError {
+                message,
+                span: None,
+            })?;
         Ok(config)
     }
 
@@ -61,12 +65,7 @@ impl GitReleaseConfig {
 pub fn validate_config(
     with: Option<&evin_yaml::SpannedValue>,
 ) -> Result<(), evin_yaml::ConfigError> {
-    GitReleaseConfig::from_with(with.cloned())
-        .map(|_| ())
-        .map_err(|e| evin_yaml::ConfigError {
-            message: e.to_string(),
-            span: None,
-        })
+    GitReleaseConfig::from_with(with.cloned()).map(|_| ())
 }
 
 // This entry point implements the SDK Action contract, whose error type is
@@ -205,7 +204,7 @@ mod tests {
         )
     }
 
-    fn config(yaml: &str) -> Result<GitReleaseConfig, String> {
+    fn config(yaml: &str) -> Result<GitReleaseConfig, evin_yaml::ConfigError> {
         let with = evin_yaml::parse_yaml(yaml).expect("valid YAML");
         GitReleaseConfig::from_with(Some(with))
     }

@@ -34,65 +34,10 @@ impl PipelineEngine {
         if let Err(e) = resolver.build_graph_public() {
             return Err(evin_locales::diagnostic(e.into()));
         }
-
-        // Pre-Flight Validation
-        for task in resolver.registry().values() {
-            if task.run.is_some() && task.steps.is_some() {
-                return Err(evin_locales::diagnostic(
-                    evin_diagnostic::IssueCode::new("issue-task-defines-run-and-steps")
-                        .arg("task_name", &task.name),
-                ));
-            }
-
-            if let Some(steps) = &task.steps {
-                for step in steps {
-                    if let Some(uses) = &step.uses {
-                        if let Some(action) = self.state.actions.get(uses.as_str()) {
-                            if let Err(e) = action.validate_config(step.with.as_ref()) {
-                                let title =
-                                    task.description.as_deref().unwrap_or(task.name.as_str());
-                                let clean_error = e
-                                    .message
-                                    .replace("unknown field", "Unknown field")
-                                    .replace("missing field", "Missing field")
-                                    .replace("invalid type:", "Invalid type:")
-                                    .replace(", expected one of", ".\n\x1FAllowed fields:")
-                                    .replace(", expected", ".\n\x1FExpected:");
-                                let mut diag = evin_locales::diagnostic(
-                                    evin_diagnostic::IssueCode::new("issue-action-config-invalid")
-                                        .arg("task", title)
-                                        .arg("clean_error", clean_error),
-                                );
-                                if let (Some(span), Some(source_file)) = (e.span, &task.source_file)
-                                {
-                                    if span.length > 1 {
-                                        diag = diag.with_file_span(
-                                            source_file.clone(),
-                                            span.offset,
-                                            span.length,
-                                            None,
-                                        );
-                                    } else {
-                                        diag = diag.with_file_location(
-                                            source_file.clone(),
-                                            Some(span.line),
-                                            Some(span.column),
-                                        );
-                                    }
-                                }
-                                return Err(diag);
-                            }
-                        } else {
-                            return Err(evin_locales::diagnostic(
-                                evin_diagnostic::IssueCode::new("issue-unknown-native-action")
-                                    .arg("action", uses.as_str()),
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
+        crate::preflight::validate_task_contracts(resolver.registry().values(), &self.state.actions)
+            .into_iter()
+            .next()
+            .map_or(Ok(()), |finding| Err(finding.diagnostic))
     }
 
     pub async fn execute(

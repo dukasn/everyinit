@@ -1,0 +1,696 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use evin_config::parser::EverInitConfig;
+use evin_diagnostic::{Diagnostic, IssueCode, Severity};
+use evin_pipeline::dag::DagResolver;
+use evin_ui::discovery::{
+    CheckIssueView, CheckReportView, CheckSelectionFailureView, CheckedManifest, ManifestKind,
+    WorkspaceIdentity, render_check, render_check_selection_failure,
+};
+use std::collections::{BTreeMap, HashSet};
+use std::io::IsTerminal;
+use std::path::PathBuf;
+
+pub async fn check(
+    workspace_only: bool,
+    module_filter: Option<&str>,
+    target_filter: Option<&str>,
+) -> Result<bool, Diagnostic> {
+    let config = match evin_config::load_workspace_tasks().await {
+        Ok(config) => config,
+        Err(diagnostic) => {
+            let view = failed_report(unresolved_identity(), diagnostic);
+            emit(render_check(&view, terminal_width(), None), false);
+            return Ok(false);
+        }
+    };
+    match check_view(&config, workspace_only, module_filter, target_filter) {
+        Ok(view) => {
+            let valid = view.is_valid();
+            emit(render_check(&view, terminal_width(), None), valid);
+            Ok(valid)
+        }
+        Err(diagnostic) if is_selection_error(&diagnostic) => {
+            let kind = if diagnostic.code.key == "issue-check-unknown-module" {
+                evin_locales::t!("check-kind-unknown-module")
+            } else {
+                evin_locales::t!("check-kind-unknown-target")
+            };
+            let selected = module_filter.or(target_filter).unwrap_or_default();
+            let detail = diagnostic
+                .hint
+                .clone()
+                .unwrap_or_else(|| evin_locales::render_issue(&diagnostic.code));
+            emit(
+                render_check_selection_failure(
+                    &CheckSelectionFailureView {
+                        workspace: identity(&config),
+                        target: selected.to_string(),
+                        kind,
+                        detail,
+                    },
+                    terminal_width(),
+                ),
+                false,
+            );
+            Ok(false)
+        }
+        Err(diagnostic) => {
+            let view = failed_report(identity(&config), diagnostic);
+            emit(render_check(&view, terminal_width(), None), false);
+            Ok(false)
+        }
+    }
+}
+
+pub fn check_view(
+    config: &EverInitConfig,
+    workspace_only: bool,
+    module_filter: Option<&str>,
+    target_filter: Option<&str>,
+) -> Result<CheckReportView, Diagnostic> {
+    let mut issues = config
+        .warnings
+        .iter()
+        .map(|warning| {
+            issue_view(
+                evin_locales::diagnostic(
+                    IssueCode::new("issue-check-workspace-warning").arg("message", warning),
+                )
+                .with_severity(Severity::Warning),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    // 1. Build and validate DAG with resolver
+    let mut resolver = DagResolver::new();
+    for task in &config.tasks {
+        resolver.add_task(task.clone());
+    }
+
+    let sorted = if let Some(target) = target_filter {
+        let registry = crate::resolver::TargetRegistry::build(config.tasks.clone());
+        let (_, matched_names) = registry.resolve(target)?;
+        resolver
+            .resolve_targets(&matched_names)
+            .map_err(|err| evin_locales::diagnostic(err.into()))?
+    } else if let Some(module) = module_filter {
+        let prefix = format!("{}:", module);
+        let module_tasks: Vec<String> = config
+            .tasks
+            .iter()
+            .filter(|t| t.name.starts_with(&prefix) || t.name == module)
+            .map(|t| t.name.clone())
+            .collect();
+        if module_tasks.is_empty() {
+            let mut diagnostic = evin_locales::diagnostic(
+                IssueCode::new("issue-check-unknown-module").arg("module", module),
+            );
+            if let Some(suggestion) = crate::resolver::strategy::best_fuzzy_match(
+                module,
+                config
+                    .modules_discovered
+                    .iter()
+                    .map(|(name, _, _)| name.as_str()),
+            ) {
+                diagnostic = diagnostic.with_hint(evin_locales::t!(
+                    "suggestion-hint",
+                    suggestion = evin_ui::utils::suggestion(suggestion)
+                ));
+            }
+            return Err(diagnostic);
+        }
+        resolver
+            .resolve_targets(&module_tasks)
+            .map_err(|err| evin_locales::diagnostic(err.into()))?
+    } else if workspace_only {
+        let ws_tasks: Vec<String> = config
+            .tasks
+            .iter()
+            .filter(|t| {
+                t.source_file.as_deref() == Some(".evin/workspace.yaml") || !t.name.contains(':')
+            })
+            .map(|t| t.name.clone())
+            .collect();
+        resolver
+            .resolve_targets(&ws_tasks)
+            .map_err(|err| evin_locales::diagnostic(err.into()))?
+    } else {
+        resolver
+            .resolve()
+            .map_err(|err| evin_locales::diagnostic(err.into()))?
+    };
+
+    let validated_task_set: HashSet<&str> = sorted.iter().map(|s| s.as_str()).collect();
+    let validated_tasks: Vec<_> = config
+        .tasks
+        .iter()
+        .filter(|t| validated_task_set.contains(t.name.as_str()))
+        .collect();
+
+    // 2. Validate native action contracts and group located findings by manifest.
+    let mut manifest_issues = BTreeMap::<String, Vec<CheckIssueView>>::new();
+    for finding in evin_pipeline::preflight::validate_task_contracts(
+        validated_tasks.iter().copied(),
+        &crate::commands::builtin_actions(),
+    ) {
+        let issue = issue_view(finding.diagnostic);
+        if let Some(source_file) = finding.source_file {
+            manifest_issues.entry(source_file).or_default().push(issue);
+        } else {
+            issues.push(issue);
+        }
+    }
+
+    // 3. Collect checked manifest files
+    let mut checked_files = Vec::new();
+
+    let ws_task_count = validated_tasks
+        .iter()
+        .filter(|t| {
+            t.source_file.as_deref() == Some(".evin/workspace.yaml") || !t.name.contains(':')
+        })
+        .count();
+    if ws_task_count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none())
+    {
+        checked_files.push(CheckedManifest {
+            path: file_uri(".evin/workspace.yaml"),
+            task_count: ws_task_count,
+            kind: ManifestKind::Workspace,
+            issues: manifest_issues
+                .remove(".evin/workspace.yaml")
+                .unwrap_or_default(),
+        });
+    }
+
+    for (_name, path, _total_count) in &config.modules_discovered {
+        let count = validated_tasks
+            .iter()
+            .filter(|t| t.source_file.as_deref() == Some(path.as_str()))
+            .count();
+        if count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none()) {
+            let is_namespace = path.ends_with(".yaml") && !path.ends_with(".evin/module.yaml");
+            checked_files.push(CheckedManifest {
+                path: file_uri(path),
+                task_count: count,
+                kind: if is_namespace {
+                    ManifestKind::Namespace
+                } else {
+                    ManifestKind::Module
+                },
+                issues: manifest_issues.remove(path).unwrap_or_default(),
+            });
+        }
+    }
+
+    // Git rules
+    let gitrules_path = PathBuf::from(".evin/gitrules.yaml");
+    if gitrules_path.exists() {
+        checked_files.push(CheckedManifest {
+            path: file_uri(".evin/gitrules.yaml"),
+            task_count: 0,
+            kind: ManifestKind::GitRules,
+            issues: Vec::new(),
+        });
+    }
+
+    // Environment
+    let env_path = PathBuf::from(".evin/environment.yaml");
+    if env_path.exists() {
+        checked_files.push(CheckedManifest {
+            path: file_uri(".evin/environment.yaml"),
+            task_count: 0,
+            kind: ManifestKind::Environment,
+            issues: Vec::new(),
+        });
+    }
+
+    // Count modules vs namespaces
+    let mut module_set = HashSet::new();
+    let mut namespace_set = HashSet::new();
+    for (name, path, _) in &config.modules_discovered {
+        let count = validated_tasks
+            .iter()
+            .filter(|t| t.source_file.as_deref() == Some(path.as_str()))
+            .count();
+        if count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none()) {
+            if path.ends_with(".yaml") && !path.ends_with(".evin/module.yaml") {
+                namespace_set.insert(name.clone());
+            } else {
+                module_set.insert(name.clone());
+            }
+        }
+    }
+
+    let edges: usize = resolver
+        .registry()
+        .values()
+        .filter_map(|t| t.needs.as_ref())
+        .map(|n| n.len())
+        .sum();
+
+    for (_, unlocated) in manifest_issues {
+        issues.extend(unlocated);
+    }
+
+    Ok(CheckReportView {
+        workspace: WorkspaceIdentity {
+            name: config.workspace_name.clone(),
+            version: config.workspace_version.clone(),
+        },
+        checked_files,
+        total_tasks: sorted.len(),
+        total_stages: config.stages.len(),
+        total_modules: module_set.len(),
+        total_namespaces: namespace_set.len(),
+        graph_nodes: sorted.len(),
+        graph_edges: edges,
+        graph_cycles: 0,
+        issues,
+    })
+}
+
+fn identity(config: &EverInitConfig) -> WorkspaceIdentity {
+    WorkspaceIdentity {
+        name: config.workspace_name.clone(),
+        version: config.workspace_version.clone(),
+    }
+}
+
+fn unresolved_identity() -> WorkspaceIdentity {
+    WorkspaceIdentity {
+        name: evin_locales::t!("check-workspace-unresolved"),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    }
+}
+
+fn issue_view(diagnostic: Diagnostic) -> CheckIssueView {
+    let message = evin_locales::render_issue(&diagnostic.code);
+    CheckIssueView {
+        diagnostic,
+        message,
+    }
+}
+
+fn failed_report(workspace: WorkspaceIdentity, diagnostic: Diagnostic) -> CheckReportView {
+    CheckReportView {
+        workspace,
+        checked_files: Vec::new(),
+        total_tasks: 0,
+        total_stages: 0,
+        total_modules: 0,
+        total_namespaces: 0,
+        graph_nodes: 0,
+        graph_edges: 0,
+        graph_cycles: usize::from(diagnostic.code.key == "issue-cycle-detected"),
+        issues: vec![issue_view(diagnostic)],
+    }
+}
+
+fn is_selection_error(diagnostic: &Diagnostic) -> bool {
+    matches!(
+        diagnostic.code.key,
+        "issue-check-unknown-module"
+            | "issue-invalid-target"
+            | "issue-invalid-stage-target"
+            | "issue-invalid-hook"
+    )
+}
+
+fn file_uri(path: &str) -> String {
+    let path = PathBuf::from(path);
+    let absolute = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+    let absolute = absolute.canonicalize().unwrap_or(absolute);
+    format!("file://{}", absolute.to_string_lossy())
+}
+
+fn emit(rendered: String, success: bool) {
+    let tape = std::env::var_os("EVIN_TAPE").is_some();
+    match output_destination(std::io::stdout().is_terminal(), tape, success) {
+        OutputDestination::StyledStderr => eprint!("{rendered}"),
+        OutputDestination::PlainStdout => {
+            print!("{}", console::strip_ansi_codes(&rendered));
+        }
+        OutputDestination::PlainStderr => {
+            eprint!("{}", console::strip_ansi_codes(&rendered));
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OutputDestination {
+    StyledStderr,
+    PlainStdout,
+    PlainStderr,
+}
+
+fn output_destination(stdout_is_terminal: bool, tape: bool, success: bool) -> OutputDestination {
+    if stdout_is_terminal || tape {
+        OutputDestination::StyledStderr
+    } else if success {
+        OutputDestination::PlainStdout
+    } else {
+        OutputDestination::PlainStderr
+    }
+}
+
+fn terminal_width() -> usize {
+    console::Term::stderr()
+        .size_checked()
+        .map(|(_, width)| usize::from(width))
+        .unwrap_or(evin_ui::constants::FALLBACK_WIDTH)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use evin_config::models::{StepObject, TaskObject};
+    use evin_diagnostic::{FileLocation, Span};
+
+    fn sample_config(tasks: Vec<TaskObject>) -> EverInitConfig {
+        EverInitConfig {
+            workspace_name: "test-workspace".into(),
+            workspace_version: "1.0.0".into(),
+            stages: vec!["Build".into(), "Test".into()],
+            execution: None,
+            tasks,
+            expose: Vec::new(),
+            workspace_env: std::collections::HashMap::new(),
+            workspace_values: std::collections::HashMap::new(),
+            modules: None,
+            install_hint: None,
+            hook_runner: None,
+            gitrules: None,
+            gitrules_source: evin_config::parser::GitRulesSource::Fallback,
+            warnings: Vec::new(),
+            modules_discovered: vec![
+                ("release".into(), ".evin/release.yaml".into(), 2),
+                ("api".into(), "crates/api/.evin/module.yaml".into(), 1),
+            ],
+            module_versions: std::collections::HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_check_view_all_valid() {
+        let cfg = sample_config(vec![
+            TaskObject {
+                name: "build".into(),
+                source_file: Some(".evin/workspace.yaml".into()),
+                stage: Some("Build".into()),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "test".into(),
+                source_file: Some(".evin/workspace.yaml".into()),
+                stage: Some("Test".into()),
+                needs: Some(vec!["build".into()]),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:doctor".into(),
+                source_file: Some(".evin/release.yaml".into()),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:bump".into(),
+                source_file: Some(".evin/release.yaml".into()),
+                needs: Some(vec!["release:doctor".into(), "build".into()]),
+                ..Default::default()
+            },
+        ]);
+
+        let report = check_view(&cfg, false, None, None).unwrap();
+        assert_eq!(report.total_tasks, 4);
+        assert_eq!(report.graph_nodes, 4);
+        assert_eq!(report.graph_edges, 3);
+        assert!(report.is_valid());
+    }
+
+    #[test]
+    fn test_check_view_workspace_only() {
+        let cfg = sample_config(vec![
+            TaskObject {
+                name: "build".into(),
+                source_file: Some(".evin/workspace.yaml".into()),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "test".into(),
+                source_file: Some(".evin/workspace.yaml".into()),
+                needs: Some(vec!["build".into()]),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:bump".into(),
+                source_file: Some(".evin/release.yaml".into()),
+                ..Default::default()
+            },
+        ]);
+
+        let report = check_view(&cfg, true, None, None).unwrap();
+        assert_eq!(report.total_tasks, 2);
+    }
+
+    #[test]
+    fn test_check_view_module_filter() {
+        let cfg = sample_config(vec![
+            TaskObject {
+                name: "build".into(),
+                source_file: Some(".evin/workspace.yaml".into()),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:doctor".into(),
+                source_file: Some(".evin/release.yaml".into()),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:bump".into(),
+                source_file: Some(".evin/release.yaml".into()),
+                needs: Some(vec!["release:doctor".into(), "build".into()]),
+                ..Default::default()
+            },
+        ]);
+
+        let report = check_view(&cfg, false, Some("release"), None).unwrap();
+        assert_eq!(report.total_tasks, 3); // release:doctor, release:bump, and dependency build
+        assert_eq!(report.graph_edges, 2);
+    }
+
+    #[test]
+    fn test_check_view_target_filter() {
+        let cfg = sample_config(vec![
+            TaskObject {
+                name: "build".into(),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:doctor".into(),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:bump".into(),
+                needs: Some(vec!["release:doctor".into()]),
+                ..Default::default()
+            },
+        ]);
+
+        let report = check_view(&cfg, false, None, Some("release:bump")).unwrap();
+        assert_eq!(report.total_tasks, 2); // release:bump and release:doctor
+    }
+
+    #[test]
+    fn test_check_view_detects_dependency_cycle() {
+        let cfg = sample_config(vec![
+            TaskObject {
+                name: "task_a".into(),
+                needs: Some(vec!["task_b".into()]),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "task_b".into(),
+                needs: Some(vec!["task_a".into()]),
+                ..Default::default()
+            },
+        ]);
+
+        let result = check_view(&cfg, false, None, None);
+        assert!(result.is_err());
+        let diag = result.unwrap_err();
+        assert_eq!(diag.code.key, "issue-cycle-detected");
+    }
+
+    #[test]
+    fn test_check_view_detects_missing_dependency() {
+        let cfg = sample_config(vec![TaskObject {
+            name: "task_a".into(),
+            needs: Some(vec!["nonexistent_task".into()]),
+            ..Default::default()
+        }]);
+
+        let result = check_view(&cfg, false, None, None);
+        assert!(result.is_err());
+        let diag = result.unwrap_err();
+        assert_eq!(diag.code.key, "issue-missing-dependency");
+    }
+
+    #[test]
+    fn workspace_warnings_are_non_fatal_findings() {
+        let mut cfg = sample_config(vec![TaskObject {
+            name: "build".into(),
+            ..Default::default()
+        }]);
+        cfg.warnings.push("deprecated field".into());
+
+        let report = check_view(&cfg, false, None, None).unwrap();
+
+        assert!(report.is_valid());
+        assert_eq!(report.warning_count(), 1);
+        assert_eq!(report.issues[0].diagnostic.severity, Severity::Warning);
+        assert_eq!(
+            report.issues[0].diagnostic.code.key,
+            "issue-check-workspace-warning"
+        );
+    }
+
+    #[test]
+    fn invalid_action_options_are_located_under_their_manifest() {
+        let with = "site_url: https://example.com\ntile: Docs\n";
+        let typo_offset = with.find("tile").unwrap();
+        let cfg = sample_config(vec![TaskObject {
+            name: "publish".into(),
+            source_file: Some(".evin/workspace.yaml".into()),
+            steps: Some(vec![StepObject {
+                run: None,
+                uses: Some(evin_yaml::Spanned::new(
+                    "evin/docs@v1".into(),
+                    Span::default(),
+                )),
+                with: Some(evin_yaml::parse_yaml(with).unwrap()),
+            }]),
+            ..Default::default()
+        }]);
+
+        let report = check_view(&cfg, false, None, None).unwrap();
+
+        assert!(!report.is_valid());
+        assert_eq!(report.error_count(), 1);
+        assert!(report.issues.is_empty());
+        let issue = &report.checked_files[0].issues[0];
+        assert_eq!(issue.diagnostic.code.key, "issue-action-config-invalid");
+        assert!(matches!(
+            issue.diagnostic.location,
+            Some(FileLocation::ByteSpan {
+                ref path,
+                offset,
+                length: 4,
+                ..
+            }) if path == ".evin/workspace.yaml" && offset == typo_offset
+        ));
+    }
+
+    #[test]
+    fn check_aggregates_action_errors_across_manifests() {
+        let invalid_step = || StepObject {
+            run: None,
+            uses: Some(evin_yaml::Spanned::new(
+                "evin/docs@v1".into(),
+                Span::default(),
+            )),
+            with: Some(
+                evin_yaml::parse_yaml("site_url: https://example.com\ntile: Docs\n").unwrap(),
+            ),
+        };
+        let cfg = sample_config(vec![
+            TaskObject {
+                name: "docs".into(),
+                source_file: Some(".evin/workspace.yaml".into()),
+                steps: Some(vec![invalid_step()]),
+                ..Default::default()
+            },
+            TaskObject {
+                name: "release:docs".into(),
+                source_file: Some(".evin/release.yaml".into()),
+                steps: Some(vec![invalid_step()]),
+                ..Default::default()
+            },
+        ]);
+
+        let report = check_view(&cfg, false, None, None).unwrap();
+
+        assert_eq!(report.error_count(), 2);
+        assert!(report.issues.is_empty());
+        assert_eq!(report.checked_files[0].issues.len(), 1);
+        assert_eq!(report.checked_files[1].issues.len(), 1);
+    }
+
+    #[test]
+    fn every_builtin_rejects_unknown_top_level_options_with_a_span() {
+        for (action_id, action) in crate::commands::builtin_actions() {
+            let with = evin_yaml::parse_yaml("mistyped_option: true\n").unwrap();
+            let error = action.validate_config(Some(&with)).unwrap_err();
+            assert!(
+                error.message.contains("unknown field"),
+                "{action_id} returned an unexpected error: {error}"
+            );
+            assert!(
+                error.span.is_some(),
+                "{action_id} discarded the option span"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_modules_use_a_check_specific_diagnostic_and_suggestion() {
+        let cfg = sample_config(Vec::new());
+
+        let diagnostic = check_view(&cfg, false, Some("releaze"), None).unwrap_err();
+
+        assert_eq!(diagnostic.code.key, "issue-check-unknown-module");
+        assert!(
+            diagnostic
+                .hint
+                .as_deref()
+                .is_some_and(|hint| hint.contains("release"))
+        );
+    }
+
+    #[test]
+    fn check_output_routing_keeps_failures_off_stdout() {
+        assert_eq!(
+            output_destination(true, false, true),
+            OutputDestination::StyledStderr
+        );
+        assert_eq!(
+            output_destination(false, true, false),
+            OutputDestination::StyledStderr
+        );
+        assert_eq!(
+            output_destination(false, false, true),
+            OutputDestination::PlainStdout
+        );
+        assert_eq!(
+            output_destination(false, false, false),
+            OutputDestination::PlainStderr
+        );
+    }
+}

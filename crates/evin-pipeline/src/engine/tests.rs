@@ -23,6 +23,13 @@ struct NoopAction;
 
 #[async_trait::async_trait]
 impl evin_action_sdk::Action for NoopAction {
+    fn validate_config(
+        &self,
+        _with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<(), evin_yaml::ConfigError> {
+        Ok(())
+    }
+
     async fn execute(
         &self,
         _ctx: &evin_action_sdk::RunnerContext,
@@ -36,6 +43,13 @@ struct ValuesAction;
 
 #[async_trait::async_trait]
 impl evin_action_sdk::Action for ValuesAction {
+    fn validate_config(
+        &self,
+        _with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<(), evin_yaml::ConfigError> {
+        Ok(())
+    }
+
     async fn execute(
         &self,
         ctx: &evin_action_sdk::RunnerContext,
@@ -58,6 +72,13 @@ struct GitRulesAction;
 
 #[async_trait::async_trait]
 impl evin_action_sdk::Action for GitRulesAction {
+    fn validate_config(
+        &self,
+        _with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<(), evin_yaml::ConfigError> {
+        Ok(())
+    }
+
     async fn execute(
         &self,
         ctx: &evin_action_sdk::RunnerContext,

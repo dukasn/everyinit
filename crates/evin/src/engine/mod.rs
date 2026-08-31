@@ -239,6 +239,27 @@ mod tests {
 
     struct CancelPhase;
 
+    struct ConfigurationFailurePhase;
+
+    #[async_trait]
+    impl Phase for ConfigurationFailurePhase {
+        fn locale_key(&self) -> String {
+            "ui.phase.resolving_configuration".to_string()
+        }
+
+        async fn execute(
+            &self,
+            _ctx: &mut CliContext,
+            _emitter: &PipelineEmitter,
+        ) -> Result<(), Diagnostic> {
+            Err(evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("issue-action-config-invalid")
+                    .arg("task", "docs:build")
+                    .arg("clean_error", "Unknown field `tile`"),
+            ))
+        }
+    }
+
     #[async_trait]
     impl Phase for CancelPhase {
         fn locale_key(&self) -> String {
@@ -316,6 +337,40 @@ mod tests {
             events
                 .iter()
                 .any(|event| matches!(event, PipelineEvent::PipelineSessionInterrupted))
+        );
+    }
+
+    #[tokio::test]
+    async fn configuration_preflight_failure_fails_resolution_before_task_output() {
+        let (sender, mut receiver) = mpsc::unbounded_channel();
+        let completion = PipelineEngine::new(sender)
+            .execute_pipeline(
+                vec![Box::new(ConfigurationFailurePhase)],
+                CliContext::default(),
+            )
+            .await;
+
+        assert_eq!(completion, PipelineCompletion::Failed);
+        let events = std::iter::from_fn(|| receiver.try_recv().ok()).collect::<Vec<_>>();
+        let failed = events
+            .iter()
+            .position(|event| {
+                matches!(
+                    event,
+                    PipelineEvent::PhaseFailed(key, _)
+                        if key == "ui.phase.resolving_configuration"
+                )
+            })
+            .unwrap();
+        let diagnostic = events
+            .iter()
+            .position(|event| matches!(event, PipelineEvent::ExecutionError(_)))
+            .unwrap();
+        assert!(failed < diagnostic);
+        assert!(
+            !events
+                .iter()
+                .any(|event| matches!(event, PipelineEvent::TaskOutputStarted { .. }))
         );
     }
 

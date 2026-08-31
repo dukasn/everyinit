@@ -83,12 +83,8 @@ impl Default for ChangelogConfig {
 
 impl ChangelogConfig {
     fn from_with(with: Option<evin_yaml::SpannedValue>) -> Result<Self, ChangelogError> {
-        let config: Self = evin_action_sdk::parse_config(with.as_ref()).map_err(|e| {
-            ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
-                message: e.to_string(),
-                span: None,
-            })
-        })?;
+        let config: Self = evin_action_sdk::parse_config(with.as_ref())
+            .map_err(ChangelogError::InvalidConfiguration)?;
         config.validate()?;
         Ok(config)
     }
@@ -181,12 +177,14 @@ struct ReleaseBlock {
 pub fn validate_config(
     with: Option<&evin_yaml::SpannedValue>,
 ) -> Result<(), evin_yaml::ConfigError> {
-    ChangelogConfig::from_with(with.cloned())
-        .map(|_| ())
-        .map_err(|e| evin_yaml::ConfigError {
-            message: e.to_string(),
+    match ChangelogConfig::from_with(with.cloned()) {
+        Ok(_) => Ok(()),
+        Err(ChangelogError::InvalidConfiguration(error)) => Err(error),
+        Err(error) => Err(evin_yaml::ConfigError {
+            message: error.to_string(),
             span: None,
-        })
+        }),
+    }
 }
 
 // This entry point implements the SDK Action contract, whose error type is

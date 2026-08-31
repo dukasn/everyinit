@@ -24,6 +24,13 @@ struct MockWriterAction;
 
 #[async_trait]
 impl Action for MockWriterAction {
+    fn validate_config(
+        &self,
+        _with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<(), evin_yaml::ConfigError> {
+        Ok(())
+    }
+
     async fn execute(
         &self,
         ctx: &RunnerContext,
@@ -38,6 +45,13 @@ struct MockReaderAction;
 
 #[async_trait]
 impl Action for MockReaderAction {
+    fn validate_config(
+        &self,
+        _with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<(), evin_yaml::ConfigError> {
+        Ok(())
+    }
+
     async fn execute(
         &self,
         ctx: &RunnerContext,

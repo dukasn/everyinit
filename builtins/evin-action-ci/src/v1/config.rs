@@ -77,11 +77,7 @@ impl CiConfig {
     pub fn from_with(
         with: Option<&evin_yaml::SpannedValue>,
     ) -> Result<Self, evin_yaml::ConfigError> {
-        let config: Self =
-            evin_action_sdk::parse_config(with).map_err(|e| evin_yaml::ConfigError {
-                message: e.to_string(),
-                span: None,
-            })?;
+        let config: Self = evin_action_sdk::parse_config(with)?;
         config.validate()?;
         Ok(config)
     }

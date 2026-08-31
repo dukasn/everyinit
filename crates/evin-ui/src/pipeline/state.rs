@@ -596,9 +596,8 @@ impl PipelineState {
             }
             UIEvent::Diagnostic {
                 item_name,
-                title,
+                diagnostic,
                 message,
-                hint,
             } => {
                 let mut lines = Vec::new();
                 for line in message.lines() {
@@ -606,12 +605,20 @@ impl PipelineState {
                         lines.push(line.to_string());
                     }
                 }
-                if let Some(hint_str) = hint {
+                if let Some(hint_str) = &diagnostic.hint {
                     lines.push(String::new());
                     for line in hint_str.lines() {
                         lines.push(line.to_string());
                     }
                 }
+                if diagnostic.location.is_some()
+                    && let Some(snippet) = crate::diagnostics::snippet::SnippetRenderer::new()
+                        .render(&diagnostic, &message)
+                {
+                    lines.push(String::new());
+                    lines.extend(snippet);
+                }
+                let title = diagnostic.title;
                 let fenced_title = if title.starts_with("(error)") {
                     title
                 } else {
@@ -848,6 +855,7 @@ impl PipelineState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use evin_diagnostic::{Diagnostic, IssueCode};
 
     #[test]
     fn test_pipeline_state_clears_running_tasks_on_failure() {
@@ -884,6 +892,41 @@ mod tests {
         assert!(!state.tracker.is_running("task_b"));
         assert!(state.finished);
         assert_eq!(state.success, Some(false));
+    }
+
+    #[test]
+    fn pipeline_diagnostics_preserve_source_snippets_inside_the_fence() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/pipeline/state.rs");
+        let source = std::fs::read_to_string(path).unwrap();
+        let offset = source
+            .find("pipeline_diagnostics_preserve_source_snippets")
+            .unwrap();
+        let diagnostic = Diagnostic::new(
+            "Configuration Error",
+            IssueCode::new("issue-action-config-invalid"),
+        )
+        .with_file_span(path, offset, 8, Some("invalid option".into()));
+        let mut state = PipelineState::new(Mode::Normal, false, false, false);
+        state.ingest(UIEvent::ItemStarted {
+            name: "Resolving configuration".into(),
+            description: None,
+            command: None,
+        });
+
+        state.ingest(UIEvent::Diagnostic {
+            item_name: "Pipeline".into(),
+            diagnostic,
+            message: "Unknown field `tile`.".into(),
+        });
+
+        let lines = &state
+            .tracker
+            .get("Resolving configuration")
+            .unwrap()
+            .fenced_buffer[0]
+            .1;
+        assert!(lines.iter().any(|line| line.contains(path)));
+        assert!(lines.iter().any(|line| line.contains("invalid option")));
     }
 
     #[test]

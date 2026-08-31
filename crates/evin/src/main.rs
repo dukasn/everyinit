@@ -80,6 +80,27 @@ enum Commands {
         #[arg(help = evin_locales::t!("explain-target-help"))]
         target: String,
     },
+    #[command(about = evin_locales::t!("check-command-help"))]
+    Check {
+        #[arg(
+            short = 'w',
+            long,
+            conflicts_with_all = ["module", "target"],
+            help = evin_locales::t!("check-workspace-help")
+        )]
+        workspace: bool,
+
+        #[arg(
+            short = 'm',
+            long,
+            conflicts_with = "target",
+            help = evin_locales::t!("check-module-help")
+        )]
+        module: Option<String>,
+
+        #[arg(help = evin_locales::t!("check-target-help"))]
+        target: Option<String>,
+    },
     #[command(about = evin_locales::t!("run-command-help"))]
     Run {
         #[arg(help = evin_locales::t!("run-target-help"))]
@@ -113,6 +134,13 @@ async fn main() {
     let discovery_result: Option<Result<bool, evin_diagnostic::Diagnostic>> = match &cli.command {
         Commands::List => Some(crate::commands::discovery::list().await.map(|_| true)),
         Commands::Explain { target } => Some(crate::commands::discovery::explain(target).await),
+        Commands::Check {
+            workspace,
+            module,
+            target,
+        } => Some(
+            crate::commands::check::check(*workspace, module.as_deref(), target.as_deref()).await,
+        ),
         _ => None,
     };
     if let Some(result) = discovery_result {
@@ -144,7 +172,7 @@ async fn main() {
                 .await
                 .ok()
                 .flatten(),
-            Commands::List | Commands::Explain { .. } => None,
+            Commands::List | Commands::Explain { .. } | Commands::Check { .. } => None,
             _ => None,
         }
     } else {
@@ -251,7 +279,7 @@ async fn main() {
             });
             commands::run_phases()
         }
-        Commands::List | Commands::Explain { .. } => {
+        Commands::List | Commands::Explain { .. } | Commands::Check { .. } => {
             unreachable!("handled before pipeline setup")
         }
     };
@@ -285,5 +313,16 @@ async fn main() {
 
     if !success {
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_selectors_are_mutually_exclusive() {
+        assert!(Cli::try_parse_from(["evin", "check", "--workspace", "verify"]).is_err());
+        assert!(Cli::try_parse_from(["evin", "check", "--module", "docs", "docs:verify"]).is_err());
     }
 }

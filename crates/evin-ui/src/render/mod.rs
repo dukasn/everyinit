@@ -73,6 +73,73 @@ pub(crate) use layout::Layout;
 pub(crate) use logger::Logger;
 pub(crate) use spinner::Spinner;
 
+pub(crate) fn fenced_lines(
+    layout: Layout,
+    theme: &Theme,
+    title: &str,
+    lines: &[String],
+    severity: Option<Severity>,
+    footer: Option<&str>,
+    preformatted: bool,
+) -> Vec<String> {
+    if lines.is_empty() {
+        return Vec::new();
+    }
+
+    let border_color = match severity {
+        Some(Severity::Error) => &theme.error_color,
+        Some(Severity::Warning) => &theme.warn_color,
+        Some(Severity::Info) => &theme.info_color,
+        None => &theme.frame_color,
+    };
+    let bar = theme.frame_color.apply_to(SYMBOL_FRAME_BAR).to_string();
+    let top_border = border_color
+        .apply_to(format!("{}{}", SYMBOL_FENCED_TOP, title))
+        .to_string();
+    let inner_bar = border_color.apply_to(SYMBOL_FRAME_BAR).to_string();
+    let bottom_border = border_color.apply_to(SYMBOL_FENCED_BOTTOM).to_string();
+
+    let mut rendered = vec![format!("{}  {}", bar, top_border)];
+    for line in lines {
+        let wrapped = if preformatted {
+            vec![line.clone()]
+        } else {
+            layout.wrap_with_margin(line, 2)
+        };
+        for wrapped_line in wrapped {
+            rendered.push(format!("{}  {} {}", bar, inner_bar, wrapped_line));
+        }
+    }
+
+    if let Some(footer) = footer {
+        let (footer_prefix, footer) = if let Some(command) = footer.strip_prefix("(cmd) ") {
+            (SYMBOL_FENCED_CMD_PREFIX, command)
+        } else {
+            (SYMBOL_FENCED_RESULT_PREFIX, footer)
+        };
+        let prefix = border_color
+            .apply_to(format!("{}{}", SYMBOL_FENCED_BOTTOM, footer_prefix))
+            .to_string();
+        let mut footer_lines = footer.lines();
+        if let Some(first) = footer_lines.next() {
+            rendered.push(format!(
+                "{}  {}{}",
+                bar,
+                prefix,
+                border_color.apply_to(first)
+            ));
+        }
+        for line in footer_lines {
+            rendered.push(format!("{}           {}", bar, border_color.apply_to(line)));
+        }
+    } else {
+        rendered.push(format!("{}  {}", bar, bottom_border));
+    }
+
+    rendered.push(bar);
+    rendered
+}
+
 // --- Output Backend ---
 #[async_trait]
 pub trait OutputBackend: Send + Sync + Debug {

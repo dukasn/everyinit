@@ -13,6 +13,10 @@ sync-command-help = Install and update Git hooks declared by this repository
 list-command-help = List declared tasks, stages, and Git hooks
 explain-command-help = Explain a target and its resolved dependency plan
 explain-target-help = Task, stage, or Git hook to explain
+check-command-help = Validate workspace configuration, task graphs, and dependencies without running them
+check-workspace-help = Validate only the root workspace configuration and tasks
+check-module-help = Validate only the specified module or namespace
+check-target-help = Task, stage, or Git hook target to validate
 
 run-command-help = Run a declared task, stage, or Git-hook workflow
 run-target-help = Task, stage, or Git hook to run

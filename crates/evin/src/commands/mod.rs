@@ -15,6 +15,7 @@
 use crate::engine::Phase;
 use crate::phases::{init::*, run::*, sync::*};
 
+pub mod check;
 pub mod discovery;
 
 pub fn run_phases() -> Vec<Box<dyn Phase>> {

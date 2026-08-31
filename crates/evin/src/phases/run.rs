@@ -23,6 +23,16 @@ use std::sync::Arc;
 
 pub struct ResolveConfigPhase;
 
+fn validate_resolved_action_configs(resolver: &DagResolver) -> Result<(), Diagnostic> {
+    evin_pipeline::preflight::validate_task_contracts(
+        resolver.registry().values(),
+        &crate::commands::builtin_actions(),
+    )
+    .into_iter()
+    .next()
+    .map_or(Ok(()), |finding| Err(finding.diagnostic))
+}
+
 #[async_trait]
 impl Phase for ResolveConfigPhase {
     fn locale_key(&self) -> String {
@@ -211,6 +221,8 @@ impl Phase for ResolveConfigPhase {
                 return Err(evin_locales::diagnostic(e.into()));
             }
 
+            validate_resolved_action_configs(&resolver)?;
+
             if any_hook && let Some(rules) = &config.gitrules {
                 let engine = evin_policy::PolicyEngine::new();
                 if let Some(target) = original_targets.first()
@@ -259,7 +271,7 @@ impl Phase for ExecuteTasksPhase {
             }
         };
 
-        let mut resolver = ctx.dag.take().unwrap();
+        let resolver = ctx.dag.take().unwrap();
         let global_env = ctx.global_env.take().unwrap_or_default();
 
         let mut engine = PipelineEngine::new(
@@ -279,8 +291,6 @@ impl Phase for ExecuteTasksPhase {
         for (id, action) in crate::commands::builtin_actions() {
             engine.register_action_arc(id, action);
         }
-
-        engine.validate(&mut resolver)?;
 
         let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel();
         let emitter_clone = emitter.clone();
@@ -404,6 +414,24 @@ impl Phase for ExecuteTasksPhase {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use evin_config::models::{StepObject, TaskObject};
+
+    fn docs_task(name: &str, needs: Option<Vec<String>>, with: &str) -> TaskObject {
+        TaskObject {
+            name: name.into(),
+            needs,
+            source_file: Some("docs/.evin/module.yaml".into()),
+            steps: Some(vec![StepObject {
+                run: None,
+                uses: Some(evin_yaml::Spanned::new(
+                    "evin/docs@v1".into(),
+                    evin_yaml::Span::default(),
+                )),
+                with: Some(evin_yaml::parse_yaml(with).unwrap()),
+            }]),
+            ..Default::default()
+        }
+    }
 
     #[tokio::test]
     async fn test_resolve_config_phase_sync_command() {
@@ -418,5 +446,44 @@ mod tests {
         let res = phase.execute(&mut ctx, &emitter).await;
         assert!(res.is_ok());
         assert!(ctx.config.is_some());
+    }
+
+    #[test]
+    fn selected_graph_preflight_rejects_an_invalid_dependency() {
+        let mut resolver = DagResolver::new();
+        resolver.add_task(docs_task(
+            "docs:dependency",
+            None,
+            "site_url: https://example.com\ntile: Docs\n",
+        ));
+        resolver.add_task(TaskObject {
+            name: "docs:build".into(),
+            needs: Some(vec!["docs:dependency".into()]),
+            run: Some("true".into()),
+            ..Default::default()
+        });
+        resolver.resolve_targets(&["docs:build".into()]).unwrap();
+
+        let error = validate_resolved_action_configs(&resolver).unwrap_err();
+
+        assert_eq!(error.code.key, "issue-action-config-invalid");
+    }
+
+    #[test]
+    fn selected_graph_preflight_ignores_unrelated_invalid_tasks() {
+        let mut resolver = DagResolver::new();
+        resolver.add_task(docs_task(
+            "docs:broken",
+            None,
+            "site_url: https://example.com\ntile: Docs\n",
+        ));
+        resolver.add_task(TaskObject {
+            name: "build".into(),
+            run: Some("true".into()),
+            ..Default::default()
+        });
+        resolver.resolve_targets(&["build".into()]).unwrap();
+
+        assert!(validate_resolved_action_configs(&resolver).is_ok());
     }
 }

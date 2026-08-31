@@ -717,14 +717,12 @@ fn emit_config_debug(logger: &Logger, report: &mut evin_yaml::ConfigReport) {
 /// The formal contract for all EVIN Native Actions.
 #[async_trait]
 pub trait Action: Send + Sync {
-    /// Validates the `with:` payload provided in the YAML configuration.
-    /// Returns Ok(()) if valid, or an error string explaining exactly what is wrong.
+    /// Statically validates the `with:` payload provided in the YAML configuration.
+    /// Every action must implement this contract, including actions that accept no options.
     fn validate_config(
         &self,
-        _with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
-        Ok(())
-    }
+        with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<(), evin_yaml::ConfigError>;
 
     async fn sync(
         &self,

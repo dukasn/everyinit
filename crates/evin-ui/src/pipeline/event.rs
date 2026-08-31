@@ -105,9 +105,8 @@ pub enum UIEvent {
     },
     Diagnostic {
         item_name: String,
-        title: String,
+        diagnostic: evin_diagnostic::Diagnostic,
         message: String,
-        hint: Option<String>,
     },
     PlannedOperation {
         message: String,
