@@ -51,8 +51,16 @@ pub fn validate_task_contracts<'a>(
             };
             let action_id = uses.as_str().to_string();
             let diagnostic = match actions.get(uses.as_str()) {
-                Some(action) => match action.validate_config(step.with.as_ref()) {
-                    Ok(()) => first_template_error(step.with.as_ref())
+                Some(action) => match action.validate_task_config(
+                    &evin_action_sdk::ActionValidationContext {
+                        task_name: &task.name,
+                        needs: task.needs.as_deref().unwrap_or_default(),
+                    },
+                    step.with.as_ref(),
+                ) {
+                    Ok(()) => (!action.handles_template_validation())
+                        .then(|| first_template_error(step.with.as_ref()))
+                        .flatten()
                         .map(|error| invalid_action_config_diagnostic(task, error)),
                     Err(error) => Some(invalid_action_config_diagnostic(task, error)),
                 },

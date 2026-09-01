@@ -12,6 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use evin_action_sdk::packaging::PackageContext;
 use std::path::{Path, PathBuf};
 
 /// Represents a validated file ready to be streamed into an archive.
@@ -28,6 +29,6 @@ pub trait Archiver: Send + Sync {
     fn create_archive(
         &self,
         output_path: &Path,
-        files: &[ArchiveEntry],
+        context: &PackageContext,
     ) -> Result<(), evin_diagnostic::Diagnostic>;
 }
