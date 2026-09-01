@@ -33,6 +33,7 @@ evin-pipeline = { workspace = true }
 evin-action-changelog = { workspace = true }
 evin-action-archive = { workspace = true }
 evin-git = { workspace = true }
+evin-gitrules = { workspace = true }
 evin-config = { workspace = true }
 evin-locales = { workspace = true }
 evin-action-version-bumper = { workspace = true }
@@ -50,6 +51,7 @@ tokio-util = { workspace = true }
 globset = { workspace = true }
 chrono = { workspace = true }
 signal-hook = { workspace = true }
+semver = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

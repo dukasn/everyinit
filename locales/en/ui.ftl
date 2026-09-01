@@ -6,6 +6,7 @@ phase-workspace-synchronized = Finished!
 phase-executing-tasks = Executing pipeline tasks
 phase-aggregating-git-hooks = Analyzing workspace tasks
 phase-synchronizing-native-actions = Caching native actions
+phase-reconciling-release-lock = Reconciling release lock
 phase-synchronizing-git-hooks = Synchronizing git hooks
 phase-generating-sync-summary = Generating sync summary
 phase-initialize-workspace = Initializing workspace

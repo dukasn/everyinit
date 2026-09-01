@@ -14,6 +14,7 @@
 
 pub mod environment;
 pub mod models;
+pub mod package;
 pub mod parser;
 pub mod workspace;
 

@@ -17,6 +17,8 @@ pub mod debug;
 pub mod fs;
 pub mod git;
 pub mod http;
+pub mod packaging;
+pub mod release;
 pub mod secrets;
 use evin_yaml::template::pipeline::TemplateContext;
 pub mod state;
@@ -107,6 +109,11 @@ pub enum LogMessage {
 pub struct ActionSyncContext {
     pub workspace_root: std::path::PathBuf,
     pub mode: PipelineMode,
+}
+
+pub struct ActionValidationContext<'a> {
+    pub task_name: &'a str,
+    pub needs: &'a [String],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -303,6 +310,7 @@ pub struct RunnerContext {
     pub dry_run: evin_io::DryRunState,
     pub gitrules: std::sync::Arc<evin_gitrules::GitRulesRoot>,
     pub http: std::sync::Arc<http::HttpClient>,
+    pub package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
     pub cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
@@ -325,6 +333,7 @@ pub struct RunnerContextBuilder {
     unverified_inputs: std::collections::HashSet<String>,
     dry_run: evin_io::DryRunState,
     cancel_token: Option<tokio_util::sync::CancellationToken>,
+    package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
 }
 
 impl RunnerContextBuilder {
@@ -355,6 +364,7 @@ impl RunnerContextBuilder {
             unverified_inputs: std::collections::HashSet::new(),
             dry_run: evin_io::DryRunState::default(),
             cancel_token: None,
+            package_manifests: std::sync::Arc::new(packaging::PackageManifestCatalog::default()),
         }
     }
 
@@ -416,6 +426,14 @@ impl RunnerContextBuilder {
         self
     }
 
+    pub fn package_manifests(
+        mut self,
+        package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
+    ) -> Self {
+        self.package_manifests = package_manifests;
+        self
+    }
+
     pub fn build(self) -> RunnerContext {
         let mut ctx = RunnerContext::new_with_dry_run_and_values_and_http(
             self.workspace_name,
@@ -434,6 +452,7 @@ impl RunnerContextBuilder {
             self.secrets,
             self.http,
             self.dry_run,
+            self.package_manifests,
         );
         ctx.cancel_token = self.cancel_token;
         ctx
@@ -579,6 +598,7 @@ impl RunnerContext {
             secrets,
             std::sync::Arc::new(http::HttpClient::new().expect("Failed to initialize HTTP client")),
             dry_run,
+            std::sync::Arc::new(packaging::PackageManifestCatalog::default()),
         )
     }
 
@@ -600,6 +620,7 @@ impl RunnerContext {
         secrets: std::sync::Arc<secrets::SecretsProvider>,
         http: std::sync::Arc<http::HttpClient>,
         dry_run: evin_io::DryRunState,
+        package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
     ) -> Self {
         let log = Logger::new(task_name.clone(), log_tx, secrets.clone());
         let env_obj = Environment::new(env);
@@ -642,6 +663,7 @@ impl RunnerContext {
             dry_run,
             gitrules: std::sync::Arc::new(evin_gitrules::GitRulesRoot::default()),
             http,
+            package_manifests,
             cancel_token: None,
         }
     }
@@ -717,12 +739,26 @@ fn emit_config_debug(logger: &Logger, report: &mut evin_yaml::ConfigReport) {
 /// The formal contract for all EVIN Native Actions.
 #[async_trait]
 pub trait Action: Send + Sync {
+    /// Whether this action validates standard and action-specific templates in
+    /// its own configuration contract.
+    fn handles_template_validation(&self) -> bool {
+        false
+    }
+
     /// Statically validates the `with:` payload provided in the YAML configuration.
     /// Every action must implement this contract, including actions that accept no options.
     fn validate_config(
         &self,
         with: Option<&evin_yaml::SpannedValue>,
     ) -> Result<(), evin_yaml::ConfigError>;
+
+    fn validate_task_config(
+        &self,
+        _ctx: &ActionValidationContext<'_>,
+        with: Option<&evin_yaml::SpannedValue>,
+    ) -> Result<(), evin_yaml::ConfigError> {
+        self.validate_config(with)
+    }
 
     async fn sync(
         &self,

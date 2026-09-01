@@ -190,6 +190,40 @@ impl IoContext {
         Ok(matches.into_iter().collect())
     }
 
+    /// Match a manifest-owned pattern without changing the task's cwd. The
+    /// caller supplies a workspace-contained directory and patterns may not
+    /// escape it.
+    pub fn matching_files_from(&self, base: &Path, pattern: &str) -> Result<Vec<PathBuf>, IoError> {
+        if !base.starts_with(&self.workspace_root) {
+            return Err(IoError::PathTraversal {
+                path: base.display().to_string(),
+                root: self.workspace_root.display().to_string(),
+            });
+        }
+        let pattern_path = Path::new(pattern);
+        if pattern_path.is_absolute()
+            || pattern_path
+                .components()
+                .any(|part| part == std::path::Component::ParentDir)
+        {
+            return Err(IoError::PathTraversal {
+                path: pattern.to_string(),
+                root: base.display().to_string(),
+            });
+        }
+        let joined = base.join(pattern);
+        let mut matches = std::collections::BTreeSet::new();
+        for path in glob::glob(&joined.to_string_lossy())
+            .map_err(|e| IoError::InvalidPattern(e.to_string()))?
+            .flatten()
+        {
+            if path.is_file() && path.starts_with(base) && path.starts_with(&self.workspace_root) {
+                matches.insert(path);
+            }
+        }
+        Ok(matches.into_iter().collect())
+    }
+
     pub fn create_dir_all(&self, path: &str) -> Result<(), IoError> {
         let safe_path = self.resolve(path)?;
         if self.mode == IoMode::DryRun {

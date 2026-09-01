@@ -13,7 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
@@ -372,6 +372,8 @@ pub struct ReleasesNamespace {
     pub policies: Option<ReleasePolicies>,
     pub prerelease: Option<PrereleaseConfig>,
     pub commit_message: Option<String>,
+    #[serde(default)]
+    pub packages: BTreeMap<String, PackageReleasePolicy>,
 }
 
 impl Default for ReleasesNamespace {
@@ -466,8 +468,32 @@ impl Default for ReleasesNamespace {
                 channels,
             }),
             commit_message: Some("chore(release): {version}".to_string()),
+            packages: BTreeMap::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum PackageRevisionScope {
+    #[default]
+    Package,
+    Target,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, default)]
+pub struct PackageRevisionPolicy {
+    pub scope: PackageRevisionScope,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct PackageReleasePolicy {
+    pub watch: Vec<String>,
+    pub targets: Vec<String>,
+    #[serde(default)]
+    pub revision: PackageRevisionPolicy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

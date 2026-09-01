@@ -97,6 +97,7 @@ pub enum ManifestKind {
     Namespace,
     GitRules,
     Environment,
+    Package,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,7 +183,10 @@ pub fn render_check(
 
     for manifest in &view.checked_files {
         let msg = match manifest.kind {
-            ManifestKind::Workspace | ManifestKind::Module | ManifestKind::Namespace => {
+            ManifestKind::Workspace
+            | ManifestKind::Module
+            | ManifestKind::Namespace
+            | ManifestKind::Package => {
                 evin_locales::t!(
                     "check-checked-manifest",
                     path = manifest.path.as_str(),

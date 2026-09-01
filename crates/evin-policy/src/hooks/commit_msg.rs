@@ -60,6 +60,36 @@ impl GitHook for CommitMsgHook {
                         issue_code: IssueCode::new("issue-commit-rejected"),
                     }));
                 }
+                let has_trailer = source
+                    .lines()
+                    .any(|line| line.trim() == evin_action_sdk::release::PACKAGE_RELEASE_TRAILER);
+                let subject = source.lines().next().unwrap_or_default().trim();
+                let staged = std::process::Command::new("git")
+                    .args(["diff", "--cached", "--name-only", "--diff-filter=ACMR"])
+                    .current_dir(repo_root)
+                    .output()
+                    .ok()
+                    .filter(|output| output.status.success())
+                    .map(|output| {
+                        String::from_utf8_lossy(&output.stdout)
+                            .lines()
+                            .map(str::to_string)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                let lock_only = staged == [evin_action_sdk::release::RELEASE_LOCK_PATH];
+                if (has_trailer || lock_only)
+                    && (!has_trailer
+                        || !lock_only
+                        || subject != evin_action_sdk::release::PACKAGE_RELEASE_SUBJECT)
+                {
+                    violations.push(PolicyError::GitState(format!(
+                        "package-only release commits must use '{}' and '{}' and stage only {}",
+                        evin_action_sdk::release::PACKAGE_RELEASE_SUBJECT,
+                        evin_action_sdk::release::PACKAGE_RELEASE_TRAILER,
+                        evin_action_sdk::release::RELEASE_LOCK_PATH,
+                    )));
+                }
             }
             Err(e) => {
                 violations.push(PolicyError::GitState(format!(

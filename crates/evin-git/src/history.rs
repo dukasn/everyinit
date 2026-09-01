@@ -18,13 +18,18 @@ use std::path::Path;
 pub struct GitCommit {
     pub hash: String,
     pub subject: String,
+    pub message: String,
     pub refs: String,
     pub files_changed: Vec<String>,
 }
 
 pub async fn fetch_all_commits(workspace_root: &Path) -> Result<Vec<GitCommit>, String> {
     let output = crate::cmd::git_cmd()
-        .args(["log", "--name-only", "--pretty=format:|||%h|%D|%s"])
+        .args([
+            "log",
+            "--name-only",
+            "--pretty=format:|||%h%x1f%D%x1f%s%x1f%B%x1e",
+        ])
         .current_dir(workspace_root)
         .output()
         .await
@@ -50,19 +55,17 @@ pub async fn fetch_all_commits(workspace_root: &Path) -> Result<Vec<GitCommit>, 
             continue;
         }
 
-        let mut lines = block.lines();
-        let metadata_line = match lines.next() {
-            Some(line) => line.trim(),
-            None => continue,
+        let Some((metadata, file_section)) = block.split_once('\u{1e}') else {
+            continue;
         };
-
-        let mut parts = metadata_line.splitn(3, '|');
+        let mut parts = metadata.trim().splitn(4, '\u{1f}');
         let hash = parts.next().unwrap_or("").trim().to_string();
         let refs = parts.next().unwrap_or("").trim().to_string();
         let subject = parts.next().unwrap_or("").trim().to_string();
+        let message = parts.next().unwrap_or(&subject).trim().to_string();
 
         let mut files_changed = Vec::new();
-        for file_line in lines {
+        for file_line in file_section.lines() {
             let file_line = file_line.trim();
             if !file_line.is_empty() {
                 files_changed.push(file_line.to_string());
@@ -72,10 +75,66 @@ pub async fn fetch_all_commits(workspace_root: &Path) -> Result<Vec<GitCommit>, 
         commits.push(GitCommit {
             hash,
             subject,
+            message,
             refs,
             files_changed,
         });
     }
 
     Ok(commits)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn retains_commit_body_and_files_separately() {
+        let temp = tempfile::TempDir::new().unwrap();
+        for args in [
+            &["init", "-q"][..],
+            &["config", "user.name", "Test"][..],
+            &["config", "user.email", "test@example.test"][..],
+            &["config", "commit.gpgSign", "false"][..],
+        ] {
+            assert!(
+                std::process::Command::new("git")
+                    .args(args)
+                    .current_dir(temp.path())
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+        std::fs::write(temp.path().join("file.txt"), "content").unwrap();
+        assert!(
+            std::process::Command::new("git")
+                .args(["add", "file.txt"])
+                .current_dir(temp.path())
+                .status()
+                .unwrap()
+                .success()
+        );
+        assert!(
+            std::process::Command::new("git")
+                .args([
+                    "commit",
+                    "-m",
+                    "chore(release): refresh package revisions",
+                    "-m",
+                    "Evin-Release-Kind: package"
+                ])
+                .current_dir(temp.path())
+                .status()
+                .unwrap()
+                .success()
+        );
+        let commits = fetch_all_commits(temp.path()).await.unwrap();
+        assert_eq!(
+            commits[0].subject,
+            "chore(release): refresh package revisions"
+        );
+        assert!(commits[0].message.contains("Evin-Release-Kind: package"));
+        assert_eq!(commits[0].files_changed, ["file.txt"]);
+    }
 }

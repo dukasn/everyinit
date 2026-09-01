@@ -7,6 +7,7 @@ edition = "2024"
 evin-git = { workspace = true }
 async-trait = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true }
 marked-yaml = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
@@ -21,6 +22,10 @@ evin-diagnostic = { workspace = true }
 evin-io = { workspace = true }
 
 evin-yaml = { workspace = true }
+tar = { workspace = true }
+flate2 = { workspace = true }
+sha2 = { workspace = true }
+md-5 = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 fluent-bundle = { workspace = true }

@@ -19,6 +19,33 @@ use evin_action_sdk::debug::StructuredDebugEvent;
 use evin_diagnostic::Diagnostic;
 use evin_git::manager::HookChange;
 
+pub struct ReconcileReleaseLockPhase;
+
+#[async_trait]
+impl Phase for ReconcileReleaseLockPhase {
+    fn locale_key(&self) -> String {
+        "ui.phase.reconciling_release_lock".into()
+    }
+
+    async fn execute(
+        &self,
+        ctx: &mut CliContext,
+        emitter: &PipelineEmitter,
+    ) -> Result<(), Diagnostic> {
+        let dry_run = ctx.mode == evin_action_sdk::PipelineMode::DryRun;
+        if let crate::sync::release_lock::ReconcileOutcome::Planned(yaml) =
+            crate::sync::release_lock::reconcile(dry_run).await?
+        {
+            emitter.emit(PipelineEvent::FencedOutput {
+                title: ".evin/release-lock.yaml".into(),
+                lines: yaml.lines().map(str::to_owned).collect(),
+                footer_label: Some("planned".into()),
+            });
+        }
+        Ok(())
+    }
+}
+
 pub struct SyncNativeActionsPhase;
 
 #[async_trait]

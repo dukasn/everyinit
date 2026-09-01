@@ -1097,6 +1097,7 @@ dependencies = [
  "evin-config",
  "evin-diagnostic",
  "evin-git",
+ "evin-gitrules",
  "evin-io",
  "evin-locales",
  "evin-pipeline",
@@ -1107,6 +1108,7 @@ dependencies = [
  "humansize",
  "marked-yaml",
  "peak_alloc",
+ "semver",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1245,13 +1247,18 @@ dependencies = [
  "evin-io",
  "evin-locales",
  "evin-yaml",
+ "flate2",
  "fluent-bundle",
  "glob",
  "marked-yaml",
+ "md-5",
  "regex",
  "reqwest",
  "serde",
  "serde_json",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "tar",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -1293,6 +1300,7 @@ dependencies = [
 name = "evin-config"
 version = "1.0.0-canary.100"
 dependencies = [
+ "evin-action-sdk",
  "evin-diagnostic",
  "evin-gitrules",
  "evin-locales",
@@ -1302,6 +1310,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "thiserror 2.0.20",
 ]
 
@@ -1410,6 +1419,7 @@ dependencies = [
 name = "evin-policy"
 version = "1.0.0-canary.100"
 dependencies = [
+ "evin-action-sdk",
  "evin-diagnostic",
  "evin-git",
  "evin-gitrules",

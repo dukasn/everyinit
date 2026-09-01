@@ -25,6 +25,7 @@ pub fn run_phases() -> Vec<Box<dyn Phase>> {
 pub fn sync_phases() -> Vec<Box<dyn Phase>> {
     vec![
         Box::new(ResolveConfigPhase),
+        Box::new(ReconcileReleaseLockPhase),
         Box::new(SyncNativeActionsPhase),
         Box::new(SyncGitHooksPhase),
     ]

@@ -13,7 +13,9 @@ thiserror = { workspace = true }
 evin-gitrules = { workspace = true }
 evin-diagnostic = { workspace = true }
 evin-yaml = { workspace = true }
+evin-action-sdk = { workspace = true }
 globset = { workspace = true }
 
 [dev-dependencies]
 serde_yaml = { workspace = true }
+tempfile = { workspace = true }

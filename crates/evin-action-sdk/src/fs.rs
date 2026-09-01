@@ -92,6 +92,12 @@ impl WorkspaceFs {
             .matching_files(pattern)
             .map_err(|e| io::Error::other(e.to_string()))
     }
+
+    pub fn matching_files_from(&self, base: &Path, pattern: &str) -> io::Result<Vec<PathBuf>> {
+        self.ctx
+            .matching_files_from(base, pattern)
+            .map_err(|e| io::Error::other(e.to_string()))
+    }
 }
 
 // Tests omitted or migrated

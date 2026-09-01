@@ -15,3 +15,4 @@
 pub mod actions;
 pub mod hooks;
 pub mod payload;
+pub mod release_lock;

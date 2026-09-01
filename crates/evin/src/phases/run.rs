@@ -287,6 +287,7 @@ impl Phase for ExecuteTasksPhase {
         engine.config.gitrules = config.gitrules;
         engine.config.forced_execution = ctx.forced_execution;
         engine.config.workspace_execution = config.execution;
+        engine.config.package_manifests = config.package_manifests;
 
         for (id, action) in crate::commands::builtin_actions() {
             engine.register_action_arc(id, action);

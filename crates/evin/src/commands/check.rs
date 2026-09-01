@@ -37,7 +37,10 @@ pub async fn check(
         }
     };
     match check_view(&config, workspace_only, module_filter, target_filter) {
-        Ok(view) => {
+        Ok(mut view) => {
+            if !workspace_only && module_filter.is_none() && target_filter.is_none() {
+                view.issues.extend(release_lock_issues(&config).await);
+            }
             let valid = view.is_valid();
             emit(render_check(&view, terminal_width(), None), valid);
             Ok(valid)
@@ -74,6 +77,163 @@ pub async fn check(
         }
     }
 }
+
+async fn release_lock_issues(config: &EverInitConfig) -> Vec<CheckIssueView> {
+    let mut issues = Vec::new();
+    let Some(rules) = config.gitrules.as_ref() else {
+        return issues;
+    };
+    let policies = rules
+        .releases
+        .as_ref()
+        .map(|release| &release.packages)
+        .unwrap_or(&EMPTY_PACKAGES);
+    if let Err(error) = evin_action_sdk::release::validate_policies(policies) {
+        issues.push(issue_view(evin_locales::diagnostic(IssueCode::custom(
+            error.to_string(),
+        ))));
+        return issues;
+    }
+    if policies.is_empty() {
+        return issues;
+    }
+    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let lock = match evin_action_sdk::release::read_lock(&root) {
+        Ok(Some(lock)) => lock,
+        Ok(None) => return issues,
+        Err(error) => {
+            issues.push(issue_view(
+                evin_locales::diagnostic(IssueCode::custom(error.to_string())).with_file_location(
+                    evin_action_sdk::release::RELEASE_LOCK_PATH,
+                    None,
+                    None,
+                ),
+            ));
+            return issues;
+        }
+    };
+    if let Err(error) = lock.validate(policies) {
+        issues.push(issue_view(
+            evin_locales::diagnostic(IssueCode::custom(error.to_string())).with_file_location(
+                evin_action_sdk::release::RELEASE_LOCK_PATH,
+                None,
+                None,
+            ),
+        ));
+    }
+    if semver::Version::parse(&lock.release.version).is_err() {
+        issues.push(issue_view(
+            evin_locales::diagnostic(IssueCode::custom(format!(
+                "release lock version '{}' is not valid SemVer",
+                lock.release.version
+            )))
+            .with_file_location(
+                evin_action_sdk::release::RELEASE_LOCK_PATH,
+                None,
+                None,
+            ),
+        ));
+    }
+    let expected_tag = evin_yaml::template::format::render(
+        rules
+            .tags
+            .as_ref()
+            .and_then(|tags| tags.name_format.as_ref())
+            .and_then(|formats| formats.iter().next())
+            .map(String::as_str)
+            .unwrap_or("v{version}"),
+        &std::collections::HashMap::from([("version", lock.release.version.as_str())]),
+    );
+    if expected_tag != lock.release.tag {
+        issues.push(issue_view(
+            evin_locales::diagnostic(IssueCode::custom(format!(
+                "release lock tag '{}' does not format from version '{}'",
+                lock.release.tag, lock.release.version
+            )))
+            .with_file_location(
+                evin_action_sdk::release::RELEASE_LOCK_PATH,
+                None,
+                None,
+            ),
+        ));
+    }
+    match evin_action_sdk::release::fingerprint_index(&root, policies).await {
+        Ok(fingerprints) => {
+            for (id, fingerprint) in fingerprints {
+                if lock
+                    .packages
+                    .get(&id)
+                    .is_some_and(|package| package.fingerprint != fingerprint)
+                {
+                    issues.push(issue_view(
+                        evin_locales::diagnostic(IssueCode::custom(format!(
+                            "release lock is stale for package '{id}'"
+                        )))
+                        .with_file_location(
+                            evin_action_sdk::release::RELEASE_LOCK_PATH,
+                            None,
+                            None,
+                        ),
+                    ));
+                }
+            }
+        }
+        Err(error) => issues.push(issue_view(evin_locales::diagnostic(IssueCode::custom(
+            error.to_string(),
+        )))),
+    }
+    if let Ok(commits) = evin_git::history::fetch_all_commits(&root).await {
+        for commit in commits {
+            if evin_action_sdk::git::extract_tag(&commit.refs)
+                .is_some_and(|tag| tag == lock.release.tag)
+            {
+                break;
+            }
+            if commit
+                .files_changed
+                .iter()
+                .any(|path| path == evin_action_sdk::release::RELEASE_LOCK_PATH)
+            {
+                let trailer = commit
+                    .message
+                    .lines()
+                    .any(|line| line.trim() == evin_action_sdk::release::PACKAGE_RELEASE_TRAILER);
+                if commit.subject != evin_action_sdk::release::PACKAGE_RELEASE_SUBJECT || !trailer {
+                    issues.push(issue_view(evin_locales::diagnostic(IssueCode::custom(format!("lock-changing commit {} is missing the canonical package-release subject or trailer", commit.hash)))));
+                }
+            }
+        }
+    }
+    let latest_tag = std::process::Command::new("git")
+        .args(["describe", "--tags", "--match", "v[0-9]*", "--abbrev=0"])
+        .current_dir(&root)
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
+    if latest_tag
+        .as_deref()
+        .is_some_and(|tag| tag != lock.release.tag)
+    {
+        issues.push(issue_view(
+            evin_locales::diagnostic(IssueCode::custom(format!(
+                "release lock tag '{}' does not match latest semantic tag '{}'",
+                lock.release.tag,
+                latest_tag.unwrap()
+            )))
+            .with_file_location(
+                evin_action_sdk::release::RELEASE_LOCK_PATH,
+                None,
+                None,
+            ),
+        ));
+    }
+    issues
+}
+
+static EMPTY_PACKAGES: std::sync::LazyLock<
+    std::collections::BTreeMap<String, evin_gitrules::PackageReleasePolicy>,
+> = std::sync::LazyLock::new(std::collections::BTreeMap::new);
 
 pub fn check_view(
     config: &EverInitConfig,
@@ -233,6 +393,15 @@ pub fn check_view(
             path: file_uri(".evin/environment.yaml"),
             task_count: 0,
             kind: ManifestKind::Environment,
+            issues: Vec::new(),
+        });
+    }
+
+    for package in config.package_manifests.manifests() {
+        checked_files.push(CheckedManifest {
+            path: file_uri(&package.path.to_string_lossy()),
+            task_count: 0,
+            kind: ManifestKind::Package,
             issues: Vec::new(),
         });
     }
@@ -406,6 +575,9 @@ mod tests {
                 ("api".into(), "crates/api/.evin/module.yaml".into(), 1),
             ],
             module_versions: std::collections::HashMap::new(),
+            package_manifests: std::sync::Arc::new(
+                evin_action_sdk::packaging::PackageManifestCatalog::default(),
+            ),
         }
     }
 

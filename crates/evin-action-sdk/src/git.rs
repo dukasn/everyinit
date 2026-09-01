@@ -317,6 +317,26 @@ impl GitProvider {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    /// Returns the author-independent commit timestamp used by reproducible
+    /// artifact builders when SOURCE_DATE_EPOCH is not supplied.
+    pub async fn head_commit_epoch(&self) -> Result<u64, GitError> {
+        let output = evin_git::cmd::git_cmd()
+            .args(["show", "-s", "--format=%ct", "HEAD"])
+            .current_dir(&self.workspace_root)
+            .output()
+            .await
+            .map_err(|e| GitError::ExecutionFailed(e.to_string()))?;
+        if !output.status.success() {
+            return Err(GitError::ExecutionFailed(
+                "Failed to read HEAD commit timestamp".to_string(),
+            ));
+        }
+        String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<u64>()
+            .map_err(|e| GitError::ExecutionFailed(format!("Invalid HEAD commit timestamp: {e}")))
+    }
+
     pub async fn verify_identity(&self) -> Result<(), GitError> {
         let name_out = evin_git::cmd::git_cmd()
             .args(["config", "user.name"])
