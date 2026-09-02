@@ -22,48 +22,76 @@ The Workflow Engine
 
 > [!FEATURE]
 >
-> ## Start with the workspace
+> ## Declare Workflows Once
 >
-> `.evin/workspace.yaml` gives repository automation one declared home. Name
-> the workflow, choose its default execution policy, and load module-local
-> tasks without scattering scripts across the repository.
+> Stop scattering shell scripts, CI configs, and task runners across your
+> repository. `.evin/workspace.yaml` is the single declarative home for your
+> project's lifecycle: tasks, stages, dependencies, environments, and modular
+> components.
 >
 > - [Build your first workspace](/book/first-workspace)
-> - [Explore the workspace schema](/reference/workspace-configuration)
+> - [Workspace schema and modules](/reference/workspace-configuration)
 >
 > ```yaml
 > workspace:
->   # Give this repository workflow a stable identity.
 >   name: storefront
 >   version: "0.1.0"
->
->   # Choose how ready tasks run unless a command overrides it.
 >   execution: linear
->
->   # Load task definitions that live with repository components.
 >   modules: [apps/web, crates/api]
+>
+> stages:
+>   - Check
+>   - Test
+>   - Release
+>
+> tasks:
+>   lint:
+>     stage: Check
+>     steps:
+>       - run: cargo clippy -- -D warnings
+>
+>   test:
+>     stage: Test
+>     needs: [lint]
+>     steps:
+>       - run: cargo test
 > ```
-
-## Learn EVIN
-
-Learn how to organize repository work, automate Git lifecycle checks, and keep
-delivery routines close to the code they support.
-
-- [Workspaces & Environments](/book/workspaces) - Organize tasks, dependencies, environment matrices, and values into clear definitions.
-- [Pipelines & Git Hooks](/book/pipelines-and-hooks) - Trigger stage graphs, single tasks, or native Git hooks with automatic dependency resolution.
-- [Documentation Site](/book/documentation-site) - Add documentation publishing to the same declared workflow.
 
 > [!FEATURE]
 >
-> ## Transform project data with ESH
+> ## Git, Built In
 >
-> ESH keeps routine automation readable: query structured release data, pipe a
-> numeric value into a formatter, then branch on that command's result without
-> leaving the prompt. The same portable commands work inside an Evin task or as
-> a directly invoked ESH script.
+> EVIN has exactly one external expectation: Git. It extends what Git
+> already provides rather than wrapping it behind adapters. Hook shims are
+> generated and kept in sync by `evin sync`. Repository policies covering commit
+> message formats, branch naming, staged-file rules, authorship, and secret
+> detection are evaluated in-memory against the live Git state before tasks
+> run.
 >
-> - [Write an ESH script](/reference/esh/writing-scripts)
-> - [Browse ESH built-ins](/reference/esh/runtime-reference)
+> - [Pipelines & Git Hooks](/book/pipelines-and-hooks)
+> - [Git Rules configuration](/reference/git-rules-configuration)
+>
+> ```yaml
+> tasks:
+>   check:
+>     stage: Check
+>     on:
+>       hooks: [pre-commit]
+>     steps:
+>       - run: cargo clippy -- -D warnings
+> ```
+
+> [!FEATURE]
+>
+> ## Portable Scripting with ESH
+>
+> Evin Shell (ESH) eliminates platform-specific shell drift across Linux,
+> macOS, and Windows. One deterministic runtime handles pipelines, structured
+> JSON/YAML, arithmetic, redirections, and concurrent work without depending
+> on `sh`, Bash, `cmd.exe`, or WSL.
+>
+> - [Write portable ESH scripts](/reference/esh/writing-scripts)
+> - [ESH built-ins and operators](/reference/esh/runtime-reference)
 >
 > ```tape title="Pipe and branch in one command" rows=6 cols=76
 > type "json -g bytes '{\"bytes\": 15728640}' | numfmt --to=iec && { echo \"artifact is ready\"; } || { echo \"format failed\"; }"
@@ -73,14 +101,15 @@ delivery routines close to the code they support.
 
 > [!FEATURE]
 >
-> ## Built-in actions for delivery work
+> ## Zero-Dependency Delivery
 >
-> Keep recurring delivery work in the same task graph. This task packages the
-> selected release files into one archive; the same action layer also handles
-> documentation, changelogs, version updates, and release commits.
+> No CI plugins. No external services. Standard delivery tasks including
+> semantic versioning, changelog generation, release archiving, and Git
+> releases are compiled directly into the EVIN binary and run inside the same
+> task graph as everyday checks.
 >
-> - [Browse built-in actions](/reference/actions)
-> - [Archive action details](/reference/actions/archive-action)
+> - [Built-in actions](/reference/actions)
+> - [Archive action](/reference/actions/archive-action)
 >
 > ```yaml
 > tasks:
@@ -96,21 +125,24 @@ delivery routines close to the code they support.
 >           layout: relative
 > ```
 
-## Technical reference and ecosystem
+## Reference & Guides
 
-Explore the contracts behind repository workflows, ESH, configuration, and
-diagnostics, then help improve the project in the open.
+The full technical story covering workspace contracts, ESH language
+semantics, built-in action schemas, diagnostic references, and the
+contribution path.
 
-- [ESH Language Reference](/reference/esh/language-reference) - POSIX syntax, parameter expansions, arithmetic operations, and parallel pipelines.
-- [Configuration & Diagnostic RFCs](/reference) - Complete normative reference for schema parameters, diagnostics, and modules.
-- [Contribute to EVIN](/contributing) - Set up the development toolchain, inspect the core engine, and shape upcoming features.
+- [The EVIN Book](/book) - Learn to define and run repository workflows.
+- [Pipelines & Git Hooks](/book/pipelines-and-hooks) - Connect the task graph to Git and CI.
+- [ESH Language Reference](/reference/esh/language-reference) - Syntax, expansion, arithmetic, pipes, and built-ins.
+- [Built-in Actions](/reference/actions) - Delivery capabilities compiled into the binary.
+- [Configuration & Schemas](/reference) - Workspace manifests, environment contracts, and diagnostics.
+- [Contribute to EVIN](/contributing) - Set up the native toolchain and shape upcoming features.
 
 > [!SPOTLIGHT] holo
 >
-> ## Make repository work repeatable
+> ## Declare once. Run everywhere.
 >
-> Define the work around your code once, then run it through one visible,
-> portable workflow.
+> One workflow definition. Your laptop, your Git hooks, your CI.
 >
 > [Read The EVIN Book](/book)
 
