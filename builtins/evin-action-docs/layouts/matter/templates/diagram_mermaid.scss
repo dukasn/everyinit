@@ -43,10 +43,10 @@
     position: relative;
     padding: var(--ui-ref-space-3) var(--ui-ref-space-6) var(--ui-ref-space-6) var(--ui-ref-space-6);
     display: flex;
-    justify-content: center;
-    align-items: center;
     overflow-x: auto;
     overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
     min-height: calc(var(--ui-ref-space-20) * 1.5);
     color: var(--ui-color-code-on-surface);
     scrollbar-width: thin;
@@ -64,17 +64,14 @@
 
 .evindoc-mermaid {
     .evin-mermaid-svg-target {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow-x: auto;
+        margin-inline: auto;
+        flex-shrink: 0;
+        display: block;
 
         svg {
-            max-width: 100%;
-            height: auto;
             display: block;
-            margin: 0 auto;
+            max-width: none;
+            height: auto;
             background: transparent !important;
         }
     }
