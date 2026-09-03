@@ -14,6 +14,7 @@
 
 use crate::error::ExecError;
 use crate::runtime::context::ExecutionContext;
+use crate::runtime::path_presentation::present;
 use crate::runtime::traits::BoxFuture;
 
 pub fn glob<'a>(
@@ -46,9 +47,9 @@ pub fn glob<'a>(
                     for entry in entries.flatten() {
                         // Make path relative to cwd if possible for clean script consumption
                         if let Ok(rel) = entry.strip_prefix(&cwd) {
-                            matches.insert(rel.to_string_lossy().to_string());
+                            matches.insert(present(rel));
                         } else {
-                            matches.insert(entry.to_string_lossy().to_string());
+                            matches.insert(present(&entry));
                         }
                     }
                 }

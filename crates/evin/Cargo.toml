@@ -52,6 +52,7 @@ globset = { workspace = true }
 chrono = { workspace = true }
 signal-hook = { workspace = true }
 semver = { workspace = true }
+url = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

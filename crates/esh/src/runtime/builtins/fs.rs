@@ -14,6 +14,7 @@
 
 use crate::error::ExecError;
 use crate::runtime::context::ExecutionContext;
+use crate::runtime::path_presentation::present;
 use crate::runtime::traits::BoxFuture;
 use std::collections::VecDeque;
 use std::fs;
@@ -33,7 +34,7 @@ pub fn pwd<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        let cwd_str = ctx.cwd().to_string_lossy().to_string();
+        let cwd_str = present(ctx.cwd());
         ctx.write_stdout(format!("{}\n", cwd_str).as_bytes());
         Ok(0)
     })

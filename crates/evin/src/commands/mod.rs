@@ -18,6 +18,33 @@ use crate::phases::{init::*, run::*, sync::*};
 pub mod check;
 pub mod discovery;
 
+pub(crate) fn file_uri(
+    path: impl AsRef<std::path::Path>,
+) -> Result<String, evin_diagnostic::Diagnostic> {
+    let path = path.as_ref();
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|error| path_diagnostic(path, error))?
+            .join(path)
+    };
+    let absolute = absolute.canonicalize().unwrap_or(absolute);
+    url::Url::from_file_path(&absolute)
+        .map(String::from)
+        .map_err(|()| path_diagnostic(&absolute, "path cannot be represented as a file URI"))
+}
+
+fn path_diagnostic(
+    path: &std::path::Path,
+    error: impl std::fmt::Display,
+) -> evin_diagnostic::Diagnostic {
+    evin_diagnostic::Diagnostic::new(
+        "Invalid file path",
+        evin_diagnostic::IssueCode::custom(format!("{}: {error}", path.display())),
+    )
+}
+
 pub fn run_phases() -> Vec<Box<dyn Phase>> {
     vec![Box::new(ResolveConfigPhase), Box::new(ExecuteTasksPhase)]
 }
@@ -79,4 +106,26 @@ pub(crate) fn builtin_actions()
     .into_iter()
     .map(|(name, action)| (name.to_string(), action))
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::file_uri;
+
+    #[test]
+    fn file_uri_encodes_an_absolute_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().join("directory with spaces");
+        std::fs::create_dir(&directory).unwrap();
+
+        let uri = file_uri(&directory).unwrap();
+        let parsed = url::Url::parse(&uri).unwrap();
+
+        assert_eq!(parsed.scheme(), "file");
+        assert_eq!(
+            parsed.to_file_path().unwrap(),
+            directory.canonicalize().unwrap()
+        );
+        assert!(!uri.contains('\\'));
+    }
 }

@@ -14,6 +14,7 @@
 
 use crate::error::ExecError;
 use crate::runtime::context::ExecutionContext;
+use crate::runtime::path_presentation::present;
 use crate::runtime::traits::BoxFuture;
 use std::path::{Path, PathBuf};
 
@@ -38,10 +39,7 @@ pub fn dirname<'a>(
 
         for path_str in args {
             let p = Path::new(path_str);
-            let parent = p
-                .parent()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| ".".to_string());
+            let parent = p.parent().map(present).unwrap_or_else(|| ".".to_string());
             let out = if parent.is_empty() {
                 ".".to_string()
             } else {
@@ -153,14 +151,14 @@ pub fn realpath<'a>(
                 let base_can = base.canonicalize().unwrap_or(base);
                 match pathdiff::diff_paths(&canonical, &base_can) {
                     Some(rel) => {
-                        ctx.write_stdout(format!("{}\n", rel.to_string_lossy()).as_bytes());
+                        ctx.write_stdout(format!("{}\n", present(&rel)).as_bytes());
                     }
                     None => {
-                        ctx.write_stdout(format!("{}\n", canonical.to_string_lossy()).as_bytes());
+                        ctx.write_stdout(format!("{}\n", present(&canonical)).as_bytes());
                     }
                 }
             } else {
-                ctx.write_stdout(format!("{}\n", canonical.to_string_lossy()).as_bytes());
+                ctx.write_stdout(format!("{}\n", present(&canonical)).as_bytes());
             }
         }
 
@@ -186,10 +184,7 @@ pub fn path<'a>(
                     return Ok(1);
                 }
                 let p = Path::new(&args[1]);
-                let parent = p
-                    .parent()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|| ".".to_string());
+                let parent = p.parent().map(present).unwrap_or_else(|| ".".to_string());
                 let out = if parent.is_empty() {
                     ".".to_string()
                 } else {
@@ -244,7 +239,7 @@ pub fn path<'a>(
                 }
                 let resolved = resolve_path(ctx, &args[1]);
                 let normalized = resolved.canonicalize().unwrap_or(resolved);
-                ctx.write_stdout(format!("{}\n", normalized.to_string_lossy()).as_bytes());
+                ctx.write_stdout(format!("{}\n", present(&normalized)).as_bytes());
                 Ok(0)
             }
             "-r" | "--rel" => {
@@ -261,11 +256,11 @@ pub fn path<'a>(
 
                 match pathdiff::diff_paths(&target, &base) {
                     Some(rel) => {
-                        ctx.write_stdout(format!("{}\n", rel.to_string_lossy()).as_bytes());
+                        ctx.write_stdout(format!("{}\n", present(&rel)).as_bytes());
                         Ok(0)
                     }
                     None => {
-                        ctx.write_stdout(format!("{}\n", target.to_string_lossy()).as_bytes());
+                        ctx.write_stdout(format!("{}\n", present(&target)).as_bytes());
                         Ok(0)
                     }
                 }
@@ -279,7 +274,7 @@ pub fn path<'a>(
                 for part in &args[1..] {
                     p.push(part);
                 }
-                ctx.write_stdout(format!("{}\n", p.to_string_lossy()).as_bytes());
+                ctx.write_stdout(format!("{}\n", present(&p)).as_bytes());
                 Ok(0)
             }
             "--exists" => {

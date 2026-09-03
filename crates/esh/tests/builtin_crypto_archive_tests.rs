@@ -45,8 +45,8 @@ async fn test_archive_and_unarchive_tar_and_zip() {
     let extract_tar = tmp.path().join("extracted_tar");
     let extract_zip = tmp.path().join("extracted_zip");
 
-    fs::create_dir_all(&src_dir).unwrap();
-    fs::write(src_dir.join("app.bin"), b"binary-contents-12345").unwrap();
+    fs::create_dir_all(src_dir.join("nested/bin")).unwrap();
+    fs::write(src_dir.join("nested/bin/app.bin"), b"binary-contents-12345").unwrap();
 
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -64,15 +64,35 @@ async fn test_archive_and_unarchive_tar_and_zip() {
     let code = engine.eval_str(script, &mut ctx).await.unwrap();
     assert_eq!(code, 0);
 
-    assert!(extract_tar.join("app.bin").is_file());
+    let tar_file = fs::File::open(tmp.path().join("bundle.tar.gz")).unwrap();
+    let decoder = flate2::read::GzDecoder::new(tar_file);
+    let mut tar = tar::Archive::new(decoder);
+    let tar_names = tar
+        .entries()
+        .unwrap()
+        .map(|entry| String::from_utf8_lossy(&entry.unwrap().path_bytes()).into_owned())
+        .collect::<Vec<_>>();
+    assert!(tar_names.iter().all(|name| !name.contains('\\')));
+
+    let zip_file = fs::File::open(tmp.path().join("bundle.zip")).unwrap();
+    let mut zip = zip::ZipArchive::new(zip_file).unwrap();
+    let zip_names = (0..zip.len())
+        .map(|index| zip.by_index(index).unwrap().name().to_string())
+        .collect::<Vec<_>>();
+    assert!(zip_names.iter().all(|name| !name.contains('\\')));
+
+    assert!(tar_names.iter().any(|name| name == "nested/bin/app.bin"));
+    assert!(zip_names.iter().any(|name| name == "nested/bin/app.bin"));
+
+    assert!(extract_tar.join("nested/bin/app.bin").is_file());
     assert_eq!(
-        fs::read(extract_tar.join("app.bin")).unwrap(),
+        fs::read(extract_tar.join("nested/bin/app.bin")).unwrap(),
         b"binary-contents-12345"
     );
 
-    assert!(extract_zip.join("app.bin").is_file());
+    assert!(extract_zip.join("nested/bin/app.bin").is_file());
     assert_eq!(
-        fs::read(extract_zip.join("app.bin")).unwrap(),
+        fs::read(extract_zip.join("nested/bin/app.bin")).unwrap(),
         b"binary-contents-12345"
     );
 }

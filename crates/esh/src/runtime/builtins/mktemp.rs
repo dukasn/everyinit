@@ -14,6 +14,7 @@
 
 use crate::error::ExecError;
 use crate::runtime::context::ExecutionContext;
+use crate::runtime::path_presentation::present;
 use crate::runtime::traits::BoxFuture;
 use tempfile::Builder;
 
@@ -45,7 +46,7 @@ pub fn mktemp<'a>(
             match Builder::new().prefix(&prefix).tempdir() {
                 Ok(dir) => {
                     let path = dir.keep();
-                    ctx.write_stdout(format!("{}\n", path.to_string_lossy()).as_bytes());
+                    ctx.write_stdout(format!("{}\n", present(&path)).as_bytes());
                     Ok(0)
                 }
                 Err(e) => {
@@ -62,7 +63,7 @@ pub fn mktemp<'a>(
                         .into_temp_path()
                         .keep()
                         .map_err(|e| ExecError::IoError(e.error.to_string()))?;
-                    ctx.write_stdout(format!("{}\n", path.to_string_lossy()).as_bytes());
+                    ctx.write_stdout(format!("{}\n", present(&path)).as_bytes());
                     Ok(0)
                 }
                 Err(e) => {

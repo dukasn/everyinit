@@ -14,6 +14,7 @@
 
 use crate::error::ExecError;
 use crate::runtime::context::ExecutionContext;
+use crate::runtime::path_presentation::present;
 use crate::runtime::traits::BoxFuture;
 use flate2::Compression;
 use flate2::read::GzDecoder;
@@ -490,7 +491,7 @@ fn add_dir_to_zip<W: Write + std::io::Seek>(
         let entry = entry?;
         let path = entry.path();
         let rel_path = path.strip_prefix(base).map_err(std::io::Error::other)?;
-        let name = rel_path.to_string_lossy().to_string();
+        let name = present(rel_path);
 
         if path.is_dir() {
             zip.add_directory(format!("{}/", name), options)?;

@@ -4,17 +4,35 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "0 4 * * 0"
   workflow_dispatch:
+    inputs:
+      run_soak:
+        description: Run the process-supervision soak suite
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
-  test-matrix:
-    name: Test (${{ matrix.os }})
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    runs-on: ${{ matrix.os }}
+  workspace-tests:
+    name: Workspace tests
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
     timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.98.0
+      - name: Run canonical workspace tests
+        run: cargo evin-dev run test
+
+  e2e:
+    name: E2E (${{ matrix.os }})
+    if: github.event_name != 'schedule'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -22,12 +40,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.0
-      - name: Run canonical workspace tests
-        run: cargo evin-dev run test
+      - name: Run cross-platform binary tests
+        run: cargo evin-dev run e2e
 
   quality:
     name: Formatting, Clippy, and browser checks
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -46,9 +64,9 @@ jobs:
       - name: Run canonical quality gate
         run: cargo evin-dev run quality
 
-  process-stress:
-    name: Process stress (${{ matrix.os }})
-    if: github.event_name == 'workflow_dispatch'
+  process-soak:
+    name: Process soak (${{ matrix.os }})
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_soak)
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:

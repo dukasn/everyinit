@@ -56,8 +56,7 @@ async fn test_path_join() {
     assert_eq!(status, 0);
 
     let output = ctx.get_captured_stdout().unwrap();
-    let trimmed = output.trim();
-    assert!(trimmed == "src/compiler/mod.rs" || trimmed == "src\\compiler\\mod.rs");
+    assert_eq!(output.trim(), "src/compiler/mod.rs");
 }
 
 #[tokio::test]

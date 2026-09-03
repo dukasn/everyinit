@@ -62,6 +62,13 @@ tasks:
     steps:
       - run: cargo test --workspace --locked
 
+  e2e:
+    stage: Test
+    description: "Run cross-platform EVIN and ESH binary tests"
+    needs:
+      - evin:e2e
+      - esh:e2e
+
   quality:
     stage: Check
     description: "Run static Rust and browser documentation quality checks"

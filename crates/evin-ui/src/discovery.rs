@@ -32,6 +32,7 @@ pub struct CountedTarget {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskGroup {
+    /// Absolute `file:` URI for the manifest that declared these tasks.
     pub source: String,
     pub module: Option<String>,
     pub tasks: Vec<TargetCard>,
@@ -61,6 +62,7 @@ pub struct TargetMetadata {
     pub kind: TargetKind,
     pub description: Option<String>,
     pub stage: Option<String>,
+    /// Absolute `file:` URI for the target working directory.
     pub cwd: Option<String>,
     pub needs: Vec<String>,
     pub environment: Vec<String>,
@@ -102,6 +104,7 @@ pub enum ManifestKind {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckedManifest {
+    /// Absolute `file:` URI for the checked manifest.
     pub path: String,
     pub task_count: usize,
     pub kind: ManifestKind,
@@ -351,10 +354,7 @@ pub fn render_catalog(view: &CatalogView, width: usize) -> String {
     bar(&mut lines);
 
     for group in &view.groups {
-        let source = Style::new()
-            .cyan()
-            .underlined()
-            .apply_to(format!("file://{}", group.source));
+        let source = Style::new().cyan().underlined().apply_to(&group.source);
         success_section(
             &mut lines,
             &format!(
@@ -742,7 +742,7 @@ fn metadata(lines: &mut Vec<String>, layout: &Layout, target: &TargetMetadata) {
                 lines,
                 layout,
                 "cwd",
-                target.cwd.as_deref().unwrap_or("file://"),
+                target.cwd.as_deref().unwrap_or("(none)"),
             );
             metadata_bullet(lines, layout, "modules", &modules_or_none(&target.modules));
             return;
@@ -875,7 +875,7 @@ mod tests {
             &CatalogView {
                 workspace: workspace(),
                 groups: vec![TaskGroup {
-                    source: "/repo/.evin/workspace.yaml".into(),
+                    source: "file:///repo/.evin/workspace.yaml".into(),
                     module: None,
                     tasks: vec![TargetCard {
                         name: "verify".into(),

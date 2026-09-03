@@ -77,8 +77,7 @@ async fn test_grep_and_glob() {
     assert_eq!(code, 0);
     let output = ctx.get_captured_stdout().unwrap();
     assert!(output.contains("println!(\"Hello Evin!\");"));
-    let normalized_output = output.replace('\\', "/");
-    assert!(normalized_output.contains("src/main.rs") || normalized_output.contains("src/lib.rs"));
+    assert!(output.contains("src/main.rs") || output.contains("src/lib.rs"));
 }
 
 #[tokio::test]
@@ -107,7 +106,7 @@ async fn test_fixed_grep_combined_flags_and_recursive_glob() {
         .unwrap();
 
     assert_eq!(code, 0);
-    let output = ctx.get_captured_stdout().unwrap().replace('\\', "/");
+    let output = ctx.get_captured_stdout().unwrap();
     assert!(output.contains("1:a.b"));
     assert!(output.contains("tree/one/two/leaf.txt"));
 }

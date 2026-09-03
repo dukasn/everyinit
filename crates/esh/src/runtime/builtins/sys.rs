@@ -15,6 +15,7 @@
 use crate::error::ExecError;
 use crate::planner::compiler::compile_script;
 use crate::runtime::context::ExecutionContext;
+use crate::runtime::path_presentation::present;
 use crate::runtime::traits::{BoxFuture, Executable, ScopeManager};
 use std::env;
 use std::path::{Path, PathBuf};
@@ -97,14 +98,14 @@ pub fn which<'a>(
             if bin_name.contains('/') || (cfg!(windows) && bin_name.contains('\\')) {
                 let p = Path::new(bin_name);
                 if p.is_file() {
-                    ctx.write_stdout(format!("{}\n", p.display()).as_bytes());
+                    ctx.write_stdout(format!("{}\n", present(p)).as_bytes());
                     found = true;
                 }
             } else {
                 for dir in &path_dirs {
                     let candidate = dir.join(bin_name);
                     if candidate.is_file() {
-                        ctx.write_stdout(format!("{}\n", candidate.display()).as_bytes());
+                        ctx.write_stdout(format!("{}\n", present(&candidate)).as_bytes());
                         found = true;
                         break;
                     }
@@ -113,7 +114,7 @@ pub fn which<'a>(
                         for ext in &[".exe", ".cmd", ".bat", ".ps1"] {
                             let with_ext = dir.join(format!("{}{}", bin_name, ext));
                             if with_ext.is_file() {
-                                ctx.write_stdout(format!("{}\n", with_ext.display()).as_bytes());
+                                ctx.write_stdout(format!("{}\n", present(&with_ext)).as_bytes());
                                 found = true;
                                 break;
                             }

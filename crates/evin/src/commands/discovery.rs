@@ -18,7 +18,7 @@ use std::io::IsTerminal;
 pub async fn list() -> Result<(), Diagnostic> {
     let config = evin_config::load_workspace_tasks().await?;
     emit(evin_ui::discovery::render_catalog(
-        &catalog_view(&config),
+        &catalog_view(&config)?,
         terminal_width(),
     ));
     Ok(())
@@ -79,7 +79,7 @@ fn terminal_width() -> usize {
         .unwrap_or(evin_ui::constants::FALLBACK_WIDTH)
 }
 
-fn catalog_view(config: &EverInitConfig) -> CatalogView {
+fn catalog_view(config: &EverInitConfig) -> Result<CatalogView, Diagnostic> {
     let mut root_tasks = Vec::new();
     let mut grouped_modules: BTreeMap<String, (String, Vec<TargetCard>)> = BTreeMap::new();
 
@@ -91,14 +91,12 @@ fn catalog_view(config: &EverInitConfig) -> CatalogView {
             description: description(task),
         };
         if let Some((module, _)) = task.name.split_once(':') {
+            let source = crate::commands::file_uri(
+                task.source_file.as_deref().unwrap_or(".evin/module.yaml"),
+            )?;
             grouped_modules
                 .entry(module.to_string())
-                .or_insert_with(|| {
-                    (
-                        absolute_source(task.source_file.as_deref().unwrap_or(".evin/module.yaml")),
-                        Vec::new(),
-                    )
-                })
+                .or_insert_with(|| (source, Vec::new()))
                 .1
                 .push(card);
         } else {
@@ -107,7 +105,7 @@ fn catalog_view(config: &EverInitConfig) -> CatalogView {
     }
 
     let mut groups = vec![TaskGroup {
-        source: absolute_source(".evin/workspace.yaml"),
+        source: crate::commands::file_uri(".evin/workspace.yaml")?,
         module: None,
         tasks: root_tasks,
     }];
@@ -154,30 +152,14 @@ fn catalog_view(config: &EverInitConfig) -> CatalogView {
         })
         .collect();
 
-    CatalogView {
+    Ok(CatalogView {
         workspace: identity(config),
         groups,
         modules,
         stages,
         hooks,
         total_tasks: config.tasks.len(),
-    }
-}
-
-fn absolute_source(path: &str) -> String {
-    let path = std::path::Path::new(path);
-    let absolute = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| std::path::PathBuf::from("."))
-            .join(path)
-    };
-    absolute
-        .canonicalize()
-        .unwrap_or(absolute)
-        .to_string_lossy()
-        .to_string()
+    })
 }
 
 fn explanation_view(config: &EverInitConfig, target: &str) -> Result<ExplanationView, Diagnostic> {
@@ -204,7 +186,9 @@ fn explanation_view(config: &EverInitConfig, target: &str) -> Result<Explanation
             kind,
             description: Some(description(task)),
             stage: task.stage.clone(),
-            cwd: Some(file_uri(task.cwd.as_deref().unwrap_or("."))),
+            cwd: Some(crate::commands::file_uri(
+                task.cwd.as_deref().unwrap_or("."),
+            )?),
             needs: sorted(task.needs.clone().unwrap_or_default()),
             environment: environment_names(task),
             steps: step_summaries(task),
@@ -218,7 +202,11 @@ fn explanation_view(config: &EverInitConfig, target: &str) -> Result<Explanation
             kind,
             description: None,
             stage: None,
-            cwd: stage_cwd.then(|| file_uri(".")),
+            cwd: if stage_cwd {
+                Some(crate::commands::file_uri(".")?)
+            } else {
+                None
+            },
             needs: Vec::new(),
             environment: Vec::new(),
             steps: Vec::new(),
@@ -254,10 +242,6 @@ fn identity(config: &EverInitConfig) -> WorkspaceIdentity {
         name: config.workspace_name.clone(),
         version: config.workspace_version.clone(),
     }
-}
-
-fn file_uri(path: &str) -> String {
-    format!("file://{}", absolute_source(path))
 }
 
 fn module_summary(tasks: &[String]) -> Vec<String> {
@@ -419,7 +403,8 @@ mod tests {
                 stage: Some("Build".into()),
                 ..Default::default()
             },
-        ]));
+        ]))
+        .unwrap();
         assert_eq!(view.groups[0].tasks[0].name, "build");
         assert_eq!(view.groups[1].module.as_deref(), Some("esh"));
         assert_eq!(view.groups[1].tasks[0].name, "esh:test");
@@ -435,7 +420,8 @@ mod tests {
                 hooks: Some(vec!["pre-commit".into()]),
             }),
             ..Default::default()
-        }]));
+        }]))
+        .unwrap();
         assert_eq!(view.stages[0].name, "Build");
         assert_eq!(view.stages[1].name, "Test");
         let pre_commit = view

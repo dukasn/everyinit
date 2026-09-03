@@ -38,6 +38,17 @@ async fn test_unix_tar_czf_and_xzf() {
     let code = engine.eval_str(script, &mut ctx).await.unwrap();
     assert_eq!(code, 0);
 
+    let archive_file = fs::File::open(tmp.path().join("app.tar.gz")).unwrap();
+    let decoder = flate2::read::GzDecoder::new(archive_file);
+    let mut archive = tar::Archive::new(decoder);
+    let names = archive
+        .entries()
+        .unwrap()
+        .map(|entry| String::from_utf8_lossy(&entry.unwrap().path_bytes()).into_owned())
+        .collect::<Vec<_>>();
+    assert!(names.iter().all(|name| !name.contains('\\')));
+    assert!(names.iter().any(|name| name == "dist/version.txt"));
+
     let extracted_file = extract_dir.join("dist").join("version.txt");
     assert!(extracted_file.is_file() || extract_dir.join("version.txt").is_file());
 }
@@ -48,8 +59,8 @@ async fn test_unix_zip_and_unzip() {
     let src_dir = tmp.path().join("dist");
     let extract_dir = tmp.path().join("extracted_zip");
 
-    fs::create_dir_all(&src_dir).unwrap();
-    fs::write(src_dir.join("meta.json"), b"{\"ok\":true}").unwrap();
+    fs::create_dir_all(src_dir.join("nested/data")).unwrap();
+    fs::write(src_dir.join("nested/data/meta.json"), b"{\"ok\":true}").unwrap();
 
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -64,8 +75,16 @@ async fn test_unix_zip_and_unzip() {
     let code = engine.eval_str(script, &mut ctx).await.unwrap();
     assert_eq!(code, 0);
 
+    let archive_file = fs::File::open(tmp.path().join("app.zip")).unwrap();
+    let mut archive = zip::ZipArchive::new(archive_file).unwrap();
+    let names = (0..archive.len())
+        .map(|index| archive.by_index(index).unwrap().name().to_string())
+        .collect::<Vec<_>>();
+    assert!(names.iter().all(|name| !name.contains('\\')));
+    assert!(names.iter().any(|name| name == "nested/data/meta.json"));
+
     assert!(
-        extract_dir.join("dist").join("meta.json").is_file()
-            || extract_dir.join("meta.json").is_file()
+        extract_dir.join("dist/nested/data/meta.json").is_file()
+            || extract_dir.join("nested/data/meta.json").is_file()
     );
 }

@@ -16,6 +16,8 @@ pub mod arith;
 pub mod builtins;
 pub mod context;
 pub mod exec;
+#[path = "path.rs"]
+pub(crate) mod path_presentation;
 pub mod streams;
 pub mod traits;
 

@@ -346,7 +346,7 @@ pub fn check_view(
     if ws_task_count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none())
     {
         checked_files.push(CheckedManifest {
-            path: file_uri(".evin/workspace.yaml"),
+            path: crate::commands::file_uri(".evin/workspace.yaml")?,
             task_count: ws_task_count,
             kind: ManifestKind::Workspace,
             issues: manifest_issues
@@ -363,7 +363,7 @@ pub fn check_view(
         if count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none()) {
             let is_namespace = path.ends_with(".yaml") && !path.ends_with(".evin/module.yaml");
             checked_files.push(CheckedManifest {
-                path: file_uri(path),
+                path: crate::commands::file_uri(path)?,
                 task_count: count,
                 kind: if is_namespace {
                     ManifestKind::Namespace
@@ -379,7 +379,7 @@ pub fn check_view(
     let gitrules_path = PathBuf::from(".evin/gitrules.yaml");
     if gitrules_path.exists() {
         checked_files.push(CheckedManifest {
-            path: file_uri(".evin/gitrules.yaml"),
+            path: crate::commands::file_uri(".evin/gitrules.yaml")?,
             task_count: 0,
             kind: ManifestKind::GitRules,
             issues: Vec::new(),
@@ -390,7 +390,7 @@ pub fn check_view(
     let env_path = PathBuf::from(".evin/environment.yaml");
     if env_path.exists() {
         checked_files.push(CheckedManifest {
-            path: file_uri(".evin/environment.yaml"),
+            path: crate::commands::file_uri(".evin/environment.yaml")?,
             task_count: 0,
             kind: ManifestKind::Environment,
             issues: Vec::new(),
@@ -399,7 +399,7 @@ pub fn check_view(
 
     for package in config.package_manifests.manifests() {
         checked_files.push(CheckedManifest {
-            path: file_uri(&package.path.to_string_lossy()),
+            path: crate::commands::file_uri(&package.path)?,
             task_count: 0,
             kind: ManifestKind::Package,
             issues: Vec::new(),
@@ -496,19 +496,6 @@ fn is_selection_error(diagnostic: &Diagnostic) -> bool {
             | "issue-invalid-stage-target"
             | "issue-invalid-hook"
     )
-}
-
-fn file_uri(path: &str) -> String {
-    let path = PathBuf::from(path);
-    let absolute = if path.is_absolute() {
-        path
-    } else {
-        std::env::current_dir()
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(path)
-    };
-    let absolute = absolute.canonicalize().unwrap_or(absolute);
-    format!("file://{}", absolute.to_string_lossy())
 }
 
 fn emit(rendered: String, success: bool) {

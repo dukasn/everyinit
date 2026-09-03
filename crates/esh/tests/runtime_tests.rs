@@ -37,17 +37,20 @@ async fn test_external_command_stdout_and_stderr_are_captured() {
     let mut ctx = ExecutionContext::new();
     ctx.enable_capture();
 
+    let esh = env!("CARGO_BIN_EXE_esh");
+    let script = format!("'{esh}' --version; '{esh}' help definitely-not-a-builtin || true");
     let status = engine
-        .eval_str(
-            "sh -c 'printf external-stdout; printf external-stderr >&2'",
-            &mut ctx,
-        )
+        .eval_str(&script, &mut ctx)
         .await
         .expect("eval failed");
 
     assert_eq!(status, 0);
-    assert_eq!(ctx.get_captured_stdout().unwrap(), "external-stdout");
-    assert_eq!(ctx.get_captured_stderr().unwrap(), "external-stderr");
+    assert!(ctx.get_captured_stdout().unwrap().starts_with("esh "));
+    assert!(
+        ctx.get_captured_stderr()
+            .unwrap()
+            .contains("no help documentation found")
+    );
 }
 
 #[tokio::test]

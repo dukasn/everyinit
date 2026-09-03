@@ -925,7 +925,11 @@ mod tests {
             .unwrap()
             .fenced_buffer[0]
             .1;
-        assert!(lines.iter().any(|line| line.contains(path)));
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("src/pipeline/state.rs"))
+        );
         assert!(lines.iter().any(|line| line.contains("invalid option")));
     }
 

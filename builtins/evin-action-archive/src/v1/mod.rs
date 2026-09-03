@@ -1091,9 +1091,12 @@ mod tests {
         let mut archive = Archive::new(tar);
         let mut entries = archive.entries().unwrap();
         let first_entry = entries.next().unwrap().unwrap();
-        let path = first_entry.path().unwrap().to_string_lossy().to_string();
+        let path = String::from_utf8_lossy(&first_entry.path_bytes()).into_owned();
 
-        // Use forward slashes for cross-platform matching if needed, though this is unix default
+        assert!(
+            !path.contains('\\'),
+            "archive path was not portable: {path}"
+        );
         assert!(
             path.contains("evin-1.2.3"),
             "Prefix was not interpolated, got: {}",
