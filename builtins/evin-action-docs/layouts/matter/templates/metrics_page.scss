@@ -1,0 +1,282 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// Documentation Metrics Page Layout (Matter Architecture)
+
+.metrics-page {
+    --start-hero-surface: var(--ui-start-color-hero-surface);
+    --start-hero-ink: var(--ui-start-color-hero-ink);
+    --start-hero-muted: var(--ui-start-color-hero-muted);
+    --start-accent: var(--ui-start-color-accent);
+    --start-card-surface: var(--ui-start-color-card-surface);
+    --start-card-muted: var(--ui-start-color-card-muted);
+    --start-card-hover: var(--ui-start-color-card-hover);
+
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    isolation: isolate;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 0 clamp(80px, 12vw, 160px);
+    background: var(--start-hero-surface);
+
+    // Let the hero's fixed particle field continue behind the metrics canvas.
+    .metrics-hero {
+        background-color: transparent;
+        clip-path: none;
+        overflow: visible;
+    }
+
+    .metrics-sections,
+    .start-feature {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+    }
+
+    .start-feature-content {
+        h2,
+        p,
+        .metrics-stat {
+            text-shadow: 0 1px 18px color-mix(in srgb, var(--start-hero-surface) 75%, transparent);
+        }
+    }
+
+    // Full-width hero: inherits .start-hero animated particle background fields
+    > .metrics-hero {
+        width: 100%;
+        margin: 0 0 clamp(32px, 5vw, 64px);
+    }
+
+    // Sections box: holds all metric feature sections vertically
+    .metrics-sections {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: clamp(48px, 6vw, 88px);
+        width: 100%;
+        max-width: min(100%, 84rem);
+        margin: 0 auto;
+        padding: clamp(28px, 3.5vw, 44px) clamp(16px, 4vw, 32px) 0;
+        box-sizing: border-box;
+
+        // Matter quantum divider above the sections (dividing Hero from Section 1)
+        &::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 5%;
+            right: 5%;
+            height: 1px;
+            background: linear-gradient(
+                90deg,
+                transparent 0%,
+                color-mix(in srgb, var(--ui-color-outline-variant) 30%, transparent) 15%,
+                var(--ui-color-outline-variant) 50%,
+                color-mix(in srgb, var(--ui-color-outline-variant) 30%, transparent) 85%,
+                transparent 100%
+            );
+            opacity: 0.8;
+        }
+
+        &::after {
+            content: '';
+            position: absolute;
+            top: -2.5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            border-radius: var(--ui-shape-corner-full);
+            background-color: var(--start-accent, var(--ui-palette-cyan));
+            box-shadow:
+                0 0 6px color-mix(in srgb, var(--start-accent, var(--ui-palette-cyan)) 75%, transparent),
+                0 0 16px color-mix(in srgb, var(--start-accent, var(--ui-palette-cyan)) 40%, transparent);
+            opacity: 0.85;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        > * {
+            width: 100%;
+            box-sizing: border-box;
+        }
+    }
+
+    // --- Matter Split Feature Layout for Metrics ---
+    .start-feature {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 1.15fr);
+        align-items: start;
+        gap: clamp(var(--ui-ref-space-5), 4vw, var(--ui-ref-space-8));
+        margin: 0;
+        padding: 0 0 clamp(48px, 6vw, 88px);
+        position: relative;
+
+        .start-feature-content {
+            min-width: 0;
+            width: 100%;
+
+            h2 {
+                margin: 0 0 var(--ui-ref-space-4) 0 !important;
+                color: var(--ui-color-on-surface);
+                font-size: clamp(2rem, 3.8vw, 2.75rem);
+                font-weight: 560;
+                line-height: 1.05;
+                letter-spacing: -0.05em;
+                text-wrap: balance;
+            }
+
+            p {
+                margin: 0 0 var(--ui-ref-space-4) 0;
+                color: var(--ui-color-on-surface-variant);
+                font-size: 1.0625rem;
+                line-height: 1.65;
+            }
+        }
+
+        .start-feature-aside {
+            align-self: stretch;
+            min-width: 0;
+        }
+    }
+
+    // Metric data panes use Matter's native .code-surface primitive directly.
+
+    // Manifest Key-Value Rows
+    .metrics-manifest-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: var(--ui-ref-space-3);
+        padding-bottom: 10px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid color-mix(in srgb, var(--ui-color-outline-variant) 40%, transparent);
+        font: var(--ui-typescale-label-medium-size) var(--ui-typescale-font-monospace);
+
+        &:last-child {
+            margin: 0;
+            padding: 0;
+            border: 0;
+        }
+    }
+
+    .metrics-manifest-path {
+        overflow: hidden;
+        color: var(--ui-palette-magenta);
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .metrics-manifest-value {
+        color: var(--ui-color-on-surface);
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+
+        .num {
+            color: var(--ui-palette-orange);
+            font-weight: 600;
+        }
+
+        .ratio {
+            color: var(--ui-palette-green);
+            font-weight: 600;
+            margin-left: 6px;
+        }
+
+        .faint {
+            color: var(--ui-color-on-surface-variant);
+            font-style: italic;
+            margin-left: 6px;
+        }
+    }
+
+    // Table Header interactive sorting buttons
+    th[data-metrics-sort] {
+        position: relative;
+        overflow: hidden;
+        transition: background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+
+        &:active {
+            background-color: var(--ui-color-state-hover);
+        }
+    }
+
+    // --- Unified Metrics Card Container (Timing Waterfall, Asset Inventory, etc.) ---
+    .metrics-card,
+    .metrics-timing,
+    .metrics-inventory {
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    // --- Unified Metrics Card Header Component ---
+    .metrics-card-header,
+    .metrics-inventory-header,
+    .metrics-timing-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        row-gap: var(--ui-ref-space-3);
+        column-gap: var(--ui-ref-space-5);
+        margin: 0 0 var(--ui-ref-space-5) 0;
+        padding: 0 0 var(--ui-ref-space-4) 0;
+        border-bottom: 1px solid color-mix(in srgb, var(--ui-color-outline-variant) 22%, transparent);
+
+        .metrics-card-title-group,
+        .inventory-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 200px;
+
+            h2,
+            .metrics-card-title {
+                margin: 0 !important;
+                padding: 0 !important;
+                color: var(--ui-color-on-surface);
+                font-size: clamp(1.25rem, 2vw, 1.5rem);
+                font-weight: 560;
+                letter-spacing: -0.025em;
+                line-height: 1.15;
+            }
+
+            p,
+            .metrics-card-subtitle,
+            .metrics-timing-desc {
+                margin: 0 !important;
+                padding: 0 !important;
+                color: var(--ui-color-on-surface-variant);
+                font-size: 0.8125rem;
+                font-family: var(--ui-typescale-font-monospace);
+            }
+        }
+
+        .metrics-card-controls,
+        .inventory-controls-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: var(--ui-ref-space-3);
+        }
+    }
+}
+
+// Tablet and Mobile Responsive Layout
+@media (max-width: 960px) {
+    .metrics-page .metrics-sections {
+        gap: clamp(36px, 6vw, 56px);
+
+        .start-feature {
+            display: flex;
+            flex-direction: column;
+            gap: var(--ui-ref-space-6);
+        }
+    }
+}

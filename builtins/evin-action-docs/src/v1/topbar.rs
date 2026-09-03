@@ -111,7 +111,7 @@ pub fn configure_matter_scss(
         .collect::<Vec<_>>()
         .join(", ");
     format!(
-        "$evin-presentation-variants: ({variants});\n$evin-topbar-enabled: {topbar_enabled};\n$evin-spotlight-enabled: {spotlight_enabled};\n{raw_scss}"
+        "$matter-presentation-variants: ({variants});\n$matter-topbar-enabled: {topbar_enabled};\n$matter-spotlight-enabled: {spotlight_enabled};\n{raw_scss}"
     )
 }
 
@@ -249,13 +249,13 @@ mod tests {
         let variants = BTreeSet::from(["genome".to_string()]);
         let configured =
             configure_matter_scss("@use \"core/banner\";", "matter", &variants, true, false);
-        assert!(configured.starts_with("$evin-presentation-variants: (\"genome\");"));
+        assert!(configured.starts_with("$matter-presentation-variants: (\"genome\");"));
         assert!(
             configure_matter_scss("body {}", "custom", &variants, true, false).starts_with("body")
         );
         assert!(
             configure_matter_scss("body {}", "matter", &BTreeSet::new(), false, false)
-                .starts_with("$evin-presentation-variants: ();")
+                .starts_with("$matter-presentation-variants: ();")
         );
     }
 }

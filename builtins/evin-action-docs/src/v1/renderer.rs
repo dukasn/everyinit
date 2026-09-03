@@ -475,9 +475,14 @@ impl ShellTemplate {
                         }
                         SlotWrapper::Css => {
                             if !val.is_empty() {
-                                out.push_str("<style>");
-                                out.push_str(val);
-                                out.push_str("</style>");
+                                let trimmed = val.trim_start();
+                                if trimmed.starts_with("<link") || trimmed.starts_with("<style") {
+                                    out.push_str(val);
+                                } else {
+                                    out.push_str("<style>");
+                                    out.push_str(val);
+                                    out.push_str("</style>");
+                                }
                             }
                         }
                         SlotWrapper::IconsSprite => {
@@ -865,7 +870,13 @@ impl NavigationModel {
             HashMap::new();
 
         for (page_position, page) in site.pages.iter().enumerate() {
-            if page.slug == "index" {
+            if page.slug == "index"
+                || page
+                    .metadata
+                    .get("dev_only")
+                    .and_then(|value| value.as_bool())
+                    == Some(true)
+            {
                 continue;
             }
             let segments: Vec<&str> = page.slug.split('/').collect();
@@ -1077,6 +1088,14 @@ struct ComponentCollector<'a> {
     used: &'a mut HashSet<String>,
 }
 
+fn component_template_name(name: &str) -> String {
+    if name.trim().replace('_', "-").starts_with("metrics-") {
+        name.trim().replace('-', "_")
+    } else {
+        name.to_string()
+    }
+}
+
 impl Visitor for ComponentCollector<'_> {
     fn visit_node(&mut self, node: &DocNode) {
         match node {
@@ -1131,7 +1150,13 @@ impl Visitor for ComponentCollector<'_> {
                 if name == "contents" || name == "local-toc" || name == "toctree" {
                     self.used.insert("toc_block".to_string());
                 } else {
-                    self.used.insert(name.clone());
+                    let component_name = component_template_name(name);
+                    if component_name.starts_with("metrics_") {
+                        self.used.insert("metrics_runtime".to_string());
+                        // Metric data panes use Matter's native code-surface controls.
+                        self.used.insert("code_block".to_string());
+                    }
+                    self.used.insert(component_name);
                     self.used.insert("callout".to_string());
                 }
             }
@@ -1276,23 +1301,28 @@ impl HtmlRenderer {
             .and_then(|v| v.as_str())
             .unwrap_or(&page.slug);
 
-        let is_start_page = page.slug == "index" && start_page.is_some();
-        let full_title = Self::document_title(page_title, site_title, is_start_page);
+        let is_metrics_page = crate::v1::is_metrics_page(page);
+        let is_start_page = (page.slug == "index" && start_page.is_some()) || is_metrics_page;
+        let full_title = if is_metrics_page {
+            format!("Metrics — {site_title}")
+        } else {
+            Self::document_title(page_title, site_title, is_start_page)
+        };
         let mut used_components = HashSet::new();
 
         if is_start_page {
             used_components.insert("start_page".to_string());
+            if is_metrics_page {
+                used_components.insert("metrics_page".to_string());
+            }
         } else if site_ast.pages.len() > 1 {
             used_components.insert("pagination".to_string());
         }
 
-        let content_html = if is_start_page {
-            Self::render_start_page(
-                start_page.expect("start page model is present"),
-                context,
-                registry,
-                &mut used_components,
-            )
+        let content_html = if page.slug == "index"
+            && let Some(sp) = start_page
+        {
+            Self::render_start_page(sp, context, registry, &mut used_components)
         } else {
             let mut content_html = String::with_capacity(4096);
             Self::render_nodes(
@@ -1308,7 +1338,26 @@ impl HtmlRenderer {
             if page.reference.is_some() {
                 content_html.push_str(&Self::render_reference_relations(context, page));
             }
-            content_html
+            if is_metrics_page {
+                let (hero_html, sections_html) =
+                    if let Some(end_idx) = content_html.find("</header>") {
+                        let split_idx = end_idx + "</header>".len();
+                        (&content_html[..split_idx], &content_html[split_idx..])
+                    } else {
+                        ("", content_html.as_str())
+                    };
+                registry.render(
+                    "metrics_page",
+                    &[
+                        ("hero", hero_html),
+                        ("sections", sections_html),
+                        ("content", &content_html),
+                    ],
+                    &mut used_components,
+                )
+            } else {
+                content_html
+            }
         };
 
         let toc_html = if is_start_page {
@@ -1424,9 +1473,15 @@ impl HtmlRenderer {
         let component_js = registry.collect_js(&used_components);
 
         let final_css = if single_file {
-            processed_css.to_string()
+            format!(
+                "<style>\n{}\nhtml body {{ opacity: 1 !important; transition: none !important; }}\n</style>",
+                processed_css
+            )
         } else {
-            crate::v1::tape_fonts::with_page_asset_prefix(processed_css, &assets_prefix)
+            format!(
+                "<link rel=\"preload\" href=\"{}theme.css\" as=\"style\">\n<link rel=\"stylesheet\" href=\"{}theme.css\" onload=\"document.documentElement.classList.add('theme-ready')\">",
+                assets_prefix, assets_prefix
+            )
         };
 
         let component_js_code =
@@ -1469,6 +1524,136 @@ impl HtmlRenderer {
         shell_template.render(&slots)
     }
 
+    /// Render a live developer route through the selected documentation shell.
+    /// The route deliberately uses the normal start-page page kind so it inherits
+    /// layout behavior instead of carrying a second shell or theme.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_workbench_shell(
+        shell_html: &str,
+        site_title: &str,
+        site_brand: &str,
+        brand_logo: &str,
+        icons_sprite: &str,
+        content: &str,
+        topbar: Option<&Topbar>,
+        topbar_scope: &str,
+        registry: &ComponentRegistry,
+        language: &str,
+        live_reload: bool,
+    ) -> String {
+        let shell_template = ShellTemplate::parse(shell_html);
+        let mut used_components = HashSet::new();
+        let topbar_html = topbar
+            .map(|setting| {
+                Self::render_workbench_topbar(setting, topbar_scope, registry, &mut used_components)
+            })
+            .unwrap_or_default();
+        let search_js = if shell_template.uses(ShellSlot::SearchJs) {
+            "<script src=\"/assets/app.js\" defer></script>"
+        } else {
+            ""
+        };
+        let css = "<link rel=\"preload\" href=\"/assets/theme.css\" as=\"style\">\n<link rel=\"stylesheet\" href=\"/assets/theme.css\" onload=\"document.documentElement.classList.add('theme-ready')\">";
+        let live_reload = if live_reload && shell_template.uses(ShellSlot::LiveReload) {
+            "<script>(function(){try{const source=new EventSource('/__evin_reload');source.addEventListener('reload',function(){window.location.reload();});}catch(_){}})();</script>"
+        } else {
+            ""
+        };
+        let title = format!("Metrics — {site_title}");
+        let slots = PageSlots {
+            title: &title,
+            site_title,
+            site_brand,
+            brand_logo,
+            home_href: "/",
+            meta: "<meta name=\"robots\" content=\"noindex, nofollow\">",
+            favicons: "",
+            font_preloads: "",
+            icons_sprite,
+            topbar: &topbar_html,
+            assets_prefix: "/assets/",
+            depth_prefix: "",
+            css,
+            nav: "",
+            breadcrumbs: "",
+            content,
+            toc: "",
+            inline_toc: "",
+            toc_rail: "",
+            document_toc: "",
+            pagination: "",
+            search_data: "",
+            search_js,
+            component_js: "",
+            live_reload,
+            page_kind: "start",
+            page_language: language,
+        };
+        shell_template.render(&slots)
+    }
+
+    fn render_workbench_topbar(
+        topbar: &Topbar,
+        scope: &str,
+        registry: &ComponentRegistry,
+        used_components: &mut HashSet<String>,
+    ) -> String {
+        let mut surface_open = String::from(
+            "<section class=\"docs-topbar topbar presentation-surface presentation--topbar presentation-scale-compact topbar--",
+        );
+        Self::escape_into(&mut surface_open, &topbar.variant);
+        surface_open.push_str(" presentation-surface--");
+        Self::escape_into(&mut surface_open, &topbar.variant);
+        surface_open.push_str("\" data-presentation-variant=\"");
+        Self::escape_into(&mut surface_open, &topbar.variant);
+        surface_open.push_str("\" data-presentation-role=\"topbar\" data-presentation-scale=\"compact\" data-topbar-variant=\"");
+        Self::escape_into(&mut surface_open, &topbar.variant);
+        surface_open.push_str("\" data-topbar-scope=\"");
+        Self::escape_into(&mut surface_open, scope);
+        surface_open.push('"');
+        if let Some(id) = &topbar.id {
+            surface_open.push_str(" data-topbar-id=\"");
+            Self::escape_into(&mut surface_open, id);
+            surface_open.push('"');
+        }
+        surface_open.push_str(" role=\"status\" aria-label=\"Site announcement\">");
+        let mut content = String::from("<div class=\"topbar-content\">");
+        if let Some(badge) = &topbar.badge {
+            content.push_str("<span class=\"topbar-badge presentation-badge\">");
+            Self::escape_into(&mut content, badge);
+            content.push_str("</span>");
+        }
+        content.push_str("<p class=\"topbar-message\"><span class=\"topbar-message-track\">");
+        Self::escape_into(&mut content, &topbar.message);
+        content.push_str("</span></p>");
+        if let Some(action) = &topbar.action {
+            content.push_str("<a class=\"topbar-action presentation-action\" href=\"");
+            Self::escape_into(&mut content, &action.href);
+            content.push('"');
+            if action.href.starts_with("https://") {
+                content.push_str(" target=\"_blank\" rel=\"noreferrer\"");
+            }
+            content.push_str("><span>");
+            Self::escape_into(&mut content, &action.label);
+            content.push_str("</span><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg></a>");
+        }
+        content.push_str("</div>");
+        if topbar.dismissible {
+            content.push_str("<button class=\"topbar-close\" type=\"button\" aria-label=\"Dismiss announcement\" data-action=\"topbar:dismiss\"><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-x\"></use></svg></button>");
+        }
+        registry.render(
+            "presentation",
+            &[
+                ("surface_open", &surface_open),
+                ("surface_close", "</section>"),
+                ("layer_one_classes", "topbar-layer topbar-layer-one"),
+                ("layer_two_classes", "topbar-layer topbar-layer-two"),
+                ("content", &content),
+            ],
+            used_components,
+        )
+    }
+
     fn document_title(page_title: &str, site_title: &str, is_start_page: bool) -> String {
         if is_start_page {
             site_title.to_string()
@@ -1485,7 +1670,7 @@ impl HtmlRenderer {
         used_components: &mut HashSet<String>,
     ) -> String {
         let mut surface_open = String::from(
-            "<section class=\"docs-topbar evin-topbar topbar presentation-surface presentation--topbar presentation-scale-compact topbar--",
+            "<section class=\"docs-topbar topbar presentation-surface presentation--topbar presentation-scale-compact topbar--",
         );
         Self::escape_into(&mut surface_open, &topbar.variant);
         surface_open.push_str(" presentation-surface--");
@@ -1524,11 +1709,11 @@ impl HtmlRenderer {
             }
             html.push_str("><span>");
             Self::escape_into(&mut html, &action.label);
-            html.push_str("</span><svg class=\"docs-icon evin-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg></a>");
+            html.push_str("</span><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg></a>");
         }
         html.push_str("</div>");
         if topbar.dismissible {
-            html.push_str("<button class=\"topbar-close\" type=\"button\" aria-label=\"Dismiss announcement\" data-action=\"topbar:dismiss\"><svg class=\"docs-icon evin-icon\" aria-hidden=\"true\"><use href=\"#icon-x\"></use></svg></button>");
+            html.push_str("<button class=\"topbar-close\" type=\"button\" aria-label=\"Dismiss announcement\" data-action=\"topbar:dismiss\"><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-x\"></use></svg></button>");
         }
         registry.render(
             "presentation",
@@ -1606,7 +1791,7 @@ impl HtmlRenderer {
                 html.push_str(&description_id);
                 html.push_str("\">");
                 Self::escape_into(&mut html, &card.description);
-                html.push_str("</span></span><svg class=\"evin-icon start-card-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg>\n</a>\n");
+                html.push_str("</span></span><svg class=\"docs-icon start-card-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg>\n</a>\n");
             }
             html.push_str("</div></div>\n</div>");
             if let Some(media) = &section.media {
@@ -1723,7 +1908,7 @@ impl HtmlRenderer {
         }
         content.push_str("><span>");
         Self::escape_into(&mut content, &spotlight.content.action.label);
-        content.push_str("</span><svg class=\"docs-icon evin-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg></a></div>");
+        content.push_str("</span><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg></a></div>");
         html.push_str(&registry.render(
             "presentation",
             &[
@@ -2174,7 +2359,7 @@ impl HtmlRenderer {
             let title = Self::escape_html(Self::page_title(p));
             let href = Self::compute_relative_href(current_slug, &p.slug);
             html.push_str(&format!(
-                "  <a href=\"{}\" class=\"pagination-card prev-card\">\n    <svg class=\"evin-icon pagination-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-left\"></use></svg>\n    <div class=\"pagination-text\">\n      <span class=\"pagination-label\">Previous</span>\n      <span class=\"pagination-title\">{}</span>\n    </div>\n  </a>\n",
+                "  <a href=\"{}\" class=\"pagination-card prev-card\">\n    <svg class=\"docs-icon pagination-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-left\"></use></svg>\n    <div class=\"pagination-text\">\n      <span class=\"pagination-label\">Previous</span>\n      <span class=\"pagination-title\">{}</span>\n    </div>\n  </a>\n",
                 href, title
             ));
         } else {
@@ -2185,7 +2370,7 @@ impl HtmlRenderer {
             let title = Self::escape_html(Self::page_title(n));
             let href = Self::compute_relative_href(current_slug, &n.slug);
             html.push_str(&format!(
-                "  <a href=\"{}\" class=\"pagination-card next-card\">\n    <div class=\"pagination-text\">\n      <span class=\"pagination-label\">Next</span>\n      <span class=\"pagination-title\">{}</span>\n    </div>\n    <svg class=\"evin-icon pagination-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg>\n  </a>\n",
+                "  <a href=\"{}\" class=\"pagination-card next-card\">\n    <div class=\"pagination-text\">\n      <span class=\"pagination-label\">Next</span>\n      <span class=\"pagination-title\">{}</span>\n    </div>\n    <svg class=\"docs-icon pagination-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg>\n  </a>\n",
                 href, title
             ));
         } else {
@@ -2264,7 +2449,7 @@ impl HtmlRenderer {
         let caption_html = caption
             .map(|caption| {
                 format!(
-                    "<p class=\"evin-diagram-caption\">{}</p>",
+                    "<p class=\"docs-diagram-caption diagram-caption\">{}</p>",
                     Self::escape_html(caption)
                 )
             })
@@ -2887,7 +3072,7 @@ impl HtmlRenderer {
                         out.push_str("    <div class=\"stepper-badge\"");
                         if is_done {
                             out.push_str(" title=\"Completed\">\n");
-                            out.push_str("      <svg class=\"evin-icon\" aria-hidden=\"true\"><use href=\"#icon-check\"></use></svg>\n");
+                            out.push_str("      <svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-check\"></use></svg>\n");
                         } else {
                             out.push_str(">\n      ");
                             if let Some(badge_str) = &step.badge {
@@ -3060,62 +3245,65 @@ impl HtmlRenderer {
                             out,
                         );
                         out.push('\n');
-                    } else if registry.has_component(name) {
-                        let arg_text = args.join(" ");
-                        let mut body_html = String::new();
-                        Self::render_nodes(
-                            body,
-                            page,
-                            site_ast,
-                            context,
-                            registry,
-                            highlighter,
-                            used_tracker,
-                            &mut body_html,
-                        );
-                        let first_arg = args.first().map(|s| s.as_str()).unwrap_or("");
-                        let title_val = if arg_text.is_empty() {
-                            name.as_str()
-                        } else {
-                            &arg_text
-                        };
-                        registry.render_to(
-                            name,
-                            &[
-                                ("title", title_val),
-                                ("args", &arg_text),
-                                ("arg0", first_arg),
-                                ("content", &body_html),
-                            ],
-                            used_tracker,
-                            out,
-                        );
-                        out.push('\n');
                     } else {
-                        let arg_text = args.join(" ");
-                        let mut body_html = String::new();
-                        Self::render_nodes(
-                            body,
-                            page,
-                            site_ast,
-                            context,
-                            registry,
-                            highlighter,
-                            used_tracker,
-                            &mut body_html,
-                        );
-                        let title_val = if arg_text.is_empty() {
-                            name.clone()
+                        let template_name = component_template_name(name);
+                        if registry.has_component(&template_name) {
+                            let arg_text = args.join(" ");
+                            let mut body_html = String::new();
+                            Self::render_nodes(
+                                body,
+                                page,
+                                site_ast,
+                                context,
+                                registry,
+                                highlighter,
+                                used_tracker,
+                                &mut body_html,
+                            );
+                            let first_arg = args.first().map(|s| s.as_str()).unwrap_or("");
+                            let title_val = if arg_text.is_empty() {
+                                name.as_str()
+                            } else {
+                                &arg_text
+                            };
+                            registry.render_to(
+                                &template_name,
+                                &[
+                                    ("title", title_val),
+                                    ("args", &arg_text),
+                                    ("arg0", first_arg),
+                                    ("content", &body_html),
+                                ],
+                                used_tracker,
+                                out,
+                            );
+                            out.push('\n');
                         } else {
-                            format!("{}: {}", name, arg_text)
-                        };
-                        registry.render_to(
-                            "callout",
-                            &[("title", &title_val), ("content", &body_html)],
-                            used_tracker,
-                            out,
-                        );
-                        out.push('\n');
+                            let arg_text = args.join(" ");
+                            let mut body_html = String::new();
+                            Self::render_nodes(
+                                body,
+                                page,
+                                site_ast,
+                                context,
+                                registry,
+                                highlighter,
+                                used_tracker,
+                                &mut body_html,
+                            );
+                            let title_val = if arg_text.is_empty() {
+                                name.clone()
+                            } else {
+                                format!("{}: {}", name, arg_text)
+                            };
+                            registry.render_to(
+                                "callout",
+                                &[("title", &title_val), ("content", &body_html)],
+                                used_tracker,
+                                out,
+                            );
+                            out.push('\n');
+                        }
                     }
                 }
                 DocNode::Diagram {
@@ -3155,24 +3343,24 @@ impl HtmlRenderer {
                     let symbol_id =
                         format!("symbol-{}", name.trim().to_lowercase().replace(' ', "-"));
                     out.push_str(&format!(
-                        "<div class=\"evin-lsp-symbol\" id=\"{}\">\n",
+                        "<div class=\"docs-lsp-symbol\" id=\"{}\">\n",
                         symbol_id
                     ));
-                    out.push_str("  <div class=\"evin-lsp-header\">\n");
+                    out.push_str("  <div class=\"docs-lsp-header\">\n");
                     out.push_str(&format!(
-                        "    <h3 class=\"evin-lsp-name\"><code>{}</code></h3>\n",
+                        "    <h3 class=\"docs-lsp-name\"><code>{}</code></h3>\n",
                         name
                     ));
                     if !category.is_empty() {
                         out.push_str(&format!(
-                            "    <span class=\"evin-lsp-category badge\">{}</span>\n",
+                            "    <span class=\"docs-lsp-category badge\">{}</span>\n",
                             category
                         ));
                     }
                     out.push_str("  </div>\n");
 
                     if !synopsis.is_empty() {
-                        out.push_str("  <div class=\"evin-lsp-synopsis\">\n");
+                        out.push_str("  <div class=\"docs-lsp-synopsis\">\n");
                         let highlighted = highlighter.highlight(Some("esh"), synopsis);
                         out.push_str(&format!(
                             "    <pre class=\"syn-container\"><code>{}</code></pre>\n",
@@ -3183,13 +3371,13 @@ impl HtmlRenderer {
 
                     if !summary.is_empty() {
                         out.push_str(&format!(
-                            "  <p class=\"evin-lsp-summary\"><strong>{}</strong>: {}</p>\n",
+                            "  <p class=\"docs-lsp-summary\"><strong>{}</strong>: {}</p>\n",
                             name, summary
                         ));
                     }
 
                     if !children.is_empty() {
-                        out.push_str("  <div class=\"evin-lsp-body\">\n");
+                        out.push_str("  <div class=\"docs-lsp-body\">\n");
                         Self::render_nodes(
                             children,
                             page,
@@ -3221,6 +3409,10 @@ impl HtmlRenderer {
             used.insert("pagination".to_string());
         }
         for page in &site_ast.pages {
+            if crate::v1::is_metrics_page(page) {
+                used.insert("start_page".to_string());
+                used.insert("metrics_page".to_string());
+            }
             walk_nodes(&page.ast, &mut ComponentCollector { used: &mut used });
         }
         used
@@ -3316,10 +3508,13 @@ impl HtmlRenderer {
         match latex2mathml::latex_to_mathml(&normalized, display) {
             Ok(mathml) => match display {
                 latex2mathml::DisplayStyle::Inline => {
-                    format!("<span class=\"evin-math-inline\">{}</span>", mathml)
+                    format!(
+                        "<span class=\"math-inline docs-math-inline\">{}</span>",
+                        mathml
+                    )
                 }
                 latex2mathml::DisplayStyle::Block => {
-                    format!("<div class=\"evin-math-block\">{}</div>", mathml)
+                    format!("<div class=\"math-block docs-math-block\">{}</div>", mathml)
                 }
             },
             Err(_) => {
@@ -3327,11 +3522,14 @@ impl HtmlRenderer {
                 push_escaped_html(&mut escaped, latex);
                 match display {
                     latex2mathml::DisplayStyle::Inline => {
-                        format!("<code class=\"evin-math-fallback\">{}</code>", escaped)
+                        format!(
+                            "<code class=\"math-fallback docs-math-fallback\">{}</code>",
+                            escaped
+                        )
                     }
                     latex2mathml::DisplayStyle::Block => {
                         format!(
-                            "<div class=\"evin-math-block\"><code class=\"evin-math-fallback evin-math-fallback-block\">{}</code></div>",
+                            "<div class=\"math-block docs-math-block\"><code class=\"math-fallback docs-math-fallback math-fallback-block docs-math-fallback-block\">{}</code></div>",
                             escaped
                         )
                     }
@@ -3925,6 +4123,51 @@ mod tests {
     }
 
     #[test]
+    fn css_slot_supports_both_link_and_style_elements() {
+        let shell = "<head><css></css></head><body></body>";
+        let template = ShellTemplate::parse(shell);
+
+        let mut slots = PageSlots {
+            title: "",
+            site_title: "",
+            site_brand: "",
+            brand_logo: "",
+            home_href: "",
+            meta: "",
+            favicons: "",
+            font_preloads: "",
+            icons_sprite: "",
+            topbar: "",
+            assets_prefix: "",
+            depth_prefix: "",
+            css: "<link rel=\"stylesheet\" href=\"assets/theme.css\">",
+            nav: "",
+            breadcrumbs: "",
+            content: "",
+            toc: "",
+            inline_toc: "",
+            toc_rail: "",
+            document_toc: "",
+            pagination: "",
+            search_data: "",
+            search_js: "",
+            component_js: "",
+            live_reload: "",
+            page_kind: "document",
+            page_language: "en",
+        };
+
+        let link_rendered = template.render(&slots);
+        assert!(link_rendered.contains("<link rel=\"stylesheet\" href=\"assets/theme.css\">"));
+        assert!(!link_rendered.contains("<style>"));
+
+        slots.css = "<style>\nbody { color: red; }\n</style>";
+        let style_rendered = template.render(&slots);
+        assert!(style_rendered.contains("<style>\nbody { color: red; }\n</style>"));
+        assert!(!style_rendered.contains("<style><style>"));
+    }
+
+    #[test]
     fn topbar_shell_slot_must_be_present_once_when_enabled() {
         assert!(validate_topbar_shell("<body><topbar></topbar></body>", true).is_ok());
         assert!(validate_topbar_shell("<body></body>", true).is_err());
@@ -4353,7 +4596,7 @@ mod tests {
         let html = pages.get("diagrams/index.html").unwrap();
 
         // 1. Verify Svgbob compiled inline <svg> directly into HTML with alt metadata, and without polluting <style> or backdrop <rect>
-        assert!(html.contains("class=\"evin-diagram-figure evindoc-svgbob\""));
+        assert!(html.contains("class=\"docs-diagram-figure diagram-figure doc-svgbob\""));
         assert!(html.contains("aria-label=\"Architecture flowchart\" role=\"img\""));
         assert!(html.contains("<svg"));
         assert!(!html.contains("<style"));
@@ -4362,12 +4605,10 @@ mod tests {
         assert!(html.contains("Figure 1: Architecture"));
 
         // 2. Verify offline Mermaid SVG, source, metadata, and controls.
-        assert!(html.contains("class=\"evin-diagram-figure evindoc-mermaid\""));
+        assert!(html.contains("class=\"docs-diagram-figure diagram-figure doc-mermaid\""));
         assert!(html.contains("aria-label=\"Protocol sequence\" role=\"img\""));
-        assert!(html.contains("class=\"evin-mermaid-source\" hidden>sequenceDiagram"));
-        assert!(
-            html.contains("<div class=\"evin-mermaid-svg-target\"><svg id=\"sequence-diagram\"")
-        );
+        assert!(html.contains("class=\"mermaid-source\" hidden>sequenceDiagram"));
+        assert!(html.contains("<div class=\"mermaid-svg-target\"><svg id=\"sequence-diagram\""));
         assert!(html.contains("Mermaid Sequence"));
         assert!(html.contains("Figure 2: Protocol"));
         assert!(html.contains("diagram:copy"));
@@ -4385,8 +4626,8 @@ mod tests {
         used.insert("diagram_mermaid".to_string());
         used.insert("diagram_svgbob".to_string());
         let css = registry.collect_css(&used);
-        assert!(css.contains(".evindoc-mermaid"));
-        assert!(css.contains(".evin-mermaid-svg-target"));
+        assert!(css.contains(".doc-mermaid"));
+        assert!(css.contains(".mermaid-svg-target"));
         assert!(css.contains("transparent !important"));
     }
 
@@ -4409,7 +4650,7 @@ mod tests {
         // Inline Math
         let inline_html =
             HtmlRenderer::render_math_to_html("E = mc^2", latex2mathml::DisplayStyle::Inline);
-        assert!(inline_html.starts_with("<span class=\"evin-math-inline\">"));
+        assert!(inline_html.starts_with("<span class=\"math-inline docs-math-inline\">"));
         assert!(
             inline_html
                 .contains("<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"inline\">")
@@ -4423,7 +4664,7 @@ mod tests {
             r"\int_0^1 x^2 dx",
             latex2mathml::DisplayStyle::Block,
         );
-        assert!(block_html.starts_with("<div class=\"evin-math-block\">"));
+        assert!(block_html.starts_with("<div class=\"math-block docs-math-block\">"));
         assert!(
             block_html
                 .contains("<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">")
@@ -4437,14 +4678,14 @@ mod tests {
         let malicious_tex = r"\invalidUnclosed{<script>alert('xss')</script>";
         let fallback_html =
             HtmlRenderer::render_math_to_html(malicious_tex, latex2mathml::DisplayStyle::Block);
-        assert!(fallback_html.starts_with("<div class=\"evin-math-block\"><code class=\"evin-math-fallback evin-math-fallback-block\">"));
+        assert!(fallback_html.starts_with("<div class=\"math-block docs-math-block\"><code class=\"math-fallback docs-math-fallback math-fallback-block docs-math-fallback-block\">"));
         assert!(fallback_html.contains("&lt;script&gt;alert('xss')&lt;/script&gt;"));
         assert!(!fallback_html.contains("<script>"));
         assert!(fallback_html.ends_with("</code></div>"));
 
         let inline_fallback =
             HtmlRenderer::render_math_to_html(malicious_tex, latex2mathml::DisplayStyle::Inline);
-        assert!(inline_fallback.starts_with("<code class=\"evin-math-fallback\">"));
+        assert!(inline_fallback.starts_with("<code class=\"math-fallback docs-math-fallback\">"));
         assert!(inline_fallback.ends_with("</code>"));
     }
 
@@ -4596,8 +4837,8 @@ mod tests {
         assert!(!used.contains("pagination"));
 
         let emitted_css = registry.collect_css(&used);
-        assert!(!emitted_css.contains(".evin-diagram"));
-        assert!(!emitted_css.contains(".evin-math"));
+        assert!(!emitted_css.contains(".diagram-figure"));
+        assert!(!emitted_css.contains(".math-block"));
         assert!(!emitted_css.contains(".start-hero"));
         assert!(!emitted_css.contains(".m3-directive"));
         assert!(!emitted_css.contains(".m3-table"));

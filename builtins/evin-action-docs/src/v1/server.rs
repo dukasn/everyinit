@@ -44,6 +44,7 @@ fn changed_source_label(
 }
 
 impl DevServer {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn start(
         out_dir: PathBuf,
         workspace_root: PathBuf,
@@ -52,6 +53,7 @@ impl DevServer {
         cancel_token: Option<tokio_util::sync::CancellationToken>,
         start_instant: std::time::Instant,
         mut stats: DocsDebugStats,
+        metrics_route: Option<String>,
     ) -> Result<(), Diagnostic> {
         let mut port = config.port;
         let listener = loop {
@@ -78,11 +80,19 @@ impl DevServer {
         let shutdown = cancel_token.unwrap_or_default();
         let (reload_tx, _) = broadcast::channel::<()>(16);
         let reload_tx = Arc::new(reload_tx);
+
+        let initial_metrics = crate::v1::metrics::generate_report(&out_dir, &config).ok();
+        let metrics_snapshot = Arc::new(std::sync::RwLock::new(initial_metrics));
+        let metrics_route = Arc::new(std::sync::RwLock::new(metrics_route));
+
         let watcher_config = config.clone();
         let watcher_root = workspace_root.clone();
         let watcher_logger = logger.clone();
         let watcher_reload = reload_tx.clone();
         let watcher_cancel = shutdown.clone();
+        let watcher_metrics = metrics_snapshot.clone();
+        let watcher_out = out_dir.clone();
+        let watcher_metrics_route = metrics_route.clone();
         let watcher_handle = tokio::spawn(async move {
             let mut fingerprint = source_fingerprint(&watcher_root, &watcher_config);
             watcher_logger.daemon_status(evin_action_sdk::activity::DocsWatching {});
@@ -108,13 +118,18 @@ impl DevServer {
                 let rebuild =
                     parse_docs(&watcher_root, &watcher_config, &watcher_logger, &mut stats)
                         .and_then(|site_ast| {
-                            render_docs(
+                            let route = crate::v1::metrics_page_route(&site_ast, &watcher_config)?;
+                            let output = render_docs(
                                 &watcher_root,
                                 &watcher_config,
                                 &site_ast,
                                 &watcher_logger,
                                 &mut stats,
-                            )
+                            )?;
+                            if let Ok(mut current) = watcher_metrics_route.write() {
+                                *current = route;
+                            }
+                            Ok(output)
                         });
                 stats.last_duration_ms = rebuild_started.elapsed().as_millis().max(1);
                 match rebuild {
@@ -129,6 +144,18 @@ impl DevServer {
                                 duration_ms: elapsed,
                             }
                         );
+                        let rebuild_metrics = watcher_metrics.clone();
+                        let rebuild_out = watcher_out.clone();
+                        let rebuild_config = watcher_config.clone();
+                        tokio::task::spawn_blocking(move || {
+                            if let Ok(report) =
+                                crate::v1::metrics::generate_report(&rebuild_out, &rebuild_config)
+                                && let Ok(mut lock) = rebuild_metrics.write()
+                            {
+                                *lock = Some(report);
+                            }
+                        });
+
                         let _ = watcher_reload.send(());
                         evin_action_sdk::action_event!(
                             watcher_logger,
@@ -156,6 +183,8 @@ impl DevServer {
 
         let listener_cancel = shutdown.clone();
         let listener_reload = reload_tx.clone();
+        let listener_metrics = metrics_snapshot.clone();
+        let listener_metrics_route = metrics_route.clone();
         let listener_handle = tokio::spawn(async move {
             let mut connections = tokio::task::JoinSet::new();
             loop {
@@ -171,6 +200,8 @@ impl DevServer {
                     out_dir.clone(),
                     listener_reload.subscribe(),
                     listener_cancel.clone(),
+                    listener_metrics.clone(),
+                    listener_metrics_route.clone(),
                 ));
             }
             connections.abort_all();
@@ -194,6 +225,8 @@ async fn serve_connection(
     out_dir: PathBuf,
     mut reload_rx: broadcast::Receiver<()>,
     cancel_token: tokio_util::sync::CancellationToken,
+    metrics_snapshot: Arc<std::sync::RwLock<Option<crate::v1::metrics::MetricsReport>>>,
+    metrics_route: Arc<std::sync::RwLock<Option<String>>>,
 ) {
     let mut buffer = [0u8; 2048];
     let read = tokio::select! {
@@ -226,6 +259,56 @@ async fn serve_connection(
         }
         return;
     }
+    let accept_gzip = request.lines().any(|line| {
+        let lower = line.to_ascii_lowercase();
+        lower.starts_with("accept-encoding:") && lower.contains("gzip")
+    });
+    if metrics_route
+        .read()
+        .ok()
+        .and_then(|route| route.clone())
+        .is_some()
+        && path == "/__evin_metrics"
+    {
+        let mut report_opt = metrics_snapshot.read().ok().and_then(|guard| guard.clone());
+        if report_opt.is_none() {
+            for _ in 0..40 {
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                if let Some(r) = metrics_snapshot.read().ok().and_then(|guard| guard.clone()) {
+                    report_opt = Some(r);
+                    break;
+                }
+            }
+        }
+        let json = report_opt
+            .and_then(|r| serde_json::to_string_pretty(&r).ok())
+            .unwrap_or_else(|| "{\"status\":\"computing\"}".to_string());
+
+        let (body, is_gzipped) = if accept_gzip && json.len() > 128 {
+            if let Ok(compressed) = crate::v1::metrics::compress_gzip(json.as_bytes()) {
+                (compressed, true)
+            } else {
+                (json.into_bytes(), false)
+            }
+        } else {
+            (json.into_bytes(), false)
+        };
+
+        let header = if is_gzipped {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Encoding: gzip\r\nCache-Control: no-cache\r\nVary: Accept-Encoding\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+        } else {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nCache-Control: no-cache\r\nVary: Accept-Encoding\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+        };
+        let _ = socket.write_all(header.as_bytes()).await;
+        let _ = socket.write_all(&body).await;
+        return;
+    }
     let clean_path = path.trim_start_matches('/');
     let direct = out_dir.join(clean_path);
     let file = if clean_path.is_empty() {
@@ -241,28 +324,57 @@ async fn serve_connection(
             .await;
         return;
     };
-    let mime = match file
+    let (mime, is_compressible) = resolve_mime(&file);
+    let (body, is_gzipped) = if accept_gzip && is_compressible && contents.len() > 128 {
+        use std::io::Write;
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        if encoder.write_all(&contents).is_ok()
+            && let Ok(compressed) = encoder.finish()
+            && compressed.len() < contents.len()
+        {
+            (compressed, true)
+        } else {
+            (contents, false)
+        }
+    } else {
+        (contents, false)
+    };
+    let header = if is_gzipped {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nContent-Encoding: gzip\r\nVary: Accept-Encoding\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+    } else {
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nVary: Accept-Encoding\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        )
+    };
+    let _ = socket.write_all(header.as_bytes()).await;
+    let _ = socket.write_all(&body).await;
+}
+
+fn resolve_mime(file: &std::path::Path) -> (&'static str, bool) {
+    match file
         .extension()
         .and_then(|extension| extension.to_str())
         .unwrap_or("")
     {
-        "css" => "text/css",
-        "js" => "application/javascript",
-        "json" => "application/json",
-        "svg" => "image/svg+xml",
-        "png" => "image/png",
-        "avif" => "image/avif",
-        "ico" => "image/x-icon",
-        "jpg" | "jpeg" => "image/jpeg",
-        "webmanifest" => "application/manifest+json",
-        _ => "text/html",
-    };
-    let header = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        contents.len()
-    );
-    let _ = socket.write_all(header.as_bytes()).await;
-    let _ = socket.write_all(&contents).await;
+        "css" => ("text/css", true),
+        "js" => ("application/javascript", true),
+        "json" => ("application/json", true),
+        "svg" => ("image/svg+xml", true),
+        "html" | "htm" => ("text/html", true),
+        "bin" => ("application/octet-stream", true),
+        "png" => ("image/png", false),
+        "avif" => ("image/avif", false),
+        "ico" => ("image/x-icon", false),
+        "jpg" | "jpeg" => ("image/jpeg", false),
+        "woff2" => ("font/woff2", false),
+        "woff" => ("font/woff", false),
+        "webmanifest" => ("application/manifest+json", true),
+        _ => ("text/html", true),
+    }
 }
 
 #[cfg(test)]
@@ -271,6 +383,17 @@ mod tests {
 
     fn fingerprint(path: &str, size: u64) -> (PathBuf, Option<std::time::SystemTime>, u64) {
         (PathBuf::from(path), None, size)
+    }
+
+    #[test]
+    fn mime_resolution_maps_bin_to_compressible_octet_stream() {
+        let (mime, compressible) = resolve_mime(std::path::Path::new("assets/search-catalog.bin"));
+        assert_eq!(mime, "application/octet-stream");
+        assert!(compressible);
+
+        let (mime, compressible) = resolve_mime(std::path::Path::new("assets/search-index.bin"));
+        assert_eq!(mime, "application/octet-stream");
+        assert!(compressible);
     }
 
     #[test]
@@ -293,5 +416,95 @@ mod tests {
             changed_source_label(&before, &after, "docs"),
             "2 files in docs"
         );
+    }
+
+    #[tokio::test]
+    async fn declared_metrics_page_and_live_api_respond_with_correct_types() {
+        let temp = tempfile::tempdir().unwrap();
+        let out_dir = temp.path().to_path_buf();
+        std::fs::write(out_dir.join("index.html"), "<html>hello</html>").unwrap();
+        std::fs::create_dir_all(out_dir.join("metrics")).unwrap();
+        std::fs::write(
+            out_dir.join("metrics/index.html"),
+            "<html><title>Metrics — Documentation</title><main data-metrics-page></main></html>",
+        )
+        .unwrap();
+        let assets = out_dir.join("assets");
+        std::fs::create_dir_all(&assets).unwrap();
+        std::fs::write(assets.join("theme.css"), "/* theme */").unwrap();
+        std::fs::write(assets.join("app.js"), "/* app */").unwrap();
+        std::fs::write(assets.join("icons.svg"), "<svg></svg>").unwrap();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let (reload_tx, _) = broadcast::channel(16);
+        let cancel = tokio_util::sync::CancellationToken::new();
+
+        let config = DocsConfig {
+            metrics: true,
+            ..DocsConfig::default()
+        };
+        let report = crate::v1::metrics::generate_report(&out_dir, &config).ok();
+        let metrics_snapshot = Arc::new(std::sync::RwLock::new(report));
+
+        let server_cancel = cancel.clone();
+        let server_out = out_dir.clone();
+        let server_metrics = metrics_snapshot.clone();
+        let handle = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            serve_connection(
+                socket,
+                server_out,
+                reload_tx.subscribe(),
+                server_cancel,
+                server_metrics,
+                Arc::new(std::sync::RwLock::new(Some("/metrics".to_string()))),
+            )
+            .await;
+        });
+
+        // 1. Test generated /metrics page.
+        let mut client = tokio::net::TcpStream::connect(addr).await.unwrap();
+        client
+            .write_all(b"GET /metrics HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .await
+            .unwrap();
+        let mut resp = Vec::new();
+        client.read_to_end(&mut resp).await.unwrap();
+        let text = String::from_utf8_lossy(&resp);
+        assert!(text.starts_with("HTTP/1.1 200 OK"));
+        assert!(text.contains("Content-Type: text/html"));
+        assert!(text.contains("Metrics — Documentation"));
+        handle.await.unwrap();
+
+        // 2. Test /__evin_metrics
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (reload_tx2, _) = broadcast::channel(16);
+        let handle2 = tokio::spawn(async move {
+            let (socket, _) = listener.accept().await.unwrap();
+            serve_connection(
+                socket,
+                out_dir,
+                reload_tx2.subscribe(),
+                cancel,
+                metrics_snapshot,
+                Arc::new(std::sync::RwLock::new(Some("/metrics".to_string()))),
+            )
+            .await;
+        });
+        let mut client2 = tokio::net::TcpStream::connect(addr).await.unwrap();
+        client2
+            .write_all(b"GET /__evin_metrics HTTP/1.1\r\nHost: localhost\r\n\r\n")
+            .await
+            .unwrap();
+        let mut resp2 = Vec::new();
+        client2.read_to_end(&mut resp2).await.unwrap();
+        let text2 = String::from_utf8_lossy(&resp2);
+        assert!(text2.starts_with("HTTP/1.1 200 OK"));
+        assert!(text2.contains("Content-Type: application/json"));
+        assert!(text2.contains("\"budget_status\""));
+        handle2.await.unwrap();
     }
 }

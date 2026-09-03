@@ -290,6 +290,24 @@ impl MarkdownParser {
                     };
                     Some((node, start))
                 } else if let Some(l) = lang.as_deref()
+                    && l.starts_with("component ")
+                {
+                    let parts: Vec<&str> = l.split_whitespace().collect();
+                    let name = parts.get(1).copied().unwrap_or_default().to_string();
+                    let args = parts
+                        .iter()
+                        .skip(2)
+                        .map(|part| (*part).to_string())
+                        .collect();
+                    Some((
+                        DocNode::Directive {
+                            name,
+                            args,
+                            body: Self::parse(&code, false).ast,
+                        },
+                        start,
+                    ))
+                } else if let Some(l) = lang.as_deref()
                     && (l.starts_with("mermaid")
                         || l.starts_with("svgbob")
                         || l.starts_with("pikchr"))
@@ -1855,6 +1873,20 @@ max_threads : integer : optional (default: 4)
             }
             other => panic!("expected Tape, found {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_parse_markdown_component_fence() {
+        let parsed = MarkdownParser::parse(
+            "```component metrics-budget Landing budget\nA live metric panel.\n```",
+            false,
+        );
+        let DocNode::Directive { name, args, body } = &parsed.ast[0] else {
+            panic!("expected component directive, found {:?}", parsed.ast);
+        };
+        assert_eq!(name, "metrics-budget");
+        assert_eq!(args, &["Landing", "budget"]);
+        assert!(matches!(body.first(), Some(DocNode::Paragraph { .. })));
     }
 
     #[test]

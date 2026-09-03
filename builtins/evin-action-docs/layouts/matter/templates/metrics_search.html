@@ -1,0 +1,34 @@
+<section class="start-feature metrics-component metrics-search-feature" data-metrics-component="search">
+  <div class="start-feature-content">
+    <h2>{{#if title}}{{title}}{{/if}}</h2>
+    <p>Two-tier staged search architecture. Tier 1 catalog provides synchronous instant title matching upon modal trigger, while Tier 2 Elias-Fano postings stream in the background without contending for CPU or initial bandwidth.</p>
+    <div class="metrics-stat">
+      <div class="stat-hero-number">
+        <span data-metric-field="efficiency">—</span>
+        <small>bits / posting</small>
+      </div>
+      <div class="stat-caption" data-metric-field="docs">Search statistics pending</div>
+    </div>
+    <p class="metrics-subtext" data-metric-field="vocabulary">Vocabulary information will appear when the search index is enabled.</p>
+  </div>
+  <aside class="start-feature-aside">
+    <div class="code-surface metrics-surface">
+      <div class="code-header">
+        <div class="code-heading">
+          <span class="code-title">Binary Engine Footprint</span>
+          <span class="lang-label">metrics</span>
+        </div>
+        <div class="code-actions">
+          <button class="icon-btn btn-download" type="button" aria-label="Download search metrics" title="Download search metrics" data-action="code:download" data-extension="txt" data-language="search-metrics">
+            <svg class="docs-icon" aria-hidden="true"><use href="#icon-download"></use></svg>
+          </button>
+          <button class="icon-btn btn-copy" type="button" aria-label="Copy search metrics" title="Copy search metrics" data-action="code:copy">
+            <svg class="docs-icon icon-copy" aria-hidden="true"><use href="#icon-copy"></use></svg>
+            <svg class="docs-icon icon-check" aria-hidden="true"><use href="#icon-check"></use></svg>
+          </button>
+        </div>
+      </div>
+      <div class="code-scroll"><pre><code class="metrics-code" data-metric-field="details">Loading search engine statistics…</code></pre></div>
+    </div>
+  </aside>
+</section>

@@ -1,0 +1,49 @@
+<section class="start-feature metrics-component metrics-budget" data-metrics-component="budget">
+  <div class="start-feature-content">
+    <h2>{{#if title}}{{title}}{{/if}}</h2>
+    <p>Critical path footprint encompasses only the absolute minimum resources required to evaluate the document tree and render Frame 0 without Layout Shift (CLS = 0).</p>
+    <div class="metrics-stat">
+      <div class="stat-hero-number">
+        <span data-metric-field="frame0-gzip">—</span>
+        <small>gzip</small>
+      </div>
+      <div class="stat-caption" data-metric-field="frame0-raw">Frame‑0 wire transfer</div>
+    </div>
+    <div class="metrics-gauge">
+      <div class="metrics-gauge-header">
+        <span class="metrics-gauge-title">Budget consumption</span>
+        <div class="metrics-gauge-badge-group">
+          <strong class="metrics-percentage" data-metric-field="percent">—</strong>
+          <span class="metrics-status-badge" data-metric-field="status">—</span>
+        </div>
+      </div>
+      <div class="metrics-gauge-track">
+        <span data-metric-field="progress"></span>
+      </div>
+      <div class="metrics-gauge-legend">
+        <span data-metric-field="used">Calculating…</span>
+        <span data-metric-field="cap">Budget pending</span>
+      </div>
+    </div>
+  </div>
+  <aside class="start-feature-aside">
+    <div class="code-surface metrics-surface" data-metrics-component="manifest">
+      <div class="code-header">
+        <div class="code-heading">
+          <span class="code-title" data-metric-field="manifest-tag">Frame-0 Manifest</span>
+          <span class="lang-label">metrics</span>
+        </div>
+        <div class="code-actions">
+          <button class="icon-btn btn-download" type="button" aria-label="Download metrics manifest" title="Download metrics manifest" data-action="code:download" data-extension="txt" data-language="metrics-manifest">
+            <svg class="docs-icon" aria-hidden="true"><use href="#icon-download"></use></svg>
+          </button>
+          <button class="icon-btn btn-copy" type="button" aria-label="Copy metrics manifest" title="Copy metrics manifest" data-action="code:copy">
+            <svg class="docs-icon icon-copy" aria-hidden="true"><use href="#icon-copy"></use></svg>
+            <svg class="docs-icon icon-check" aria-hidden="true"><use href="#icon-check"></use></svg>
+          </button>
+        </div>
+      </div>
+      <div class="code-scroll"><pre><code class="metrics-code" data-metric-field="manifest">Loading critical assets…</code></pre></div>
+    </div>
+  </aside>
+</section>

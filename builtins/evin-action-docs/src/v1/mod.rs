@@ -37,6 +37,7 @@ pub mod templates;
 pub mod topbar;
 pub mod validator;
 
+pub mod metrics;
 pub mod resolver;
 
 use ast::{DocFormat, DocSiteAst};
@@ -164,6 +165,12 @@ pub struct DocsConfig {
     pub topbar: Option<TopbarSetting>,
     #[serde(default)]
     pub presentation: Option<Presentation>,
+    #[serde(default)]
+    pub diagnostic_search: bool,
+    #[serde(default)]
+    pub metrics: bool,
+    #[serde(default)]
+    pub metrics_budget_kb: Option<u32>,
 }
 
 impl Default for DocsConfig {
@@ -197,6 +204,9 @@ impl Default for DocsConfig {
             strict_filenames: false,
             topbar: None,
             presentation: None,
+            diagnostic_search: false,
+            metrics: false,
+            metrics_budget_kb: None,
         }
     }
 }
@@ -315,11 +325,123 @@ pub fn validate_config(
             } else {
                 seo::validate_site_settings(&config.site_url, &config.language).map(|_| ())
             }
+        })
+        .and_then(|_| {
+            if config.metrics_budget_kb.is_some() && !config.metrics {
+                Err("metrics_budget_kb requires metrics to be enabled".to_string())
+            } else {
+                Ok(())
+            }
         });
     validation.map_err(|message| evin_yaml::ConfigError {
         message,
         span: None,
     })
+}
+
+const METRICS_PAGE_KIND: &str = "metrics";
+
+fn metadata_bool(page: &ast::DocPage, key: &str) -> bool {
+    page.metadata.get(key).and_then(|value| value.as_bool()) == Some(true)
+}
+
+pub(crate) fn is_metrics_page(page: &ast::DocPage) -> bool {
+    page.metadata
+        .get("page_kind")
+        .and_then(|value| value.as_str())
+        == Some(METRICS_PAGE_KIND)
+}
+
+fn is_dev_only_page(page: &ast::DocPage) -> bool {
+    metadata_bool(page, "dev_only")
+}
+
+fn directive_is_metric(name: &str) -> bool {
+    name.trim().replace('_', "-").starts_with("metrics-")
+}
+
+fn page_uses_metric_directive(nodes: &[evin_doc::ast::DocNode]) -> bool {
+    use evin_doc::ast::DocNode;
+    nodes.iter().any(|node| match node {
+        DocNode::Directive { name, body, .. } => {
+            directive_is_metric(name) || page_uses_metric_directive(body)
+        }
+        DocNode::Admonition { children, .. } | DocNode::LspSymbol { children, .. } => {
+            page_uses_metric_directive(children)
+        }
+        DocNode::List { items, .. } => items.iter().any(|item| page_uses_metric_directive(item)),
+        DocNode::TaskList { items } => items
+            .iter()
+            .any(|item| page_uses_metric_directive(&item.body)),
+        DocNode::DefinitionList { items } => items
+            .iter()
+            .any(|item| page_uses_metric_directive(&item.body)),
+        DocNode::OptionList { items } => items
+            .iter()
+            .any(|item| page_uses_metric_directive(&item.body)),
+        DocNode::FieldList { items } => items
+            .iter()
+            .any(|item| page_uses_metric_directive(&item.body)),
+        DocNode::Stepper { steps } => steps
+            .iter()
+            .any(|step| page_uses_metric_directive(&step.body)),
+        _ => false,
+    })
+}
+
+pub(crate) fn metrics_page_route(
+    site: &DocSiteAst,
+    config: &DocsConfig,
+) -> Result<Option<String>, evin_diagnostic::Diagnostic> {
+    let mut metrics_pages = site.pages.iter().filter(|page| is_metrics_page(page));
+    let Some(page) = metrics_pages.next() else {
+        return Ok(None);
+    };
+    if metrics_pages.next().is_some() {
+        return Err(evin_diagnostic::Diagnostic::new(
+            "Only one page may declare page_kind: metrics",
+            evin_diagnostic::IssueCode::new("invalid-metrics-page"),
+        ));
+    }
+    if !is_dev_only_page(page) {
+        return Err(evin_diagnostic::Diagnostic::new(
+            "page_kind: metrics requires dev_only: true",
+            evin_diagnostic::IssueCode::new("invalid-metrics-page"),
+        ));
+    }
+    if !config.metrics {
+        return Err(evin_diagnostic::Diagnostic::new(
+            "page_kind: metrics requires metrics: true",
+            evin_diagnostic::IssueCode::new("invalid-metrics-page"),
+        ));
+    }
+    if config.mode != DocsMode::Serve {
+        return Ok(None);
+    }
+    Ok(Some(format!("/{}", page.slug.trim_matches('/'))))
+}
+
+fn validate_metrics_pages(
+    site: &DocSiteAst,
+    config: &DocsConfig,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    let route = metrics_page_route(site, config)?;
+    for page in &site.pages {
+        if page_uses_metric_directive(&page.ast)
+            && config.mode == DocsMode::Build
+            && !is_metrics_page(page)
+        {
+            return Err(evin_diagnostic::Diagnostic::new(
+                format!(
+                    "Metric component directives are development-only; '{}' must declare page_kind: metrics and dev_only: true",
+                    page.source_path
+                ),
+                evin_diagnostic::IssueCode::new("invalid-metrics-page"),
+            ));
+        }
+    }
+    let _ = route;
+    Ok(())
 }
 
 pub(crate) fn parse_docs(
@@ -407,6 +529,7 @@ pub(crate) fn parse_docs(
     if config.strict_filenames {
         validate_strict_filenames(&site).map_err(doc_issue_to_diagnostic)?;
     }
+    validate_metrics_pages(&site, config)?;
     stats.pages = site.pages.len();
     stats.rst = site
         .pages
@@ -466,27 +589,31 @@ fn validate_strict_filenames(site: &DocSiteAst) -> Result<(), evin_doc::DocIssue
                 "Strict documentation filenames must use the .md or .rst extension",
             ));
         }
-        let Some(parent) = path
+        let parent = path
             .parent()
-            .filter(|parent| !parent.as_os_str().is_empty())
-        else {
+            .filter(|parent| !parent.as_os_str().is_empty());
+        if parent.is_none() && !(is_metrics_page(page) && is_dev_only_page(page)) {
             return Err(strict_filename_error(
                 &page.source_path,
                 "Only the root start page may live outside a documentation section",
             ));
-        };
-        let section = parent.to_string_lossy().replace('\\', "/");
-        for component in parent.components() {
-            let seg_str = component.as_os_str().to_string_lossy();
-            let seg_stem = seg_str
-                .split_once('.')
-                .map(|(_, name)| name)
-                .unwrap_or(&seg_str);
-            if !segment.is_match(seg_stem) {
-                return Err(strict_filename_error(
-                    &page.source_path,
-                    "Strict documentation sections must use lowercase kebab-case directory names",
-                ));
+        }
+        let section = parent
+            .map(|parent| parent.to_string_lossy().replace('\\', "/"))
+            .unwrap_or_default();
+        if let Some(parent) = parent {
+            for component in parent.components() {
+                let seg_str = component.as_os_str().to_string_lossy();
+                let seg_stem = seg_str
+                    .split_once('.')
+                    .map(|(_, name)| name)
+                    .unwrap_or(&seg_str);
+                if !segment.is_match(seg_stem) {
+                    return Err(strict_filename_error(
+                        &page.source_path,
+                        "Strict documentation sections must use lowercase kebab-case directory names",
+                    ));
+                }
             }
         }
         let Some(stem) = path.file_stem().and_then(|value| value.to_str()) else {
@@ -641,6 +768,21 @@ pub(crate) fn render_docs(
     logger: &evin_action_sdk::Logger,
     stats: &mut DocsDebugStats,
 ) -> Result<PathBuf, evin_diagnostic::Diagnostic> {
+    let static_site;
+    let site_ast = if config.mode == DocsMode::Build {
+        static_site = DocSiteAst {
+            pages: site_ast
+                .pages
+                .iter()
+                .filter(|page| !is_dev_only_page(page))
+                .cloned()
+                .collect(),
+            ..site_ast.clone()
+        };
+        &static_site
+    } else {
+        site_ast
+    };
     let write_failures_before = stats.write_failures;
     stats.renders += 1;
     stats.bundle = config.bundle.clone();
@@ -991,13 +1133,31 @@ pub(crate) fn render_docs(
             stats.write_failures += 1;
         }
         let search_payload = SearchIndexBuilder::build(site_ast, start_page.search_prompts.clone());
-        if std::fs::write(assets.join("search.bin"), search_payload.to_binary()).is_err() {
-            stats.write_failures += 1;
-        }
-        if let Ok(json) = serde_json::to_string(&search_payload)
-            && std::fs::write(out_dir.join("search.json"), json).is_err()
+        let _ = std::fs::remove_file(assets.join("search.bin"));
+        if std::fs::write(
+            assets.join("search-catalog.bin"),
+            search_payload.to_catalog_binary(),
+        )
+        .is_err()
         {
             stats.write_failures += 1;
+        }
+        if std::fs::write(
+            assets.join("search-index.bin"),
+            search_payload.to_index_binary(),
+        )
+        .is_err()
+        {
+            stats.write_failures += 1;
+        }
+        if config.diagnostic_search {
+            if let Ok(json) = serde_json::to_string(&search_payload)
+                && std::fs::write(out_dir.join("search.json"), json).is_err()
+            {
+                stats.write_failures += 1;
+            }
+        } else {
+            let _ = std::fs::remove_file(out_dir.join("search.json"));
         }
     }
     if single_file && tape_fonts::remove_published(&out_dir).is_err() {
@@ -1031,7 +1191,7 @@ pub(crate) fn render_docs(
     stats.pages_written = site_ast.pages.len();
     let expected_assets = favicon_asset_count
         + 1
-        + if single_file { 0 } else { 3 }
+        + if single_file { 0 } else { 4 }
         + if !single_file {
             tape_fonts::FONTS.len()
         } else {
@@ -1064,8 +1224,10 @@ fn prune_stale_page_outputs(
         .map(|path| out_dir.join(path))
         .collect::<HashSet<_>>();
     let mut directories = vec![out_dir.to_path_buf()];
+    let mut visited_directories = Vec::new();
 
     while let Some(directory) = directories.pop() {
+        visited_directories.push(directory.clone());
         let entries = std::fs::read_dir(&directory).map_err(|error| {
             evin_diagnostic::Diagnostic::new(
                 format!(
@@ -1099,6 +1261,12 @@ fn prune_stale_page_outputs(
                     )
                 })?;
             }
+        }
+    }
+    visited_directories.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+    for directory in visited_directories {
+        if directory != out_dir {
+            let _ = std::fs::remove_dir(&directory);
         }
     }
     Ok(())
@@ -1146,10 +1314,35 @@ pub async fn execute(
         return Ok(());
     }
     let out_dir = render_docs(workspace_root, &config, &site_ast, &ctx.log, &mut stats)?;
+    let metrics_route = metrics_page_route(&site_ast, &config)?;
     ctx.state
         .set_output("output_dir", &out_dir.to_string_lossy());
     ctx.state
         .set_output("page_count", &site_ast.pages.len().to_string());
+    if config.metrics && config.mode == DocsMode::Build {
+        let report = metrics::generate_report(&out_dir, &config).map_err(|e| {
+            evin_diagnostic::Diagnostic::new(
+                format!("Failed to collect documentation metrics: {e}"),
+                evin_diagnostic::IssueCode::new("issue-docs-metrics-generation-failed"),
+            )
+        })?;
+        metrics::write_report(&out_dir, &report).map_err(|e| {
+            evin_diagnostic::Diagnostic::new(
+                format!("Failed to write metrics.json: {e}"),
+                evin_diagnostic::IssueCode::new("issue-docs-metrics-write-failed"),
+            )
+        })?;
+        if report.budget_status == metrics::BudgetStatus::Fail {
+            let limit = report.frame0.budget_limit_bytes.unwrap_or(0);
+            return Err(evin_diagnostic::Diagnostic::new(
+                format!(
+                    "Documentation Frame-0 critical landing path size ({} B) exceeded configured budget ({} B)",
+                    report.frame0.gzip_bytes, limit
+                ),
+                evin_diagnostic::IssueCode::new("issue-docs-metrics-budget-exceeded"),
+            ));
+        }
+    }
     if config.mode == DocsMode::Serve {
         ctx.state
             .set_output("server_url", &format!("http://127.0.0.1:{}", config.port));
@@ -1161,6 +1354,7 @@ pub async fn execute(
             ctx.cancel_token.clone(),
             started,
             stats,
+            metrics_route,
         )
         .await?;
     }
@@ -1377,10 +1571,10 @@ mod tests {
                 .unwrap_or_else(|error| panic!("{theme} theme did not compile: {error}"));
 
             assert!(!base_css.contains(".start-hero"));
-            assert!(!base_css.contains(".evin-diagram-container"));
-            assert!(!base_css.contains(".evin-math-block"));
+            assert!(!base_css.contains(".docs-diagram-container"));
+            assert!(!base_css.contains(".docs-math-block"));
             assert!(!base_css.contains(".presentation-surface"));
-            assert!(!base_css.contains(".evin-topbar"));
+            assert!(!base_css.contains(".docs-topbar"));
             assert!(base_css.contains("--ui-ref-space-6"));
             assert!(base_css.contains("--ui-color-background"));
             assert!(base_css.contains("--ui-layout-sidebar-width"));
@@ -1404,9 +1598,9 @@ mod tests {
 
             assert!(full_css.contains(".start-hero"));
             assert!(full_css.contains(".start-card-grid"));
-            assert!(full_css.contains(".evin-mermaid-svg-target"));
-            assert!(full_css.contains(".evin-diagram-figure"));
-            assert!(full_css.contains(".evin-math-block"));
+            assert!(full_css.contains(".mermaid-svg-target"));
+            assert!(full_css.contains(".docs-diagram-figure"));
+            assert!(full_css.contains(".docs-math-block"));
         }
     }
 
@@ -1434,7 +1628,7 @@ mod tests {
         .unwrap();
         assert!(selected_css.contains(".topbar--genome"));
         assert!(selected_css.contains(".presentation-surface"));
-        assert!(selected_css.contains(".evin-topbar"));
+        assert!(selected_css.contains(".docs-topbar"));
         assert!(!selected_css.contains(".start-spotlight-content"));
         assert!(selected_css.contains("--ui-topbar-genome-surface"));
         assert!(!selected_css.contains(".topbar--aurora"));
@@ -1474,7 +1668,7 @@ mod tests {
         .unwrap();
         assert!(spotlight_only_css.contains(".start-spotlight-content"));
         assert!(spotlight_only_css.contains(".topbar--holo"));
-        assert!(!spotlight_only_css.contains(".evin-topbar"));
+        assert!(!spotlight_only_css.contains(".docs-topbar"));
         assert!(!spotlight_only_css.contains(".topbar-content"));
 
         for variant in topbar::MATTER_VARIANTS {
@@ -1505,7 +1699,7 @@ mod tests {
             false,
         )
         .unwrap();
-        assert!(!disabled_css.contains(".evin-topbar"));
+        assert!(!disabled_css.contains(".docs-topbar"));
         assert!(!disabled_css.contains(".presentation-surface"));
         assert!(!disabled_css.contains("--ui-topbar-"));
     }
@@ -1649,7 +1843,10 @@ mod tests {
                 let path = file.path().to_string_lossy();
                 let is_layout_source =
                     path.ends_with(".scss") || path.ends_with(".html") || path.ends_with(".js");
-                if !is_layout_source || path.ends_with("_tokens.scss") {
+                if !is_layout_source
+                    || path.ends_with("_tokens.scss")
+                    || path.ends_with("shell.html")
+                {
                     continue;
                 }
                 let Some(contents) = file.contents_utf8() else {
@@ -1845,18 +2042,18 @@ mod tests {
         let html = std::fs::read_to_string(output.join("gallery/index.html")).unwrap();
 
         for expected in [
-            "evindoc-svgbob",
-            "evindoc-mermaid",
-            "evin-math-block",
+            "doc-svgbob",
+            "doc-mermaid",
+            "math-block",
             "doc-list-stepper",
             "doc-list-task",
             "doc-list-def",
             "doc-list-fields",
-            "evin-callout",
+            "docs-callout",
         ] {
             assert!(html.contains(expected), "fixture did not render {expected}");
         }
-        assert!(html.matches("class=\"evin-mermaid-svg-target\"").count() >= 1);
+        assert!(html.matches("class=\"mermaid-svg-target\"").count() >= 1);
         for forbidden in [
             ["mermaid", ".esm"].concat(),
             ["window", ".mermaid"].concat(),
@@ -1941,9 +2138,9 @@ mod tests {
             let output = render_docs(temp_dir.path(), &config, &site, &logger, &mut stats).unwrap();
             let html = std::fs::read_to_string(output.join("graph/index.html")).unwrap();
 
-            assert_eq!(html.matches("class=\"evin-mermaid-svg-target\"").count(), 1);
-            assert!(html.contains("class=\"evin-mermaid-source\" hidden>flowchart LR"));
-            assert!(html.contains("<svg id=\"evin-graph-mermaid-1\""));
+            assert_eq!(html.matches("class=\"mermaid-svg-target\"").count(), 1);
+            assert!(html.contains("class=\"mermaid-source\" hidden>flowchart LR"));
+            assert!(html.contains("<svg id=\"diagram-graph-mermaid-1\""));
             for forbidden in [
                 ["mermaid", ".esm"].concat(),
                 ["window", ".mermaid"].concat(),
@@ -1987,7 +2184,7 @@ mod tests {
         let page = std::fs::read_to_string(output.join("tape/index.html")).unwrap();
         let css = std::fs::read_to_string(output.join("assets/theme.css")).unwrap();
 
-        assert!(page.contains("evin-terminal-tape"));
+        assert!(page.contains("terminal-tape-svg"));
         assert!(page.contains("prefers-reduced-motion"));
         assert!(page.contains("tape-heading"));
         assert!(page.contains("Build proof"));
@@ -2206,5 +2403,144 @@ mod tests {
             favicon_svg.contains("acme-favicon"),
             "favicon should match custom extension favicon"
         );
+    }
+
+    #[test]
+    fn test_metrics_config_validation() {
+        let yaml_bad = "metrics: false\nmetrics_budget_kb: 110\nsite_url: 'https://example.com'";
+        let val_bad = evin_yaml::parse_yaml(yaml_bad).unwrap();
+        let err = validate_config(Some(&val_bad));
+        assert!(err.is_err());
+        assert!(
+            err.unwrap_err()
+                .message
+                .contains("metrics_budget_kb requires metrics")
+        );
+
+        let yaml_good = "metrics: true\nmetrics_budget_kb: 110\nsite_url: 'https://example.com'";
+        let val_good = evin_yaml::parse_yaml(yaml_good).unwrap();
+        assert!(validate_config(Some(&val_good)).is_ok());
+
+        let yaml_no_budget = "metrics: true\nsite_url: 'https://example.com'";
+        let val_no_budget = evin_yaml::parse_yaml(yaml_no_budget).unwrap();
+        assert!(validate_config(Some(&val_no_budget)).is_ok());
+    }
+
+    #[test]
+    fn declared_metrics_page_requires_dev_metadata_and_uses_its_slug() {
+        let metrics_page = |dev_only: bool| ast::DocPage {
+            slug: "metrics".to_string(),
+            source_path: "90.metrics.md".to_string(),
+            format: DocFormat::Markdown,
+            metadata: HashMap::from([
+                ("page_kind".to_string(), serde_json::json!("metrics")),
+                ("dev_only".to_string(), serde_json::json!(dev_only)),
+            ]),
+            reference: None,
+            toc: vec![],
+            ast: vec![],
+        };
+        let site = DocSiteAst {
+            version: "1.0".to_string(),
+            title: Some("Docs".to_string()),
+            reference_prefix: "REF".to_string(),
+            pages: vec![metrics_page(true)],
+        };
+        let config = DocsConfig {
+            mode: DocsMode::Serve,
+            metrics: true,
+            ..DocsConfig::default()
+        };
+        assert_eq!(
+            metrics_page_route(&site, &config).unwrap(),
+            Some("/metrics".to_string())
+        );
+
+        let no_metrics = DocsConfig {
+            mode: DocsMode::Serve,
+            ..DocsConfig::default()
+        };
+        assert!(metrics_page_route(&site, &no_metrics).is_err());
+
+        let invalid = DocSiteAst {
+            pages: vec![metrics_page(false)],
+            ..site.clone()
+        };
+        assert!(metrics_page_route(&invalid, &config).is_err());
+
+        let static_config = DocsConfig {
+            mode: DocsMode::Build,
+            metrics: true,
+            ..DocsConfig::default()
+        };
+        assert_eq!(metrics_page_route(&site, &static_config).unwrap(), None);
+
+        let public_component = DocSiteAst {
+            pages: vec![ast::DocPage {
+                slug: "public".to_string(),
+                source_path: "guide/10.public.md".to_string(),
+                format: DocFormat::Markdown,
+                metadata: HashMap::new(),
+                reference: None,
+                toc: vec![],
+                ast: vec![evin_doc::ast::DocNode::Directive {
+                    name: "metrics-budget".to_string(),
+                    args: vec![],
+                    body: vec![],
+                }],
+            }],
+            ..site
+        };
+        assert!(validate_metrics_pages(&public_component, &static_config).is_err());
+    }
+
+    #[tokio::test]
+    async fn test_metrics_build_emission_and_budget_gate() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let docs_dir = temp_dir.path().join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("index.md"),
+            "# Test docs\n\nA valid start page.\n\n## Explore\n\n- [Hello](/hello) — Hello page.\n",
+        )
+        .unwrap();
+        std::fs::write(docs_dir.join("hello.md"), "# Hello\n\nHello content.\n").unwrap();
+
+        // 1. Build with metrics enabled and generous budget -> passes and writes metrics.json
+        let config_pass = DocsConfig {
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            out: temp_dir
+                .path()
+                .join("out_pass")
+                .to_string_lossy()
+                .to_string(),
+            site_url: "https://example.com/".to_string(),
+            metrics: true,
+            metrics_budget_kb: Some(500),
+            ..DocsConfig::default()
+        };
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
+            temp_dir.path(),
+        ));
+        let logger = evin_action_sdk::Logger::new("docs".to_string(), tx.clone(), secrets.clone());
+        let mut stats = DocsDebugStats::default();
+        let site = parse_docs(temp_dir.path(), &config_pass, &logger, &mut stats).unwrap();
+        let out_pass =
+            render_docs(temp_dir.path(), &config_pass, &site, &logger, &mut stats).unwrap();
+
+        let report = metrics::generate_report(&out_pass, &config_pass).unwrap();
+        let written = metrics::write_report(&out_pass, &report).unwrap();
+        assert!(written.is_file());
+        assert_eq!(report.budget_status, metrics::BudgetStatus::Pass);
+
+        // 2. Report with tiny budget (e.g. 1 KB) -> reports BudgetStatus::Fail
+        let config_fail = DocsConfig {
+            metrics: true,
+            metrics_budget_kb: Some(1),
+            ..config_pass.clone()
+        };
+        let report_fail = metrics::generate_report(&out_pass, &config_fail).unwrap();
+        assert_eq!(report_fail.budget_status, metrics::BudgetStatus::Fail);
     }
 }

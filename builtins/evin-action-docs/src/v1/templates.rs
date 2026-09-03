@@ -545,7 +545,7 @@ mod tests {
     fn test_sfc_parser_blocks() {
         let sfc = r#"
 <template>
-  <aside class="evin-callout">
+  <aside class="docs-callout">
     {{#if title}}
     <h4 class="callout-title">{{title}}</h4>
     {{/if}}
@@ -554,13 +554,13 @@ mod tests {
 </template>
 
 <style scoped>
-  .evin-callout {
+  .docs-callout {
     padding: 1rem;
   }
 </style>
 
 <script>
-  window.EvinActions['callout:toggle'] = () => {};
+  window.MatterActions['callout:toggle'] = () => {};
 </script>
 "#;
         assert!(SfcParser::is_sfc(sfc));
@@ -572,10 +572,10 @@ mod tests {
                 .template
                 .as_ref()
                 .unwrap()
-                .contains("<aside class=\"evin-callout\">")
+                .contains("<aside class=\"docs-callout\">")
         );
         assert!(blocks.style.is_some());
-        assert!(blocks.style.as_ref().unwrap().contains(".evin-callout {"));
+        assert!(blocks.style.as_ref().unwrap().contains(".docs-callout {"));
         assert!(blocks.style_scoped);
         assert!(blocks.script.is_some());
         assert!(
@@ -583,7 +583,7 @@ mod tests {
                 .script
                 .as_ref()
                 .unwrap()
-                .contains("window.EvinActions['callout:toggle']")
+                .contains("window.MatterActions['callout:toggle']")
         );
     }
 

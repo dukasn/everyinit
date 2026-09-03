@@ -32,6 +32,8 @@ tasks:
           title: "${site_title}"
           site_url: "${site_url}"
           strict_filenames: true
+          metrics: true
+          metrics_budget_kb: 110
 
   test-responsive:
     stage: Docs
@@ -64,3 +66,5 @@ tasks:
           title: "${site_title}"
           site_url: "${site_url}"
           strict_filenames: true
+          metrics: true
+          metrics_budget_kb: 110

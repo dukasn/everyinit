@@ -100,7 +100,7 @@ fn compile_diagram(
         .filter(|title| !title.trim().is_empty())
         .map(|title| format!("Mermaid diagram '{title}'"))
         .unwrap_or_else(|| format!("Mermaid diagram #{position}"));
-    let diagram_id = sanitize_svg_id(&format!("evin-{page_slug}-mermaid-{position}"));
+    let diagram_id = sanitize_svg_id(&format!("diagram-{page_slug}-mermaid-{position}"));
 
     let profile = matter_profile();
     let svg = HeadlessRenderer::new()
@@ -185,7 +185,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(first, second);
-        assert!(first.svg.contains("id=\"evin-guide-start-mermaid-1\""));
+        assert!(first.svg.contains("id=\"diagram-guide-start-mermaid-1\""));
     }
 
     #[test]

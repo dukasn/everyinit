@@ -17,6 +17,8 @@
 use std::collections::BTreeMap;
 
 pub const MAGIC: [u8; 4] = [0x45, 0x56, 0x49, 0x4E]; // "EVIN"
+pub const MAGIC_CATALOG: [u8; 4] = [0x45, 0x56, 0x43, 0x54]; // "EVCT"
+pub const MAGIC_INDEX: [u8; 4] = [0x45, 0x56, 0x49, 0x58]; // "EVIX"
 pub const VERSION: u16 = 1;
 
 /// Standard Base64 encoder for inlining binary octet streams.
@@ -97,6 +99,8 @@ impl ChdBuilder {
         let mut displacements = vec![0u16; bucket_count];
         let mut slot_to_term_idx = vec![usize::MAX; term_count];
 
+        let mut candidate_slots = Vec::new();
+
         for &b in &bucket_order {
             let items = &buckets[b];
             if items.is_empty() {
@@ -118,8 +122,10 @@ impl ChdBuilder {
                 }
             } else {
                 let mut found = false;
+                candidate_slots.clear();
+                candidate_slots.reserve(items.len());
                 for d in 1..u16::MAX {
-                    let mut candidate_slots = Vec::with_capacity(items.len());
+                    candidate_slots.clear();
                     let mut conflict = false;
 
                     for &term_idx in items {
@@ -558,6 +564,228 @@ impl BinarySearchIndexWriter {
         buffer
     }
 
+    pub fn serialize_catalog(
+        docs: &[(String, String, String, String, String, usize, u8)],
+        snippets: &[String],
+        prompts: &[String],
+    ) -> Vec<u8> {
+        let doc_count = docs.len() as u32;
+        let prompt_count = prompts.len() as u32;
+
+        let mut buffer = Vec::with_capacity(32 * 1024);
+
+        // 1. Reserve 32-byte header
+        buffer.extend_from_slice(&MAGIC_CATALOG);
+        buffer.extend_from_slice(&VERSION.to_le_bytes()); // 4..6
+        buffer.extend_from_slice(&0u16.to_le_bytes()); // Flags 6..8
+        buffer.extend_from_slice(&doc_count.to_le_bytes()); // 8..12
+        buffer.extend_from_slice(&prompt_count.to_le_bytes()); // 12..16
+
+        let docs_offset_pos = buffer.len();
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 16..20
+        let prompts_offset_pos = buffer.len();
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 20..24
+        let strings_offset_pos = buffer.len();
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 24..28
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 28..32 (reserved)
+
+        // String pool
+        let mut string_pool = Vec::new();
+        let mut intern_str = |s: &str| -> (u32, u16) {
+            let offset = string_pool.len() as u32;
+            let bytes = s.as_bytes();
+            string_pool.extend_from_slice(bytes);
+            (offset, bytes.len() as u16)
+        };
+
+        // Pre-intern snippets
+        let mut snippet_offsets = Vec::with_capacity(snippets.len());
+        for snippet in snippets {
+            snippet_offsets.push(intern_str(snippet));
+        }
+
+        // Section 1: Doc Descriptors Table (Exact 40 bytes per doc)
+        Self::align_4(&mut buffer);
+        let docs_offset = buffer.len() as u32;
+
+        for (slug, page_title, section_title, anchor, ref_id, snippet_idx, kind) in docs {
+            let (slug_off, slug_len) = intern_str(slug);
+            let (page_title_off, page_title_len) = intern_str(page_title);
+            let (sec_title_off, sec_title_len) = intern_str(section_title);
+            let (anchor_off, anchor_len) = intern_str(anchor);
+            let (ref_id_off, ref_id_len) = intern_str(ref_id);
+            let (snippet_off, snippet_len) =
+                snippet_offsets.get(*snippet_idx).copied().unwrap_or((0, 0));
+
+            buffer.extend_from_slice(&slug_off.to_le_bytes());
+            buffer.extend_from_slice(&slug_len.to_le_bytes());
+            buffer.extend_from_slice(&page_title_off.to_le_bytes());
+            buffer.extend_from_slice(&page_title_len.to_le_bytes());
+            buffer.extend_from_slice(&sec_title_off.to_le_bytes());
+            buffer.extend_from_slice(&sec_title_len.to_le_bytes());
+            buffer.extend_from_slice(&anchor_off.to_le_bytes());
+            buffer.extend_from_slice(&anchor_len.to_le_bytes());
+            buffer.extend_from_slice(&ref_id_off.to_le_bytes());
+            buffer.extend_from_slice(&ref_id_len.to_le_bytes());
+            buffer.extend_from_slice(&snippet_off.to_le_bytes());
+            buffer.extend_from_slice(&snippet_len.to_le_bytes());
+            buffer.push(*kind);
+            buffer.push(0);
+            buffer.push(0);
+            buffer.push(0);
+        }
+
+        // Section 2: Prompts Table
+        Self::align_4(&mut buffer);
+        let prompts_offset = buffer.len() as u32;
+        for prompt in prompts {
+            let (off, len) = intern_str(prompt);
+            buffer.extend_from_slice(&off.to_le_bytes());
+            buffer.extend_from_slice(&len.to_le_bytes());
+            buffer.extend_from_slice(&0u16.to_le_bytes());
+        }
+
+        // Section 3: Strings Pool
+        Self::align_4(&mut buffer);
+        let strings_offset = buffer.len() as u32;
+        buffer.extend_from_slice(&string_pool);
+
+        // Fill Header offsets
+        buffer[docs_offset_pos..docs_offset_pos + 4].copy_from_slice(&docs_offset.to_le_bytes());
+        buffer[prompts_offset_pos..prompts_offset_pos + 4]
+            .copy_from_slice(&prompts_offset.to_le_bytes());
+        buffer[strings_offset_pos..strings_offset_pos + 4]
+            .copy_from_slice(&strings_offset.to_le_bytes());
+
+        buffer
+    }
+
+    pub fn serialize_index(
+        doc_count: usize,
+        index: &BTreeMap<String, Vec<(usize, u8, u8)>>,
+    ) -> Vec<u8> {
+        let term_count = index.len() as u32;
+        let terms: Vec<String> = index.keys().cloned().collect();
+        let chd = ChdBuilder::build(&terms);
+
+        let mut buffer = Vec::with_capacity(32 * 1024);
+
+        // 1. Reserve 32-byte header
+        buffer.extend_from_slice(&MAGIC_INDEX);
+        buffer.extend_from_slice(&VERSION.to_le_bytes()); // 4..6
+        buffer.extend_from_slice(&0u16.to_le_bytes()); // Flags 6..8
+        buffer.extend_from_slice(&(doc_count as u32).to_le_bytes()); // 8..12
+        buffer.extend_from_slice(&term_count.to_le_bytes()); // 12..16
+
+        let mphf_offset_pos = buffer.len();
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 16..20
+        let postings_offset_pos = buffer.len();
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 20..24
+        let strings_offset_pos = buffer.len();
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 24..28
+        buffer.extend_from_slice(&0u32.to_le_bytes()); // 28..32 (reserved)
+
+        // String pool builder for term strings
+        let mut string_pool = Vec::new();
+        let mut intern_str = |s: &str| -> (u32, u16) {
+            let offset = string_pool.len() as u32;
+            let bytes = s.as_bytes();
+            string_pool.extend_from_slice(bytes);
+            (offset, bytes.len() as u16)
+        };
+
+        let mut term_offsets = Vec::with_capacity(term_count as usize);
+        for slot in 0..term_count as usize {
+            let term = chd.slot_to_term.get(slot).map(|s| s.as_str()).unwrap_or("");
+            term_offsets.push(intern_str(term));
+        }
+
+        // Section 1: MPHF, Fingerprints, Term String Pointers & Postings Offsets
+        Self::align_4(&mut buffer);
+        let mphf_offset = buffer.len() as u32;
+
+        buffer.extend_from_slice(&(chd.bucket_count as u32).to_le_bytes());
+        for &d in &chd.displacements {
+            buffer.extend_from_slice(&d.to_le_bytes());
+        }
+        Self::align_4(&mut buffer);
+        for &fp in &chd.fingerprints {
+            buffer.push(fp);
+        }
+        Self::align_4(&mut buffer);
+
+        for (off, len) in &term_offsets {
+            buffer.extend_from_slice(&off.to_le_bytes());
+            buffer.extend_from_slice(&len.to_le_bytes());
+            buffer.extend_from_slice(&0u16.to_le_bytes());
+        }
+
+        let postings_offset_table_pos = buffer.len();
+        for _ in 0..term_count {
+            buffer.extend_from_slice(&0u32.to_le_bytes());
+        }
+
+        // Section 2: Postings Section (Elias-Fano Encoded)
+        Self::align_4(&mut buffer);
+        let postings_offset = buffer.len() as u32;
+        let mut posting_offsets = Vec::with_capacity(term_count as usize);
+
+        for slot in 0..term_count as usize {
+            let rel_offset = (buffer.len() as u32) - postings_offset;
+            posting_offsets.push(rel_offset);
+
+            if let Some(term) = chd.slot_to_term.get(slot)
+                && let Some(postings) = index.get(term)
+            {
+                let mut sorted_postings = postings.clone();
+                sorted_postings.sort_by_key(|p| p.0);
+
+                let doc_ids: Vec<usize> = sorted_postings.iter().map(|p| p.0).collect();
+                let weights: Vec<u8> = sorted_postings
+                    .iter()
+                    .map(|p| {
+                        let flags = p.1 & 0x0F;
+                        let freq = p.2.min(15);
+                        (flags << 4) | freq
+                    })
+                    .collect();
+
+                let encoded = EliasFanoEncoder::encode(&doc_ids, &weights, doc_count);
+
+                buffer.extend_from_slice(&encoded.count.to_le_bytes());
+                buffer.push(encoded.low_bits_width);
+                buffer.push(encoded.low_bits.len() as u8);
+                buffer.extend_from_slice(&(encoded.high_bits.len() as u16).to_le_bytes());
+                buffer.extend_from_slice(&encoded.low_bits);
+                buffer.extend_from_slice(&encoded.high_bits);
+                buffer.extend_from_slice(&encoded.weights);
+                Self::align_4(&mut buffer);
+            } else {
+                buffer.extend_from_slice(&0u16.to_le_bytes());
+                Self::align_4(&mut buffer);
+            }
+        }
+
+        for (i, &off) in posting_offsets.iter().enumerate() {
+            let pos = postings_offset_table_pos + (i * 4);
+            buffer[pos..pos + 4].copy_from_slice(&off.to_le_bytes());
+        }
+
+        // Section 3: Strings Pool
+        Self::align_4(&mut buffer);
+        let strings_offset = buffer.len() as u32;
+        buffer.extend_from_slice(&string_pool);
+
+        // Fill Header offsets
+        buffer[mphf_offset_pos..mphf_offset_pos + 4].copy_from_slice(&mphf_offset.to_le_bytes());
+        buffer[postings_offset_pos..postings_offset_pos + 4]
+            .copy_from_slice(&postings_offset.to_le_bytes());
+        buffer[strings_offset_pos..strings_offset_pos + 4]
+            .copy_from_slice(&strings_offset.to_le_bytes());
+
+        buffer
+    }
+
     #[inline]
     fn align_4(vec: &mut Vec<u8>) {
         let remainder = vec.len() % 4;
@@ -658,5 +886,14 @@ mod tests {
 
         assert_eq!(&bytes[0..4], &MAGIC);
         assert!(bytes.len() > 32);
+
+        let prompts = vec!["Search documentation...".to_string()];
+        let cat_bytes = BinarySearchIndexWriter::serialize_catalog(&docs, &snippets, &prompts);
+        assert_eq!(&cat_bytes[0..4], &MAGIC_CATALOG);
+        assert!(cat_bytes.len() > 32);
+
+        let idx_bytes = BinarySearchIndexWriter::serialize_index(docs.len(), &index);
+        assert_eq!(&idx_bytes[0..4], &MAGIC_INDEX);
+        assert!(idx_bytes.len() > 32);
     }
 }

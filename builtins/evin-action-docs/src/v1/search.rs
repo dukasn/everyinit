@@ -46,6 +46,21 @@ impl SearchIndexPayload {
             &self.index,
         )
     }
+
+    pub fn to_catalog_binary(&self) -> Vec<u8> {
+        crate::v1::search_binary::BinarySearchIndexWriter::serialize_catalog(
+            &self.docs,
+            &self.snippets,
+            &self.prompts,
+        )
+    }
+
+    pub fn to_index_binary(&self) -> Vec<u8> {
+        crate::v1::search_binary::BinarySearchIndexWriter::serialize_index(
+            self.docs.len(),
+            &self.index,
+        )
+    }
 }
 
 pub struct RawDocSection {
@@ -164,6 +179,14 @@ impl SearchIndexBuilder {
         let mut raw_sections = Vec::new();
 
         for page in &site_ast.pages {
+            if page
+                .metadata
+                .get("dev_only")
+                .and_then(|value| value.as_bool())
+                == Some(true)
+            {
+                continue;
+            }
             let page_title = page
                 .metadata
                 .get("title")

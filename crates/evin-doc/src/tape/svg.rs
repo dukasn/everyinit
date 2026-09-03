@@ -88,11 +88,12 @@ pub fn render_svg(config: &TapeConfig, frames: &[TerminalFrame], description: &s
     let tape_id = stable_tape_id(config, frames, description);
     let cols = config.cols;
     let mut output = format!(
-        "<svg class=\"evin-terminal-tape\" data-tape-duration-ms=\"{duration}\" data-tape-cols=\"{cols}\" data-tape-rows=\"{rendered_rows}\" role=\"img\" aria-labelledby=\"tape-title-{tape_id:016x} tape-desc-{tape_id:016x}\" style=\"--tape-width:{width}px;--tape-height:{height}px;--tape-cols:{cols};--tape-rows:{rendered_rows};--tape-aspect:{width}/{height};user-select:none;-webkit-user-select:none;pointer-events:none\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\"><title id=\"tape-title-{tape_id:016x}\">{}</title><desc id=\"tape-desc-{tape_id:016x}\">{}</desc><style>",
+        "<svg class=\"terminal-tape-svg\" data-tape-duration-ms=\"{duration}\" data-tape-cols=\"{cols}\" data-tape-rows=\"{rendered_rows}\" font-size=\"{}\" xml:space=\"preserve\" role=\"img\" aria-labelledby=\"tape-title-{tape_id:016x} tape-desc-{tape_id:016x}\" style=\"--tape-width:{width}px;--tape-height:{height}px;--tape-cols:{cols};--tape-rows:{rendered_rows};--tape-aspect:{width}/{height};user-select:none;-webkit-user-select:none;pointer-events:none\" viewBox=\"0 0 {width} {height}\" xmlns=\"http://www.w3.org/2000/svg\"><title id=\"tape-title-{tape_id:016x}\">{}</title><desc id=\"tape-desc-{tape_id:016x}\">{}</desc><style>",
+        metrics.font_size,
         escape(title),
         escape(description)
     );
-    output.push_str(".evin-terminal-tape{--term-bg:var(--ui-color-code-surface);--term-fg:var(--ui-color-code-on-surface);background:var(--term-bg);overflow:hidden}.evin-terminal-tape,.tape-frame,.tape-frame text,.tape-frame tspan{font-family:'IBM Plex Mono','Cascadia Mono','Cascadia Code','Fira Code',ui-monospace,Menlo,Monaco,Consolas,monospace;font-kerning:none;font-variant-ligatures:none;font-synthesis:none;text-anchor:start;dominant-baseline:alphabetic}");
+    output.push_str(".terminal-tape-svg{--term-bg:var(--ui-color-code-surface);--term-fg:var(--ui-color-code-on-surface);background:var(--term-bg);overflow:hidden}.terminal-tape-svg,.tape-frame,.tape-frame text,.tape-frame tspan{font-family:'IBM Plex Mono','Cascadia Mono','Cascadia Code','Fira Code',ui-monospace,Menlo,Monaco,Consolas,monospace;font-kerning:none;font-variant-ligatures:none;font-synthesis:none;text-anchor:start;dominant-baseline:alphabetic}");
     output.push_str(".term-default{fill:var(--term-fg)}.term-command,.term-builtin{fill:var(--ui-syn-function)}.term-keyword{fill:var(--ui-syn-keyword)}.term-flag,.term-punctuation{fill:var(--ui-syn-punctuation)}.term-variable{fill:var(--ui-syn-variable)}.term-string{fill:var(--ui-syn-string)}.term-number{fill:var(--ui-syn-constant)}.term-operator{fill:var(--ui-syn-operator)}.term-comment{fill:var(--ui-syn-comment)}.term-ansi-0{fill:var(--ui-palette-black);stroke:var(--ui-palette-black)}.term-ansi-1{fill:var(--ui-palette-red);stroke:var(--ui-palette-red)}.term-ansi-2{fill:var(--ui-palette-green);stroke:var(--ui-palette-green)}.term-ansi-3{fill:var(--ui-palette-yellow);stroke:var(--ui-palette-yellow)}.term-ansi-4{fill:var(--ui-palette-blue);stroke:var(--ui-palette-blue)}.term-ansi-5{fill:var(--ui-palette-magenta);stroke:var(--ui-palette-magenta)}.term-ansi-6{fill:var(--ui-palette-cyan);stroke:var(--ui-palette-cyan)}.term-ansi-7,.term-ansi-8,.term-ansi-15{fill:var(--ui-palette-white);stroke:var(--ui-palette-white)}.term-ansi-9{fill:var(--ui-palette-red);stroke:var(--ui-palette-red)}.term-ansi-10{fill:var(--ui-palette-green);stroke:var(--ui-palette-green)}.term-ansi-11{fill:var(--ui-palette-yellow);stroke:var(--ui-palette-yellow)}.term-ansi-12{fill:var(--ui-palette-blue);stroke:var(--ui-palette-blue)}.term-ansi-13{fill:var(--ui-palette-magenta);stroke:var(--ui-palette-magenta)}.term-ansi-14{fill:var(--ui-palette-cyan);stroke:var(--ui-palette-cyan)}.term-bold{font-weight:700}.term-dim{opacity:0.7}.term-italic{font-style:italic}.term-underline{text-decoration:underline}.term-strikethrough{text-decoration:line-through}.term-overline{text-decoration:overline}.term-hidden{opacity:0}.term-invert-fg{fill:var(--term-bg)}.term-invert-bg{fill:var(--term-fg)}.term-underline-curly{fill:none;stroke-width:1.2;stroke-linecap:round}");
     output.push_str("</style>");
     output.push_str(&format!(
@@ -104,7 +105,10 @@ pub fn render_svg(config: &TapeConfig, frames: &[TerminalFrame], description: &s
         } else {
             "none"
         };
-        output.push_str(&format!("<g class=\"tape-frame\" data-tape-frame-start-ms=\"{}\" display=\"{display}\" font-size=\"{}\" xml:space=\"preserve\">", timeline[index], metrics.font_size));
+        output.push_str(&format!(
+            "<g class=\"tape-frame\" data-tape-frame-start-ms=\"{}\" display=\"{display}\">",
+            timeline[index]
+        ));
         for row in 0..frame.rows.min(rendered_rows) {
             let start = usize::from(row) * usize::from(frame.cols);
             let cells = &frame.cells[start..start + usize::from(frame.cols)];
@@ -160,7 +164,29 @@ fn occupied_rows(frame: &TerminalFrame) -> u16 {
         .max(frame.cursor_row.saturating_add(1))
 }
 
+fn is_blank_default(cell: &super::screen::TerminalCell) -> bool {
+    if cell.ch != ' ' {
+        return false;
+    }
+    let (_, effective_bg) = cell.attributes.effective_colors();
+    effective_bg == super::screen::TerminalColor::Default
+        && !cell.attributes.invert
+        && !cell.attributes.underline
+        && !cell.attributes.strikethrough
+        && !cell.attributes.overline
+}
+
 fn write_row(output: &mut String, cells: &[super::screen::TerminalCell], metrics: TerminalMetrics) {
+    let end_col = cells
+        .iter()
+        .rposition(|c| !is_blank_default(c))
+        .map(|idx| idx + 1)
+        .unwrap_or(0);
+    if end_col == 0 {
+        return;
+    }
+    let cells = &cells[..end_col];
+
     let mut column = 0;
     while column < cells.len() {
         if cells[column].continuation {
@@ -714,11 +740,25 @@ mod tests {
         assert!(svg.contains("'IBM Plex Mono','Cascadia Mono','Cascadia Code','Fira Code'"));
         assert!(svg.contains("data-tape-duration-ms=\"1040\""));
         assert!(svg.contains("<text x=\"16\" y=\"31\">"));
-        assert!(svg.contains("<tspan x=\"16 34 43 52 61 70 79\""));
+        assert!(svg.contains("<tspan x=\"16\""));
         assert!(!svg.contains("textLength="));
         assert!(!svg.contains("lengthAdjust="));
         assert!(svg.contains("y=\"31\""));
         assert!(svg.contains("class=\"term-cursor\" x=\"34\" y=\"16\" width=\"2\" height=\"20\""));
+    }
+
+    #[test]
+    fn trailing_blank_cells_are_trimmed_while_interior_spaces_preserve_grid() {
+        let mut screen = VirtualScreen::new(1, 8);
+        screen.write_str("a b");
+        let config = TapeConfig {
+            rows: 1,
+            cols: 8,
+            ..TapeConfig::default()
+        };
+        let svg = render_svg(&config, &[screen.capture(40)], "grid");
+        assert!(svg.contains("<tspan x=\"16 25 34\""));
+        assert!(!svg.contains("43 52 61 70 79"));
     }
 
     #[test]

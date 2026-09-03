@@ -149,12 +149,12 @@ test('topbar is a 44px shell announcement and remembers dismissal', async ({ pag
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.goto('/');
 
-  const topbar = page.locator('.evin-topbar');
+  const topbar = page.locator('.docs-topbar');
   await expect(topbar).toHaveAttribute('data-topbar-variant', 'holo');
   await expect(topbar).toHaveAttribute('data-topbar-id', 'first-public-canary');
   await expect(topbar.locator('.topbar-action')).toHaveAttribute('href', 'https://github.com/dukasn/evin/releases');
   const layout = await page.evaluate(() => {
-    const bar = document.querySelector('.evin-topbar').getBoundingClientRect();
+    const bar = document.querySelector('.docs-topbar').getBoundingClientRect();
     const app = document.querySelector('#appLayout').getBoundingClientRect();
     const sidebar = document.querySelector('#sidebar').getBoundingClientRect();
     return { top: bar.top, bottom: bar.bottom, width: bar.width, height: bar.height, appTop: app.top, appBottom: app.bottom, sidebarTop: sidebar.top, viewport: window.innerHeight };
@@ -177,7 +177,7 @@ test('terminal tape player displays one frame and pauses without movement', asyn
   await page.goto('/');
 
   const tape = page.locator('.terminal-tape').first();
-  const svg = tape.locator('.evin-terminal-tape');
+  const svg = tape.locator('svg.terminal-tape-svg, svg.terminal-tape');
   await expect(svg).toBeVisible();
 
   const state = await svg.evaluate((element) => {

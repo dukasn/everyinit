@@ -1,0 +1,71 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// Documentation Metrics Timing Component
+
+.metrics-timing {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-ref-space-5);
+    color: var(--ui-color-on-surface-variant);
+    font: var(--ui-typescale-label-small-size) var(--ui-typescale-font-monospace);
+
+    .metrics-timing-waterfall {
+        display: flex;
+        flex-direction: column;
+        gap: var(--ui-ref-space-2);
+    }
+}
+
+.metrics-timing-row {
+    display: grid;
+    grid-template-columns: 180px minmax(60px, 1fr) 80px;
+    align-items: center;
+    gap: var(--ui-ref-space-4);
+    padding: 10px 16px;
+    border-radius: var(--ui-shape-corner-medium);
+    transition: background-color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+
+    &:hover {
+        background-color: var(--ui-color-state-hover);
+    }
+
+    .metrics-timing-label,
+    > span:first-child {
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--ui-color-on-surface);
+    }
+
+    .metrics-timing-track {
+        height: 8px;
+        overflow: hidden;
+        border-radius: var(--ui-shape-corner-full);
+        background: var(--ui-color-surface-container-high);
+    }
+
+    .metrics-timing-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--start-accent, var(--ui-palette-cyan)) 0%, var(--ui-palette-green) 100%);
+        transition: width var(--ui-motion-duration-medium) var(--ui-motion-easing-standard);
+    }
+
+    .metrics-timing-value {
+        color: var(--ui-color-on-surface);
+        text-align: right;
+        font-size: 0.875rem;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+@media (max-width: 840px) {
+    .metrics-timing-row {
+        grid-template-columns: 128px minmax(30px, 1fr) 60px;
+        padding: 8px 10px;
+        gap: var(--ui-ref-space-2);
+    }
+}
+
+

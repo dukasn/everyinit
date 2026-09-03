@@ -81,7 +81,7 @@ pub fn css(single_file: bool) -> String {
             format!("fonts/{}", font.filename)
         };
         css.push_str(&format!(
-            "@font-face{{font-family:'IBM Plex Mono';src:url('{source}') format('woff2');font-display:block;font-style:{};font-weight:{};font-synthesis:none}}",
+            "@font-face{{font-family:'IBM Plex Mono';src:url('{source}') format('woff2');font-display:swap;font-style:{};font-weight:{};font-synthesis:none}}",
             font.style, font.weight
         ));
     }
@@ -109,41 +109,12 @@ pub fn with_page_asset_prefix(css: &str, assets_prefix: &str) -> String {
     page_css
 }
 
-/// Return the faces actually used by a page's generated tape SVG markup.
-/// Preloading unused italic/bold files makes browsers warn and wastes the
-/// connection; the regular face is always needed for a tape.
-pub fn used_by_markup(markup: &str) -> Vec<&'static TapeFont> {
-    let mut bold = false;
-    let mut italic = false;
-    let mut bold_italic = false;
-    let mut rest = markup;
-    while let Some(start) = rest.find("<tspan") {
-        let Some(end) = rest[start..].find('>') else {
-            break;
-        };
-        let attributes = &rest[start..start + end];
-        let is_bold =
-            attributes.contains("font-weight=\"700\"") || attributes.contains("term-bold");
-        let is_italic =
-            attributes.contains("font-style=\"italic\"") || attributes.contains("term-italic");
-        match (is_bold, is_italic) {
-            (true, true) => bold_italic = true,
-            (true, false) => bold = true,
-            (false, true) => italic = true,
-            (false, false) => {}
-        }
-        rest = &rest[start + end + 1..];
-    }
-    FONTS
-        .iter()
-        .filter(|font| match (font.weight, font.style) {
-            (400, "normal") => true,
-            (700, "normal") => bold,
-            (400, "italic") => italic,
-            (700, "italic") => bold_italic,
-            _ => false,
-        })
-        .collect()
+/// Return the faces preloaded in the critical path for tape SVG markup.
+/// We restrict critical preloads to the regular face (`IBMPlexMono-Regular.woff2`)
+/// to prevent dual-font network contention on single-pipe / 2G connections.
+/// Bold and italic variants are loaded on-demand by the browser.
+pub fn used_by_markup(_markup: &str) -> Vec<&'static TapeFont> {
+    vec![&FONTS[0]]
 }
 
 /// Remove only the four generated tape faces when a rebuilt site no longer
@@ -186,7 +157,7 @@ mod tests {
         assert!(!external.contains("data:font/woff2"));
         let inline = css(true);
         assert!(inline.contains("data:font/woff2;base64,"));
-        assert!(inline.contains("font-display:block"));
+        assert!(inline.contains("font-display:swap"));
     }
 
     #[test]
@@ -205,6 +176,7 @@ mod tests {
         let styled = used_by_markup(
             "<tspan font-weight=\"700\"></tspan><tspan font-style=\"italic\"></tspan><tspan font-weight=\"700\" font-style=\"italic\"></tspan>",
         );
-        assert_eq!(styled.len(), 4);
+        assert_eq!(styled.len(), 1);
+        assert_eq!(styled[0].filename, "IBMPlexMono-Regular.woff2");
     }
 }

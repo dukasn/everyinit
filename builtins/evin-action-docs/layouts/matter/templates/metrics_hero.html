@@ -1,0 +1,13 @@
+<header class="start-hero metrics-component metrics-hero" data-metrics-component="hero">
+  <div class="start-hero-content">
+    <p class="start-eyebrow">{{#if title}}{{title}}{{/if}}</p>
+    <h1 class="hero-title"><span data-metric-field="frame0-gzip">—</span> <span class="metrics-unit">KB gzip</span></h1>
+    <p class="start-lead" data-metric-field="lead">Measuring the deterministic initial-paint footprint…</p>
+    <div class="start-feature-actions">
+      <button class="start-feature-action start-feature-action--primary" type="button" data-metrics-action="copy">Copy metrics.json</button>
+      <button class="start-feature-action" type="button" data-metrics-action="refresh">Refresh metrics</button>
+      <a class="start-feature-action metrics-action--explore" href="#metrics-inventory"><span class="metrics-action-label">Explore</span><span class="metrics-action-meta" data-metric-field="asset-count">assets</span><span class="metrics-action-arrow" aria-hidden="true">↓</span></a>
+    </div>
+    <span class="metrics-copy-notice" data-metric-field="notice" role="status" aria-live="polite"></span>
+  </div>
+</header>
