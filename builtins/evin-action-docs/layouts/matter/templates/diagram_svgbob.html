@@ -1,16 +1,17 @@
-<figure class="evin-diagram-figure evindoc-svgbob"{{id_attr}}{{alt_attr}}>
+<figure class="docs-diagram-figure diagram-figure doc-svgbob"{{id_attr}}{{alt_attr}}>
   <div class="code-header diagram-header">
     <span class="lang-label diagram-label">{{display_title}}</span>
     <div class="code-actions diagram-actions">
       <button class="icon-btn btn-download" type="button" aria-label="Download diagram" title="Download diagram" data-action="diagram:download" data-format="svg" data-filename="{{filename}}">
-        <svg class="evin-icon" aria-hidden="true"><use href="#icon-download"></use></svg>
+        <svg class="docs-icon" aria-hidden="true"><use href="#icon-download"></use></svg>
       </button>
       <button class="icon-btn btn-copy" type="button" aria-label="Copy diagram code" title="Copy diagram code" data-action="diagram:copy">
-        <svg class="evin-icon" aria-hidden="true"><use href="#icon-copy"></use></svg>
+        <svg class="docs-icon icon-copy" aria-hidden="true"><use href="#icon-copy"></use></svg>
+        <svg class="docs-icon icon-check" aria-hidden="true"><use href="#icon-check"></use></svg>
       </button>
     </div>
   </div>
-  <div class="evin-diagram-svg-wrapper">
+  <div class="docs-diagram-svg-wrapper diagram-svg-wrapper">
     {{svg}}
   </div>
   {{caption_html}}

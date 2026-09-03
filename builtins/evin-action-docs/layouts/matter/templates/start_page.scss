@@ -67,7 +67,7 @@
             571px 463px,
             571px 463px,
             571px 463px;
-        opacity: 0.9;
+        opacity: 0.62;
         animation: start-hero-particles-drift-near 15s cubic-bezier(.45, 0, .55, 1) infinite;
     }
 
@@ -79,9 +79,7 @@
             radial-gradient(circle 3px at 74% 22%, color-mix(in srgb, var(--start-accent) 65%, transparent) 0 2.2px, transparent 3px),
             radial-gradient(circle 3.2px at 62% 78%, color-mix(in srgb, var(--start-accent) 60%, transparent) 0 2.4px, transparent 3.2px),
             radial-gradient(circle 2.5px at 86% 52%, color-mix(in srgb, var(--ui-color-on-surface) 35%, transparent) 0 1.8px, transparent 2.5px),
-            /* Quantum Orbital Ring & Focal Node (Prime Sheet 4: 883px x 739px) */
-            radial-gradient(circle 14px at 28% 68%, transparent 10px, color-mix(in srgb, var(--start-accent) 28%, transparent) 11px 12px, transparent 13px),
-            radial-gradient(circle 3.8px at 28% 68%, color-mix(in srgb, var(--start-accent) 75%, transparent) 0 3px, transparent 3.8px),
+            /* Sparse foreground stars (no orbital rings) */
             radial-gradient(circle 2.8px at 84% 38%, color-mix(in srgb, var(--start-accent) 55%, transparent) 0 2px, transparent 2.8px),
             radial-gradient(circle 2.4px at 48% 24%, color-mix(in srgb, var(--ui-color-on-surface) 38%, transparent) 0 1.6px, transparent 2.4px);
         background-size:
@@ -90,26 +88,24 @@
             719px 593px,
             719px 593px,
             883px 739px,
-            883px 739px,
-            883px 739px,
             883px 739px;
-        opacity: 0.85;
+        opacity: 0.58;
         animation: start-hero-particles-drift-far 21s cubic-bezier(.45, 0, .55, 1) -6s infinite;
     }
 }
 
 @keyframes start-hero-particles-drift-near {
-    0%, 100% { transform: translate3d(-6px, 4px, 0); opacity: 0.84; }
-    24% { transform: translate3d(5px, -7px, 0); opacity: 0.96; }
-    53% { transform: translate3d(9px, 3px, 0); opacity: 0.88; }
-    78% { transform: translate3d(-4px, 8px, 0); opacity: 0.94; }
+    0%, 100% { transform: translate3d(-6px, 4px, 0); opacity: 0.42; }
+    24% { transform: translate3d(5px, -7px, 0); opacity: 0.72; }
+    53% { transform: translate3d(9px, 3px, 0); opacity: 0.5; }
+    78% { transform: translate3d(-4px, 8px, 0); opacity: 0.68; }
 }
 
 @keyframes start-hero-particles-drift-far {
-    0%, 100% { transform: translate3d(8px, -6px, 0); opacity: 0.78; }
-    22% { transform: translate3d(-9px, -2px, 0); opacity: 0.9; }
-    49% { transform: translate3d(-3px, 9px, 0); opacity: 0.82; }
-    74% { transform: translate3d(10px, 4px, 0); opacity: 0.92; }
+    0%, 100% { transform: translate3d(8px, -6px, 0); opacity: 0.36; }
+    22% { transform: translate3d(-9px, -2px, 0); opacity: 0.64; }
+    49% { transform: translate3d(-3px, 9px, 0); opacity: 0.4; }
+    74% { transform: translate3d(10px, 4px, 0); opacity: 0.6; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -369,7 +365,7 @@ body[data-page-kind="start"] .prose a.start-card {
 }
 
 svg.start-card-icon,
-.start-card-icon.evin-icon,
+.start-card-icon.docs-icon,
 .start-card-icon {
     flex: 0 0 auto;
     width: var(--ui-start-card-icon-size) !important;
@@ -411,7 +407,7 @@ svg.start-card-icon,
 
 svg.start-footer-logo,
 .start-footer-logo.docs-icon,
-.start-footer-logo.evin-icon,
+.start-footer-logo.matter-icon,
 .start-footer-logo {
     display: flex;
     align-items: center;
@@ -539,7 +535,8 @@ body[data-page-kind="start"] .start-footer-column a {
     letter-spacing: -0.03em;
 }
 
-body[data-page-kind="start"] {
+body[data-page-kind="start"],
+body[data-page-kind="metrics"] {
     .breadcrumbs,
     .inline-toc,
     .toc-rail,

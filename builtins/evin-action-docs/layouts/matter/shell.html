@@ -10,11 +10,62 @@
     <depth-prefix></depth-prefix>
 
     <script>
-        const savedTheme = localStorage.getItem('m3-docs-theme') || 'light';
-        document.documentElement.setAttribute('data-theme', savedTheme);
+        (() => {
+            const theme = localStorage.getItem('m3-theme') || 
+                localStorage.getItem('m3-docs-theme') || 
+                (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
     </script>
 
+    <style id="matter-theme-shield">
+        :root {
+            color-scheme: light;
+            --ui-color-background: #FAF7F2;
+            --ui-color-on-background: #1D1B19;
+        }
+        html[data-theme="dark"] {
+            color-scheme: dark;
+            --ui-color-background: #040406;
+            --ui-color-on-background: #E8E8EB;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--ui-color-background) !important;
+            color: var(--ui-color-on-background);
+        }
+
+        /* Hold body invisible until theme.css is parsed */
+        body {
+            opacity: 0;
+            transition: opacity 160ms ease-out;
+        }
+
+        /* Smooth full-page fade in */
+        html.theme-ready body {
+            opacity: 1;
+        }
+
+        /* Instant reveal when reduced motion is requested */
+        @media (prefers-reduced-motion: reduce) {
+            body {
+                opacity: 1 !important;
+                transition: none !important;
+            }
+        }
+
+        /* Guard against unstyled native dialogs appearing before CSS */
+        dialog:not([open]) { display: none !important; }
+    </style>
+    <noscript><style>body { opacity: 1 !important; }</style></noscript>
+
     <css></css>
+
+    <script>
+        /* Failsafe timeout: reveal content after 1.5s if network stalls */
+        setTimeout(() => document.documentElement.classList.add('theme-ready'), 1500);
+    </script>
 </head>
 <body data-page-kind="<page-kind></page-kind>">
     <icons-sprite></icons-sprite>
@@ -33,6 +84,21 @@
             </button>
         </div>
         <div class="dialog-content" id="docs-search-results"></div>
+        <template id="search-card-tmpl">
+            <button class="dialog-item search-result-card" type="button">
+                <div class="search-result-left"><svg class="docs-icon" aria-hidden="true"><use href=""></use></svg></div>
+                <div class="search-result-body">
+                    <div class="search-result-header">
+                        <span class="search-result-title"></span>
+                    </div>
+                    <div class="search-result-meta"></div>
+                    <div class="search-result-snippet"></div>
+                </div>
+            </button>
+        </template>
+        <template id="search-empty-tmpl">
+            <div class="search-empty-state">No matches found</div>
+        </template>
     </dialog>
 
     <div class="app-layout" id="appLayout">

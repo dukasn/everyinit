@@ -2,15 +2,15 @@
 // spotlight is rendered. Each variant block in core/banner is guarded by the
 // resolved build-time list, so this source never implies every variant is
 // emitted into a documentation artifact.
-$evin-presentation-variants: () !default;
-$evin-topbar-enabled: false !default;
-$evin-spotlight-enabled: false !default;
-$presentation-variants: $evin-presentation-variants;
-$topbar-enabled: $evin-topbar-enabled;
+$matter-presentation-variants: () !default;
+$matter-topbar-enabled: false !default;
+$matter-spotlight-enabled: false !default;
+$presentation-variants: $matter-presentation-variants;
+$topbar-enabled: $matter-topbar-enabled;
 
 @import "core/banner";
 
-@if $evin-spotlight-enabled {
+@if $matter-spotlight-enabled {
     .start-spotlight {
         position: relative;
         isolation: isolate;
@@ -109,7 +109,7 @@ $topbar-enabled: $evin-topbar-enabled;
                     box-shadow var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
                     transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
 
-        span, svg, .docs-icon, .evin-icon {
+        span, svg, .docs-icon, .matter-icon {
             color: var(--presentation-action-ink) !important;
         }
     }
@@ -121,7 +121,7 @@ $topbar-enabled: $evin-topbar-enabled;
         color: var(--presentation-action-ink-hover, var(--presentation-action-ink)) !important;
         outline: none;
 
-        span, svg, .docs-icon, .evin-icon {
+        span, svg, .docs-icon, .matter-icon {
             color: var(--presentation-action-ink-hover, var(--presentation-action-ink)) !important;
             text-decoration: underline;
         }
@@ -132,9 +132,9 @@ $topbar-enabled: $evin-topbar-enabled;
         outline-offset: 4px;
     }
     .start-spotlight-action .docs-icon,
-    .start-spotlight-action .evin-icon,
+    .start-spotlight-action .matter-icon,
     .presentation-scale-feature .presentation-action .docs-icon,
-    .presentation-scale-feature .presentation-action .evin-icon {
+    .presentation-scale-feature .presentation-action .matter-icon {
         width: var(--presentation-action-icon-size, var(--spotlight-action-icon-size, 1.25rem));
         height: var(--presentation-action-icon-size, var(--spotlight-action-icon-size, 1.25rem));
         color: inherit !important;

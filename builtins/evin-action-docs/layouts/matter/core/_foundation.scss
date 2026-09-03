@@ -36,8 +36,8 @@ body {
 
 
 .docs-icon,
-.evin-icon { width: 1.25rem; height: 1.25rem; display: inline-block; vertical-align: -0.125em; fill: currentColor; flex-shrink: 0; pointer-events: none; transition: color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard); }
+.matter-icon { width: 1.25rem; height: 1.25rem; display: inline-block; vertical-align: -0.125em; fill: currentColor; flex-shrink: 0; pointer-events: none; transition: color var(--ui-motion-duration-short) var(--ui-motion-easing-standard), transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard); }
 .icon-btn .docs-icon,
-.icon-btn .evin-icon { width: 24px; height: 24px; }
+.icon-btn .matter-icon { width: 24px; height: 24px; }
 .pagination-card .docs-icon,
-.pagination-card .evin-icon { width: 24px; height: 24px; }
+.pagination-card .matter-icon { width: 24px; height: 24px; }

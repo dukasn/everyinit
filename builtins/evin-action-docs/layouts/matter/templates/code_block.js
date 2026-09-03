@@ -1,75 +1,61 @@
 (function() {
     'use strict';
 
-    window.EvinActions = window.EvinActions || {};
+    window.MatterActions = window.MatterActions || window.DocsActions || window.EvinActions || {};
+    window.DocsActions = window.MatterActions;
+    window.EvinActions = window.MatterActions;
 
-    const copyIconSvg = '<svg class="evin-icon" aria-hidden="true"><use href="#icon-copy"></use></svg>';
-    const checkIconSvg = '<svg class="evin-icon" style="color:var(--ui-color-primary)" aria-hidden="true"><use href="#icon-check"></use></svg>';
-
-    function copyToClipboard(text, onSuccess) {
-        if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(onSuccess).catch(function() {
-                fallbackCopy(text, onSuccess);
-            });
-        } else {
-            fallbackCopy(text, onSuccess);
+    if (!window.MatterActions.copyText) {
+        function fallbackCopy(text, onSuccess) {
+            try {
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-999999px';
+                textarea.style.top = '-999999px';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (successful && onSuccess) onSuccess();
+            } catch (_) {}
         }
-    }
 
-    function fallbackCopy(text, onSuccess) {
-        try {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.left = '-999999px';
-            textarea.style.top = '-999999px';
-            document.body.appendChild(textarea);
-            textarea.focus();
-            textarea.select();
-            const successful = document.execCommand('copy');
-            document.body.removeChild(textarea);
-            if (successful && onSuccess) {
-                onSuccess();
+        window.MatterActions.copyText = function(text, button, successTitle) {
+            if (!text) return;
+            const onSuccess = function() {
+                if (!button) return;
+                button.classList.add('is-copied');
+                const prevTitle = button.getAttribute('title');
+                button.setAttribute('title', successTitle || 'Copied!');
+                setTimeout(function() {
+                    button.classList.remove('is-copied');
+                    if (prevTitle) button.setAttribute('title', prevTitle);
+                    else button.removeAttribute('title');
+                }, 2000);
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(onSuccess).catch(function() {
+                    fallbackCopy(text, onSuccess);
+                });
+            } else {
+                fallbackCopy(text, onSuccess);
             }
-        } catch (_) {}
+        };
     }
 
-    function addRippleEffect(button, e) {
-        const circle = document.createElement('span');
-        const diameter = Math.max(button.clientWidth, button.clientHeight);
-        const radius = diameter / 2;
-        const rect = button.getBoundingClientRect();
-
-        circle.style.width = circle.style.height = `${diameter}px`;
-        circle.style.left = `${e.clientX - rect.left - radius}px`;
-        circle.style.top = `${e.clientY - rect.top - radius}px`;
-        circle.classList.add('ripple');
-
-        const existing = button.querySelector('.ripple');
-        if (existing) existing.remove();
-
-        button.appendChild(circle);
-    }
-
-    window.EvinActions['code:copy'] = function(copyBtn, e) {
-        if (e) addRippleEffect(copyBtn, e);
+    window.MatterActions['code:copy'] = function(copyBtn, e) {
         const surface = copyBtn.closest('.code-surface');
         const codeEl = surface ? surface.querySelector('code') : null;
         if (!codeEl) return;
 
         const text = codeEl.innerText || codeEl.textContent || '';
-        copyToClipboard(text, function() {
-            copyBtn.innerHTML = checkIconSvg;
-            copyBtn.setAttribute('title', 'Copied!');
-            setTimeout(function() {
-                copyBtn.innerHTML = copyIconSvg;
-                copyBtn.setAttribute('title', 'Copy code');
-            }, 2000);
-        });
+        window.MatterActions.copyText(text, copyBtn, 'Copied!');
     };
 
-    window.EvinActions['code:download'] = function(downloadBtn, e) {
-        if (e) addRippleEffect(downloadBtn, e);
+    window.MatterActions['code:download'] = function(downloadBtn, e) {
         const surface = downloadBtn.closest('.code-surface');
         const codeEl = surface ? surface.querySelector('code') : null;
         if (!codeEl) return;

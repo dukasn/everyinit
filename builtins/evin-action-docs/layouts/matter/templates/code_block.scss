@@ -86,7 +86,8 @@
             background-color: var(--ui-color-state-focus);
         }
 
-        .evin-icon {
+        .docs-icon,
+        .matter-icon {
             width: var(--ui-typescale-title-medium-size);
             height: var(--ui-typescale-title-medium-size);
             transition: transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard), color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
@@ -140,23 +141,6 @@
             border-radius: 0;
             color: inherit;
         }
-    }
-}
-
-/* Material Ripple Wave */
-.ripple {
-    position: absolute;
-    border-radius: var(--ui-shape-corner-full);
-    background: var(--ui-color-state-focus);
-    transform: scale(0);
-    animation: ripple-effect var(--ui-motion-duration-long) var(--ui-motion-easing-standard);
-    pointer-events: none;
-}
-
-@keyframes ripple-effect {
-    to {
-        transform: scale(4);
-        opacity: 0;
     }
 }
 

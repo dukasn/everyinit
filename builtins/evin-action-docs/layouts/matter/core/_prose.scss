@@ -31,7 +31,8 @@ h1, h2, h3, h4, h5, h6 {
             opacity var(--ui-motion-duration-short) var(--ui-motion-easing-standard),
             transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
 
-        .evin-icon {
+        .docs-icon,
+        .matter-icon {
             width: 0.875rem;
             height: 0.875rem;
         }
@@ -363,8 +364,7 @@ hr, .m3-divider {
 }
 
 /* ESH / LSP Built-in Symbol Catalog Cards (Clean M3 Matter Surface) */
-.docs-lsp-symbol,
-.evin-lsp-symbol {
+.docs-lsp-symbol {
     margin: var(--ui-ref-space-8) 0;
     padding: var(--ui-ref-space-6);
     background-color: var(--ui-color-surface-container-low);
@@ -372,8 +372,7 @@ hr, .m3-divider {
     border-radius: var(--ui-shape-corner-extra-large, 18px);
 }
 
-.docs-lsp-header,
-.evin-lsp-header {
+.docs-lsp-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -381,8 +380,7 @@ hr, .m3-divider {
     margin-bottom: var(--ui-ref-space-3);
 }
 
-.docs-lsp-name,
-.evin-lsp-name {
+.docs-lsp-name {
     margin: 0 !important;
     font-size: var(--ui-typescale-title-large-size, 1.25rem);
     font-weight: 700;
@@ -400,8 +398,7 @@ hr, .m3-divider {
     }
 }
 
-.docs-lsp-category.badge,
-.evin-lsp-category.badge {
+.docs-lsp-category.badge {
     display: inline-flex;
     align-items: center;
     padding: 4px 12px;
@@ -415,8 +412,7 @@ hr, .m3-divider {
     border: none;
 }
 
-.docs-lsp-synopsis,
-.evin-lsp-synopsis {
+.docs-lsp-synopsis {
     margin: var(--ui-ref-space-2) 0 var(--ui-ref-space-4);
 
     pre.syn-container {
@@ -438,16 +434,14 @@ hr, .m3-divider {
     }
 }
 
-.docs-lsp-summary,
-.evin-lsp-summary {
+.docs-lsp-summary {
     margin: 0 0 var(--ui-ref-space-4) !important;
     font-size: var(--ui-typescale-body-medium-size);
     color: var(--ui-color-on-surface-variant);
     line-height: var(--ui-doc-line-height-compact);
 }
 
-.docs-lsp-body,
-.evin-lsp-body {
+.docs-lsp-body {
     margin-top: var(--ui-ref-space-5);
     padding-top: var(--ui-ref-space-5);
     border-top: 1px solid var(--ui-color-outline-variant);

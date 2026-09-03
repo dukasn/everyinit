@@ -1,10 +1,13 @@
-.evin-math-inline math,
-.evin-math-block math {
+.math-inline math,
+.docs-math-inline math,
+.math-block math,
+.docs-math-block math {
     color: var(--ui-color-on-surface);
     font-size: 1.05em;
 }
 
-.evin-math-block {
+.math-block,
+.docs-math-block {
     margin: var(--ui-ref-space-4) 0;
     padding: var(--ui-ref-space-3);
     max-width: 100%;
@@ -13,7 +16,8 @@
     justify-content: center;
 }
 
-.evin-math-fallback {
+.math-fallback,
+.docs-math-fallback {
     font-family: var(--ui-typescale-font-monospace);
     background-color: var(--ui-color-surface-container);
     border: 1px solid var(--ui-color-outline-variant);
@@ -23,7 +27,8 @@
     word-break: break-word;
     overflow-wrap: break-word;
 
-    &.evin-math-fallback-block {
+    &.math-fallback-block,
+    &.docs-math-fallback-block {
         display: block;
         width: 100%;
         max-width: 100%;

@@ -1,4 +1,5 @@
-.terminal-tape {
+figure.terminal-tape,
+.terminal-tape:not(svg) {
     margin: var(--ui-ref-space-6) 0;
     padding: 0;
     max-width: 100%;
@@ -105,10 +106,25 @@
                 opacity: 0.5;
             }
 
-            .evin-icon {
+            .docs-icon,
+            .matter-icon {
                 width: var(--ui-typescale-title-medium-size);
                 height: var(--ui-typescale-title-medium-size);
                 transition: transform var(--ui-motion-duration-short) var(--ui-motion-easing-standard), color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
+            }
+        }
+
+        .tape-playback {
+            .icon-play {
+                display: none !important;
+            }
+            &[aria-pressed="true"] {
+                .icon-pause {
+                    display: none !important;
+                }
+                .icon-play {
+                    display: inline-block !important;
+                }
             }
         }
     }
@@ -134,7 +150,8 @@
                 width: calc(var(--ui-ref-space-8, 32px));
                 height: calc(var(--ui-ref-space-8, 32px));
 
-                .evin-icon {
+                .docs-icon,
+                .matter-icon {
                     width: var(--ui-typescale-body-large-size);
                     height: var(--ui-typescale-body-large-size);
                 }
@@ -143,6 +160,7 @@
     }
 
     .tape-stage {
+        border: none;
         padding: 0 var(--ui-ref-space-3) var(--ui-ref-space-3) var(--ui-ref-space-3);
         overflow-x: auto;
         overflow-y: hidden;
@@ -161,11 +179,20 @@
             background: var(--ui-color-code-outline);
             border-radius: var(--ui-shape-corner-full);
         }
+
+        svg {
+            border: none !important;
+            margin: 0 !important;
+        }
     }
 
-    .evin-terminal-tape {
+    .terminal-tape-svg,
+    svg.terminal-tape,
+    svg.terminal-tape-svg {
         display: block;
         width: 100%;
+        border: none !important;
+        margin: 0 !important;
         min-width: calc(var(--tape-cols, 80) * 8.5px + 32px);
         max-width: 100%;
         height: auto;
@@ -222,19 +249,15 @@
         }
     }
 
-    .tape-ripple {
-        position: absolute;
-        border-radius: var(--ui-shape-corner-full);
-        background: var(--ui-color-state-focus);
-        transform: scale(0);
-        animation: tape-ripple-effect var(--ui-motion-duration-long) var(--ui-motion-easing-standard);
-        pointer-events: none;
-    }
 }
 
-@keyframes tape-ripple-effect {
-    to {
-        transform: scale(4);
-        opacity: 0;
+@media (prefers-reduced-motion: reduce) {
+    .terminal-tape .tape-frame,
+    .terminal-tape-svg .tape-frame {
+        display: none !important;
+    }
+    .terminal-tape .tape-frame:last-of-type,
+    .terminal-tape-svg .tape-frame:last-of-type {
+        display: inline !important;
     }
 }

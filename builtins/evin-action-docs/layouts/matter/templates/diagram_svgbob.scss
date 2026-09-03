@@ -1,5 +1,6 @@
 /* Diagrams (Svgbob) */
-.evin-diagram-figure {
+.docs-diagram-figure,
+.diagram-figure {
     position: relative;
     margin: var(--ui-ref-space-6) 0;
     padding: 0;
@@ -39,9 +40,10 @@
     gap: var(--ui-ref-space-1);
 }
 
-.evin-diagram-svg-wrapper {
+.docs-diagram-svg-wrapper,
+.diagram-svg-wrapper {
     position: relative;
-    padding: var(--ui-ref-space-3) var(--ui-ref-space-6) var(--ui-ref-space-6) var(--ui-ref-space-6);
+    padding: var(--ui-ref-space-3);
     display: flex;
     overflow-x: auto;
     overflow-y: hidden;
@@ -62,15 +64,17 @@
     }
 
     > svg {
-        margin-inline: auto;
-        flex-shrink: 0;
         display: block;
-        max-width: none;
+        width: 100%;
+        max-width: 100%;
         height: auto;
     }
 }
 
-.evindoc-svgbob .evin-diagram-svg-wrapper > svg {
+.doc-svgbob .diagram-svg-wrapper > svg,
+.docs-svgbob .diagram-svg-wrapper > svg,
+.doc-svgbob .docs-diagram-svg-wrapper > svg,
+.docs-svgbob .docs-diagram-svg-wrapper > svg {
     font-family: var(--ui-typescale-font-monospace);
     color: var(--ui-diagram-node-text, var(--ui-color-code-on-surface));
 
@@ -105,7 +109,8 @@
     }
 }
 
-.evin-diagram-caption {
+.docs-diagram-caption,
+.diagram-caption {
     margin: 0;
     padding: 0 var(--ui-ref-space-6) var(--ui-ref-space-4) var(--ui-ref-space-6);
     font-size: var(--ui-typescale-label-medium-size);

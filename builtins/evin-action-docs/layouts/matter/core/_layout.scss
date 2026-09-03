@@ -70,14 +70,10 @@ aside.sidebar > * {
     pointer-events: auto;
 }
 @if $topbar-enabled {
-    .docs-topbar ~ .app-layout aside.sidebar,
-    .evin-topbar ~ .app-layout aside.sidebar { inset-block-start: var(--ui-layout-topbar-height); }
-    .docs-topbar ~ .app-layout .sidebar-backdrop,
-    .evin-topbar ~ .app-layout .sidebar-backdrop { inset-block-start: var(--ui-layout-topbar-height); }
+    .docs-topbar ~ .app-layout aside.sidebar { inset-block-start: var(--ui-layout-topbar-height); }
+    .docs-topbar ~ .app-layout .sidebar-backdrop { inset-block-start: var(--ui-layout-topbar-height); }
     .docs-topbar.is-hidden ~ .app-layout aside.sidebar,
-    .docs-topbar.is-hidden ~ .app-layout .sidebar-backdrop,
-    .evin-topbar.is-hidden ~ .app-layout aside.sidebar,
-    .evin-topbar.is-hidden ~ .app-layout .sidebar-backdrop { inset-block-start: 0; }
+    .docs-topbar.is-hidden ~ .app-layout .sidebar-backdrop { inset-block-start: 0; }
     /* The announcement already establishes the shell edge. Do not add a
      * second visual gutter before the sidebar's brand area. */
     .sidebar-top { padding-top: 0; }
@@ -175,7 +171,8 @@ body.modal-drawer-open main.content { overflow: hidden; }
     white-space: nowrap;
 }
 
-body[data-page-kind="start"] {
+body[data-page-kind="start"],
+body[data-page-kind="metrics"] {
     .breadcrumbs,
     .inline-toc,
     .toc-rail,

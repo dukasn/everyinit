@@ -16,7 +16,7 @@
         color var(--ui-motion-duration-short) var(--ui-motion-easing-standard);
 
     .docs-icon,
-    .evin-icon {
+    .matter-icon {
         width: 22px;
         height: 22px;
     }
@@ -27,6 +27,52 @@
     background-color: var(--ui-color-state-hover);
     color: var(--ui-color-on-surface);
     outline: none;
+}
+
+.btn-copy, .tape-copy {
+    .icon-check {
+        display: none !important;
+    }
+    &.is-copied {
+        .icon-copy {
+            display: none !important;
+        }
+        .icon-check {
+            display: inline-block !important;
+            color: var(--ui-color-primary) !important;
+        }
+    }
+}
+
+/* Shared Material ripple for all action controls. */
+.ripple-host {
+    position: relative;
+    overflow: hidden;
+}
+
+.ripple {
+    position: absolute;
+    border-radius: var(--ui-shape-corner-full);
+    background: var(--ui-color-state-focus);
+    transform: scale(0);
+    animation: ripple-effect 500ms var(--ui-motion-easing-standard);
+    pointer-events: none;
+    z-index: 1;
+}
+
+@keyframes ripple-effect {
+    0% {
+        opacity: 0.85;
+    }
+
+    60% {
+        opacity: 0.35;
+    }
+
+    to {
+        transform: scale(4);
+        opacity: 0;
+    }
 }
 
 

@@ -109,15 +109,15 @@ $topbar-enabled: false !default;
      * enabled topbar; retaining the modal drawer offset would create 44px of
      * empty space above it. */
     @if $topbar-enabled {
-        .docs-topbar ~ .app-layout aside.sidebar,
-        .evin-topbar ~ .app-layout aside.sidebar { inset-block-start: auto; }
+        .docs-topbar ~ .app-layout aside.sidebar { inset-block-start: auto; }
     }
 
     /* The start page always begins with its persistent drawer closed. Keep
      * that server-rendered first paint in sync with app.js so a wide screen
      * never briefly exposes the drawer before client state is applied. */
     .app-layout.sidebar-closed aside.sidebar,
-    body[data-page-kind="start"] .app-layout:not(.sidebar-open) aside.sidebar {
+    body[data-page-kind="start"] .app-layout:not(.sidebar-open) aside.sidebar,
+    body[data-page-kind="metrics"] .app-layout:not(.sidebar-open) aside.sidebar {
         width: 0;
         border-right-color: transparent;
         transform: translateX(-100%);
@@ -125,7 +125,8 @@ $topbar-enabled: false !default;
     }
 
     .app-layout.sidebar-closed aside.sidebar > *,
-    body[data-page-kind="start"] .app-layout:not(.sidebar-open) aside.sidebar > * {
+    body[data-page-kind="start"] .app-layout:not(.sidebar-open) aside.sidebar > *,
+    body[data-page-kind="metrics"] .app-layout:not(.sidebar-open) aside.sidebar > * {
         opacity: 0;
         pointer-events: none;
     }

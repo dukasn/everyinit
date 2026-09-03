@@ -1,5 +1,6 @@
 /* Diagrams (Mermaid) */
-.evin-diagram-figure {
+.docs-diagram-figure,
+.diagram-figure {
     position: relative;
     margin: var(--ui-ref-space-6) 0;
     padding: 0;
@@ -39,9 +40,10 @@
     gap: var(--ui-ref-space-1);
 }
 
-.evin-diagram-container {
+.docs-diagram-container,
+.diagram-container {
     position: relative;
-    padding: var(--ui-ref-space-3) var(--ui-ref-space-6) var(--ui-ref-space-6) var(--ui-ref-space-6);
+    padding: var(--ui-ref-space-3);
     display: flex;
     overflow-x: auto;
     overflow-y: hidden;
@@ -62,26 +64,29 @@
     }
 }
 
-.evindoc-mermaid {
-    .evin-mermaid-svg-target {
-        margin-inline: auto;
-        flex-shrink: 0;
+.doc-mermaid,
+.docs-mermaid {
+    .mermaid-svg-target {
+        width: 100%;
+        min-width: 0;
         display: block;
 
         svg {
             display: block;
-            max-width: none;
+            width: 100%;
+            max-width: 100%;
             height: auto;
             background: transparent !important;
         }
     }
 }
 
-.evin-mermaid-source[hidden] {
+.mermaid-source[hidden] {
     display: none !important;
 }
 
-.evin-diagram-caption {
+.docs-diagram-caption,
+.diagram-caption {
     margin: 0;
     padding: 0 var(--ui-ref-space-6) var(--ui-ref-space-4) var(--ui-ref-space-6);
     font-size: var(--ui-typescale-label-medium-size);
