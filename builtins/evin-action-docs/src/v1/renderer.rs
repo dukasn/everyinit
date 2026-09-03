@@ -54,6 +54,7 @@ enum ShellSlot {
     LiveReload,
     PageKind,
     PageLanguage,
+    JsonLd,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,6 +252,18 @@ impl ShellTemplate {
             (
                 "<page-language/>",
                 ShellSlot::PageLanguage,
+                SlotWrapper::None,
+            ),
+            ("<json-ld></json-ld>", ShellSlot::JsonLd, SlotWrapper::None),
+            ("<json-ld/>", ShellSlot::JsonLd, SlotWrapper::None),
+            (
+                "<!-- evin:slot:json_ld -->",
+                ShellSlot::JsonLd,
+                SlotWrapper::None,
+            ),
+            (
+                "<!-- evin:slot:json-ld -->",
+                ShellSlot::JsonLd,
                 SlotWrapper::None,
             ),
             // Legacy comment fallbacks
@@ -463,6 +476,7 @@ impl ShellTemplate {
                         ShellSlot::LiveReload => slots.live_reload,
                         ShellSlot::PageKind => slots.page_kind,
                         ShellSlot::PageLanguage => slots.page_language,
+                        ShellSlot::JsonLd => slots.json_ld,
                     };
                     match wrapper {
                         SlotWrapper::None => out.push_str(val),
@@ -500,6 +514,12 @@ impl ShellTemplate {
                     }
                 }
             }
+        }
+        if !self.uses(ShellSlot::JsonLd)
+            && !slots.json_ld.is_empty()
+            && let Some(pos) = out.find("</head>")
+        {
+            out.insert_str(pos, &format!("    {}\n", slots.json_ld));
         }
         if !self.uses(ShellSlot::PageLanguage) {
             return apply_html_language(out, slots.page_language);
@@ -571,6 +591,7 @@ struct PageSlots<'a> {
     live_reload: &'a str,
     page_kind: &'a str,
     page_language: &'a str,
+    json_ld: &'a str,
 }
 
 #[derive(Debug, Clone)]
@@ -966,6 +987,7 @@ pub struct PreparedRenderContext<'a> {
     pub start_page: Option<&'a StartPageModel>,
     pub topbar: Option<&'a Topbar>,
     pub seo: &'a SeoCatalog,
+    pub social_image: Option<&'a str>,
 }
 
 impl<'a> PreparedRenderContext<'a> {
@@ -988,6 +1010,7 @@ impl<'a> PreparedRenderContext<'a> {
         start_page: Option<&'a StartPageModel>,
         topbar: Option<&'a Topbar>,
         seo: &'a SeoCatalog,
+        social_image: Option<&'a str>,
     ) -> Self {
         let shell_template = ShellTemplate::parse(shell_html);
         let site_title = site.title.as_deref().unwrap_or("Documentation").to_string();
@@ -1074,6 +1097,7 @@ impl<'a> PreparedRenderContext<'a> {
             start_page,
             topbar,
             seo,
+            social_image,
         }
     }
 
@@ -1269,6 +1293,7 @@ impl HtmlRenderer {
             start_page,
             None,
             seo,
+            None,
         );
         Self::render_prepared(&context)
     }
@@ -1409,21 +1434,168 @@ impl HtmlRenderer {
             "noindex, nofollow"
         };
 
-        let meta_html = if page_description.is_empty() {
+        let og_image = page
+            .metadata
+            .get("image")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| Self::resolve_absolute_url(s, &context.seo.site_url))
+            .or_else(|| {
+                context
+                    .social_image
+                    .map(|s| Self::resolve_absolute_url(s, &context.seo.site_url))
+            })
+            .or_else(|| match &context.resolved_favicon {
+                Some(crate::v1::resolver::ResolvedFavicon::Custom { extension, .. })
+                    if extension != "svg" =>
+                {
+                    context
+                        .seo
+                        .site_url
+                        .join(&format!("assets/favicons/favicon.{}", extension))
+                        .ok()
+                        .map(|u| u.to_string())
+                }
+                _ => None,
+            });
+
+        let mut meta_tags = Vec::new();
+        meta_tags.push(format!(
+            "<link rel=\"canonical\" href=\"{}\">",
+            Self::escape_html(&seo_page.canonical_url)
+        ));
+        meta_tags.push(format!("<meta name=\"robots\" content=\"{}\">", robots));
+        meta_tags.push("<meta name=\"generator\" content=\"evin\">".to_string());
+
+        if !page_description.is_empty() {
+            meta_tags.push(format!(
+                "<meta name=\"description\" content=\"{}\">",
+                Self::escape_html(page_description)
+            ));
+        }
+
+        meta_tags.push(format!(
+            "<meta property=\"og:url\" content=\"{}\">",
+            Self::escape_html(&seo_page.canonical_url)
+        ));
+        meta_tags.push("<meta property=\"og:type\" content=\"website\">".to_string());
+        meta_tags.push(format!(
+            "<meta property=\"og:site_name\" content=\"{}\">",
+            Self::escape_html(site_title)
+        ));
+        meta_tags.push(format!(
+            "<meta property=\"og:title\" content=\"{}\">",
+            Self::escape_html(page_title)
+        ));
+        if !page_description.is_empty() {
+            meta_tags.push(format!(
+                "<meta property=\"og:description\" content=\"{}\">",
+                Self::escape_html(page_description)
+            ));
+        }
+        if let Some(image_url) = &og_image {
+            meta_tags.push(format!(
+                "<meta property=\"og:image\" content=\"{}\">",
+                Self::escape_html(image_url)
+            ));
+        }
+
+        meta_tags.push("<meta name=\"twitter:card\" content=\"summary\">".to_string());
+        meta_tags.push(format!(
+            "<meta name=\"twitter:title\" content=\"{}\">",
+            Self::escape_html(page_title)
+        ));
+        if !page_description.is_empty() {
+            meta_tags.push(format!(
+                "<meta name=\"twitter:description\" content=\"{}\">",
+                Self::escape_html(page_description)
+            ));
+        }
+        if let Some(image_url) = &og_image {
+            meta_tags.push(format!(
+                "<meta name=\"twitter:image\" content=\"{}\">",
+                Self::escape_html(image_url)
+            ));
+        }
+
+        for (alt_lang, alt_url) in &seo_page.hreflang_alternates {
+            meta_tags.push(format!(
+                "<link rel=\"alternate\" hreflang=\"{}\" href=\"{}\">",
+                Self::escape_html(alt_lang),
+                Self::escape_html(alt_url)
+            ));
+        }
+
+        if !is_start_page && let Some(idx) = context.index.page_position(&page.slug) {
+            let pages = &context.site.pages;
+            if idx > 0
+                && let Some(prev) = pages.get(idx - 1)
+            {
+                let prev_canonical = &context.seo.page(&prev.slug).canonical_url;
+                meta_tags.push(format!(
+                    "<link rel=\"prev\" href=\"{}\">",
+                    Self::escape_html(prev_canonical)
+                ));
+            }
+            if let Some(next) = pages.get(idx + 1) {
+                let next_canonical = &context.seo.page(&next.slug).canonical_url;
+                meta_tags.push(format!(
+                    "<link rel=\"next\" href=\"{}\">",
+                    Self::escape_html(next_canonical)
+                ));
+            }
+        }
+
+        let meta_html = meta_tags.join("\n    ");
+
+        let json_ld = if is_start_page {
+            let mut schema = serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebSite",
+                "name": site_title,
+                "url": seo_page.canonical_url,
+            });
+            if !page_description.is_empty() {
+                schema["description"] = serde_json::Value::String(page_description.to_string());
+            }
             format!(
-                "<link rel=\"canonical\" href=\"{}\">\n    <meta name=\"robots\" content=\"{}\">\n    <meta property=\"og:title\" content=\"{}\">",
-                Self::escape_html(&seo_page.canonical_url),
-                robots,
-                Self::escape_html(page_title)
+                "<script type=\"application/ld+json\">\n{}\n</script>",
+                serde_json::to_string_pretty(&schema).unwrap_or_default()
             )
         } else {
+            let mut schema = serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "TechArticle",
+                "headline": page_title,
+                "url": seo_page.canonical_url,
+                "isPartOf": {
+                    "@type": "WebSite",
+                    "name": site_title,
+                    "url": context.seo.site_url.as_str()
+                }
+            });
+            if !page_description.is_empty() {
+                schema["description"] = serde_json::Value::String(page_description.to_string());
+            }
+            if let Some(updated) = &seo_page.updated {
+                schema["dateModified"] = serde_json::Value::String(updated.clone());
+            }
+            if let Some(author) = page
+                .metadata
+                .get("author")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+            {
+                schema["author"] = serde_json::json!({
+                    "@type": "Person",
+                    "name": author
+                });
+            }
             format!(
-                "<link rel=\"canonical\" href=\"{}\">\n    <meta name=\"robots\" content=\"{}\">\n    <meta name=\"description\" content=\"{}\">\n    <meta property=\"og:title\" content=\"{}\">\n    <meta property=\"og:description\" content=\"{}\">",
-                Self::escape_html(&seo_page.canonical_url),
-                robots,
-                Self::escape_html(page_description),
-                Self::escape_html(page_title),
-                Self::escape_html(page_description)
+                "<script type=\"application/ld+json\">\n{}\n</script>",
+                serde_json::to_string_pretty(&schema).unwrap_or_default()
             )
         };
 
@@ -1519,6 +1691,7 @@ impl HtmlRenderer {
             live_reload: live_reload_code,
             page_kind: if is_start_page { "start" } else { "document" },
             page_language: &seo_page.language,
+            json_ld: &json_ld,
         };
 
         shell_template.render(&slots)
@@ -1588,6 +1761,7 @@ impl HtmlRenderer {
             live_reload,
             page_kind: "start",
             page_language: language,
+            json_ld: "",
         };
         shell_template.render(&slots)
     }
@@ -2183,6 +2357,17 @@ impl HtmlRenderer {
 
     fn escape_into(out: &mut String, value: &str) {
         push_escaped_html(out, value);
+    }
+
+    fn resolve_absolute_url(url_or_path: &str, site_url: &url::Url) -> String {
+        if url_or_path.starts_with("http://") || url_or_path.starts_with("https://") {
+            url_or_path.to_string()
+        } else {
+            site_url
+                .join(url_or_path.trim_start_matches('/'))
+                .map(|u| u.to_string())
+                .unwrap_or_else(|_| url_or_path.to_string())
+        }
     }
 
     fn compute_relative_prefix(from_slug: &str) -> String {
@@ -4098,6 +4283,7 @@ mod tests {
             live_reload: "",
             page_kind: "document",
             page_language: "en",
+            json_ld: "",
         };
 
         let rendered = template.render(&slots);
@@ -4155,6 +4341,7 @@ mod tests {
             live_reload: "",
             page_kind: "document",
             page_language: "en",
+            json_ld: "",
         };
 
         let link_rendered = template.render(&slots);
@@ -4956,5 +5143,156 @@ mod tests {
         assert!(tape_used.contains("tape"));
         assert!(tape_js.contains("tape:toggle-playback"));
         assert!(tape_js.contains("tape:copy"));
+    }
+
+    #[test]
+    fn metadata_expansion_emits_og_twitter_generator_json_ld_and_sequence_links() {
+        let mut index_meta = HashMap::new();
+        index_meta.insert(
+            "title".to_string(),
+            serde_json::Value::String("Home Page".to_string()),
+        );
+        index_meta.insert(
+            "description".to_string(),
+            serde_json::Value::String("The site home page description.".to_string()),
+        );
+        index_meta.insert(
+            "image".to_string(),
+            serde_json::Value::String("https://example.com/custom-og.png".to_string()),
+        );
+
+        let mut guide_meta = HashMap::new();
+        guide_meta.insert(
+            "title".to_string(),
+            serde_json::Value::String("Guide Page".to_string()),
+        );
+        guide_meta.insert(
+            "description".to_string(),
+            serde_json::Value::String("A comprehensive guide page description.".to_string()),
+        );
+        guide_meta.insert(
+            "author".to_string(),
+            serde_json::Value::String("Alice Developer".to_string()),
+        );
+        guide_meta.insert(
+            "updated".to_string(),
+            serde_json::Value::String("2026-07-20".to_string()),
+        );
+
+        let mut ref_meta = HashMap::new();
+        ref_meta.insert(
+            "title".to_string(),
+            serde_json::Value::String("Reference Page".to_string()),
+        );
+
+        let site = DocSiteAst {
+            version: "1.0".to_string(),
+            title: Some("Evin Documentation".to_string()),
+            reference_prefix: "REF".to_string(),
+            pages: vec![
+                DocPage {
+                    slug: "index".to_string(),
+                    source_path: "index.md".to_string(),
+                    format: DocFormat::Markdown,
+                    metadata: index_meta,
+                    reference: None,
+                    toc: vec![],
+                    ast: vec![],
+                },
+                DocPage {
+                    slug: "guide".to_string(),
+                    source_path: "guide.md".to_string(),
+                    format: DocFormat::Markdown,
+                    metadata: guide_meta,
+                    reference: None,
+                    toc: vec![],
+                    ast: vec![],
+                },
+                DocPage {
+                    slug: "reference".to_string(),
+                    source_path: "reference.md".to_string(),
+                    format: DocFormat::Markdown,
+                    metadata: ref_meta,
+                    reference: None,
+                    toc: vec![],
+                    ast: vec![],
+                },
+            ],
+        };
+
+        let seo = SeoCatalog::build(&site, "https://example.com/docs/", "en").unwrap();
+        let assets = ResolvedAssets::default();
+        let registry = ComponentRegistry::empty();
+        let shell = "<head><page-title></page-title><page-meta></page-meta><json-ld></json-ld></head><body><content></content></body>";
+        let index = SiteIndex::build(&site).unwrap();
+
+        let context = PreparedRenderContext::new(
+            &site,
+            index,
+            &assets,
+            shell,
+            "",
+            "",
+            "",
+            &registry,
+            false,
+            false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            &seo,
+            Some("https://example.com/global-social.png"),
+        );
+
+        let outputs = HtmlRenderer::render_prepared(&context);
+
+        // 1. Start page (index.html)
+        let index_html = &outputs["index.html"];
+        assert!(index_html.contains("<meta name=\"generator\" content=\"evin\">"));
+        assert!(
+            index_html.contains("<meta property=\"og:url\" content=\"https://example.com/docs/\">")
+        );
+        assert!(index_html.contains("<meta property=\"og:type\" content=\"website\">"));
+        assert!(
+            index_html.contains("<meta property=\"og:site_name\" content=\"Evin Documentation\">")
+        );
+        assert!(index_html.contains("<meta property=\"og:title\" content=\"Home Page\">"));
+        assert!(index_html.contains(
+            "<meta property=\"og:description\" content=\"The site home page description.\">"
+        ));
+        assert!(index_html.contains(
+            "<meta property=\"og:image\" content=\"https://example.com/custom-og.png\">"
+        ));
+        assert!(index_html.contains("<meta name=\"twitter:card\" content=\"summary\">"));
+        assert!(index_html.contains("<meta name=\"twitter:title\" content=\"Home Page\">"));
+        assert!(index_html.contains(
+            "<meta name=\"twitter:image\" content=\"https://example.com/custom-og.png\">"
+        ));
+        assert!(index_html.contains("\"@type\": \"WebSite\""));
+        assert!(index_html.contains("\"name\": \"Evin Documentation\""));
+
+        // 2. Guide page (guide/index.html)
+        let guide_html = &outputs["guide/index.html"];
+        assert!(
+            guide_html
+                .contains("<link rel=\"canonical\" href=\"https://example.com/docs/guide/\">")
+        );
+        assert!(guide_html.contains(
+            "<meta property=\"og:image\" content=\"https://example.com/global-social.png\">"
+        ));
+        assert!(guide_html.contains(
+            "<meta name=\"twitter:image\" content=\"https://example.com/global-social.png\">"
+        ));
+        assert!(guide_html.contains("<link rel=\"prev\" href=\"https://example.com/docs/\">"));
+        assert!(
+            guide_html.contains("<link rel=\"next\" href=\"https://example.com/docs/reference/\">")
+        );
+        assert!(guide_html.contains("\"@type\": \"TechArticle\""));
+        assert!(guide_html.contains("\"headline\": \"Guide Page\""));
+        assert!(guide_html.contains("\"dateModified\": \"2026-07-20\""));
+        assert!(guide_html.contains("\"name\": \"Alice Developer\""));
     }
 }

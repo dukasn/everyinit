@@ -171,6 +171,10 @@ pub struct DocsConfig {
     pub metrics: bool,
     #[serde(default)]
     pub metrics_budget_kb: Option<u32>,
+    #[serde(default)]
+    pub social_image: Option<String>,
+    #[serde(default)]
+    pub lastmod_fallback: bool,
 }
 
 impl Default for DocsConfig {
@@ -207,6 +211,8 @@ impl Default for DocsConfig {
             diagnostic_search: false,
             metrics: false,
             metrics_budget_kb: None,
+            social_image: None,
+            lastmod_fallback: false,
         }
     }
 }
@@ -788,11 +794,35 @@ pub(crate) fn render_docs(
     stats.bundle = config.bundle.clone();
     stats.pages_written = 0;
     stats.assets_written = 0;
-    let seo = seo::SeoCatalog::build(site_ast, &config.site_url, &config.language).inspect_err(
-        |_error| {
-            stats.emit_output(logger);
-        },
-    )?;
+    let git_resolver = |source_path: &str| -> Option<String> {
+        let rel_path = Path::new(&config.source_dir).join(source_path);
+        let output = std::process::Command::new("git")
+            .args(["log", "-1", "--format=%cs", "--"])
+            .arg(&rel_path)
+            .current_dir(workspace_root)
+            .output()
+            .ok()?;
+        if output.status.success() {
+            let date_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !date_str.is_empty() {
+                return Some(date_str);
+            }
+        }
+        None
+    };
+    let seo_options = seo::SeoBuildOptions {
+        git_lastmod_resolver: Some(&git_resolver),
+        lastmod_fallback: config.lastmod_fallback,
+    };
+    let seo = seo::SeoCatalog::build_with_options(
+        site_ast,
+        &config.site_url,
+        &config.language,
+        seo_options,
+    )
+    .inspect_err(|_error| {
+        stats.emit_output(logger);
+    })?;
     let site_index = evin_doc::SiteIndex::build(site_ast).map_err(doc_issue_to_diagnostic)?;
     let has_subpath_warning = config.mode == DocsMode::Build && seo.site_url.path() != "/";
     let discovery_files = seo.discovery_files(config.mode).inspect_err(|_error| {
@@ -1099,6 +1129,7 @@ pub(crate) fn render_docs(
         Some(&start_page),
         topbar.as_ref(),
         &seo,
+        config.social_image.as_deref(),
     );
     let rendered_pages = HtmlRenderer::render_prepared(&render_context);
     prune_stale_page_outputs(&out_dir, &rendered_pages)?;

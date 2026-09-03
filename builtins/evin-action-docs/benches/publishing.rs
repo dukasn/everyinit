@@ -83,6 +83,7 @@ fn publishing_benchmarks(criterion: &mut Criterion) {
                 None,
                 None,
                 &seo,
+                None,
             ))
         })
     });
@@ -105,6 +106,7 @@ fn publishing_benchmarks(criterion: &mut Criterion) {
         None,
         None,
         &seo,
+        None,
     );
     criterion.bench_function("render_prepared_large_site", |bencher| {
         bencher.iter(|| black_box(HtmlRenderer::render_prepared(black_box(&context))))

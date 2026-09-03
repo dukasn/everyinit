@@ -31,6 +31,17 @@ pub struct SeoPage {
     pub indexable: bool,
     pub self_canonical: bool,
     pub updated: Option<String>,
+    pub changefreq: Option<&'static str>,
+    pub priority: Option<&'static str>,
+    pub hreflang_alternates: Vec<(String, String)>,
+}
+
+pub type GitLastmodResolver<'b> = dyn Fn(&str) -> Option<String> + Sync + 'b;
+
+#[derive(Default)]
+pub struct SeoBuildOptions<'a> {
+    pub git_lastmod_resolver: Option<&'a GitLastmodResolver<'a>>,
+    pub lastmod_fallback: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +86,15 @@ pub fn validate_site_settings(site_url: &str, language: &str) -> Result<Url, Str
 
 impl SeoCatalog {
     pub fn build(site: &DocSiteAst, site_url: &str, language: &str) -> Result<Self, Diagnostic> {
+        Self::build_with_options(site, site_url, language, SeoBuildOptions::default())
+    }
+
+    pub fn build_with_options(
+        site: &DocSiteAst,
+        site_url: &str,
+        language: &str,
+        options: SeoBuildOptions<'_>,
+    ) -> Result<Self, Diagnostic> {
         let site_url = validate_site_settings(site_url, language).map_err(invalid_seo)?;
         let site_language = normalize_language(language).map_err(invalid_seo)?;
         let default_urls: HashSet<String> = site
@@ -88,6 +108,8 @@ impl SeoCatalog {
         let mut quality = SeoQualityReport::default();
         let mut titles = HashMap::<String, Vec<String>>::new();
         let mut descriptions = HashMap::<String, Vec<String>>::new();
+        let mut stem_groups: HashMap<String, Vec<(String, String, bool)>> = HashMap::new();
+
         for page in &site.pages {
             let title = metadata_string(page, "title").unwrap_or(&page.slug);
             let description = metadata_string(page, "description").unwrap_or("");
@@ -155,14 +177,50 @@ impl SeoCatalog {
                 })
                 .transpose()?
                 .unwrap_or_else(|| site_language.clone());
-            let updated = seo_metadata(page, "updated")?
+            let explicit_updated = seo_metadata(page, "updated")?
                 .map(|value| {
                     normalize_updated(value).map_err(|message| {
                         invalid_seo(format!("{} in '{}'", message, page.source_path))
                     })
                 })
                 .transpose()?;
+            let updated = match explicit_updated {
+                Some(val) => Some(val),
+                None => {
+                    if let Some(resolver) = options.git_lastmod_resolver {
+                        if let Some(git_date) = resolver(&page.source_path) {
+                            normalize_updated(&git_date).ok()
+                        } else if options.lastmod_fallback {
+                            Some(chrono::Utc::now().format("%Y-%m-%d").to_string())
+                        } else {
+                            None
+                        }
+                    } else if options.lastmod_fallback {
+                        Some(chrono::Utc::now().format("%Y-%m-%d").to_string())
+                    } else {
+                        None
+                    }
+                }
+            };
             let self_canonical = canonical_url == default_canonical;
+            let is_start = page.slug == "index";
+            let is_reference = page.reference.is_some() || page.slug.starts_with("reference/");
+            let (changefreq, priority) = if is_start {
+                (Some("weekly"), Some("1.0"))
+            } else if is_reference {
+                (Some("monthly"), Some("0.8"))
+            } else {
+                (Some("monthly"), Some("0.9"))
+            };
+
+            let stem = slug_stem(&page.slug);
+            let is_unprefixed = !page.slug.split('/').next().is_some_and(is_locale_segment);
+            stem_groups.entry(stem).or_default().push((
+                page_language.clone(),
+                canonical_url.clone(),
+                is_unprefixed,
+            ));
+
             pages.insert(
                 page.slug.clone(),
                 SeoPage {
@@ -171,9 +229,37 @@ impl SeoCatalog {
                     indexable,
                     self_canonical,
                     updated,
+                    changefreq,
+                    priority,
+                    hreflang_alternates: Vec::new(),
                 },
             );
         }
+
+        for (slug, page_obj) in &mut pages {
+            let stem = slug_stem(slug);
+            if let Some(group) = stem_groups.get(&stem)
+                && group.len() > 1
+            {
+                let mut alternates = Vec::new();
+                let mut x_default = None;
+                for (lang, url, is_unprefixed) in group {
+                    alternates.push((lang.clone(), url.clone()));
+                    if *is_unprefixed && x_default.is_none() {
+                        x_default = Some(url.clone());
+                    }
+                }
+                if let Some(default_url) =
+                    x_default.or_else(|| group.first().map(|(_, u, _)| u.clone()))
+                {
+                    alternates.push(("x-default".to_string(), default_url));
+                }
+                alternates.sort();
+                alternates.dedup();
+                page_obj.hreflang_alternates = alternates;
+            }
+        }
+
         quality.duplicate_titles = duplicate_count(titles);
         quality.duplicate_descriptions = duplicate_count(descriptions);
         let indexable_pages = pages
@@ -333,12 +419,43 @@ fn duplicate_count(values: HashMap<String, Vec<String>>) -> usize {
         .count()
 }
 
+fn is_locale_segment(segment: &str) -> bool {
+    (segment.len() == 2 || segment.len() == 3 || segment.contains('-') || segment.contains('_'))
+        && LanguageIdentifier::from_str(segment).is_ok()
+}
+
+fn slug_stem(slug: &str) -> String {
+    let parts: Vec<&str> = slug.split('/').collect();
+    if parts.is_empty() {
+        return "index".to_string();
+    }
+    if is_locale_segment(parts[0]) {
+        if parts.len() == 1 || parts[1].is_empty() || parts[1] == "index" {
+            "index".to_string()
+        } else {
+            parts[1..].join("/")
+        }
+    } else {
+        slug.to_string()
+    }
+}
+
 fn sitemap_entry(page: &SeoPage) -> String {
     let mut entry = format!("  <url><loc>{}</loc>", escape_xml(&page.canonical_url));
     if let Some(updated) = &page.updated {
         entry.push_str("<lastmod>");
         entry.push_str(&escape_xml(updated));
         entry.push_str("</lastmod>");
+    }
+    if let Some(changefreq) = page.changefreq {
+        entry.push_str("<changefreq>");
+        entry.push_str(changefreq);
+        entry.push_str("</changefreq>");
+    }
+    if let Some(priority) = page.priority {
+        entry.push_str("<priority>");
+        entry.push_str(priority);
+        entry.push_str("</priority>");
     }
     entry.push_str("</url>\n");
     entry
@@ -601,5 +718,92 @@ mod tests {
         assert_eq!(description.chars().count(), 160);
         assert!(description.ends_with("..."));
         assert!(!description.contains("   "));
+    }
+
+    #[test]
+    fn sitemap_emits_changefreq_and_priority_hints() {
+        let catalog = SeoCatalog::build(
+            &site(vec![
+                page("index", "Home", &[]),
+                page("guide", "Guide", &[]),
+                page("reference/api", "API Reference", &[]),
+            ]),
+            "https://example.com/",
+            "en",
+        )
+        .unwrap();
+        let files = catalog.discovery_files(DocsMode::Build).unwrap();
+        let sitemap = &files["sitemap.xml"];
+
+        assert!(sitemap.contains(
+            "<loc>https://example.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority>"
+        ));
+        assert!(sitemap.contains("<loc>https://example.com/guide/</loc><changefreq>monthly</changefreq><priority>0.9</priority>"));
+        assert!(sitemap.contains("<loc>https://example.com/reference/api/</loc><changefreq>monthly</changefreq><priority>0.8</priority>"));
+    }
+
+    #[test]
+    fn hreflang_alternates_grouped_by_stem_with_x_default() {
+        let catalog = SeoCatalog::build(
+            &site(vec![
+                page("guide", "Guide", &[]),
+                page("pt-br/guide", "Guia", &[("language", "pt-br")]),
+                page("es/guide", "Guía", &[("language", "es")]),
+            ]),
+            "https://example.com/",
+            "en",
+        )
+        .unwrap();
+
+        let guide = catalog.page("guide");
+        assert_eq!(
+            guide.hreflang_alternates,
+            vec![
+                ("en".to_string(), "https://example.com/guide/".to_string()),
+                (
+                    "es".to_string(),
+                    "https://example.com/es/guide/".to_string()
+                ),
+                (
+                    "pt-BR".to_string(),
+                    "https://example.com/pt-br/guide/".to_string()
+                ),
+                (
+                    "x-default".to_string(),
+                    "https://example.com/guide/".to_string()
+                ),
+            ]
+        );
+
+        let pt_guide = catalog.page("pt-br/guide");
+        assert_eq!(pt_guide.hreflang_alternates, guide.hreflang_alternates);
+    }
+
+    #[test]
+    fn lastmod_resolver_and_fallback() {
+        let dummy_git = |path: &str| -> Option<String> {
+            if path == "guide.md" {
+                Some("2026-05-01".to_string())
+            } else {
+                None
+            }
+        };
+
+        let catalog = SeoCatalog::build_with_options(
+            &site(vec![
+                page("guide", "Guide", &[]),
+                page("untracked", "Untracked", &[]),
+            ]),
+            "https://example.com/",
+            "en",
+            SeoBuildOptions {
+                git_lastmod_resolver: Some(&dummy_git),
+                lastmod_fallback: true,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(catalog.page("guide").updated.as_deref(), Some("2026-05-01"));
+        assert!(catalog.page("untracked").updated.is_some());
     }
 }
