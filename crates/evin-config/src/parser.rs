@@ -54,6 +54,15 @@ fn resolved_module_version(
         .unwrap_or_else(|| workspace_version.to_string())
 }
 
+fn overlay_document_variables(
+    base: &HashMap<String, String>,
+    overlay: HashMap<String, String>,
+) -> HashMap<String, String> {
+    let mut combined = base.clone();
+    combined.extend(overlay);
+    combined
+}
+
 #[derive(Default, Clone, Copy)]
 pub struct TaskParseContext<'a> {
     pub namespace: Option<&'a str>,
@@ -329,19 +338,18 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
 
             let ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
 
-            let mut merged_values = namespace_doc.values;
-            if let Some(ns_values) = namespace_doc.namespace.values {
-                merged_values.extend(ns_values);
-            }
-
             if let Some(tasks) = namespace_doc.tasks {
                 let parsed = parse_tasks(
                     tasks,
                     TaskParseContext {
                         namespace: Some(&ns_name),
                         source_file: Some(&file_path),
-                        module_env: namespace_doc.namespace.env.as_ref(),
-                        module_values: Some(&merged_values),
+                        module_env: if namespace_doc.env.is_empty() {
+                            None
+                        } else {
+                            Some(&namespace_doc.env)
+                        },
+                        module_values: Some(&namespace_doc.values),
                         valid_stages: &valid_stages,
                         workspace_name: Some(&workspace.workspace.name),
                         ..Default::default()
@@ -374,7 +382,11 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
                         namespace: Some(&module.module.name),
                         cwd: Some(module_dir),
                         source_file: Some(&mod_path.display().to_string()),
-                        module_env: module.module.env.as_ref(),
+                        module_env: if module.env.is_empty() {
+                            None
+                        } else {
+                            Some(&module.env)
+                        },
                         module_values: Some(&module.values),
                         valid_stages: &valid_stages,
                         workspace_name: Some(&workspace.workspace.name),
@@ -434,16 +446,9 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
                         format!("{}:{}", module.module.name, raw_ns_name)
                     };
 
-                    let mut combined_env = module.module.env.clone().unwrap_or_default();
-                    if let Some(ns_env) = &namespace_doc.namespace.env {
-                        combined_env.extend(ns_env.clone());
-                    }
-
-                    let mut combined_values = module.values.clone();
-                    combined_values.extend(namespace_doc.values);
-                    if let Some(ns_vals) = namespace_doc.namespace.values {
-                        combined_values.extend(ns_vals);
-                    }
+                    let combined_env = overlay_document_variables(&module.env, namespace_doc.env);
+                    let combined_values =
+                        overlay_document_variables(&module.values, namespace_doc.values);
 
                     if let Some(tasks) = namespace_doc.tasks {
                         let parsed = parse_tasks(
@@ -515,13 +520,11 @@ mod tests {
         let inherited = crate::workspace::ModuleConfig {
             name: "inherited".to_string(),
             version: None,
-            env: None,
             include: None,
         };
         let independent = crate::workspace::ModuleConfig {
             name: "independent".to_string(),
             version: Some("2.0.0".to_string()),
-            env: None,
             include: None,
         };
 
@@ -658,6 +661,95 @@ mod tests {
         let parsed = result.unwrap();
         assert_eq!(parsed[0].name, "release:doctor");
         assert_eq!(parsed[0].source_file.as_deref(), Some(".evin/release.yaml"));
+    }
+
+    #[test]
+    fn namespace_tasks_inherit_root_document_variables() {
+        let tasks = HashMap::from([(
+            Spanned {
+                value: "clean".to_string(),
+                span: evin_diagnostic::span::Span::default(),
+            },
+            TaskObject {
+                name: "clean".to_string(),
+                run: Some("echo clean".to_string()),
+                ..Default::default()
+            },
+        )]);
+        let namespace_env = HashMap::from([("RELEASE_CHANNEL".to_string(), "canary".to_string())]);
+        let namespace_values =
+            HashMap::from([("staging_dir".to_string(), "dist/stage".to_string())]);
+
+        let parsed = parse_tasks(
+            tasks,
+            TaskParseContext {
+                namespace: Some("release"),
+                module_env: Some(&namespace_env),
+                module_values: Some(&namespace_values),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            parsed[0]
+                .module_env
+                .as_ref()
+                .unwrap()
+                .get("RELEASE_CHANNEL"),
+            Some(&"canary".to_string())
+        );
+        assert_eq!(
+            parsed[0].module_values.as_ref().unwrap().get("staging_dir"),
+            Some(&"dist/stage".to_string())
+        );
+    }
+
+    #[test]
+    fn module_namespace_tasks_prefer_namespace_root_variables() {
+        let tasks = HashMap::from([(
+            Spanned {
+                value: "deploy".to_string(),
+                span: evin_diagnostic::span::Span::default(),
+            },
+            TaskObject {
+                name: "deploy".to_string(),
+                run: Some("echo deploy".to_string()),
+                ..Default::default()
+            },
+        )]);
+        let combined_env = overlay_document_variables(
+            &HashMap::from([("CHANNEL".to_string(), "stable".to_string())]),
+            HashMap::from([("CHANNEL".to_string(), "canary".to_string())]),
+        );
+        let combined_values = overlay_document_variables(
+            &HashMap::from([("artifact_prefix".to_string(), "module".to_string())]),
+            HashMap::from([("artifact_prefix".to_string(), "namespace".to_string())]),
+        );
+
+        let parsed = parse_tasks(
+            tasks,
+            TaskParseContext {
+                namespace: Some("api:release"),
+                module_env: Some(&combined_env),
+                module_values: Some(&combined_values),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(
+            parsed[0].module_env.as_ref().unwrap().get("CHANNEL"),
+            Some(&"canary".to_string())
+        );
+        assert_eq!(
+            parsed[0]
+                .module_values
+                .as_ref()
+                .unwrap()
+                .get("artifact_prefix"),
+            Some(&"namespace".to_string())
+        );
     }
 
     #[test]

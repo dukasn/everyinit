@@ -106,6 +106,27 @@ tasks: {}
 
         assert_eq!(config.module.version.as_deref(), Some("2.3.4"));
     }
+
+    #[test]
+    fn module_yaml_deserializes_root_variables() {
+        let config: ModuleYaml = serde_yaml::from_str(
+            r#"
+module:
+  name: api
+env:
+  API_LOG: debug
+values:
+  artifact_name: api-server
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(config.env.get("API_LOG"), Some(&"debug".to_string()));
+        assert_eq!(
+            config.values.get("artifact_name"),
+            Some(&"api-server".to_string())
+        );
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,7 +153,6 @@ pub struct ModuleConfig {
     /// Optional module-specific version. When omitted, the module inherits
     /// the enclosing workspace version.
     pub version: Option<String>,
-    pub env: Option<HashMap<String, String>>,
     #[serde(default, alias = "includes")]
     pub include: Option<IncludeConfig>,
 }
@@ -141,6 +161,8 @@ pub struct ModuleConfig {
 #[serde(deny_unknown_fields)]
 pub struct ModuleYaml {
     pub module: ModuleConfig,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
     #[serde(default)]
     pub values: HashMap<String, String>,
     #[serde(default)]
@@ -152,14 +174,14 @@ pub struct ModuleYaml {
 pub struct NamespaceConfig {
     pub name: String,
     pub description: Option<String>,
-    pub env: Option<HashMap<String, String>>,
-    pub values: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NamespaceYaml {
     pub namespace: NamespaceConfig,
+    #[serde(default)]
+    pub env: HashMap<String, String>,
     #[serde(default)]
     pub values: HashMap<String, String>,
     #[serde(default)]
@@ -221,10 +243,12 @@ includes:
 namespace:
   name: release
   description: "Release engineering and distribution pipelines"
-  env:
-    RELEASE_CHANNEL: canary
-  values:
-    staging_dir: "dist/release-stage"
+
+env:
+  RELEASE_CHANNEL: canary
+
+values:
+  staging_dir: "dist/release-stage"
 
 tasks:
   doctor:
@@ -239,16 +263,11 @@ tasks:
             Some("Release engineering and distribution pipelines")
         );
         assert_eq!(
-            parsed
-                .namespace
-                .env
-                .as_ref()
-                .unwrap()
-                .get("RELEASE_CHANNEL"),
+            parsed.env.get("RELEASE_CHANNEL"),
             Some(&"canary".to_string())
         );
         assert_eq!(
-            parsed.namespace.values.as_ref().unwrap().get("staging_dir"),
+            parsed.values.get("staging_dir"),
             Some(&"dist/release-stage".to_string())
         );
         assert!(parsed.tasks.is_some());
@@ -256,6 +275,50 @@ tasks:
         assert_eq!(tasks.len(), 1);
         let task_name = tasks.keys().next().unwrap();
         assert_eq!(task_name.value, "doctor");
+    }
+
+    #[test]
+    fn nested_module_and_namespace_variables_are_rejected() {
+        let module_error = serde_yaml::from_str::<ModuleYaml>(
+            r#"
+module:
+  name: api
+  env:
+    API_LOG: debug
+"#,
+        )
+        .unwrap_err();
+        assert!(module_error.to_string().contains("unknown field `env`"));
+
+        let namespace_env_error = serde_yaml::from_str::<NamespaceYaml>(
+            r#"
+namespace:
+  name: release
+  env:
+    RELEASE_CHANNEL: canary
+"#,
+        )
+        .unwrap_err();
+        assert!(
+            namespace_env_error
+                .to_string()
+                .contains("unknown field `env`")
+        );
+
+        let namespace_values_error = serde_yaml::from_str::<NamespaceYaml>(
+            r#"
+namespace:
+  name: release
+  values:
+    staging_dir: dist
+"#,
+        )
+        .unwrap_err();
+        assert!(
+            namespace_values_error
+                .to_string()
+                .contains("unknown field `values`")
+        );
     }
 
     #[test]
