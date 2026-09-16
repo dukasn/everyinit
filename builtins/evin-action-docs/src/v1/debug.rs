@@ -47,6 +47,8 @@ pub(crate) struct DocsDebugStats {
     pub failed: usize,
     pub reloads: usize,
     pub last_duration_ms: u128,
+    pub port: u16,
+    pub network_url: Option<String>,
 }
 
 impl DocsDebugStats {
@@ -125,6 +127,8 @@ impl DocsDebugStats {
                 failed: self.failed,
                 reloads: self.reloads,
                 last_duration_ms: self.last_duration_ms,
+                port: self.port,
+                network_url: self.network_url.clone(),
             }
         );
     }

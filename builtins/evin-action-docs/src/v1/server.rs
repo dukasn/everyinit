@@ -49,6 +49,23 @@ impl ServeHost {
     fn url(self, port: u16) -> String {
         format!("http://{}/", self.address(port))
     }
+
+    pub(crate) fn network_url(self, port: u16) -> Option<String> {
+        match self {
+            Self::Loopback => None,
+            Self::AllInterfaces => local_network_ip().map(|ip| format!("http://{ip}:{port}/")),
+        }
+    }
+}
+
+fn local_network_ip() -> Option<std::net::IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    // Connect to an external address — no packets are sent; this just
+    // causes the OS to select the preferred outbound interface.
+    socket.connect("8.8.8.8:80").ok()?;
+    let addr = socket.local_addr().ok()?;
+    let ip = addr.ip();
+    if ip.is_loopback() { None } else { Some(ip) }
 }
 
 pub(crate) struct ServerBinding {
@@ -60,6 +77,10 @@ pub(crate) struct ServerBinding {
 impl ServerBinding {
     pub(crate) fn url(&self) -> String {
         self.host.url(self.port)
+    }
+
+    pub(crate) fn network_url(&self) -> Option<String> {
+        self.host.network_url(self.port)
     }
 }
 
@@ -120,11 +141,27 @@ impl DevServer {
         mut stats: DocsDebugStats,
         metrics_route: Option<String>,
     ) -> Result<(), Diagnostic> {
+        let local_url = binding.url();
+        let network_url = binding.network_url();
         logger.daemon_started(
             start_instant.elapsed(),
-            evin_action_sdk::activity::DocsServerRunning { url: binding.url() },
+            evin_action_sdk::activity::DocsServerRunning {
+                url: local_url.clone(),
+            },
         );
+        stats.port = binding.port;
+        stats.network_url = network_url.clone();
         stats.emit_serve(&logger);
+        let serve_ready_url = match &network_url {
+            Some(lan) => format!("{local_url} · Network: {lan}"),
+            None => local_url,
+        };
+        evin_action_sdk::action_event!(
+            logger,
+            evin_action_sdk::activity::DocsServeReady {
+                url: serve_ready_url
+            }
+        );
 
         let externally_cancelled = cancel_token.is_some();
         let shutdown = cancel_token.unwrap_or_default();
@@ -463,6 +500,11 @@ mod tests {
         assert_eq!(ServeHost::Loopback.url(3001), "http://127.0.0.1:3001/");
         assert_eq!(ServeHost::AllInterfaces.address(3000), "0.0.0.0:3000");
         assert_eq!(ServeHost::AllInterfaces.url(3001), "http://0.0.0.0:3001/");
+    }
+
+    #[test]
+    fn loopback_host_has_no_network_url() {
+        assert_eq!(ServeHost::Loopback.network_url(3000), None);
     }
 
     #[test]

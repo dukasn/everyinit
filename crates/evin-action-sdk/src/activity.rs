@@ -223,6 +223,7 @@ define_activity_events! {
     pub struct DocsRebuildSucceeded { duration_ms: u128 } => (Info, Rebuild, "activity-docs-rebuild-succeeded");
     pub struct DocsReloaded {} => (Info, Reload, "activity-docs-reloaded");
     pub struct DocsRebuildFailed { reason: String } => (Error, Rebuild, "activity-docs-rebuild-failed");
+    pub struct DocsServeReady { url: String } => (Info, Ready, "activity-docs-serve-ready");
     pub struct ArchiveCompressing { files: usize, path: String } => (Info, Package, "activity-archive-compressing");
 }
 
@@ -260,6 +261,7 @@ pub const ACTIVITY_LOCALE_KEYS: &[(&str, &[&str])] = &[
     ("activity-docs-rebuild-succeeded", &["duration_ms"]),
     ("activity-docs-reloaded", &[]),
     ("activity-docs-rebuild-failed", &["reason"]),
+    ("activity-docs-serve-ready", &["url"]),
     ("activity-archive-compressing", &["files", "path"]),
     ("status-docs-server-running", &["url"]),
     ("status-docs-watching", &[]),

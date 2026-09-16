@@ -318,7 +318,7 @@ define_debug_registry! {
     pub struct DocsLinkAudit { enabled: bool, audits: usize, links: usize, anchors: usize, issues: usize } => (552, builtin, snapshot(DocsLinks = "docs.links"));
     pub struct DocsDiscoveryAudit { audits: usize, indexable: usize, excluded: usize, sitemap_files: usize, quality_warnings: usize, missing_descriptions: usize, long_titles: usize, description_length: usize, duplicate_titles: usize, duplicate_descriptions: usize, deployment_warnings: usize } => (553, builtin, snapshot(DocsDiscovery = "docs.discovery"));
     pub struct DocsOutput { renders: usize, pages_written: usize, assets_written: usize, write_failures: usize, bundle: String } => (554, builtin, snapshot(DocsOutput = "docs.output"));
-    pub struct DocsServe { changes: usize, rebuilds: usize, succeeded: usize, failed: usize, reloads: usize, last_duration_ms: u128 } => (555, builtin, snapshot(DocsServe = "docs.serve"));
+    pub struct DocsServe { changes: usize, rebuilds: usize, succeeded: usize, failed: usize, reloads: usize, last_duration_ms: u128, port: u16, network_url: Option<String> } => (555, builtin, snapshot(DocsServe = "docs.serve"));
     pub struct SubprocessStart { command: String, cwd: String, shell: String } => (601, subprocess, append);
     pub struct SubprocessEnvironment { injected_vars: Vec<String> } => (602, subprocess, append);
     pub struct SubprocessFinish { duration_ms: u128, exit_code: Option<i64> } => (603, subprocess, append);

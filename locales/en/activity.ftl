@@ -16,6 +16,7 @@ activity-docs-changed = { $path }
 activity-docs-rebuild-succeeded = Documentation rebuilt in { $duration_ms } ms
 activity-docs-reloaded = Browser reload requested
 activity-docs-rebuild-failed = Documentation rebuild failed: { $reason }
+activity-docs-serve-ready = Documentation site ready at { $url }
 activity-archive-compressing = Compressing { $files } files into { $path }...
 
 status-docs-server-running = Documentation server running at { $url }
