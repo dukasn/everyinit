@@ -52,6 +52,7 @@ impl PipelineEngine {
             workspace_values: HashMap::new(),
             workspace_name,
             run_payload,
+            invocation_flags: HashMap::new(),
             gitrules: None,
             forced_execution: None,
             workspace_execution: None,

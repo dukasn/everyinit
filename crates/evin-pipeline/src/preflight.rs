@@ -4,12 +4,69 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, version 3.
 
-use evin_action_sdk::Action;
+use evin_action_sdk::{Action, InvocationFlags};
 use evin_config::models::TaskObject;
 use evin_diagnostic::{Diagnostic, IssueCode};
 use evin_yaml::{ConfigError, Span, SpannedValue};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InvocationResolution {
+    pub action_flags: HashMap<String, InvocationFlags>,
+    pub hook_payload: Vec<String>,
+}
+
+#[allow(clippy::result_large_err)]
+pub fn resolve_invocation_flags<'a>(
+    tasks: impl IntoIterator<Item = &'a TaskObject>,
+    actions: &HashMap<String, Arc<dyn Action>>,
+    payload: &[String],
+) -> Result<InvocationResolution, Diagnostic> {
+    let action_ids = tasks
+        .into_iter()
+        .flat_map(|task| task.steps.iter().flatten())
+        .filter_map(|step| step.uses.as_ref().map(|uses| uses.as_str().to_string()))
+        .collect::<BTreeSet<_>>();
+
+    let mut owners = BTreeMap::new();
+    for action_id in action_ids {
+        let Some(action) = actions.get(&action_id) else {
+            continue;
+        };
+        for flag in action.invocation_flags() {
+            if let Some(existing) = owners.insert(flag.name(), action_id.clone())
+                && existing != action_id
+            {
+                return Err(evin_locales::diagnostic(
+                    IssueCode::new("issue-invocation-flag-ambiguous")
+                        .arg("flag", format!("--{}", flag.name()))
+                        .arg("first_action", existing)
+                        .arg("second_action", action_id),
+                ));
+            }
+        }
+    }
+
+    let mut resolution = InvocationResolution::default();
+    for value in payload {
+        let Some(flag) = value.strip_prefix("--") else {
+            resolution.hook_payload.push(value.clone());
+            continue;
+        };
+        let Some(action_id) = owners.get(flag) else {
+            return Err(evin_locales::diagnostic(
+                IssueCode::new("issue-invocation-flag-unknown").arg("flag", value),
+            ));
+        };
+        resolution
+            .action_flags
+            .entry(action_id.clone())
+            .or_default()
+            .insert(flag);
+    }
+    Ok(resolution)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActionValidationFinding {
@@ -143,11 +200,16 @@ fn first_template_error(value: Option<&SpannedValue>) -> Option<ConfigError> {
 mod tests {
     use super::*;
     use async_trait::async_trait;
-    use evin_action_sdk::RunnerContext;
+    use evin_action_sdk::{InvocationFlag, RunnerContext};
     use evin_config::models::StepObject;
     use serde::Deserialize;
 
     struct StrictAction;
+
+    struct HostAction;
+    struct DuplicateHostAction;
+
+    const HOST_FLAG: &[InvocationFlag] = &[InvocationFlag::new("host")];
 
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -164,6 +226,50 @@ mod tests {
             evin_action_sdk::parse_config::<StrictConfig>(with).map(|config| {
                 let _ = config.required;
             })
+        }
+
+        async fn execute(
+            &self,
+            _ctx: &RunnerContext,
+            _with: Option<SpannedValue>,
+        ) -> Result<(), Diagnostic> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl Action for HostAction {
+        fn invocation_flags(&self) -> &'static [InvocationFlag] {
+            HOST_FLAG
+        }
+
+        fn validate_config(
+            &self,
+            _with: Option<&SpannedValue>,
+        ) -> Result<(), evin_yaml::ConfigError> {
+            Ok(())
+        }
+
+        async fn execute(
+            &self,
+            _ctx: &RunnerContext,
+            _with: Option<SpannedValue>,
+        ) -> Result<(), Diagnostic> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl Action for DuplicateHostAction {
+        fn invocation_flags(&self) -> &'static [InvocationFlag] {
+            HOST_FLAG
+        }
+
+        fn validate_config(
+            &self,
+            _with: Option<&SpannedValue>,
+        ) -> Result<(), evin_yaml::ConfigError> {
+            Ok(())
         }
 
         async fn execute(
@@ -193,6 +299,18 @@ mod tests {
                     Span::default(),
                 )),
                 with: Some(evin_yaml::parse_yaml(yaml).unwrap()),
+            }]),
+            ..Default::default()
+        }
+    }
+
+    fn invocation_task(name: &str, action: &str) -> TaskObject {
+        TaskObject {
+            name: name.into(),
+            steps: Some(vec![StepObject {
+                run: None,
+                uses: Some(evin_yaml::Spanned::new(action.into(), Span::default())),
+                with: None,
             }]),
             ..Default::default()
         }
@@ -313,5 +431,56 @@ mod tests {
             findings[0].diagnostic.code.key,
             "issue-task-defines-run-and-steps"
         );
+    }
+
+    #[test]
+    fn invocation_flags_are_routed_only_to_the_declaring_action() {
+        let task = invocation_task("docs", "test/docs@v1");
+        let actions = HashMap::from([(
+            "test/docs@v1".to_string(),
+            Arc::new(HostAction) as Arc<dyn Action>,
+        )]);
+
+        let resolution = resolve_invocation_flags(
+            [&task],
+            &actions,
+            &["--host".to_string(), ".git/COMMIT_EDITMSG".to_string()],
+        )
+        .unwrap();
+
+        assert!(resolution.action_flags["test/docs@v1"].contains("host"));
+        assert_eq!(resolution.hook_payload, [".git/COMMIT_EDITMSG"]);
+    }
+
+    #[test]
+    fn unknown_invocation_flags_fail_before_execution() {
+        let task = invocation_task("docs", "test/docs@v1");
+        let actions = HashMap::from([(
+            "test/docs@v1".to_string(),
+            Arc::new(HostAction) as Arc<dyn Action>,
+        )]);
+
+        let error =
+            resolve_invocation_flags([&task], &actions, &["--watch".to_string()]).unwrap_err();
+        assert_eq!(error.code.key, "issue-invocation-flag-unknown");
+    }
+
+    #[test]
+    fn duplicate_invocation_flag_declarations_are_rejected() {
+        let docs = invocation_task("docs", "test/docs@v1");
+        let other = invocation_task("other", "test/other@v1");
+        let actions = HashMap::from([
+            (
+                "test/docs@v1".to_string(),
+                Arc::new(HostAction) as Arc<dyn Action>,
+            ),
+            (
+                "test/other@v1".to_string(),
+                Arc::new(DuplicateHostAction) as Arc<dyn Action>,
+            ),
+        ]);
+
+        let error = resolve_invocation_flags([&docs, &other], &actions, &[]).unwrap_err();
+        assert_eq!(error.code.key, "issue-invocation-flag-ambiguous");
     }
 }

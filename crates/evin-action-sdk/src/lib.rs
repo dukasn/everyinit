@@ -737,12 +737,47 @@ fn emit_config_debug(logger: &Logger, report: &mut evin_yaml::ConfigReport) {
 }
 
 /// The formal contract for all EVIN Native Actions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvocationFlag {
+    name: &'static str,
+}
+
+impl InvocationFlag {
+    pub const fn new(name: &'static str) -> Self {
+        Self { name }
+    }
+
+    pub const fn name(self) -> &'static str {
+        self.name
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InvocationFlags(std::collections::BTreeSet<String>);
+
+impl InvocationFlags {
+    pub fn contains(&self, name: &str) -> bool {
+        self.0.contains(name)
+    }
+
+    pub fn insert(&mut self, name: impl Into<String>) {
+        self.0.insert(name.into());
+    }
+}
+
 #[async_trait]
 pub trait Action: Send + Sync {
     /// Whether this action validates standard and action-specific templates in
     /// its own configuration contract.
     fn handles_template_validation(&self) -> bool {
         false
+    }
+
+    /// Declares the value-less long flags this action accepts after `evin run
+    /// <target> --`. The runner validates and routes these flags only to the
+    /// declaring action within the selected task graph.
+    fn invocation_flags(&self) -> &'static [InvocationFlag] {
+        &[]
     }
 
     /// Statically validates the `with:` payload provided in the YAML configuration.
@@ -776,6 +811,19 @@ pub trait Action: Send + Sync {
         ctx: &RunnerContext,
         with: Option<evin_yaml::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic>;
+
+    /// Executes the action with its runner-resolved invocation flags.
+    ///
+    /// Existing actions retain their `execute` implementation until they opt
+    /// into invocation flags.
+    async fn execute_with_invocation(
+        &self,
+        ctx: &RunnerContext,
+        with: Option<evin_yaml::SpannedValue>,
+        _flags: &InvocationFlags,
+    ) -> Result<(), evin_diagnostic::Diagnostic> {
+        self.execute(ctx, with).await
+    }
 }
 
 /// Helper method to deserialize the plugin's configuration from the `with` mapping.

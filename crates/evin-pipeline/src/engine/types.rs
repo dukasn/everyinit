@@ -58,6 +58,7 @@ pub struct PipelineConfig {
     pub workspace_values: HashMap<String, String>,
     pub workspace_name: Option<String>,
     pub run_payload: Vec<String>,
+    pub invocation_flags: HashMap<String, evin_action_sdk::InvocationFlags>,
     pub gitrules: Option<Arc<evin_gitrules::GitRulesRoot>>,
     pub forced_execution: Option<evin_config::workspace::ExecutionMode>,
     pub workspace_execution: Option<evin_config::workspace::ExecutionMode>,

@@ -16,12 +16,18 @@
 
 pub mod v1;
 
-use evin_action_sdk::{Action, RunnerContext};
+use evin_action_sdk::{Action, InvocationFlag, InvocationFlags, RunnerContext};
+
+const INVOCATION_FLAGS: &[InvocationFlag] = &[InvocationFlag::new("host")];
 
 pub struct DocsAction;
 
 #[async_trait::async_trait]
 impl Action for DocsAction {
+    fn invocation_flags(&self) -> &'static [InvocationFlag] {
+        INVOCATION_FLAGS
+    }
+
     fn validate_config(
         &self,
         with: Option<&evin_yaml::SpannedValue>,
@@ -35,5 +41,14 @@ impl Action for DocsAction {
         with: Option<evin_yaml::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         v1::execute(ctx, with).await
+    }
+
+    async fn execute_with_invocation(
+        &self,
+        ctx: &RunnerContext,
+        with: Option<evin_yaml::SpannedValue>,
+        flags: &InvocationFlags,
+    ) -> Result<(), evin_diagnostic::Diagnostic> {
+        v1::execute_with_invocation(ctx, with, flags).await
     }
 }

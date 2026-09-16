@@ -335,6 +335,7 @@ impl PipelineEngine {
         let run_script = task.run.clone();
         let steps = task.steps.clone();
         let hook_payload = self.config.run_payload.clone();
+        let invocation_flags = self.config.invocation_flags.clone();
         let actions = self.state.actions.clone();
         let needs = task.needs.clone().unwrap_or_default();
         let gitrules = self.config.gitrules.clone();
@@ -460,7 +461,13 @@ impl PipelineEngine {
                         }
                     } else if let Some(uses) = &step.uses {
                         if let Some(action) = actions.get(uses.as_str()) {
-                            let step_res = action.execute(&ctx, step.with.clone()).await;
+                            let flags = invocation_flags
+                                .get(uses.as_str())
+                                .cloned()
+                                .unwrap_or_default();
+                            let step_res = action
+                                .execute_with_invocation(&ctx, step.with.clone(), &flags)
+                                .await;
                             if step_res.is_err() {
                                 res = step_res.map_err(|e| e.code);
                                 break;

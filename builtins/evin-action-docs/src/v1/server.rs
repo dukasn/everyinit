@@ -23,6 +23,46 @@ use tokio::sync::broadcast;
 
 pub struct DevServer;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ServeHost {
+    Loopback,
+    AllInterfaces,
+}
+
+impl ServeHost {
+    pub(crate) fn from_exposed(exposed: bool) -> Self {
+        if exposed {
+            Self::AllInterfaces
+        } else {
+            Self::Loopback
+        }
+    }
+
+    fn address(self, port: u16) -> String {
+        let host = match self {
+            Self::Loopback => "127.0.0.1",
+            Self::AllInterfaces => "0.0.0.0",
+        };
+        format!("{host}:{port}")
+    }
+
+    fn url(self, port: u16) -> String {
+        format!("http://{}/", self.address(port))
+    }
+}
+
+pub(crate) struct ServerBinding {
+    listener: TcpListener,
+    host: ServeHost,
+    port: u16,
+}
+
+impl ServerBinding {
+    pub(crate) fn url(&self) -> String {
+        self.host.url(self.port)
+    }
+}
+
 type SourceFingerprint = Vec<(PathBuf, Option<std::time::SystemTime>, u64)>;
 
 fn changed_source_label(
@@ -44,8 +84,33 @@ fn changed_source_label(
 }
 
 impl DevServer {
+    pub(crate) async fn bind(
+        host: ServeHost,
+        first_port: u16,
+    ) -> Result<ServerBinding, Diagnostic> {
+        let mut port = first_port;
+        let listener = loop {
+            match TcpListener::bind(host.address(port)).await {
+                Ok(listener) => break listener,
+                Err(_) if port < first_port + 50 => port += 1,
+                Err(_) => {
+                    return Err(Diagnostic::new(
+                        "Could not bind dev server to any available port",
+                        IssueCode::new("issue-docs-server-bind-failed"),
+                    ));
+                }
+            }
+        };
+        Ok(ServerBinding {
+            listener,
+            host,
+            port,
+        })
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn start(
+        binding: ServerBinding,
         out_dir: PathBuf,
         workspace_root: PathBuf,
         config: DocsConfig,
@@ -55,24 +120,9 @@ impl DevServer {
         mut stats: DocsDebugStats,
         metrics_route: Option<String>,
     ) -> Result<(), Diagnostic> {
-        let mut port = config.port;
-        let listener = loop {
-            match TcpListener::bind(format!("127.0.0.1:{port}")).await {
-                Ok(listener) => break listener,
-                Err(_) if port < config.port + 50 => port += 1,
-                Err(_) => {
-                    return Err(Diagnostic::new(
-                        "Could not bind dev server to any available port",
-                        IssueCode::new("issue-docs-server-bind-failed"),
-                    ));
-                }
-            }
-        };
         logger.daemon_started(
             start_instant.elapsed(),
-            evin_action_sdk::activity::DocsServerRunning {
-                url: format!("http://127.0.0.1:{port}/"),
-            },
+            evin_action_sdk::activity::DocsServerRunning { url: binding.url() },
         );
         stats.emit_serve(&logger);
 
@@ -189,7 +239,7 @@ impl DevServer {
             let mut connections = tokio::task::JoinSet::new();
             loop {
                 let accepted = tokio::select! {
-                    accepted = listener.accept() => accepted,
+                    accepted = binding.listener.accept() => accepted,
                     _ = listener_cancel.cancelled() => break,
                 };
                 let Ok((socket, _)) = accepted else {
@@ -405,6 +455,14 @@ mod tests {
             changed_source_label(&before, &after, "docs"),
             "docs/index.rst"
         );
+    }
+
+    #[test]
+    fn serve_hosts_produce_the_bound_server_url() {
+        assert_eq!(ServeHost::Loopback.address(3000), "127.0.0.1:3000");
+        assert_eq!(ServeHost::Loopback.url(3001), "http://127.0.0.1:3001/");
+        assert_eq!(ServeHost::AllInterfaces.address(3000), "0.0.0.0:3000");
+        assert_eq!(ServeHost::AllInterfaces.url(3001), "http://0.0.0.0:3001/");
     }
 
     #[test]

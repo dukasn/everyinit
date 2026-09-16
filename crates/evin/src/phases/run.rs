@@ -223,6 +223,14 @@ impl Phase for ResolveConfigPhase {
 
             validate_resolved_action_configs(&resolver)?;
 
+            let invocation = evin_pipeline::preflight::resolve_invocation_flags(
+                resolver.registry().values(),
+                &crate::commands::builtin_actions(),
+                &ctx.run_payload,
+            )?;
+            ctx.run_payload = invocation.hook_payload;
+            ctx.invocation_flags = invocation.action_flags;
+
             if any_hook && let Some(rules) = &config.gitrules {
                 let engine = evin_policy::PolicyEngine::new();
                 if let Some(target) = original_targets.first()
@@ -282,6 +290,7 @@ impl Phase for ExecuteTasksPhase {
             Some(config.workspace_name.clone()),
         );
         engine.config.workspace_values = config.workspace_values;
+        engine.config.invocation_flags = ctx.invocation_flags.clone();
         engine.config.global_env = Arc::new(global_env);
         engine.config.env_schema = ctx.env_schema.clone();
         engine.config.gitrules = config.gitrules;

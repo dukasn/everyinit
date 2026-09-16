@@ -43,7 +43,7 @@ pub mod resolver;
 use ast::{DocFormat, DocSiteAst};
 use css::CssOptimizer;
 use debug::DocsDebugStats;
-use evin_action_sdk::RunnerContext;
+use evin_action_sdk::{InvocationFlags, RunnerContext};
 use fs::EmbeddedFs;
 use include_dir::{Dir, include_dir};
 use presentation::Presentation;
@@ -142,6 +142,8 @@ pub struct DocsConfig {
     #[serde(default = "default_port")]
     pub port: u16,
     #[serde(default)]
+    pub host: bool,
+    #[serde(default)]
     pub layout_dir: Option<String>,
     #[serde(default)]
     pub favicon: Option<String>,
@@ -196,6 +198,7 @@ impl Default for DocsConfig {
             bundle: default_bundle(),
             validate_links: default_validate_links(),
             port: default_port(),
+            host: false,
             layout_dir: None,
             favicon: None,
             logo: None,
@@ -215,6 +218,10 @@ impl Default for DocsConfig {
             lastmod_fallback: false,
         }
     }
+}
+
+fn resolve_serve_host(config: &DocsConfig, flags: &InvocationFlags) -> server::ServeHost {
+    server::ServeHost::from_exposed(config.host || flags.contains("host"))
 }
 
 impl DocsConfig {
@@ -1307,6 +1314,14 @@ pub async fn execute(
     ctx: &RunnerContext,
     with: Option<evin_yaml::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
+    execute_with_invocation(ctx, with, &InvocationFlags::default()).await
+}
+
+pub async fn execute_with_invocation(
+    ctx: &RunnerContext,
+    with: Option<evin_yaml::SpannedValue>,
+    invocation_flags: &InvocationFlags,
+) -> Result<(), evin_diagnostic::Diagnostic> {
     let started = std::time::Instant::now();
     let config: DocsConfig = ctx.load_config(with.as_ref()).map_err(|error| {
         evin_diagnostic::Diagnostic::new(
@@ -1375,9 +1390,11 @@ pub async fn execute(
         }
     }
     if config.mode == DocsMode::Serve {
-        ctx.state
-            .set_output("server_url", &format!("http://127.0.0.1:{}", config.port));
+        let host = resolve_serve_host(&config, invocation_flags);
+        let binding = server::DevServer::bind(host, config.port).await?;
+        ctx.state.set_output("server_url", &binding.url());
         server::DevServer::start(
+            binding,
             out_dir,
             workspace_root.to_path_buf(),
             config,
@@ -1400,6 +1417,7 @@ mod tests {
     fn defaults_are_build_friendly() {
         let config = DocsConfig::default();
         assert_eq!(config.mode, DocsMode::Build);
+        assert!(!config.host);
         assert_eq!(config.source_dir, "docs");
         assert_eq!(config.asset_dir, "assets");
         assert_eq!(config.out, "dist/docs");
@@ -1501,6 +1519,38 @@ mod tests {
             ..DocsConfig::default()
         };
         assert!(!config.minify.unwrap_or(config.mode == DocsMode::Build));
+    }
+
+    #[test]
+    fn serve_host_accepts_yaml_and_routed_invocation_override() {
+        let yaml = "site_url: https://example.com/\nhost: true\n";
+        let value = evin_yaml::parse_yaml(yaml).unwrap();
+        let configured = evin_yaml::de::from_spanned_value::<DocsConfig>(value).unwrap();
+        assert!(configured.host);
+        assert_eq!(
+            resolve_serve_host(&configured, &InvocationFlags::default()),
+            server::ServeHost::AllInterfaces
+        );
+
+        let default = DocsConfig::default();
+        assert_eq!(
+            resolve_serve_host(&default, &InvocationFlags::default()),
+            server::ServeHost::Loopback
+        );
+        let mut host_flag = InvocationFlags::default();
+        host_flag.insert("host");
+        assert_eq!(
+            resolve_serve_host(&default, &host_flag),
+            server::ServeHost::AllInterfaces
+        );
+        assert_eq!(
+            resolve_serve_host(&default, &InvocationFlags::default()),
+            server::ServeHost::Loopback
+        );
+
+        let invalid =
+            evin_yaml::parse_yaml("site_url: https://example.com/\nhost: 127.0.0.1\n").unwrap();
+        assert!(evin_yaml::de::from_spanned_value::<DocsConfig>(invalid).is_err());
     }
 
     #[test]
