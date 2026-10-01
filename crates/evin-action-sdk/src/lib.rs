@@ -116,6 +116,72 @@ pub struct ActionValidationContext<'a> {
     pub needs: &'a [String],
 }
 
+/// Editor-facing, static description of a native action. Validation remains
+/// owned by the action's configuration parser; this data exists for analysis,
+/// completion, hover, and output-reference discovery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActionDescriptor {
+    pub summary: &'static str,
+    pub fields: &'static [ActionFieldDescriptor],
+    pub outputs: &'static [ActionOutputDescriptor],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActionFieldDescriptor {
+    /// Dot-separated path below `with`.
+    pub path: &'static str,
+    pub kind: ActionFieldKind,
+    pub required: bool,
+    pub description: &'static str,
+    /// Optional condition, such as `format=arch`.
+    pub condition: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ActionFieldKind {
+    String,
+    Integer,
+    Boolean,
+    List,
+    Object,
+    Enum(&'static [&'static str]),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActionOutputDescriptor {
+    pub name: &'static str,
+    pub description: &'static str,
+}
+
+impl ActionDescriptor {
+    /// Treat the compact dot-path representation as a typed field tree.  This
+    /// keeps descriptors ergonomic for built-ins while giving editor consumers
+    /// a stable parent/child query instead of forcing them to parse paths.
+    pub fn children_at(
+        &self,
+        parent: Option<&str>,
+    ) -> impl Iterator<Item = &'static ActionFieldDescriptor> + '_ {
+        let prefix = parent.map(|path| format!("{path}."));
+        self.fields.iter().filter(move |field| match &prefix {
+            Some(prefix) => field
+                .path
+                .strip_prefix(prefix)
+                .is_some_and(|rest| !rest.contains('.')),
+            None => !field.path.contains('.'),
+        })
+    }
+}
+
+impl ActionFieldDescriptor {
+    /// Default YAML insertion text for editor completion clients.
+    pub fn snippet(&self) -> String {
+        format!(
+            "{}: ${{1}}",
+            self.path.rsplit('.').next().unwrap_or(self.path)
+        )
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SyncChange {
     Create,
@@ -752,6 +818,11 @@ impl InvocationFlags {
 
 #[async_trait]
 pub trait Action: Send + Sync {
+    /// Static editor metadata for built-in actions. This is an internal
+    /// workspace contract and intentionally does not replace validation.
+    fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
+        None
+    }
     /// Whether this action validates standard and action-specific templates in
     /// its own configuration contract.
     fn handles_template_validation(&self) -> bool {

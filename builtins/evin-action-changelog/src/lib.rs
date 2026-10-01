@@ -14,12 +14,94 @@
 
 pub mod v1;
 
-use evin_action_sdk::{Action, RunnerContext};
+use evin_action_sdk::{
+    Action, ActionDescriptor, ActionFieldDescriptor, ActionFieldKind, ActionOutputDescriptor,
+    RunnerContext,
+};
+
+const CHANGELOG_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
+    summary: "Generate a changelog section.",
+    fields: &[
+        ActionFieldDescriptor {
+            path: "path",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Changelog path.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "version",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Release version.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "include_unreleased",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Include the unreleased section.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "preamble",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Changelog preamble.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "show_hashes",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Show commit hashes.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "show_scopes",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Show conventional-commit scopes.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "unreleased_heading",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Unreleased section heading.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "sections",
+            kind: ActionFieldKind::Object,
+            required: false,
+            description: "Change-type section labels.",
+            condition: None,
+        },
+    ],
+    outputs: &[
+        ActionOutputDescriptor {
+            name: "path",
+            description: "Updated changelog path.",
+        },
+        ActionOutputDescriptor {
+            name: "version",
+            description: "Published version.",
+        },
+        ActionOutputDescriptor {
+            name: "tag",
+            description: "Published tag.",
+        },
+    ],
+};
 
 pub struct ChangelogAction;
 
 #[async_trait::async_trait]
 impl Action for ChangelogAction {
+    fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
+        Some(&CHANGELOG_DESCRIPTOR)
+    }
     fn validate_config(
         &self,
         with: Option<&evin_yaml::SpannedValue>,

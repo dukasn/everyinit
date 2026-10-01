@@ -14,12 +14,49 @@
 
 pub mod v1;
 
-use evin_action_sdk::{Action, RunnerContext};
+use evin_action_sdk::{
+    Action, ActionDescriptor, ActionFieldDescriptor, ActionFieldKind, ActionOutputDescriptor,
+    RunnerContext,
+};
+
+const GIT_RELEASE_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
+    summary: "Commit and tag a release.",
+    fields: &[
+        ActionFieldDescriptor {
+            path: "stage",
+            kind: ActionFieldKind::Enum(&["all", "existing"]),
+            required: false,
+            description: "Files to stage before committing.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "message",
+            kind: ActionFieldKind::String,
+            required: true,
+            description: "Release commit message.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "tag",
+            kind: ActionFieldKind::String,
+            required: true,
+            description: "Release tag.",
+            condition: None,
+        },
+    ],
+    outputs: &[ActionOutputDescriptor {
+        name: "tag",
+        description: "Created release tag.",
+    }],
+};
 
 pub struct GitReleaseAction;
 
 #[async_trait::async_trait]
 impl Action for GitReleaseAction {
+    fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
+        Some(&GIT_RELEASE_DESCRIPTOR)
+    }
     fn validate_config(
         &self,
         with: Option<&evin_yaml::SpannedValue>,

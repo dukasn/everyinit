@@ -14,12 +14,87 @@
 
 pub mod v1;
 
-use evin_action_sdk::{Action, RunnerContext};
+use evin_action_sdk::{
+    Action, ActionDescriptor, ActionFieldDescriptor, ActionFieldKind, ActionOutputDescriptor,
+    RunnerContext,
+};
+
+const CI_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
+    summary: "Reconcile remote CI release state.",
+    fields: &[
+        ActionFieldDescriptor {
+            path: "plan_out",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Generated CI plan path.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "dry_run",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Plan without publishing changes.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "state",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Persisted CI state path.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "notes_dir",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Release notes directory.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "artifacts_dir",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Artifact directory.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "changelog",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Changelog path.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "prune_orphans",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Prune remote orphan releases.",
+            condition: None,
+        },
+    ],
+    outputs: &[
+        ActionOutputDescriptor {
+            name: "plan",
+            description: "Generated CI plan.",
+        },
+        ActionOutputDescriptor {
+            name: "delta_count",
+            description: "Number of reconciled changes.",
+        },
+        ActionOutputDescriptor {
+            name: "reconciled",
+            description: "Whether reconciliation changed state.",
+        },
+    ],
+};
 
 pub struct CiAction;
 
 #[async_trait::async_trait]
 impl Action for CiAction {
+    fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
+        Some(&CI_DESCRIPTOR)
+    }
     fn validate_config(
         &self,
         with: Option<&evin_yaml::SpannedValue>,
