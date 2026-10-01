@@ -28,18 +28,39 @@ pub async fn check(
     module_filter: Option<&str>,
     target_filter: Option<&str>,
 ) -> Result<bool, Diagnostic> {
-    let config = match evin_config::load_workspace_tasks().await {
-        Ok(config) => config,
-        Err(diagnostic) => {
+    let actions = crate::commands::builtin_actions();
+    let semantic = evin_config::WorkspaceSemanticAnalysis::build(
+        evin_config::WorkspaceSnapshot::load(&evin_config::source::FilesystemSource).await,
+        &actions,
+    );
+    let config = match semantic.config.as_ref() {
+        Some(config) => config,
+        None => {
+            let diagnostic = semantic
+                .index
+                .diagnostics
+                .first()
+                .cloned()
+                .unwrap_or_else(|| {
+                    evin_locales::diagnostic(IssueCode::custom(
+                        "workspace configuration could not be loaded",
+                    ))
+                });
             let view = failed_report(unresolved_identity(), diagnostic);
             emit(render_check(&view, terminal_width(), None), false);
             return Ok(false);
         }
     };
-    match check_view(&config, workspace_only, module_filter, target_filter) {
+    match check_view_with_findings(
+        config,
+        workspace_only,
+        module_filter,
+        target_filter,
+        Some(&semantic.findings),
+    ) {
         Ok(mut view) => {
             if !workspace_only && module_filter.is_none() && target_filter.is_none() {
-                view.issues.extend(release_lock_issues(&config).await);
+                view.issues.extend(release_lock_issues(config).await);
             }
             let valid = view.is_valid();
             emit(render_check(&view, terminal_width(), None), valid);
@@ -59,7 +80,7 @@ pub async fn check(
             emit(
                 render_check_selection_failure(
                     &CheckSelectionFailureView {
-                        workspace: identity(&config),
+                        workspace: identity(config),
                         target: selected.to_string(),
                         kind,
                         detail,
@@ -71,7 +92,7 @@ pub async fn check(
             Ok(false)
         }
         Err(diagnostic) => {
-            let view = failed_report(identity(&config), diagnostic);
+            let view = failed_report(identity(config), diagnostic);
             emit(render_check(&view, terminal_width(), None), false);
             Ok(false)
         }
@@ -241,6 +262,16 @@ pub fn check_view(
     module_filter: Option<&str>,
     target_filter: Option<&str>,
 ) -> Result<CheckReportView, Diagnostic> {
+    check_view_with_findings(config, workspace_only, module_filter, target_filter, None)
+}
+
+fn check_view_with_findings(
+    config: &EverInitConfig,
+    workspace_only: bool,
+    module_filter: Option<&str>,
+    target_filter: Option<&str>,
+    supplied_findings: Option<&[evin_config::analysis::AnalysisFinding]>,
+) -> Result<CheckReportView, Diagnostic> {
     let mut issues = config
         .warnings
         .iter()
@@ -320,12 +351,22 @@ pub fn check_view(
         .filter(|t| validated_task_set.contains(t.name.as_str()))
         .collect();
 
-    // 2. Validate native action contracts and group located findings by manifest.
+    // 2. Reuse the side-effect-free configuration analyzer. Repository state
+    // validation remains in `release_lock_issues`, outside this layer.
     let mut manifest_issues = BTreeMap::<String, Vec<CheckIssueView>>::new();
-    for finding in evin_pipeline::preflight::validate_task_contracts(
-        validated_tasks.iter().copied(),
-        &crate::commands::builtin_actions(),
-    ) {
+    let owned_findings;
+    let findings = if let Some(findings) = supplied_findings {
+        findings
+    } else {
+        owned_findings =
+            evin_config::analysis::analyze(config, &crate::commands::builtin_actions()).findings;
+        &owned_findings
+    };
+    for finding in findings
+        .iter()
+        .filter(|finding| validated_task_set.contains(finding.task_name.as_str()))
+        .cloned()
+    {
         let issue = issue_view(finding.diagnostic);
         if let Some(source_file) = finding.source_file {
             manifest_issues.entry(source_file).or_default().push(issue);

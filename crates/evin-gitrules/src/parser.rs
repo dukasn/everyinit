@@ -35,16 +35,41 @@ pub fn parse_file<P: AsRef<Path>>(path: P) -> Result<GitRulesRoot, ParserError> 
     let path = path.as_ref();
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
-    match ext {
-        "yaml" | "yml" => {
-            let root = <GitRulesRoot as evin_yaml::YamlDocument>::from_file(path)?;
-            Ok(root)
-        }
-        "json" => {
-            let content = fs::read_to_string(path)?;
-            let root: GitRulesRoot = serde_json::from_str(&content)?;
-            Ok(root)
-        }
+    let content = fs::read_to_string(path)?;
+    parse_str(&content, ext, Some(path))
+}
+
+/// Parse GitRules from caller-provided text, including editor document overlays.
+pub fn parse_str(
+    content: &str,
+    extension: &str,
+    path: Option<&Path>,
+) -> Result<GitRulesRoot, ParserError> {
+    match extension {
+        "yaml" | "yml" => Ok(<GitRulesRoot as evin_yaml::YamlDocument>::from_str(
+            content, path,
+        )?),
+        "json" => Ok(serde_json::from_str(content)?),
         _ => Err(ParserError::UnsupportedFormat),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ParserError, parse_str};
+    use std::path::Path;
+
+    #[test]
+    fn yaml_gitrules_accepts_v1_headers_and_rejects_other_evin_headers() {
+        assert!(parse_str("#!evin/v1\nversion: 1\n", "yaml", None).is_ok());
+        let error = parse_str(
+            "#!evin/v2\nversion: 1\n",
+            "yaml",
+            Some(Path::new("rules.yaml")),
+        )
+        .unwrap_err();
+        assert!(
+            matches!(error, ParserError::Diagnostic(ref diagnostic) if diagnostic.code.key == "issue-evin-header-invalid")
+        );
     }
 }

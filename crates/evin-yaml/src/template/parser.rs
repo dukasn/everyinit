@@ -23,6 +23,13 @@ pub enum Token {
     Variable(String),
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct VariableMatch {
+    pub body: String,
+    pub offset: usize,
+    pub length: usize,
+}
+
 /// A generic parser for brace-based template formats.
 pub struct TemplateParser {
     pub open: &'static str,
@@ -69,6 +76,22 @@ impl TemplateParser {
         }
 
         tokens
+    }
+
+    /// Return variable bodies together with their byte ranges in `text`.
+    pub fn variables(&self, text: &str) -> Vec<VariableMatch> {
+        self.regex
+            .captures_iter(text)
+            .map(|captures| {
+                let full = captures.get(0).expect("template capture has full range");
+                let body = captures.name("body").expect("template capture has body");
+                VariableMatch {
+                    body: body.as_str().to_owned(),
+                    offset: full.start(),
+                    length: full.end() - full.start(),
+                }
+            })
+            .collect()
     }
 
     /// Checks if a string contains malformed usage of the opening brace.

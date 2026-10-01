@@ -12,10 +12,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+pub mod analysis;
 pub mod environment;
 pub mod models;
 pub mod parser;
+pub mod semantic;
+pub mod source;
 pub mod workspace;
 
 pub use parser::EverInitConfig;
 pub use parser::load_workspace_tasks;
+pub use semantic::{WorkspaceSemanticAnalysis, WorkspaceSemanticIndex, WorkspaceSnapshot};

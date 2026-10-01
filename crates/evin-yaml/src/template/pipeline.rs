@@ -43,6 +43,23 @@ pub enum TemplateError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TemplateReferenceKind {
+    TaskOutput { task: String, key: String },
+    Environment { key: String },
+    Value { key: String },
+}
+
+/// A standard pipeline template reference, expressed relative to the scalar
+/// that contains it.  Configuration analysis keeps source ownership outside
+/// this shared parser and adds the scalar's byte offset to these ranges.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateReference {
+    pub kind: TemplateReferenceKind,
+    /// Byte offset of the full `${...}` expression within the scalar.
+    pub offset: usize,
+    pub length: usize,
+}
+
 enum Reference {
     Task { task: String, key: String },
     Env(String),
@@ -52,6 +69,42 @@ enum Reference {
 fn get_parser() -> TemplateParser {
     // Pipeline syntax uses ${var}, meaning { and } are invalid inside the body.
     TemplateParser::new("${", "}", "^\\{\\}")
+}
+
+/// Parse standard `${...}` references without resolving them.  This is the
+/// shared source of truth for runtime template validation and editor-neutral
+/// configuration analysis.
+pub fn references(text: &str) -> Result<Vec<TemplateReference>, TemplateError> {
+    if text.contains("{{") || text.contains("}}") {
+        return Err(TemplateError::MalformedSyntax(
+            "old syntax {{...}} is not supported, use ${...}".to_string(),
+        ));
+    }
+    let parser = get_parser();
+    if let Err(fragment) = parser.check_malformed(text) {
+        return Err(TemplateError::MalformedSyntax(fragment));
+    }
+
+    let mut result = Vec::new();
+    for variable in parser.variables(text) {
+        let kind = match parse_reference(&variable.body, &[]) {
+            Ok(Reference::Task { task, key }) => TemplateReferenceKind::TaskOutput { task, key },
+            Ok(Reference::Env(key)) => TemplateReferenceKind::Environment { key },
+            Ok(Reference::Local(key)) => TemplateReferenceKind::Value { key },
+            Err(_) => {
+                return Err(TemplateError::MalformedSyntax(format!(
+                    "${{{}}}",
+                    variable.body
+                )));
+            }
+        };
+        result.push(TemplateReference {
+            kind,
+            offset: variable.offset,
+            length: variable.length,
+        });
+    }
+    Ok(result)
 }
 
 pub fn validate_template_syntax(text: &str) -> Result<(), TemplateError> {

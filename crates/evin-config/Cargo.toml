@@ -17,5 +17,7 @@ evin-action-sdk = { workspace = true }
 globset = { workspace = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 serde_yaml = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true }

@@ -195,9 +195,27 @@ pub fn parse_tasks(
 }
 
 pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::Diagnostic> {
+    load_workspace_tasks_from_sync(&crate::source::FilesystemSource)
+}
+
+/// Load workspace configuration through an abstract source. The filesystem
+/// adapter preserves CLI behavior; overlays make the same discovery usable by
+/// an editor without writing buffers to disk.
+pub async fn load_workspace_tasks_from(
+    source: &dyn crate::source::WorkspaceSource,
+) -> Result<EverInitConfig, evin_diagnostic::Diagnostic> {
+    load_workspace_tasks_from_sync(source)
+}
+
+/// Synchronous implementation for editor hosts whose stdio loop is blocking.
+/// The loader performs only caller-provided source reads; it never executes
+/// actions, reads Git state, or reaches the network.
+pub fn load_workspace_tasks_from_sync(
+    source: &dyn crate::source::WorkspaceSource,
+) -> Result<EverInitConfig, evin_diagnostic::Diagnostic> {
     let workspace_path = std::path::PathBuf::from(".evin/workspace.yaml");
 
-    if !workspace_path.exists() {
+    if !source.exists(&workspace_path) {
         return Ok(EverInitConfig {
             workspace_name: "".to_string(),
             workspace_version: "".to_string(),
@@ -218,7 +236,7 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
         });
     }
 
-    let workspace = <WorkspaceYaml as evin_yaml::YamlDocument>::from_file(&workspace_path)?;
+    let workspace: WorkspaceYaml = load_yaml(source, &workspace_path)?;
 
     let mut gitrules = None;
     let mut gitrules_source = GitRulesSource::Fallback;
@@ -232,26 +250,39 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
             ));
         } else {
             let local_rules_path = std::path::PathBuf::from(rules_ref);
-            if local_rules_path.exists() {
-                match evin_gitrules::parse_file(&local_rules_path) {
-                    Ok(rules) => {
-                        gitrules = Some(std::sync::Arc::new(rules));
-                        gitrules_source = GitRulesSource::Local(rules_ref.clone());
-                    }
-                    Err(e) => {
-                        if let evin_gitrules::ParserError::Diagnostic(d) = e {
-                            return Err(d);
-                        }
-                        return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(
-                            e.to_string(),
-                        ))
-                        .with_file_location(
-                            local_rules_path.to_string_lossy().to_string(),
-                            None,
-                            None,
-                        ));
-                    }
-                }
+            if source.exists(&local_rules_path) {
+                let rules = source
+                    .read_to_string(&local_rules_path)
+                    .map_err(|error| {
+                        evin_locales::diagnostic(
+                            evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                                .arg("file_path", local_rules_path.display().to_string())
+                                .arg("error", error.to_string()),
+                        )
+                    })
+                    .and_then(|content| {
+                        evin_gitrules::parse_str(
+                            &content,
+                            local_rules_path
+                                .extension()
+                                .and_then(|extension| extension.to_str())
+                                .unwrap_or(""),
+                            Some(&local_rules_path),
+                        )
+                        .map_err(|error| match error {
+                            evin_gitrules::ParserError::Diagnostic(diagnostic) => diagnostic,
+                            other => evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(
+                                other.to_string(),
+                            ))
+                            .with_file_location(
+                                local_rules_path.display().to_string(),
+                                None,
+                                None,
+                            ),
+                        })
+                    })?;
+                gitrules = Some(std::sync::Arc::new(rules));
+                gitrules_source = GitRulesSource::Local(rules_ref.clone());
             } else {
                 // Retain the configured source even before it exists so watch
                 // mode can observe its creation and re-resolve the rules.
@@ -320,7 +351,7 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
 
         for (explicit_name, file_path) in includes {
             let ns_path = std::path::PathBuf::from(&file_path);
-            if !ns_path.exists() {
+            if !source.exists(&ns_path) {
                 return Err(evin_locales::diagnostic(
                     evin_diagnostic::IssueCode::new("issue-file-parse-failed")
                         .arg("file_path", &file_path)
@@ -329,8 +360,7 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
                 .with_file_location(&file_path, None, None));
             }
 
-            let namespace_doc =
-                <crate::workspace::NamespaceYaml as evin_yaml::YamlDocument>::from_file(&ns_path)?;
+            let namespace_doc: crate::workspace::NamespaceYaml = load_yaml(source, &ns_path)?;
 
             let ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
 
@@ -361,11 +391,11 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
     if let Some(ref modules) = workspace.workspace.modules {
         for module_dir in modules {
             let mod_path = std::path::PathBuf::from(&module_dir).join(".evin/module.yaml");
-            if !mod_path.exists() {
+            if !source.exists(&mod_path) {
                 continue;
             }
 
-            let module = <ModuleYaml as evin_yaml::YamlDocument>::from_file(&mod_path)?;
+            let module: ModuleYaml = load_yaml(source, &mod_path)?;
             module_versions.insert(
                 module.module.name.clone(),
                 resolved_module_version(&module.module, &workspace.workspace.version),
@@ -419,7 +449,7 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
                         std::path::PathBuf::from(module_dir).join(&file_path)
                     };
 
-                    if !ns_path.exists() {
+                    if !source.exists(&ns_path) {
                         return Err(evin_locales::diagnostic(
                             evin_diagnostic::IssueCode::new("issue-file-parse-failed")
                                 .arg("file_path", &file_path)
@@ -428,10 +458,8 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
                         .with_file_location(&file_path, None, None));
                     }
 
-                    let namespace_doc =
-                        <crate::workspace::NamespaceYaml as evin_yaml::YamlDocument>::from_file(
-                            &ns_path,
-                        )?;
+                    let namespace_doc: crate::workspace::NamespaceYaml =
+                        load_yaml(source, &ns_path)?;
 
                     let raw_ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
                     let full_ns_name = if raw_ns_name == module.module.name {
@@ -497,6 +525,20 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
         modules_discovered,
         module_versions,
     })
+}
+
+fn load_yaml<T: evin_yaml::YamlDocument>(
+    source: &dyn crate::source::WorkspaceSource,
+    path: &std::path::Path,
+) -> Result<T, evin_diagnostic::Diagnostic> {
+    let content = source.read_to_string(path).map_err(|error| {
+        evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                .arg("file_path", path.display().to_string())
+                .arg("error", error.to_string()),
+        )
+    })?;
+    T::from_str(&content, Some(path))
 }
 
 #[cfg(test)]
@@ -787,5 +829,63 @@ mod tests {
         assert_eq!(needs[0], "build");
         // Bare "build" should be qualified to "my_module:build" because "build" is local to my_module
         assert_eq!(needs[1], "my_module:build");
+    }
+
+    #[tokio::test]
+    async fn overlay_source_loads_namespaced_tasks_without_filesystem_writes() {
+        let mut source = crate::source::OverlaySource::default();
+        source.insert(
+            ".evin/workspace.yaml",
+            "workspace: { name: app, version: 1.0.0, include: [.evin/packages.yaml] }\nstages: [Publish]\ntasks: {}\n",
+        );
+        source.insert(
+            ".evin/packages.yaml",
+            "namespace: { name: packages }\nvalues: { package_name: app }\ntasks:\n  build:\n    stage: Publish\n    run: echo\n",
+        );
+        let config = load_workspace_tasks_from(&source).await.unwrap();
+        assert_eq!(config.tasks.len(), 1);
+        assert_eq!(config.tasks[0].name, "packages:build");
+        assert_eq!(
+            config.tasks[0].module_values.as_ref().unwrap()["package_name"],
+            "app"
+        );
+    }
+
+    #[test]
+    fn headers_are_accepted_for_workspace_module_namespace_gitrules_and_environment() {
+        use evin_yaml::YamlDocument;
+
+        let mut source = crate::source::OverlaySource::default();
+        source.insert(
+            ".evin/workspace.yaml",
+            "#!evin/v1\nworkspace: { name: app, version: 1.0.0, rules: .evin/gitrules.yaml, modules: [crates/api], include: [.evin/packages.yaml] }\nstages: [Build]\ntasks: {}\n",
+        );
+        source.insert(
+            "crates/api/.evin/module.yaml",
+            "#!evin/v1\nmodule: { name: api }\ntasks: {}\n",
+        );
+        source.insert(
+            ".evin/packages.yaml",
+            "#!evin/v1\nnamespace: { name: packages }\ntasks: {}\n",
+        );
+        source.insert(".evin/gitrules.yaml", "#!evin/v1\nversion: 1\n");
+
+        let config = load_workspace_tasks_from_sync(&source).unwrap();
+        assert!(config.gitrules.is_some());
+        assert!(
+            config
+                .modules_discovered
+                .iter()
+                .any(|(name, _, _)| name == "api")
+        );
+        assert_eq!(
+            <crate::environment::EnvironmentYaml as YamlDocument>::from_str(
+                "#!evin/v1\nversion: 1\n",
+                None,
+            )
+            .unwrap()
+            .version,
+            1
+        );
     }
 }

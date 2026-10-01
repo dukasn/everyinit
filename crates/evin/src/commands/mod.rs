@@ -110,6 +110,7 @@ pub(crate) fn builtin_actions()
 
 #[cfg(test)]
 mod tests {
+    use super::builtin_actions;
     use super::file_uri;
 
     #[test]
@@ -127,5 +128,25 @@ mod tests {
             directory.canonicalize().unwrap()
         );
         assert!(!uri.contains('\\'));
+    }
+
+    #[test]
+    fn every_builtin_action_declares_editor_metadata() {
+        for (id, action) in builtin_actions() {
+            let descriptor = action.editor_descriptor().expect("builtin descriptor");
+            assert!(!descriptor.summary.is_empty(), "{id} summary");
+            assert!(
+                descriptor.children_at(None).next().is_some(),
+                "{id} root fields"
+            );
+            for field in descriptor.fields {
+                assert!(!field.description.is_empty(), "{id} field {}", field.path);
+                assert!(
+                    !field.snippet().is_empty(),
+                    "{id} field {} snippet",
+                    field.path
+                );
+            }
+        }
     }
 }

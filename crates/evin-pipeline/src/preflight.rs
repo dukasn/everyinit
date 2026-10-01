@@ -7,9 +7,11 @@
 use evin_action_sdk::{Action, InvocationFlags};
 use evin_config::models::TaskObject;
 use evin_diagnostic::{Diagnostic, IssueCode};
-use evin_yaml::{ConfigError, Span, SpannedValue};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+
+#[cfg(test)]
+use evin_yaml::{Span, SpannedValue};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InvocationResolution {
@@ -81,119 +83,16 @@ pub fn validate_task_contracts<'a>(
     tasks: impl IntoIterator<Item = &'a TaskObject>,
     actions: &HashMap<String, Arc<dyn Action>>,
 ) -> Vec<ActionValidationFinding> {
-    let mut tasks = tasks.into_iter().collect::<Vec<_>>();
-    tasks.sort_by(|left, right| left.name.cmp(&right.name));
-
-    let mut findings = Vec::new();
-    for task in tasks {
-        if task.run.is_some() && task.steps.is_some() {
-            findings.push(ActionValidationFinding {
-                task_name: task.name.clone(),
-                source_file: task.source_file.clone(),
-                step_index: None,
-                action_id: None,
-                diagnostic: evin_locales::diagnostic(
-                    IssueCode::new("issue-task-defines-run-and-steps").arg("task_name", &task.name),
-                ),
-            });
-            continue;
-        }
-
-        let Some(steps) = &task.steps else {
-            continue;
-        };
-        for (step_index, step) in steps.iter().enumerate() {
-            let Some(uses) = &step.uses else {
-                continue;
-            };
-            let action_id = uses.as_str().to_string();
-            let diagnostic = match actions.get(uses.as_str()) {
-                Some(action) => match action.validate_task_config(
-                    &evin_action_sdk::ActionValidationContext {
-                        task_name: &task.name,
-                        needs: task.needs.as_deref().unwrap_or_default(),
-                    },
-                    step.with.as_ref(),
-                ) {
-                    Ok(()) => (!action.handles_template_validation())
-                        .then(|| first_template_error(step.with.as_ref()))
-                        .flatten()
-                        .map(|error| invalid_action_config_diagnostic(task, error)),
-                    Err(error) => Some(invalid_action_config_diagnostic(task, error)),
-                },
-                None => Some(with_source_span(
-                    evin_locales::diagnostic(
-                        IssueCode::new("issue-unknown-native-action").arg("action", uses.as_str()),
-                    ),
-                    task.source_file.as_deref(),
-                    uses.span(),
-                )),
-            };
-
-            if let Some(diagnostic) = diagnostic {
-                findings.push(ActionValidationFinding {
-                    task_name: task.name.clone(),
-                    source_file: task.source_file.clone(),
-                    step_index: Some(step_index),
-                    action_id: Some(action_id),
-                    diagnostic,
-                });
-            }
-        }
-    }
-    findings
-}
-
-fn invalid_action_config_diagnostic(task: &TaskObject, error: ConfigError) -> Diagnostic {
-    let clean_error = error
-        .message
-        .replace("unknown field", "Unknown field")
-        .replace("missing field", "Missing field")
-        .replace("invalid type:", "Invalid type:")
-        .replace(", expected one of", ".\nAllowed fields:")
-        .replace(", expected", ".\nExpected:");
-    let title = task.description.as_deref().unwrap_or(task.name.as_str());
-    let diagnostic = evin_locales::diagnostic(
-        IssueCode::new("issue-action-config-invalid")
-            .arg("task", title)
-            .arg("clean_error", clean_error),
-    );
-    match error.span {
-        Some(span) => with_source_span(diagnostic, task.source_file.as_deref(), span),
-        None => diagnostic,
-    }
-}
-
-fn with_source_span(diagnostic: Diagnostic, source_file: Option<&str>, span: Span) -> Diagnostic {
-    let Some(source_file) = source_file else {
-        return diagnostic;
-    };
-    if span.length > 1 {
-        diagnostic.with_file_span(source_file, span.offset, span.length, None)
-    } else {
-        diagnostic.with_file_location(source_file, Some(span.line), Some(span.column))
-    }
-}
-
-fn first_template_error(value: Option<&SpannedValue>) -> Option<ConfigError> {
-    let value = value?;
-    match value {
-        SpannedValue::String(text, span) => {
-            evin_yaml::template::pipeline::validate_template_syntax(text)
-                .err()
-                .map(|error| ConfigError {
-                    message: error.to_string(),
-                    span: Some(*span),
-                })
-        }
-        SpannedValue::Sequence(values, _) => values
-            .iter()
-            .find_map(|value| first_template_error(Some(value))),
-        SpannedValue::Mapping(values, _) => values.iter().find_map(|(key, value)| {
-            first_template_error(Some(key)).or_else(|| first_template_error(Some(value)))
-        }),
-        _ => None,
-    }
+    evin_config::analysis::validate_task_contracts(tasks, actions)
+        .into_iter()
+        .map(|finding| ActionValidationFinding {
+            task_name: finding.task_name,
+            source_file: finding.source_file,
+            step_index: finding.step_index,
+            action_id: finding.action_id,
+            diagnostic: finding.diagnostic,
+        })
+        .collect()
 }
 
 #[cfg(test)]

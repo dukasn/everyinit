@@ -14,8 +14,8 @@
 
 use super::format::render;
 use super::pipeline::{
-    TemplateContext, TemplateError, resolve_templates, resolve_templates_with_self,
-    validate_template_syntax,
+    TemplateContext, TemplateError, TemplateReferenceKind, references, resolve_templates,
+    resolve_templates_with_self, validate_template_syntax,
 };
 use super::regex::compile_template;
 use std::collections::{HashMap, HashSet};
@@ -115,6 +115,31 @@ fn test_validate_syntax_old_mustache_rejected() {
         matches!(err, Err(TemplateError::MalformedSyntax(_))),
         "expected MalformedSyntax, got: {:?}",
         err
+    );
+}
+
+#[test]
+fn references_keep_relative_byte_ranges_and_kinds() {
+    let text = "x ${value} ${env.HOME} ${build.output}";
+    let references = references(text).unwrap();
+    assert_eq!(references.len(), 3);
+    assert_eq!(references[0].offset, 2);
+    assert_eq!(
+        references[0].kind,
+        TemplateReferenceKind::Value {
+            key: "value".into()
+        }
+    );
+    assert_eq!(
+        references[1].kind,
+        TemplateReferenceKind::Environment { key: "HOME".into() }
+    );
+    assert_eq!(
+        references[2].kind,
+        TemplateReferenceKind::TaskOutput {
+            task: "build".into(),
+            key: "output".into()
+        }
     );
 }
 
