@@ -1914,6 +1914,30 @@ mod tests {
     }
 
     #[test]
+    fn matter_sidebar_backdrop_preserves_fixed_positioning_and_excludes_ripple() {
+        let (_, raw_css, app_js, embedded_fs) =
+            resolve_layout_assets(Path::new("."), "matter", None);
+        let css = CssOptimizer::process(&raw_css, &HashMap::new(), &embedded_fs, false).unwrap();
+
+        assert!(
+            css.contains(".sidebar-backdrop") && css.contains("position: fixed !important"),
+            "sidebar-backdrop must enforce fixed !important positioning to survive cascade overrides"
+        );
+        assert!(
+            app_js.contains("button:not(.sidebar-backdrop)"),
+            "ripple target selector must explicitly exclude sidebar-backdrop"
+        );
+        assert!(
+            app_js.contains("button.classList.contains('sidebar-backdrop')"),
+            "ripple effect function must guard against sidebar-backdrop"
+        );
+        assert!(
+            !app_js.contains("$('#sidebarBackdrop')?.addEventListener('click'"),
+            "sidebarBackdrop should not have redundant click listener"
+        );
+    }
+
+    #[test]
     fn bundled_styles_keep_ui_colors_in_the_token_layer() {
         fn inspect(
             dir: &include_dir::Dir<'_>,

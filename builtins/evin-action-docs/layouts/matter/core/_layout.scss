@@ -51,7 +51,7 @@ aside.sidebar > * {
 /* Mobile Backdrop Overlay */
 .sidebar-backdrop {
     display: block;
-    position: fixed;
+    position: fixed !important;
     inset: 0; background-color: var(--ui-color-scrim);
     border: 0;
     opacity: 0;

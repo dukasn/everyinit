@@ -678,7 +678,7 @@ const App = (() => {
 
     // 5. ACTIONS & KEY KERNEL
     const ripple = (button, event) => {
-        if (!button) return;
+        if (!button || button.classList.contains('sidebar-backdrop')) return;
         button.classList.add('ripple-host');
         const circle = document.createElement('span');
         const diameter = Math.max(button.clientWidth, button.clientHeight);
@@ -884,13 +884,6 @@ const App = (() => {
             if (!isInDialog) modal.close();
         });
 
-        // Close sidebar on backdrop click (for mobile drawer)
-        $('#sidebarBackdrop')?.addEventListener('click', () => {
-            if (isModal()) {
-                setDrawer(0);
-            }
-        });
-
         const input = searchInput();
         input?.addEventListener('input', () => {
             performSearch();
@@ -900,7 +893,7 @@ const App = (() => {
 
         document.addEventListener('click', e => {
             const t = e.target.closest('[data-action]');
-            const rippleTarget = e.target.closest('button, a, [role="button"]');
+            const rippleTarget = e.target.closest('button:not(.sidebar-backdrop), a, [role="button"]:not(.sidebar-backdrop)');
             if (rippleTarget) ripple(rippleTarget, e);
             if (t && ACTIONS[t.dataset.action]) ACTIONS[t.dataset.action](t, e);
             else if (e.target.closest('.search-result-card')) {
