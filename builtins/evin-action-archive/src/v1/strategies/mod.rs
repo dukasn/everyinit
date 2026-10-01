@@ -13,5 +13,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod apk;
+pub mod arch;
 pub mod deb;
 pub mod targz;

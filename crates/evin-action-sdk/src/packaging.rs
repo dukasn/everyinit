@@ -12,10 +12,10 @@
 
 use flate2::{Compression, GzBuilder};
 use md5::{Digest as Md5Digest, Md5};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use sha2::Sha256;
 use std::collections::BTreeMap;
-use std::io::{self};
+use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use tar::{Builder, EntryType, Header};
 
@@ -29,15 +29,11 @@ pub enum PackagingError {
     Read { path: PathBuf, source: io::Error },
     #[error("invalid SOURCE_DATE_EPOCH: {0}")]
     InvalidEpoch(String),
-    #[error("unknown package token '{{{{{0}}}}}'")]
-    UnknownToken(String),
-    #[error("unterminated package token")]
-    UnterminatedToken,
     #[error("archive writer failed: {0}")]
     Archive(#[from] io::Error),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LinuxArch {
     X86_64,
@@ -76,6 +72,19 @@ impl LinuxArch {
             Self::Noarch => "noarch",
         }
     }
+
+    pub fn arch(self) -> &'static str {
+        match self {
+            Self::X86_64 => "x86_64",
+            Self::Aarch64 => "aarch64",
+            Self::X86 => "i686",
+            Self::Armv7 => "armv7h",
+            Self::Riscv64 => "riscv64",
+            Self::Ppc64le => "ppc64le",
+            Self::S390x => "s390x",
+            Self::Noarch => "any",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +92,7 @@ pub enum PackageFormat {
     TarGz,
     Deb,
     Apk,
+    Arch,
 }
 
 impl PackageFormat {
@@ -91,6 +101,7 @@ impl PackageFormat {
             "tar.gz" => Some(Self::TarGz),
             "deb" => Some(Self::Deb),
             "apk" => Some(Self::Apk),
+            "arch" => Some(Self::Arch),
             _ => None,
         }
     }
@@ -100,231 +111,9 @@ impl PackageFormat {
             Self::TarGz => "tar.gz",
             Self::Deb => "deb",
             Self::Apk => "apk",
+            Self::Arch => "arch",
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct PackageManifestSource {
-    pub root: PathBuf,
-    pub path: PathBuf,
-    pub manifest: PackageManifest,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PackageManifestCatalog {
-    manifests: Vec<PackageManifestSource>,
-}
-
-impl PackageManifestCatalog {
-    pub fn new(mut manifests: Vec<PackageManifestSource>) -> Self {
-        manifests.sort_by(|left, right| left.root.cmp(&right.root));
-        Self { manifests }
-    }
-
-    pub fn manifests(&self) -> &[PackageManifestSource] {
-        &self.manifests
-    }
-
-    pub fn select(&self, task_cwd: &Path) -> Option<&PackageManifestSource> {
-        self.manifests
-            .iter()
-            .filter(|entry| task_cwd.starts_with(&entry.root))
-            .max_by_key(|entry| entry.root.components().count())
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PackageManifest {
-    pub version: u32,
-    pub identity: PackageIdentity,
-    #[serde(default)]
-    pub payload: Vec<PayloadMapping>,
-    #[serde(default)]
-    pub targets: PackageTargets,
-}
-
-impl PackageManifest {
-    pub fn validate(&self) -> Result<(), PackagingError> {
-        if self.version != 1
-            || self.identity.name.trim().is_empty()
-            || self.identity.name.contains("{{")
-        {
-            return Err(PackagingError::InvalidPath(
-                "package identity or manifest version".into(),
-            ));
-        }
-        if self.identity.summary.trim().is_empty()
-            || self.identity.maintainer.trim().is_empty()
-            || self.identity.license.trim().is_empty()
-        {
-            return Err(PackagingError::InvalidPath(
-                "required package identity field".into(),
-            ));
-        }
-        let token_check = PackageTokens {
-            name: self.identity.name.clone(),
-            version: "version".into(),
-            arch: "arch".into(),
-            revision: 1,
-            maintainer: self.identity.maintainer.clone(),
-            summary: self.identity.summary.clone(),
-        };
-        for value in [
-            &self.identity.summary,
-            &self.identity.maintainer,
-            &self.identity.license,
-        ]
-        .into_iter()
-        .chain(self.identity.description.iter())
-        .chain(self.identity.homepage.iter())
-        {
-            render_intrinsic_tokens(value, &token_check)?;
-        }
-        for mapping in &self.payload {
-            if mapping.source.trim().is_empty() || mapping.strip_prefix.trim().is_empty() {
-                return Err(PackagingError::InvalidPath(
-                    "empty payload source or strip_prefix".into(),
-                ));
-            }
-            normalize_install_dir(&mapping.destination)?;
-            render_intrinsic_tokens(&mapping.source, &token_check)?;
-            render_intrinsic_tokens(&mapping.strip_prefix, &token_check)?;
-            render_intrinsic_tokens(&mapping.destination, &token_check)?;
-            if let Some(mode) = mapping.mode
-                && mode > 0o777
-            {
-                return Err(PackagingError::InvalidPath(format!(
-                    "invalid file mode {mode:o}"
-                )));
-            }
-        }
-        if let Some(target) = &self.targets.deb {
-            for dependency in &target.depends {
-                render_intrinsic_tokens(dependency, &token_check)?;
-            }
-        }
-        if let Some(target) = &self.targets.apk {
-            for dependency in &target.depends {
-                render_intrinsic_tokens(dependency, &token_check)?;
-            }
-        }
-        Ok(())
-    }
-}
-
-impl evin_yaml::YamlDocument for PackageManifest {}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PackageIdentity {
-    pub name: String,
-    pub summary: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    pub maintainer: String,
-    pub license: String,
-    #[serde(default)]
-    pub homepage: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PayloadMapping {
-    pub source: String,
-    pub strip_prefix: String,
-    pub destination: String,
-    #[serde(default)]
-    pub mode: Option<u32>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PackageTargets {
-    #[serde(default)]
-    pub deb: Option<DebTarget>,
-    #[serde(default)]
-    pub apk: Option<ApkTarget>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DebTarget {
-    #[serde(default)]
-    pub depends: Vec<String>,
-    #[serde(default)]
-    pub scripts: DebScripts,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct DebScripts {
-    pub preinst: Option<String>,
-    pub postinst: Option<String>,
-    pub prerm: Option<String>,
-    pub postrm: Option<String>,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ApkTarget {
-    #[serde(default)]
-    pub depends: Vec<String>,
-    #[serde(default)]
-    pub scripts: ApkScripts,
-}
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ApkScripts {
-    pub pre_install: Option<String>,
-    pub post_install: Option<String>,
-    pub pre_deinstall: Option<String>,
-    pub post_deinstall: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct PackageTokens {
-    pub name: String,
-    pub version: String,
-    pub arch: String,
-    pub revision: u32,
-    pub maintainer: String,
-    pub summary: String,
-}
-
-pub fn render_intrinsic_tokens(
-    value: &str,
-    tokens: &PackageTokens,
-) -> Result<String, PackagingError> {
-    let mut rendered = String::with_capacity(value.len());
-    let mut remaining = value;
-    while let Some(start) = remaining.find("{{") {
-        rendered.push_str(&remaining[..start]);
-        let after_start = &remaining[start + 2..];
-        let Some(end) = after_start.find("}}") else {
-            return Err(PackagingError::UnterminatedToken);
-        };
-        let token = after_start[..end].trim();
-        let replacement = match token {
-            "name" => &tokens.name,
-            "version" => &tokens.version,
-            "arch" => &tokens.arch,
-            "revision" => {
-                rendered.push_str(&tokens.revision.to_string());
-                remaining = &after_start[end + 2..];
-                continue;
-            }
-            "maintainer" => &tokens.maintainer,
-            "summary" => &tokens.summary,
-            other => return Err(PackagingError::UnknownToken(other.to_string())),
-        };
-        rendered.push_str(replacement);
-        remaining = &after_start[end + 2..];
-    }
-    rendered.push_str(remaining);
-    Ok(rendered)
 }
 
 pub fn parse_source_date_epoch(value: &str) -> Result<u64, PackagingError> {
@@ -485,6 +274,70 @@ pub fn normalized_tar_gz(
     Ok(tar.into_inner()?.finish()?)
 }
 
+pub fn normalized_tar(entries: &[PreparedEntry]) -> Result<Vec<u8>, PackagingError> {
+    let mut ordered = entries.to_vec();
+    ordered.sort_by(|a, b| a.path.as_bytes().cmp(b.path.as_bytes()));
+    let mut tar = Builder::new(Vec::new());
+    for entry in ordered {
+        let mut header = Header::new_ustar();
+        header.set_path(&entry.path)?;
+        header.set_mode(entry.mode);
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(entry.mtime);
+        header.set_username("root")?;
+        header.set_groupname("root")?;
+        match entry.kind {
+            PreparedEntryKind::Directory => {
+                header.set_entry_type(EntryType::Directory);
+                header.set_size(0);
+                header.set_cksum();
+                tar.append(&header, io::empty())?;
+            }
+            PreparedEntryKind::File => {
+                header.set_entry_type(EntryType::Regular);
+                header.set_size(entry.data.len() as u64);
+                header.set_cksum();
+                tar.append(&header, entry.data.as_slice())?;
+            }
+        }
+    }
+    tar.finish()?;
+    Ok(tar.into_inner()?)
+}
+
+/// Publish an artifact only after its complete deterministic encoding succeeds.
+///
+/// The temporary file is created beside the destination so persistence is a
+/// same-filesystem replacement. A failed encoder or persist operation drops
+/// the temporary file and leaves an existing artifact untouched.
+pub fn write_atomically(
+    output: &Path,
+    write: impl FnOnce(&mut dyn Write) -> Result<(), PackagingError>,
+) -> Result<(), PackagingError> {
+    let parent = output
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let mut temporary = tempfile::Builder::new()
+        .prefix(".evin-archive-")
+        .tempfile_in(parent)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        temporary
+            .as_file_mut()
+            .set_permissions(std::fs::Permissions::from_mode(0o644))?;
+    }
+    write(temporary.as_file_mut())?;
+    temporary.as_file_mut().flush()?;
+    temporary.as_file_mut().sync_all()?;
+    temporary
+        .persist(output)
+        .map_err(|error| PackagingError::Archive(error.error))?;
+    Ok(())
+}
+
 pub fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
@@ -595,6 +448,69 @@ mod tests {
         assert_eq!(
             normalized_tar_gz(&entries, Compression::best()).unwrap(),
             normalized_tar_gz(&entries, Compression::best()).unwrap()
+        );
+    }
+
+    #[test]
+    fn atomic_write_replaces_only_a_complete_artifact() {
+        let temp = TempDir::new().unwrap();
+        let output = temp.path().join("artifact");
+        std::fs::write(&output, b"old").unwrap();
+
+        write_atomically(&output, |writer| {
+            writer.write_all(b"new")?;
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(std::fs::read(&output).unwrap(), b"new");
+        assert!(std::fs::read_dir(temp.path()).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".evin-archive-")
+        }));
+    }
+
+    #[test]
+    fn atomic_write_failure_preserves_existing_artifact_and_cleans_up() {
+        let temp = TempDir::new().unwrap();
+        let output = temp.path().join("artifact");
+        std::fs::write(&output, b"old").unwrap();
+
+        let error = write_atomically(&output, |writer| {
+            writer.write_all(b"partial")?;
+            Err(PackagingError::InvalidPath("injected failure".into()))
+        });
+
+        assert!(error.is_err());
+        assert_eq!(std::fs::read(&output).unwrap(), b"old");
+        assert!(std::fs::read_dir(temp.path()).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".evin-archive-")
+        }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_publishes_readable_non_executable_artifacts() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().unwrap();
+        let output = temp.path().join("artifact");
+        write_atomically(&output, |writer| {
+            writer.write_all(b"artifact")?;
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(
+            std::fs::metadata(output).unwrap().permissions().mode() & 0o777,
+            0o644
         );
     }
 }

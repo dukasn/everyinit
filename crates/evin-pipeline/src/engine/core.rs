@@ -56,9 +56,6 @@ impl PipelineEngine {
             gitrules: None,
             forced_execution: None,
             workspace_execution: None,
-            package_manifests: Arc::new(
-                evin_action_sdk::packaging::PackageManifestCatalog::default(),
-            ),
         };
 
         let state = PipelineExecutionState {

@@ -21,10 +21,6 @@ pub struct ArchiveAction;
 
 #[async_trait::async_trait]
 impl Action for ArchiveAction {
-    fn handles_template_validation(&self) -> bool {
-        true
-    }
-
     fn validate_config(
         &self,
         with: Option<&evin_yaml::SpannedValue>,

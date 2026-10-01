@@ -310,7 +310,6 @@ pub struct RunnerContext {
     pub dry_run: evin_io::DryRunState,
     pub gitrules: std::sync::Arc<evin_gitrules::GitRulesRoot>,
     pub http: std::sync::Arc<http::HttpClient>,
-    pub package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
     pub cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
@@ -333,7 +332,6 @@ pub struct RunnerContextBuilder {
     unverified_inputs: std::collections::HashSet<String>,
     dry_run: evin_io::DryRunState,
     cancel_token: Option<tokio_util::sync::CancellationToken>,
-    package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
 }
 
 impl RunnerContextBuilder {
@@ -364,7 +362,6 @@ impl RunnerContextBuilder {
             unverified_inputs: std::collections::HashSet::new(),
             dry_run: evin_io::DryRunState::default(),
             cancel_token: None,
-            package_manifests: std::sync::Arc::new(packaging::PackageManifestCatalog::default()),
         }
     }
 
@@ -426,14 +423,6 @@ impl RunnerContextBuilder {
         self
     }
 
-    pub fn package_manifests(
-        mut self,
-        package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
-    ) -> Self {
-        self.package_manifests = package_manifests;
-        self
-    }
-
     pub fn build(self) -> RunnerContext {
         let mut ctx = RunnerContext::new_with_dry_run_and_values_and_http(
             self.workspace_name,
@@ -452,7 +441,6 @@ impl RunnerContextBuilder {
             self.secrets,
             self.http,
             self.dry_run,
-            self.package_manifests,
         );
         ctx.cancel_token = self.cancel_token;
         ctx
@@ -598,7 +586,6 @@ impl RunnerContext {
             secrets,
             std::sync::Arc::new(http::HttpClient::new().expect("Failed to initialize HTTP client")),
             dry_run,
-            std::sync::Arc::new(packaging::PackageManifestCatalog::default()),
         )
     }
 
@@ -620,7 +607,6 @@ impl RunnerContext {
         secrets: std::sync::Arc<secrets::SecretsProvider>,
         http: std::sync::Arc<http::HttpClient>,
         dry_run: evin_io::DryRunState,
-        package_manifests: std::sync::Arc<packaging::PackageManifestCatalog>,
     ) -> Self {
         let log = Logger::new(task_name.clone(), log_tx, secrets.clone());
         let env_obj = Environment::new(env);
@@ -663,7 +649,6 @@ impl RunnerContext {
             dry_run,
             gitrules: std::sync::Arc::new(evin_gitrules::GitRulesRoot::default()),
             http,
-            package_manifests,
             cancel_token: None,
         }
     }

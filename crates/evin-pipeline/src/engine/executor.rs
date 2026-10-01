@@ -340,7 +340,6 @@ impl PipelineEngine {
         let needs = task.needs.clone().unwrap_or_default();
         let gitrules = self.config.gitrules.clone();
         let workspace_name = self.config.workspace_name.clone();
-        let package_manifests = self.config.package_manifests.clone();
 
         join_set.spawn(async move {
             let start_sys_time = SystemTime::now();
@@ -425,7 +424,6 @@ impl PipelineEngine {
             .unverified_inputs(unverified_inputs.clone())
             .dry_run(dry_run)
             .cancel_token(Some(engine_ctx.cancel_token.clone()))
-            .package_manifests(package_manifests)
             .build();
 
             // Pass the globally resolved gitrules down to the action context

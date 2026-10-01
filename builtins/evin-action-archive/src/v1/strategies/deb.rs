@@ -17,7 +17,6 @@ use evin_action_sdk::packaging::{
 };
 use flate2::Compression;
 use std::io::Write;
-use std::path::Path;
 
 pub struct DebPackage<'a> {
     pub context: &'a PackageContext,
@@ -34,7 +33,7 @@ pub struct DebPackage<'a> {
 }
 
 pub fn write(
-    output: &Path,
+    output: &mut dyn Write,
     mut package: DebPackage<'_>,
 ) -> Result<(), evin_action_sdk::packaging::PackagingError> {
     let data = normalized_tar_gz(&package.context.entries, Compression::best())?;
@@ -102,11 +101,20 @@ pub fn write(
         });
     }
     let control = normalized_tar_gz(&control_entries, Compression::best())?;
-    let mut file = std::fs::File::create(output)?;
-    file.write_all(b"!<arch>\n")?;
-    append_ar_member(&mut file, "debian-binary", b"2.0\n", package.context.epoch)?;
-    append_ar_member(&mut file, "control.tar.gz", &control, package.context.epoch)?;
-    append_ar_member(&mut file, "data.tar.gz", &data, package.context.epoch)?;
+    output.write_all(b"!<arch>\n")?;
+    append_ar_member(
+        &mut *output,
+        "debian-binary",
+        b"2.0\n",
+        package.context.epoch,
+    )?;
+    append_ar_member(
+        &mut *output,
+        "control.tar.gz",
+        &control,
+        package.context.epoch,
+    )?;
+    append_ar_member(&mut *output, "data.tar.gz", &data, package.context.epoch)?;
     Ok(())
 }
 

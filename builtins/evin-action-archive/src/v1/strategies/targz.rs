@@ -14,35 +14,26 @@
 
 use crate::v1::archiver::Archiver;
 use evin_action_sdk::packaging::{PackageContext, normalized_tar_gz};
-use evin_diagnostic::{Diagnostic, IssueCode};
 use flate2::Compression;
-use std::path::Path;
+use std::io::Write;
 
 pub struct TarGzArchiver {
     pub compression_level: Option<u32>,
 }
 
 impl Archiver for TarGzArchiver {
-    fn create_archive(
+    fn write_archive(
         &self,
-        output_path: &Path,
+        output: &mut dyn Write,
         context: &PackageContext,
-    ) -> Result<(), Diagnostic> {
+    ) -> Result<(), evin_action_sdk::packaging::PackagingError> {
         let compression = self
             .compression_level
             .map(Compression::new)
             .unwrap_or_default();
 
-        let bytes = normalized_tar_gz(&context.entries, compression).map_err(|e| {
-            evin_locales::diagnostic(
-                IssueCode::new("finalize-archive-failed").arg("error", e.to_string()),
-            )
-        })?;
-        std::fs::write(output_path, bytes).map_err(|e| {
-            evin_locales::diagnostic(
-                IssueCode::new("create-output-file-failed").arg("error", e.to_string()),
-            )
-        })?;
+        let bytes = normalized_tar_gz(&context.entries, compression)?;
+        output.write_all(&bytes)?;
         Ok(())
     }
 }

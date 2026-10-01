@@ -13,7 +13,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use evin_action_sdk::packaging::PackageContext;
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::PathBuf;
 
 /// Represents a validated file ready to be streamed into an archive.
 #[derive(Debug)]
@@ -24,11 +25,11 @@ pub struct ArchiveEntry {
     pub destination: PathBuf,
 }
 
-/// The core Strategy trait for format-agnostic compression
+/// Internal strategy contract for format-agnostic compression.
 pub trait Archiver: Send + Sync {
-    fn create_archive(
+    fn write_archive(
         &self,
-        output_path: &Path,
+        output: &mut dyn Write,
         context: &PackageContext,
-    ) -> Result<(), evin_diagnostic::Diagnostic>;
+    ) -> Result<(), evin_action_sdk::packaging::PackagingError>;
 }

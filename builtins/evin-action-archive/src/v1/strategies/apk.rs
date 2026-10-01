@@ -17,7 +17,6 @@ use evin_action_sdk::packaging::{
 };
 use flate2::Compression;
 use std::io::Write;
-use std::path::Path;
 
 pub struct ApkPackage<'a> {
     pub context: &'a PackageContext,
@@ -34,7 +33,7 @@ pub struct ApkPackage<'a> {
 }
 
 pub fn write(
-    output: &Path,
+    output: &mut dyn Write,
     mut package: ApkPackage<'_>,
 ) -> Result<(), evin_action_sdk::packaging::PackagingError> {
     let data = normalized_tar_gz(&package.context.entries, Compression::best())?;
@@ -87,8 +86,7 @@ pub fn write(
         });
     }
     let control = normalized_tar_gz(&control, Compression::best())?;
-    let mut file = std::fs::File::create(output)?;
-    file.write_all(&control)?;
-    file.write_all(&data)?;
+    output.write_all(&control)?;
+    output.write_all(&data)?;
     Ok(())
 }

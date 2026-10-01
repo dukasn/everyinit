@@ -266,10 +266,12 @@ fn normalized_targets(policy: &PackageReleasePolicy) -> Result<BTreeSet<String>,
     let targets = policy.targets.iter().cloned().collect::<BTreeSet<_>>();
     if targets.is_empty()
         || targets.len() != policy.targets.len()
-        || targets.iter().any(|v| v != "deb" && v != "apk")
+        || targets
+            .iter()
+            .any(|v| v != "deb" && v != "apk" && v != "arch")
     {
         return Err(ReleaseError::Policy(
-            "targets must be a non-empty unique subset of deb and apk".into(),
+            "targets must be a non-empty unique subset of deb, apk, and arch".into(),
         ));
     }
     Ok(targets)
@@ -589,7 +591,7 @@ mod tests {
             "app".into(),
             PackageReleasePolicy {
                 watch: vec!["src/**".into()],
-                targets: vec!["deb".into(), "apk".into()],
+                targets: vec!["deb".into(), "apk".into(), "arch".into()],
                 revision: evin_gitrules::PackageRevisionPolicy { scope },
             },
         )])
@@ -615,7 +617,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             json,
-            r#"{"schema":1,"release":{"version":"1.2.3","tag":"v1.2.3"},"packages":{"app":{"revisions":{"apk":{"version":"1.2.3","revision":1},"deb":{"version":"1.2.3","revision":1}}}}}"#
+            r#"{"schema":1,"release":{"version":"1.2.3","tag":"v1.2.3"},"packages":{"app":{"revisions":{"apk":{"version":"1.2.3","revision":1},"arch":{"version":"1.2.3","revision":1},"deb":{"version":"1.2.3","revision":1}}}}}"#
                 .to_string()
         );
     }

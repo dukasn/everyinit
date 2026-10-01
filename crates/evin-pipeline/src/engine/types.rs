@@ -62,7 +62,6 @@ pub struct PipelineConfig {
     pub gitrules: Option<Arc<evin_gitrules::GitRulesRoot>>,
     pub forced_execution: Option<evin_config::workspace::ExecutionMode>,
     pub workspace_execution: Option<evin_config::workspace::ExecutionMode>,
-    pub package_manifests: Arc<evin_action_sdk::packaging::PackageManifestCatalog>,
 }
 
 pub struct PipelineExecutionState {

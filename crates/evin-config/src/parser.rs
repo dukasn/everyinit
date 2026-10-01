@@ -41,7 +41,6 @@ pub struct EverInitConfig {
     pub warnings: Vec<String>,
     pub modules_discovered: Vec<(String, String, usize)>,
     pub module_versions: HashMap<String, String>,
-    pub package_manifests: std::sync::Arc<evin_action_sdk::packaging::PackageManifestCatalog>,
 }
 
 fn resolved_module_version(
@@ -216,9 +215,6 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
             warnings: Vec::new(),
             modules_discovered: Vec::new(),
             module_versions: HashMap::new(),
-            package_manifests: std::sync::Arc::new(
-                evin_action_sdk::packaging::PackageManifestCatalog::default(),
-            ),
         });
     }
 
@@ -480,12 +476,6 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
         }
     }
 
-    let workspace_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let package_manifests = crate::package::load_package_catalog(
-        &workspace_root,
-        workspace.workspace.modules.as_ref(),
-    )?;
-
     Ok(EverInitConfig {
         workspace_name: workspace.workspace.name.clone(),
         workspace_version: workspace.workspace.version.clone(),
@@ -506,7 +496,6 @@ pub async fn load_workspace_tasks() -> Result<EverInitConfig, evin_diagnostic::D
         warnings,
         modules_discovered,
         module_versions,
-        package_manifests,
     })
 }
 

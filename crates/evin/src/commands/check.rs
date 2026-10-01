@@ -397,15 +397,6 @@ pub fn check_view(
         });
     }
 
-    for package in config.package_manifests.manifests() {
-        checked_files.push(CheckedManifest {
-            path: crate::commands::file_uri(&package.path)?,
-            task_count: 0,
-            kind: ManifestKind::Package,
-            issues: Vec::new(),
-        });
-    }
-
     // Count modules vs namespaces
     let mut module_set = HashSet::new();
     let mut namespace_set = HashSet::new();
@@ -562,9 +553,6 @@ mod tests {
                 ("api".into(), "crates/api/.evin/module.yaml".into(), 1),
             ],
             module_versions: std::collections::HashMap::new(),
-            package_manifests: std::sync::Arc::new(
-                evin_action_sdk::packaging::PackageManifestCatalog::default(),
-            ),
         }
     }
 

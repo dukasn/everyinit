@@ -1174,6 +1174,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
+ "zstandard",
 ]
 
 [[package]]
@@ -5648,6 +5649,12 @@ dependencies = [
  "log",
  "simd-adler32",
 ]
+
+[[package]]
+name = "zstandard"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e95bb8ae3c19a8586de2347b2c8d427ceb2b705812b055a05ca3852105053ce"
 
 [[package]]
 name = "zune-core"

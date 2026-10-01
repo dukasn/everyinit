@@ -383,9 +383,6 @@ mod tests {
             warnings: Vec::new(),
             modules_discovered: Vec::new(),
             module_versions: HashMap::new(),
-            package_manifests: std::sync::Arc::new(
-                evin_action_sdk::packaging::PackageManifestCatalog::default(),
-            ),
         }
     }
 

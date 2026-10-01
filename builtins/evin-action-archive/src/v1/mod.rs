@@ -13,26 +13,26 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #![allow(clippy::result_large_err)]
-pub mod archiver;
+mod archiver;
 pub mod config;
-pub mod strategies;
+mod strategies;
 
 use archiver::{ArchiveEntry, Archiver};
-use config::{ArchiveConfig, LayoutMode};
-use strategies::{apk, deb, targz::TarGzArchiver};
+use config::{ArchiveConfig, LayoutMode, PackageConfig};
+use strategies::{apk, arch, deb, targz::TarGzArchiver};
 
 use evin_action_sdk::{
     RunnerContext,
-    packaging::{self, PackageContext, PackageFormat, PackageTokens, SourceEntry},
+    packaging::{self, PackageContext, PackageFormat, SourceEntry},
 };
-use evin_yaml::template::pipeline::resolve_templates;
 use glob::Pattern;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::path::PathBuf;
 
 struct PackageBuild {
     context: PackageContext,
-    manifest: evin_action_sdk::packaging::PackageManifest,
+    package: PackageConfig,
     format: PackageFormat,
     arch: String,
     revision: u32,
@@ -42,10 +42,10 @@ struct PackageBuild {
 
 struct PackageEncoder {
     format: PackageFormat,
-    write: fn(&Path, &PackageBuild) -> Result<(), packaging::PackagingError>,
+    write: fn(&mut dyn Write, &PackageBuild) -> Result<(), packaging::PackagingError>,
 }
 
-const PACKAGE_ENCODERS: [PackageEncoder; 2] = [
+const PACKAGE_ENCODERS: [PackageEncoder; 3] = [
     PackageEncoder {
         format: PackageFormat::Deb,
         write: write_deb,
@@ -53,6 +53,10 @@ const PACKAGE_ENCODERS: [PackageEncoder; 2] = [
     PackageEncoder {
         format: PackageFormat::Apk,
         write: write_apk,
+    },
+    PackageEncoder {
+        format: PackageFormat::Arch,
+        write: write_arch,
     },
 ];
 
@@ -112,52 +116,20 @@ pub async fn execute(
     ctx: &RunnerContext,
     with_payload: Option<evin_yaml::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let mut config: ArchiveConfig =
-        evin_action_sdk::parse_config(with_payload.as_ref()).map_err(|e| {
-            evin_locales::diagnostic(
-                evin_diagnostic::IssueCode::new("invalid-config").arg("error", e.to_string()),
-            )
-        })?;
-    config.format = resolve_action_templates(&config.format, ctx)?;
-    config.path = resolve_action_templates(&config.path, ctx)
-        .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string())))?;
-    if let Some(prefix) = &config.prefix {
-        config.prefix = Some(resolve_action_templates(prefix, ctx).map_err(|e| {
-            evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string()))
-        })?);
-    }
-    config.include = config
-        .include
-        .as_ref()
-        .map(|include| {
-            include
-                .iter()
-                .map(|pattern| {
-                    resolve_action_templates(pattern, ctx).map_err(|e| {
-                        evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string()))
-                    })
-                })
-                .collect::<Result<_, _>>()
-        })
-        .transpose()?;
-    config.exclude = config
-        .exclude
-        .iter()
-        .map(|pattern| {
-            resolve_action_templates(pattern, ctx).map_err(|e| {
-                evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string()))
-            })
-        })
-        .collect::<Result<_, _>>()?;
+    let mut config: ArchiveConfig = ctx.load_config(with_payload.as_ref()).map_err(|e| {
+        evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("invalid-config").arg("error", e.to_string()),
+        )
+    })?;
     config.validate()?;
     validate_format_keys(
         with_payload
             .as_ref()
             .unwrap_or(&evin_yaml::SpannedValue::Null(Default::default())),
-        PackageFormat::parse(&config.format).expect("validated format"),
+        config.package_format()?,
     )?;
 
-    let format = PackageFormat::parse(&config.format).expect("validated format");
+    let format = config.package_format()?;
     let mut package_build = None;
     let source_entries = if format == PackageFormat::TarGz {
         resolve_and_map_files(ctx, &config)?
@@ -169,38 +141,24 @@ pub async fn execute(
             })
             .collect::<Vec<_>>()
     } else {
-        let selected = ctx
-            .package_manifests
-            .select(ctx.fs.task_cwd())
-            .ok_or_else(|| diagnostic("no .evin/package.yaml applies to this packaging task"))?;
-        let mut manifest = selected.manifest.clone();
+        let package = config.package.clone().expect("validated package");
+        validate_package(&package, format)?;
         let architecture = config.architecture.expect("validated architecture");
         match format {
-            PackageFormat::Deb if manifest.targets.deb.is_none() => {
-                return Err(diagnostic("package manifest has no deb target"));
+            PackageFormat::Deb if package.targets.deb.is_none() => {
+                return Err(diagnostic("package has no deb target"));
             }
-            PackageFormat::Apk if manifest.targets.apk.is_none() => {
-                return Err(diagnostic("package manifest has no apk target"));
+            PackageFormat::Apk if package.targets.apk.is_none() => {
+                return Err(diagnostic("package has no apk target"));
+            }
+            PackageFormat::Arch if package.targets.arch.is_none() => {
+                return Err(diagnostic("package has no arch target"));
             }
             _ => {}
         }
-        let package_id = config.package.as_deref().expect("validated package");
-        if manifest.identity.name != package_id {
-            return Err(diagnostic(format!(
-                "release package '{package_id}' does not match package manifest identity '{}'",
-                manifest.identity.name
-            )));
-        }
-        let reference = config.release.as_deref().expect("validated release");
-        let upstream = release_reference_task(reference)
-            .ok_or_else(|| diagnostic("release must be exactly '${task.release}'"))?;
-        let payload = ctx.state.get_input(upstream, "release").ok_or_else(|| {
-            diagnostic(format!(
-                "prerequisite '{upstream}' did not publish release output"
-            ))
-        })?;
-        let artifact: evin_action_sdk::release::ReleaseArtifact = serde_json::from_str(&payload)
-            .map_err(|error| diagnostic(format!("invalid release output: {error}")))?;
+        let artifact: evin_action_sdk::release::ReleaseArtifact =
+            serde_json::from_str(config.release.as_deref().expect("validated release"))
+                .map_err(|error| diagnostic(format!("invalid release output: {error}")))?;
         if artifact.schema != 1 {
             return Err(diagnostic(format!(
                 "unsupported release schema {}",
@@ -210,11 +168,12 @@ pub async fn execute(
         let target_name = format.as_str();
         let release_state = artifact
             .packages
-            .get(package_id)
+            .get(&package.name)
             .and_then(|package| package.revisions.get(target_name))
             .ok_or_else(|| {
                 diagnostic(format!(
-                    "release has no resolved '{target_name}' revision for package '{package_id}'"
+                    "release has no resolved '{target_name}' revision for package '{}'",
+                    package.name
                 ))
             })?;
         if release_state.revision == 0 || release_state.version.trim().is_empty() {
@@ -226,23 +185,30 @@ pub async fn execute(
         let arch = match format {
             PackageFormat::Deb => architecture.deb().to_string(),
             PackageFormat::Apk => architecture.apk().to_string(),
+            PackageFormat::Arch => architecture.arch().to_string(),
             PackageFormat::TarGz => unreachable!(),
         };
-        let mut tokens = PackageTokens {
-            name: manifest.identity.name.clone(),
-            version: release_state.version.clone(),
-            arch: arch.clone(),
+        let filename = package_filename(
+            format,
+            &package.name,
+            &release_state.version,
             revision,
-            maintainer: manifest.identity.maintainer.clone(),
-            summary: manifest.identity.summary.clone(),
-        };
-        render_manifest_metadata(&mut manifest, &mut tokens)?;
-        config.path = packaging::render_intrinsic_tokens(&config.path, &tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-        let sources = resolve_package_payloads(ctx, selected.root.as_path(), &manifest, &tokens)?;
-        package_build = Some((manifest, tokens, arch, revision, selected.root.clone()));
+            &arch,
+        );
+        config.path = Some(format!(
+            "{}/{}",
+            config
+                .output_dir
+                .as_deref()
+                .expect("validated output_dir")
+                .trim_end_matches('/'),
+            filename
+        ));
+        let sources = resolve_package_payloads(ctx, &package)?;
+        package_build = Some((package, arch, revision, release_state.version.clone()));
         sources
     };
+    let archive_path = config.path.as_deref().expect("validated archive path");
     if source_entries.is_empty() {
         if ctx.mode == evin_action_sdk::PipelineMode::DryRun && !ctx.uncertainty().is_empty() {
             ctx.mark_unverified(format!(
@@ -251,9 +217,9 @@ pub async fn execute(
             ));
             ctx.log
                 .plan(evin_action_sdk::activity::ArchivePlanUnresolved {
-                    path: config.path.clone(),
+                    path: archive_path.to_string(),
                 });
-            ctx.state.set_output("path", &config.path);
+            ctx.state.set_output("path", archive_path);
             ctx.state.set_output("size", "unknown");
             return Ok(());
         }
@@ -262,7 +228,7 @@ pub async fn execute(
         )));
     }
 
-    let output_path = ctx.fs.get_safe_physical_path(&config.path).map_err(|e| {
+    let output_path = ctx.fs.get_safe_physical_path(archive_path).map_err(|e| {
         evin_locales::diagnostic(
             evin_diagnostic::IssueCode::new("issue-archive-safe-path-failed")
                 .arg("context", "archive path")
@@ -273,9 +239,9 @@ pub async fn execute(
     if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
         ctx.log.plan(evin_action_sdk::activity::ArchivePlan {
             files: source_entries.len(),
-            path: config.path.clone(),
+            path: archive_path.to_string(),
         });
-        ctx.state.set_output("path", &config.path);
+        ctx.state.set_output("path", archive_path);
         ctx.state.set_output("size", "0");
         return Ok(());
     }
@@ -296,42 +262,45 @@ pub async fn execute(
         ctx.log,
         evin_action_sdk::activity::ArchiveCompressing {
             files: source_entries.len(),
-            path: config.path.clone(),
+            path: archive_path.to_string(),
         }
     );
     let epoch = resolve_epoch(ctx).await?;
     let files_len = source_entries.len();
-    let build = if let Some((manifest, tokens, arch, revision, root)) = package_build {
+    let build = if let Some((package, arch, revision, version)) = package_build {
         let context = PackageContext::prepare(epoch, source_entries.clone())
             .map_err(|error| diagnostic(error.to_string()))?;
-        let scripts = load_scripts(&manifest, &tokens, format, &root)?;
+        let scripts = load_scripts(ctx, &package, format)?;
         Some(PackageBuild {
             context,
-            manifest,
+            package,
             format,
             arch,
             revision,
-            version: tokens.version.clone(),
+            version,
             scripts,
         })
     } else {
         None
     };
+    let write_path = output_path.clone();
     tokio::task::spawn_blocking(move || {
-        if let Some(build) = build {
-            let encoder = PACKAGE_ENCODERS
-                .iter()
-                .find(|encoder| encoder.format == build.format)
-                .expect("fixed package strategy LUT");
-            (encoder.write)(&output_path, &build).map_err(|error| diagnostic(error.to_string()))
-        } else {
-            let context = PackageContext::prepare(epoch, source_entries)
-                .map_err(|error| diagnostic(error.to_string()))?;
-            TarGzArchiver {
-                compression_level: config.compression_level,
+        packaging::write_atomically(&write_path, |output| {
+            if let Some(build) = build {
+                let encoder = PACKAGE_ENCODERS
+                    .iter()
+                    .find(|encoder| encoder.format == build.format)
+                    .expect("fixed package strategy LUT");
+                (encoder.write)(output, &build)
+            } else {
+                let context = PackageContext::prepare(epoch, source_entries)?;
+                TarGzArchiver {
+                    compression_level: config.compression_level,
+                }
+                .write_archive(output, &context)
             }
-            .create_archive(&output_path, &context)
-        }
+        })
+        .map_err(|error| diagnostic(error.to_string()))
     })
     .await
     .map_err(|e| {
@@ -341,10 +310,8 @@ pub async fn execute(
         )))
     })??;
 
-    ctx.state.set_output("path", &config.path);
-    if let Ok(metadata) =
-        tokio::fs::metadata(ctx.fs.get_safe_physical_path(&config.path).unwrap()).await
-    {
+    ctx.state.set_output("path", archive_path);
+    if let Ok(metadata) = tokio::fs::metadata(&output_path).await {
         ctx.state.set_output("size", &metadata.len().to_string());
         ctx.log.debug_event(evin_action_sdk::debug::ArchiveOutput {
             format: config.format.clone(),
@@ -371,8 +338,15 @@ fn validate_format_keys(
         })
         .collect::<std::collections::BTreeSet<_>>();
     let forbidden: &[&str] = match format {
-        PackageFormat::TarGz => &["architecture", "package", "release", "revision"],
-        PackageFormat::Deb | PackageFormat::Apk => &[
+        PackageFormat::TarGz => &[
+            "architecture",
+            "package",
+            "release",
+            "output_dir",
+            "revision",
+        ],
+        PackageFormat::Deb | PackageFormat::Apk | PackageFormat::Arch => &[
+            "path",
             "include",
             "exclude",
             "prefix",
@@ -388,18 +362,6 @@ fn validate_format_keys(
         )));
     }
     Ok(())
-}
-
-fn resolve_action_templates(
-    value: &str,
-    ctx: &RunnerContext,
-) -> Result<String, evin_diagnostic::Diagnostic> {
-    const OPEN: &str = "__EVIN_INTRINSIC_OPEN__";
-    const CLOSE: &str = "__EVIN_INTRINSIC_CLOSE__";
-    let protected = value.replace("{{", OPEN).replace("}}", CLOSE);
-    resolve_templates(&protected, ctx)
-        .map(|rendered| rendered.replace(OPEN, "{{").replace(CLOSE, "}}"))
-        .map_err(|e| diagnostic(e.to_string()))
 }
 
 fn diagnostic(message: impl Into<String>) -> evin_diagnostic::Diagnostic {
@@ -421,26 +383,27 @@ async fn resolve_epoch(ctx: &RunnerContext) -> Result<u64, evin_diagnostic::Diag
 
 fn resolve_package_payloads(
     ctx: &RunnerContext,
-    root: &Path,
-    manifest: &evin_action_sdk::packaging::PackageManifest,
-    tokens: &PackageTokens,
+    package: &PackageConfig,
 ) -> Result<Vec<SourceEntry>, evin_diagnostic::Diagnostic> {
     let mut entries = BTreeMap::<String, SourceEntry>::new();
-    for mapping in &manifest.payload {
-        let source = packaging::render_intrinsic_tokens(&mapping.source, tokens)
+    let root = ctx.fs.task_cwd();
+    for mapping in &package.payload {
+        if mapping.source.trim().is_empty() || mapping.strip_prefix.trim().is_empty() {
+            return Err(diagnostic(
+                "package payload source and strip_prefix must not be empty",
+            ));
+        }
+        if mapping.mode.is_some_and(|mode| mode > 0o777) {
+            return Err(diagnostic("package payload mode must be at most 0777"));
+        }
+        let strip = packaging::safe_relative_path(&mapping.strip_prefix)
             .map_err(|error| diagnostic(error.to_string()))?;
-        let strip_prefix = packaging::render_intrinsic_tokens(&mapping.strip_prefix, tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-        let destination = packaging::render_intrinsic_tokens(&mapping.destination, tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-        let strip = packaging::safe_relative_path(&strip_prefix)
-            .map_err(|error| diagnostic(error.to_string()))?;
-        let destination = packaging::normalize_install_dir(&destination)
+        let destination = packaging::normalize_install_dir(&mapping.destination)
             .map_err(|error| diagnostic(error.to_string()))?;
         let strip = root.join(strip);
         for source_path in ctx
             .fs
-            .matching_files_from(root, &source)
+            .matching_files_from(root, &mapping.source)
             .map_err(|error| diagnostic(error.to_string()))?
         {
             let relative = source_path.strip_prefix(&strip).map_err(|_| {
@@ -477,14 +440,13 @@ fn resolve_package_payloads(
 }
 
 fn load_scripts(
-    manifest: &evin_action_sdk::packaging::PackageManifest,
-    tokens: &PackageTokens,
+    ctx: &RunnerContext,
+    package: &PackageConfig,
     format: PackageFormat,
-    root: &Path,
 ) -> Result<Vec<(String, Vec<u8>)>, evin_diagnostic::Diagnostic> {
     let definitions: Vec<(&str, Option<&String>)> = match format {
         PackageFormat::Deb => {
-            let scripts = &manifest
+            let scripts = &package
                 .targets
                 .deb
                 .as_ref()
@@ -498,7 +460,7 @@ fn load_scripts(
             ]
         }
         PackageFormat::Apk => {
-            let scripts = &manifest
+            let scripts = &package
                 .targets
                 .apk
                 .as_ref()
@@ -511,71 +473,38 @@ fn load_scripts(
                 (".post-deinstall", scripts.post_deinstall.as_ref()),
             ]
         }
+        PackageFormat::Arch => vec![(
+            ".INSTALL",
+            package
+                .targets
+                .arch
+                .as_ref()
+                .expect("validated target")
+                .scripts
+                .install
+                .as_ref(),
+        )],
         PackageFormat::TarGz => Vec::new(),
     };
     definitions
         .into_iter()
         .filter_map(|(name, path)| path.map(|path| (name, path)))
         .map(|(name, path)| {
-            let path = packaging::render_intrinsic_tokens(path, tokens)
+            let path = packaging::safe_relative_path(path)
                 .map_err(|error| diagnostic(error.to_string()))?;
-            let path = packaging::safe_relative_path(&path)
-                .map_err(|error| diagnostic(error.to_string()))?;
-            let bytes = std::fs::read(root.join(path))
+            let bytes = std::fs::read(ctx.fs.task_cwd().join(path))
                 .map_err(|error| diagnostic(format!("failed to read package script: {error}")))?;
-            let text = std::str::from_utf8(&bytes)
-                .map_err(|_| diagnostic("package scripts must be UTF-8 text"))?;
-            Ok((
-                name.to_string(),
-                packaging::render_intrinsic_tokens(text, tokens)
-                    .map_err(|error| diagnostic(error.to_string()))?
-                    .into_bytes(),
-            ))
+            Ok((name.to_string(), bytes))
         })
         .collect()
 }
 
-fn render_manifest_metadata(
-    manifest: &mut evin_action_sdk::packaging::PackageManifest,
-    tokens: &mut PackageTokens,
-) -> Result<(), evin_diagnostic::Diagnostic> {
-    manifest.identity.summary =
-        packaging::render_intrinsic_tokens(&manifest.identity.summary, tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-    tokens.summary = manifest.identity.summary.clone();
-    manifest.identity.maintainer =
-        packaging::render_intrinsic_tokens(&manifest.identity.maintainer, tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-    tokens.maintainer = manifest.identity.maintainer.clone();
-    manifest.identity.license =
-        packaging::render_intrinsic_tokens(&manifest.identity.license, tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-    if let Some(description) = &mut manifest.identity.description {
-        *description = packaging::render_intrinsic_tokens(description, tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-    }
-    if let Some(homepage) = &mut manifest.identity.homepage {
-        *homepage = packaging::render_intrinsic_tokens(homepage, tokens)
-            .map_err(|error| diagnostic(error.to_string()))?;
-    }
-    if let Some(target) = &mut manifest.targets.deb {
-        for dependency in &mut target.depends {
-            *dependency = packaging::render_intrinsic_tokens(dependency, tokens)
-                .map_err(|error| diagnostic(error.to_string()))?;
-        }
-    }
-    if let Some(target) = &mut manifest.targets.apk {
-        for dependency in &mut target.depends {
-            *dependency = packaging::render_intrinsic_tokens(dependency, tokens)
-                .map_err(|error| diagnostic(error.to_string()))?;
-        }
-    }
-    Ok(())
-}
-
-fn write_deb(output: &Path, build: &PackageBuild) -> Result<(), packaging::PackagingError> {
+fn write_deb(
+    output: &mut dyn Write,
+    build: &PackageBuild,
+) -> Result<(), packaging::PackagingError> {
     let target = build
-        .manifest
+        .package
         .targets
         .deb
         .as_ref()
@@ -584,23 +513,26 @@ fn write_deb(output: &Path, build: &PackageBuild) -> Result<(), packaging::Packa
         output,
         deb::DebPackage {
             context: &build.context,
-            name: &build.manifest.identity.name,
+            name: &build.package.name,
             version: &build.version,
             revision: build.revision,
             architecture: &build.arch,
-            summary: &build.manifest.identity.summary,
-            description: build.manifest.identity.description.as_deref(),
-            maintainer: &build.manifest.identity.maintainer,
-            homepage: build.manifest.identity.homepage.as_deref(),
+            summary: &build.package.summary,
+            description: build.package.description.as_deref(),
+            maintainer: &build.package.maintainer,
+            homepage: build.package.homepage.as_deref(),
             depends: target.depends.clone(),
             scripts: build.scripts.clone(),
         },
     )
 }
 
-fn write_apk(output: &Path, build: &PackageBuild) -> Result<(), packaging::PackagingError> {
+fn write_apk(
+    output: &mut dyn Write,
+    build: &PackageBuild,
+) -> Result<(), packaging::PackagingError> {
     let target = build
-        .manifest
+        .package
         .targets
         .apk
         .as_ref()
@@ -609,18 +541,187 @@ fn write_apk(output: &Path, build: &PackageBuild) -> Result<(), packaging::Packa
         output,
         apk::ApkPackage {
             context: &build.context,
-            name: &build.manifest.identity.name,
+            name: &build.package.name,
             version: &build.version,
             revision: build.revision,
             architecture: &build.arch,
-            summary: &build.manifest.identity.summary,
-            homepage: build.manifest.identity.homepage.as_deref(),
-            maintainer: &build.manifest.identity.maintainer,
-            license: &build.manifest.identity.license,
+            summary: &build.package.summary,
+            homepage: build.package.homepage.as_deref(),
+            maintainer: &build.package.maintainer,
+            license: &build.package.license,
             depends: target.depends.clone(),
             scripts: build.scripts.clone(),
         },
     )
+}
+
+fn write_arch(
+    output: &mut dyn Write,
+    build: &PackageBuild,
+) -> Result<(), packaging::PackagingError> {
+    let target = build
+        .package
+        .targets
+        .arch
+        .as_ref()
+        .expect("fixed encoder target");
+    let install = build
+        .scripts
+        .iter()
+        .find(|(path, _)| path == ".INSTALL")
+        .map(|(_, data)| data.as_slice());
+    arch::write(
+        output,
+        arch::ArchPackage {
+            context: &build.context,
+            name: &build.package.name,
+            version: &build.version,
+            revision: build.revision,
+            architecture: &build.arch,
+            summary: &build.package.summary,
+            homepage: build.package.homepage.as_deref(),
+            maintainer: &build.package.maintainer,
+            license: &build.package.license,
+            depends: &target.depends,
+            optdepends: &target.optdepends,
+            provides: &target.provides,
+            conflicts: &target.conflicts,
+            replaces: &target.replaces,
+            backup: &target.backup,
+            install,
+        },
+    )
+}
+
+fn package_filename(
+    format: PackageFormat,
+    name: &str,
+    version: &str,
+    revision: u32,
+    arch: &str,
+) -> String {
+    match format {
+        PackageFormat::Deb => format!("{name}_{version}-{revision}_{arch}.deb"),
+        PackageFormat::Apk => format!("{name}-{version}-r{revision}.apk"),
+        PackageFormat::Arch => format!("{name}-{version}-{revision}-{arch}.pkg.tar.zst"),
+        PackageFormat::TarGz => unreachable!(),
+    }
+}
+
+fn validate_package(
+    package: &PackageConfig,
+    format: PackageFormat,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    for (field, value) in [
+        ("name", &package.name),
+        ("summary", &package.summary),
+        ("maintainer", &package.maintainer),
+        ("license", &package.license),
+    ] {
+        validate_metadata_string(field, value)?;
+    }
+    for (field, value) in [
+        ("description", package.description.as_deref()),
+        ("homepage", package.homepage.as_deref()),
+    ] {
+        if let Some(value) = value {
+            validate_metadata_string(field, value)?;
+        }
+    }
+    if !package.name.chars().all(|character| {
+        character.is_ascii_lowercase()
+            || character.is_ascii_digit()
+            || character == '-'
+            || character == '_'
+            || character == '.'
+    }) {
+        return Err(diagnostic("package name contains unsupported characters"));
+    }
+    if let Some(target) = &package.targets.arch {
+        for (field, values) in [
+            ("depends", &target.depends),
+            ("optdepends", &target.optdepends),
+            ("provides", &target.provides),
+            ("conflicts", &target.conflicts),
+            ("replaces", &target.replaces),
+        ] {
+            validate_relations(field, values)?;
+        }
+        validate_relations("backup", &target.backup)?;
+        for path in &target.backup {
+            packaging::normalize_archive_path(path)
+                .map_err(|error| diagnostic(error.to_string()))?;
+        }
+    }
+    if let Some(target) = &package.targets.deb {
+        validate_relations("depends", &target.depends)?;
+        for path in [
+            target.scripts.preinst.as_deref(),
+            target.scripts.postinst.as_deref(),
+            target.scripts.prerm.as_deref(),
+            target.scripts.postrm.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            validate_script_path(path)?;
+        }
+    }
+    if let Some(target) = &package.targets.apk {
+        validate_relations("depends", &target.depends)?;
+        for path in [
+            target.scripts.pre_install.as_deref(),
+            target.scripts.post_install.as_deref(),
+            target.scripts.pre_deinstall.as_deref(),
+            target.scripts.post_deinstall.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            validate_script_path(path)?;
+        }
+    }
+    if let Some(target) = &package.targets.arch
+        && let Some(path) = target.scripts.install.as_deref()
+    {
+        validate_script_path(path)?;
+    }
+    let _ = format;
+    Ok(())
+}
+
+fn validate_metadata_string(field: &str, value: &str) -> Result<(), evin_diagnostic::Diagnostic> {
+    if value.trim().is_empty() || value.contains(['\n', '\r', '\0']) {
+        return Err(diagnostic(format!(
+            "package {field} must be non-empty and contain no line breaks"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_relations(field: &str, values: &[String]) -> Result<(), evin_diagnostic::Diagnostic> {
+    let mut seen = std::collections::BTreeSet::new();
+    for value in values {
+        if value.trim().is_empty() || value.contains(['\n', '\r', '\0']) {
+            return Err(diagnostic(format!(
+                "package {field} entries must be non-empty single-line strings"
+            )));
+        }
+        if !seen.insert(value) {
+            return Err(diagnostic(format!(
+                "package {field} contains '{value}' more than once"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_script_path(path: &str) -> Result<(), evin_diagnostic::Diagnostic> {
+    if path.trim().is_empty() {
+        return Err(diagnostic("package script path must not be empty"));
+    }
+    packaging::safe_relative_path(path).map_err(|error| diagnostic(error.to_string()))?;
+    Ok(())
 }
 
 fn resolve_and_map_files(
@@ -1156,48 +1257,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn deb_and_apk_use_the_manifest_lut_and_are_reproducible() {
-        use evin_action_sdk::packaging::{
-            ApkTarget, DebTarget, LinuxArch, PackageIdentity, PackageManifest,
-            PackageManifestCatalog, PackageManifestSource, PackageTargets, PayloadMapping,
-        };
-
+    async fn distro_packages_use_inline_config_and_derived_paths() {
         let temp = TempDir::new().unwrap();
         std::fs::create_dir_all(temp.path().join("bin")).unwrap();
         std::fs::write(temp.path().join("bin/example"), "hello\n").unwrap();
-        let manifest = PackageManifest {
-            version: 1,
-            identity: PackageIdentity {
-                name: "example".into(),
-                summary: "Example package".into(),
-                description: None,
-                maintainer: "Example <example@example.test>".into(),
-                license: "MIT".into(),
-                homepage: None,
-            },
-            payload: vec![PayloadMapping {
-                source: "bin/example".into(),
-                strip_prefix: "bin".into(),
-                destination: "/usr/bin".into(),
-                mode: Some(0o755),
-            }],
-            targets: PackageTargets {
-                deb: Some(DebTarget {
-                    depends: vec!["libc6".into()],
-                    ..Default::default()
-                }),
-                apk: Some(ApkTarget {
-                    depends: vec!["so:libc.musl-x86_64.so.1".into()],
-                    ..Default::default()
-                }),
-            },
-        };
-        let catalog =
-            std::sync::Arc::new(PackageManifestCatalog::new(vec![PackageManifestSource {
-                root: temp.path().to_path_buf(),
-                path: temp.path().join(".evin/package.yaml"),
-                manifest,
-            }]));
+        std::fs::write(
+            temp.path().join("bin/install"),
+            "post_install() { echo installed; }\n",
+        )
+        .unwrap();
         let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
         let mut ctx = RunnerContext::new(
             None,
@@ -1221,7 +1289,10 @@ mod tests {
             )),
             std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default()),
         );
-        ctx.package_manifests = catalog;
+        ctx.values = evin_action_sdk::Values::new(HashMap::from([(
+            "package_name".into(),
+            "example".into(),
+        )]));
         let release = evin_action_sdk::release::ReleaseArtifact {
             schema: 1,
             release: evin_action_sdk::release::ReleaseIdentity {
@@ -1246,6 +1317,13 @@ mod tests {
                                 revision: 1,
                             },
                         ),
+                        (
+                            "arch".into(),
+                            evin_action_sdk::release::RevisionState {
+                                version: "1.2.3".into(),
+                                revision: 1,
+                            },
+                        ),
                     ]),
                 },
             )]),
@@ -1255,12 +1333,10 @@ mod tests {
             HashMap::from([("release".into(), serde_json::to_string(&release).unwrap())]),
         );
 
-        let deb_with = evin_yaml::parse_yaml(
-            "format: deb\npath: dist/{{name}}_{{version}}_{{arch}}.deb\narchitecture: x86_64\npackage: example\nrelease: ${bump.release}\n",
-        )
-        .unwrap();
+        let package = "package:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  license: MIT\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\n  targets:\n    deb:\n      depends: [libc6]\n    apk:\n      depends: [so:libc.musl-x86_64.so.1]\n    arch:\n      depends: [glibc]\n      optdepends: ['bash: completion support']\n      provides: [example-cli]\n      conflicts: [example-old]\n      replaces: [example-old]\n      backup: [etc/example.conf]\n      scripts:\n        install: bin/install\n";
+        let deb_with = evin_yaml::parse_yaml(&format!("format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
         ArchiveAction.execute(&ctx, Some(deb_with)).await.unwrap();
-        let deb = std::fs::read(temp.path().join("dist/example_1.2.3_amd64.deb")).unwrap();
+        let deb = std::fs::read(temp.path().join("dist/example_1.2.3-1_amd64.deb")).unwrap();
         assert!(deb.starts_with(b"!<arch>\n"));
         assert!(
             deb.windows(b"control.tar.gz".len())
@@ -1271,50 +1347,69 @@ mod tests {
                 .any(|window| window == b"data.tar.gz")
         );
 
-        let apk_with = evin_yaml::parse_yaml("format: apk\npath: dist/{{name}}-{{version}}-r{{revision}}.apk\narchitecture: x86_64\npackage: example\nrelease: ${bump.release}\n").unwrap();
+        let apk_with = evin_yaml::parse_yaml(&format!("format: apk\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
         ArchiveAction.execute(&ctx, Some(apk_with)).await.unwrap();
         let apk = std::fs::read(temp.path().join("dist/example-1.2.3-r1.apk")).unwrap();
         assert!(apk.starts_with(&[0x1f, 0x8b]));
         assert!(apk.len() > 64);
-        assert_eq!(LinuxArch::X86_64.deb(), "amd64");
+        let arch_with = evin_yaml::parse_yaml(&format!("format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
+        ArchiveAction
+            .execute(&ctx, Some(arch_with.clone()))
+            .await
+            .unwrap();
+        let arch_path = temp.path().join("dist/example-1.2.3-1-x86_64.pkg.tar.zst");
+        let bytes = std::fs::read(&arch_path).unwrap();
+        let tar = zstandard::decode_all(bytes.as_slice()).unwrap();
+        let mut archive = tar::Archive::new(std::io::Cursor::new(tar));
+        let mut members = BTreeMap::new();
+        for entry in archive.entries().unwrap() {
+            let mut entry = entry.unwrap();
+            let path = entry.path().unwrap().to_string_lossy().into_owned();
+            let mut contents = Vec::new();
+            std::io::Read::read_to_end(&mut entry, &mut contents).unwrap();
+            members.insert(path, contents);
+        }
+        let names = members.keys().cloned().collect::<Vec<_>>();
+        assert_eq!(names, {
+            let mut sorted = names.clone();
+            sorted.sort();
+            sorted
+        });
+        let pkginfo = std::str::from_utf8(&members[".PKGINFO"]).unwrap();
+        assert!(pkginfo.contains("pkgbase = example\n"));
+        assert!(pkginfo.contains("xdata = pkgtype=pkg\n"));
+        assert!(pkginfo.contains("pkgver = 1.2.3-1\n"));
+        assert!(pkginfo.contains("optdepend = bash: completion support\n"));
+        assert!(pkginfo.contains("provides = example-cli\n"));
+        assert!(pkginfo.contains("conflict = example-old\n"));
+        assert!(pkginfo.contains("replaces = example-old\n"));
+        assert!(pkginfo.contains("backup = etc/example.conf\n"));
+        assert!(
+            std::str::from_utf8(&members[".MTREE"])
+                .unwrap()
+                .contains("./usr/bin/example type=file mode=755 time=123")
+        );
+        assert_eq!(members[".INSTALL"], b"post_install() { echo installed; }\n");
+        ArchiveAction.execute(&ctx, Some(arch_with)).await.unwrap();
+        assert_eq!(bytes, std::fs::read(arch_path).unwrap());
+        assert_eq!(
+            evin_action_sdk::packaging::LinuxArch::X86_64.arch(),
+            "x86_64"
+        );
     }
 
     #[test]
     fn formats_reject_each_others_keys() {
-        assert!(
-            ArchiveConfig {
-                format: "tar.gz".into(),
-                path: "out.tar.gz".into(),
-                include: Some(vec!["x".into()]),
-                exclude: vec![],
-                prefix: None,
-                layout: LayoutMode::Flat,
-                compression_level: None,
-                architecture: Some(evin_action_sdk::packaging::LinuxArch::X86_64),
-                package: None,
-                release: None
-            }
-            .validate()
-            .is_err()
-        );
-        assert!(
-            ArchiveConfig {
-                format: "deb".into(),
-                path: "out.deb".into(),
-                include: Some(vec!["x".into()]),
-                exclude: vec![],
-                prefix: None,
-                layout: LayoutMode::Flat,
-                compression_level: None,
-                architecture: Some(evin_action_sdk::packaging::LinuxArch::X86_64),
-                package: Some("app".into()),
-                release: Some("${bump.release}".into())
-            }
-            .validate()
-            .is_err()
-        );
+        let tar_with_package =
+            evin_yaml::parse_yaml("path: out.tar.gz\ninclude: [x]\npackage: { name: app }\n")
+                .unwrap();
+        assert!(validate_config(Some(&tar_with_package)).is_err());
+        let package_with_path = evin_yaml::parse_yaml(
+            "format: deb\npath: out.deb\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { deb: {} } }\n",
+        ).unwrap();
+        assert!(validate_config(Some(&package_with_path)).is_err());
         let configured_default = evin_yaml::parse_yaml(
-            "format: deb\npath: out.deb\narchitecture: x86_64\nlayout: flat\n",
+            "format: deb\noutput_dir: dist\narchitecture: x86_64\nlayout: flat\n",
         )
         .unwrap();
         assert!(validate_config(Some(&configured_default)).is_err());
@@ -1322,7 +1417,7 @@ mod tests {
 
     #[test]
     fn package_release_reference_must_be_a_declared_need() {
-        let with = evin_yaml::parse_yaml("format: deb\npath: out.deb\narchitecture: x86_64\npackage: app\nrelease: ${bump.release}\n").unwrap();
+        let with = evin_yaml::parse_yaml("format: deb\noutput_dir: dist\narchitecture: x86_64\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { deb: {} } }\nrelease: ${bump.release}\n").unwrap();
         let missing = evin_action_sdk::ActionValidationContext {
             task_name: "package",
             needs: &[],
@@ -1334,5 +1429,22 @@ mod tests {
             needs: &needs,
         };
         assert!(validate_task_config(&valid, Some(&with)).is_ok());
+    }
+
+    #[test]
+    fn package_validation_rejects_invalid_relations_and_backup_paths() {
+        let invalid_relation = evin_yaml::parse_yaml(
+            "format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { arch: { depends: [glibc, glibc] } } }\n",
+        )
+        .unwrap();
+        let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&invalid_relation)).unwrap();
+        assert!(validate_package(config.package.as_ref().unwrap(), PackageFormat::Arch).is_err());
+
+        let unsafe_backup = evin_yaml::parse_yaml(
+            "format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { arch: { backup: ['../etc/app.conf'] } } }\n",
+        )
+        .unwrap();
+        let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&unsafe_backup)).unwrap();
+        assert!(validate_package(config.package.as_ref().unwrap(), PackageFormat::Arch).is_err());
     }
 }

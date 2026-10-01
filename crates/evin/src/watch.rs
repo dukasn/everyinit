@@ -200,13 +200,6 @@ pub async fn resolve_watch_spec(
     if let GitRulesSource::Local(path) = &config.gitrules_source {
         config_paths.insert(normalize_relative(path));
     }
-    for package in config.package_manifests.manifests() {
-        let relative = package
-            .path
-            .strip_prefix(&workspace_root)
-            .unwrap_or(&package.path);
-        config_paths.insert(normalize_relative(relative));
-    }
 
     // Configuration sources for the selected DAG include each transitive
     // dependency's module file, even when that dependency has no watch block.
