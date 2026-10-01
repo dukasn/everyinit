@@ -4,6 +4,7 @@ issue-sync-workspace-not-loaded = Workspace configuration not loaded
 issue-sync-execution-failed = { $error }
 issue-env-syntax-error = Invalid key-value format. Expected KEY=VALUE
 issue-yaml-parse-failed = { $error }
+issue-evin-header-invalid = Invalid Evin document header: { $error }
 issue-policy-validation-failed = Invalid policy '{ $policy }': { $error }
 issue-watcher-creation-failed = Failed to create watcher: { $error }
 issue-sync-hook-update-failed = Failed to update hook '{ $hook }': { $error }
@@ -96,6 +97,7 @@ issue-sync-workspace-not-loaded-title = Workspace Error
 issue-sync-execution-failed-title = Execution Failed
 issue-env-syntax-error-title = Environment Error
 issue-yaml-parse-failed-title = Parse Error
+issue-evin-header-invalid-title = Evin Document Header
 issue-policy-validation-failed-title = Policy Violation
 issue-watcher-creation-failed-title = Watcher Error
 issue-git-command-failed-title = Git Error

@@ -260,6 +260,11 @@ mod tests {
         phase.execute(&mut ctx, &emitter).await.unwrap();
 
         assert!(dir.path().join(".evin/workspace.yaml").exists());
+        assert!(
+            std::fs::read_to_string(dir.path().join(".evin/workspace.yaml"))
+                .unwrap()
+                .starts_with("#!evin/v1\n")
+        );
         assert!(!dir.path().join(".evin/gitrules.yaml").exists());
         assert!(!dir.path().join(".evin/environment.yaml").exists());
     }
@@ -285,6 +290,13 @@ mod tests {
         assert!(dir.path().join(".evin/workspace.yaml").exists());
         assert!(dir.path().join(".evin/gitrules.yaml").exists());
         assert!(dir.path().join(".evin/environment.yaml").exists());
+        for name in ["workspace.yaml", "gitrules.yaml", "environment.yaml"] {
+            assert!(
+                std::fs::read_to_string(dir.path().join(".evin").join(name))
+                    .unwrap()
+                    .starts_with("#!evin/v1\n")
+            );
+        }
     }
 
     #[tokio::test]
@@ -308,5 +320,35 @@ mod tests {
         assert!(!dir.path().join(".evin/workspace.yaml").exists());
         assert!(dir.path().join(".evin/gitrules.yaml").exists());
         assert!(dir.path().join(".evin/environment.yaml").exists());
+        for name in ["gitrules.yaml", "environment.yaml"] {
+            assert!(
+                std::fs::read_to_string(dir.path().join(".evin").join(name))
+                    .unwrap()
+                    .starts_with("#!evin/v1\n")
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_init_module_emits_an_evin_header() {
+        let dir = tempdir().unwrap();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let emitter = PipelineEmitter::new(tx);
+        let mut ctx = CliContext::default();
+        let phase = InitWorkspacePhase {
+            workspace: false,
+            gitrules: false,
+            env: false,
+            all: false,
+            module: Some("crates/example".into()),
+            target_path: Some(dir.path().to_path_buf()),
+        };
+
+        phase.execute(&mut ctx, &emitter).await.unwrap();
+        assert!(
+            std::fs::read_to_string(dir.path().join("crates/example/.evin/module.yaml"))
+                .unwrap()
+                .starts_with("#!evin/v1\n")
+        );
     }
 }

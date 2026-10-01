@@ -1,3 +1,4 @@
+#!evin/v1
 namespace:
   name: release
   description: "Release engineering and distribution pipelines"

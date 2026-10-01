@@ -14,6 +14,7 @@
 
 pub mod de;
 pub mod de_enum;
+pub mod header;
 pub mod template;
 
 use std::fmt::Display;
@@ -21,6 +22,7 @@ use yaml_rust2::parser::{Event, Parser};
 use yaml_rust2::scanner::Marker;
 
 pub use evin_diagnostic::{Span, Spanned};
+pub use header::{EVIN_HEADER_V1, EvinHeader, inspect_evin_header, validate_evin_header};
 
 fn marker_to_span(marker: Marker) -> Span {
     Span {
@@ -227,6 +229,7 @@ pub trait YamlDocument: serde::de::DeserializeOwned {
         content: &str,
         file_path: Option<&std::path::Path>,
     ) -> Result<Self, evin_diagnostic::Diagnostic> {
+        validate_evin_header(content, file_path)?;
         let ast = parse_yaml(content).map_err(|e| {
             e.into_diagnostic(
                 "YAML Syntax Error",

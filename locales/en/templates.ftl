@@ -1,6 +1,7 @@
 # EVIN Default Template Localizations
 
 init-template-gitrules =
+    #!evin/v1
     # EVIN GitRules Configuration
     # Defines the version control policies and conventions for your workspace.
     version: 1
@@ -60,6 +61,7 @@ init-template-gitrules =
         block_wip_prefixes: ["WIP:", "draft:", "wip:"]
 
 init-template-workspace =
+    #!evin/v1
     # EVIN Workspace Configuration
     # Defines your project's identity, pipeline stages, and automation tasks.
     workspace:
@@ -90,6 +92,7 @@ init-template-workspace =
           - run: echo "Testing project..."
 
 init-template-module =
+    #!evin/v1
     # EVIN Module Configuration
     module:
       name: my-module
@@ -103,6 +106,7 @@ init-template-module =
           - run: echo "Building module..."
 
 init-template-environment =
+    #!evin/v1
     # EVIN Environment Configuration
     # Declares environment variable schemas, secret redaction rules, and stage scopes.
     version: 1
