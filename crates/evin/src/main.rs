@@ -22,6 +22,7 @@ use clap::{Parser, Subcommand};
 pub mod commands;
 pub mod engine;
 pub mod events;
+mod lsp;
 pub mod phases;
 pub mod resolver;
 pub mod sync;
@@ -50,6 +51,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    #[command(about = "Run the Evin Language Server Protocol server over stdio")]
+    Lsp,
     #[command(about = evin_locales::t!("init-command-help"))]
     Init {
         #[arg(short = 'w', long, help = evin_locales::t!("init-workspace-help"))]
@@ -131,6 +134,13 @@ async fn main() {
         console::set_colors_enabled_stderr(true);
     }
     let cli = Cli::parse();
+    if matches!(cli.command, Commands::Lsp) {
+        if let Err(error) = crate::lsp::run_lsp_server() {
+            eprintln!("evin: lsp server error: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let discovery_result: Option<Result<bool, evin_diagnostic::Diagnostic>> = match &cli.command {
         Commands::List => Some(crate::commands::discovery::list().await.map(|_| true)),
         Commands::Explain { target } => Some(crate::commands::discovery::explain(target).await),
@@ -172,7 +182,9 @@ async fn main() {
                 .await
                 .ok()
                 .flatten(),
-            Commands::List | Commands::Explain { .. } | Commands::Check { .. } => None,
+            Commands::List | Commands::Explain { .. } | Commands::Check { .. } | Commands::Lsp => {
+                None
+            }
             _ => None,
         }
     } else {
@@ -279,7 +291,7 @@ async fn main() {
             });
             commands::run_phases()
         }
-        Commands::List | Commands::Explain { .. } | Commands::Check { .. } => {
+        Commands::List | Commands::Explain { .. } | Commands::Check { .. } | Commands::Lsp => {
             unreachable!("handled before pipeline setup")
         }
     };

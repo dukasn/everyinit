@@ -23,37 +23,12 @@ use crate::lexer::cursor::Lexer;
 use crate::parser::ast::ASTNode;
 use crate::parser::pratt::Parser;
 use crate::planner::compiler::compile_script;
-use crate::syntax::{SourcePositionIndex, scan_tokens};
+use crate::syntax::scan_tokens;
 use bumpalo::Bump;
+use evin_lsp::LspDocument;
 use rustc_hash::FxHashMap;
 use serde_json::{Value, json};
 use std::io::{self, BufReader, BufWriter, Write};
-
-#[derive(Debug, Clone)]
-pub struct LspDocument {
-    pub uri: String,
-    pub version: i32,
-    pub text: String,
-    pub index: SourcePositionIndex,
-}
-
-impl LspDocument {
-    pub fn new(uri: String, version: i32, text: String) -> Self {
-        let index = SourcePositionIndex::new(&text);
-        Self {
-            uri,
-            version,
-            text,
-            index,
-        }
-    }
-
-    pub fn update(&mut self, version: i32, text: String) {
-        self.version = version;
-        self.index = SourcePositionIndex::new(&text);
-        self.text = text;
-    }
-}
 
 pub struct LspServer {
     pub initialized: bool,
@@ -456,6 +431,7 @@ impl LspServer {
                     value: kw.doc_markdown.to_string(),
                 }),
                 insert_text: Some(kw.name.to_string()),
+                insert_text_format: None,
             });
         }
 
@@ -469,6 +445,7 @@ impl LspServer {
                     value: bi.doc_markdown.to_string(),
                 }),
                 insert_text: Some(bi.name.to_string()),
+                insert_text_format: None,
             });
         }
 

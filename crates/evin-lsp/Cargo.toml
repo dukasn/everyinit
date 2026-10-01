@@ -1,0 +1,10 @@
+[package]
+name = "evin-lsp"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+rustc-hash = "2.1"
+serde = { workspace = true }
+serde_json = { workspace = true }

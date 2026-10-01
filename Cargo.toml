@@ -71,6 +71,7 @@ portable-pty = "0.9"
 evin-io = { path = "crates/evin-io" }
 evin-action-sdk = { path = "crates/evin-action-sdk" }
 evin-locales = { path = "crates/evin-locales" }
+evin-lsp = { path = "crates/evin-lsp" }
 evin-action-changelog = { path = "builtins/evin-action-changelog" }
 evin-action-archive = { path = "builtins/evin-action-archive" }
 evin-action-version-bumper = { path = "builtins/evin-action-version-bumper" }

@@ -43,6 +43,7 @@ evin-action-ci = { workspace = true }
 evin-action-sdk = { workspace = true }
 evin-diagnostic = { workspace = true }
 evin-policy = { workspace = true }
+evin-lsp = { workspace = true }
 async-trait.workspace = true
 serde_yaml = { workspace = true }
 peak_alloc = { workspace = true }
