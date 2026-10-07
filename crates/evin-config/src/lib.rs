@@ -16,6 +16,7 @@ pub mod analysis;
 pub mod environment;
 pub mod models;
 pub mod parser;
+pub mod paths;
 pub mod semantic;
 pub mod source;
 pub mod workspace;

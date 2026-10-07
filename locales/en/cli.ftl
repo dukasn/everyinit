@@ -2,10 +2,10 @@
 
 app-description = Evin — The Workflow Engine
 init-command-help = Initialize .evin configuration for this repository
-init-workspace-help = Generate a default .evin/workspace.yaml
-init-gitrules-help = Generate a default .evin/gitrules.yaml
-init-env-help = Generate a default .evin/environment.yaml
-init-module-help = Generate a default .evin/module.yaml in the specified path
+init-workspace-help = Generate a default .evin/workspace.flow
+init-gitrules-help = Generate a default .evin/gitrules.flow
+init-env-help = Generate a default .evin/environment.flow
+init-module-help = Generate a default .evin/module.flow in the specified path
 init-all-help = Generate all default workspace configuration files
 init-path-help = Target directory path for workspace initialization
 

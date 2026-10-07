@@ -319,7 +319,7 @@ impl<'a> RulesValidator<'a> {
             .par_iter()
             .filter(|f| !f.is_binary && f.size_bytes <= 1_000_000)
             .filter(|f| !ignore_patterns.iter().any(|p| p.matches(&f.path)))
-            .filter(|f| !f.path.ends_with(".evin/gitrules.yaml"))
+            .filter(|f| !f.path.ends_with(".evin/gitrules.flow"))
             .flat_map(|file| {
                 let mut errors = Vec::new();
 

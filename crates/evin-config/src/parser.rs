@@ -85,8 +85,8 @@ pub fn parse_tasks(
         let config_path = cx
             .source_file
             .map(|s| s.to_string())
-            .or_else(|| cx.cwd.map(|p| format!("{}/.evin/module.yaml", p)))
-            .unwrap_or_else(|| ".evin/workspace.yaml".to_string());
+            .or_else(|| cx.cwd.map(|p| format!("{}/.evin/module.flow", p)))
+            .unwrap_or_else(|| ".evin/workspace.flow".to_string());
 
         task.source_file = Some(config_path.clone());
 
@@ -213,7 +213,7 @@ pub async fn load_workspace_tasks_from(
 pub fn load_workspace_tasks_from_sync(
     source: &dyn crate::source::WorkspaceSource,
 ) -> Result<EverInitConfig, evin_diagnostic::Diagnostic> {
-    let workspace_path = std::path::PathBuf::from(".evin/workspace.yaml");
+    let workspace_path = std::path::PathBuf::from(crate::paths::WORKSPACE_MANIFEST);
 
     if !source.exists(&workspace_path) {
         return Ok(EverInitConfig {
@@ -390,7 +390,8 @@ pub fn load_workspace_tasks_from_sync(
 
     if let Some(ref modules) = workspace.workspace.modules {
         for module_dir in modules {
-            let mod_path = std::path::PathBuf::from(&module_dir).join(".evin/module.yaml");
+            let mod_path =
+                std::path::PathBuf::from(&module_dir).join(crate::paths::MODULE_MANIFEST);
             if !source.exists(&mod_path) {
                 continue;
             }
@@ -684,14 +685,14 @@ mod tests {
             tasks,
             TaskParseContext {
                 namespace: Some("release"),
-                source_file: Some(".evin/release.yaml"),
+                source_file: Some(".evin/release.flow"),
                 ..Default::default()
             },
         );
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed[0].name, "release:doctor");
-        assert_eq!(parsed[0].source_file.as_deref(), Some(".evin/release.yaml"));
+        assert_eq!(parsed[0].source_file.as_deref(), Some(".evin/release.flow"));
     }
 
     #[test]
@@ -835,11 +836,11 @@ mod tests {
     async fn overlay_source_loads_namespaced_tasks_without_filesystem_writes() {
         let mut source = crate::source::OverlaySource::default();
         source.insert(
-            ".evin/workspace.yaml",
-            "workspace: { name: app, version: 1.0.0, include: [.evin/packages.yaml] }\nstages: [Publish]\ntasks: {}\n",
+            ".evin/workspace.flow",
+            "workspace: { name: app, version: 1.0.0, include: [.evin/packages.flow] }\nstages: [Publish]\ntasks: {}\n",
         );
         source.insert(
-            ".evin/packages.yaml",
+            ".evin/packages.flow",
             "namespace: { name: packages }\nvalues: { package_name: app }\ntasks:\n  build:\n    stage: Publish\n    run: echo\n",
         );
         let config = load_workspace_tasks_from(&source).await.unwrap();
@@ -857,18 +858,18 @@ mod tests {
 
         let mut source = crate::source::OverlaySource::default();
         source.insert(
-            ".evin/workspace.yaml",
-            "#!evin/v1\nworkspace: { name: app, version: 1.0.0, rules: .evin/gitrules.yaml, modules: [crates/api], include: [.evin/packages.yaml] }\nstages: [Build]\ntasks: {}\n",
+            ".evin/workspace.flow",
+            "#!evin/v1\nworkspace: { name: app, version: 1.0.0, rules: .evin/gitrules.flow, modules: [crates/api], include: [.evin/packages.flow] }\nstages: [Build]\ntasks: {}\n",
         );
         source.insert(
-            "crates/api/.evin/module.yaml",
+            "crates/api/.evin/module.flow",
             "#!evin/v1\nmodule: { name: api }\ntasks: {}\n",
         );
         source.insert(
-            ".evin/packages.yaml",
+            ".evin/packages.flow",
             "#!evin/v1\nnamespace: { name: packages }\ntasks: {}\n",
         );
-        source.insert(".evin/gitrules.yaml", "#!evin/v1\nversion: 1\n");
+        source.insert(".evin/gitrules.flow", "#!evin/v1\nversion: 1\n");
 
         let config = load_workspace_tasks_from_sync(&source).unwrap();
         assert!(config.gitrules.is_some());

@@ -432,7 +432,7 @@ mod tests {
         logger
             .debug(&[format!(
                 "[E_102] workspace_root=. config_origin={}\nwrite_permissions=writable",
-                ".evin/a-very-long-configuration-directory/workspace.yaml"
+                ".evin/a-very-long-configuration-directory/workspace.flow"
             )])
             .await;
 
@@ -456,7 +456,7 @@ mod tests {
         let backend = std::sync::Arc::new(RecordingBackend::default());
         let logger = Logger::new(Layout::with_width(32), backend.clone());
         let record =
-            "[E_102] workspace_root=. config_origin=.evin/a-very-long-directory/workspace.yaml";
+            "[E_102] workspace_root=. config_origin=.evin/a-very-long-directory/workspace.flow";
         logger.debug(&[record.to_string()]).await;
 
         let lines = backend.lines.lock().unwrap();

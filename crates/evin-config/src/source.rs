@@ -13,6 +13,8 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::paths::{ENVIRONMENT_MANIFEST, MODULE_MANIFEST, is_canonical_manifest};
+
 /// Whether a document is eligible for Evin-aware editor treatment. Eligibility
 /// is deliberately separate from workspace discovery: a marked external YAML
 /// file still must be included by a workspace or module to join that graph.
@@ -27,13 +29,7 @@ pub fn recognize_evin_document(
     text: &str,
 ) -> Result<Option<EvinDocumentRecognition>, evin_diagnostic::Diagnostic> {
     let header = evin_yaml::validate_evin_header(text, Some(path))?;
-    let canonical_path = path
-        .components()
-        .any(|component| component.as_os_str() == ".evin")
-        && matches!(
-            path.extension().and_then(|extension| extension.to_str()),
-            Some("yaml" | "yml")
-        );
+    let canonical_path = is_canonical_manifest(path);
     Ok(
         (canonical_path || header.is_some()).then_some(EvinDocumentRecognition {
             canonical_path,
@@ -71,7 +67,7 @@ impl WorkspaceDocuments {
             result.load_namespace(source, path)?;
         }
         for module_dir in workspace.workspace.modules.unwrap_or_default() {
-            let module_path = normalize(root.join(module_dir).join(".evin/module.yaml"));
+            let module_path = normalize(root.join(module_dir).join(MODULE_MANIFEST));
             if !source.exists(&module_path) {
                 continue;
             }
@@ -96,7 +92,7 @@ impl WorkspaceDocuments {
                 result.texts.insert(path.clone(), read(source, &path)?);
             }
         }
-        let environment = normalize(root.join(".evin/environment.yaml"));
+        let environment = normalize(root.join(ENVIRONMENT_MANIFEST));
         if source.exists(&environment) {
             result
                 .texts
@@ -154,6 +150,13 @@ fn missing(path: &Path) -> evin_diagnostic::Diagnostic {
 pub trait WorkspaceSource: Send + Sync {
     fn exists(&self, path: &Path) -> bool;
     fn read_to_string(&self, path: &Path) -> io::Result<String>;
+    fn list_dir(&self, path: &Path) -> io::Result<Vec<WorkspacePathEntry>>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspacePathEntry {
+    pub name: String,
+    pub is_directory: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -164,6 +167,17 @@ impl WorkspaceSource for FilesystemSource {
     }
     fn read_to_string(&self, path: &Path) -> io::Result<String> {
         std::fs::read_to_string(path)
+    }
+    fn list_dir(&self, path: &Path) -> io::Result<Vec<WorkspacePathEntry>> {
+        std::fs::read_dir(path)?
+            .map(|entry| {
+                let entry = entry?;
+                Ok(WorkspacePathEntry {
+                    name: entry.file_name().to_string_lossy().into_owned(),
+                    is_directory: entry.file_type()?.is_dir(),
+                })
+            })
+            .collect()
     }
 }
 
@@ -207,6 +221,38 @@ impl WorkspaceSource for OverlaySource {
             .map(Ok)
             .unwrap_or_else(|| self.fallback.read_to_string(&self.filesystem_path(path)))
     }
+    fn list_dir(&self, path: &Path) -> io::Result<Vec<WorkspacePathEntry>> {
+        use std::collections::BTreeMap;
+
+        let mut entries = BTreeMap::<String, bool>::new();
+        if let Ok(filesystem_entries) = self.fallback.list_dir(&self.filesystem_path(path)) {
+            entries.extend(
+                filesystem_entries
+                    .into_iter()
+                    .map(|entry| (entry.name, entry.is_directory)),
+            );
+        }
+        let directory = normalize(path.to_owned());
+        for overlay in self.overlays.keys() {
+            let Ok(relative) = overlay.strip_prefix(&directory) else {
+                continue;
+            };
+            let mut components = relative.components();
+            let Some(first) = components.next() else {
+                continue;
+            };
+            let name = first.as_os_str().to_string_lossy().into_owned();
+            let is_directory = components.next().is_some();
+            entries
+                .entry(name)
+                .and_modify(|current| *current |= is_directory)
+                .or_insert(is_directory);
+        }
+        Ok(entries
+            .into_iter()
+            .map(|(name, is_directory)| WorkspacePathEntry { name, is_directory })
+            .collect())
+    }
 }
 
 pub fn normalize(path: PathBuf) -> PathBuf {
@@ -231,7 +277,7 @@ mod tests {
     #[test]
     fn overlay_shadows_and_can_remove_a_filesystem_path() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join(".evin/workspace.yaml");
+        let path = directory.path().join(".evin/workspace.flow");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, "disk").unwrap();
         let mut source = OverlaySource::default();
@@ -246,12 +292,12 @@ mod tests {
     fn document_loader_follows_an_unsaved_included_namespace() {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path();
-        let workspace = root.join(".evin/workspace.yaml");
+        let workspace = root.join(".evin/workspace.flow");
         std::fs::create_dir_all(workspace.parent().unwrap()).unwrap();
-        std::fs::write(&workspace, "workspace: { name: app, version: 1.0.0, include: [.evin/packages.yaml] }\nstages: []\n").unwrap();
+        std::fs::write(&workspace, "workspace: { name: app, version: 1.0.0, include: [.evin/packages.flow] }\nstages: []\n").unwrap();
         let mut source = OverlaySource::default();
         source.insert(
-            root.join(".evin/packages.yaml"),
+            root.join(".evin/packages.flow"),
             "namespace: { name: packages }\ntasks: {}\n",
         );
         let documents = super::WorkspaceDocuments::load(&source, &workspace).unwrap();
@@ -261,13 +307,22 @@ mod tests {
     #[test]
     fn document_recognition_accepts_canonical_paths_or_a_valid_header() {
         let canonical = recognize_evin_document(
-            Path::new(".evin/workspace.yaml"),
+            Path::new(".evin/workspace.flow"),
             "workspace: { name: app, version: 1.0.0 }\n",
         )
         .unwrap()
         .unwrap();
         assert!(canonical.canonical_path);
         assert!(canonical.header.is_none());
+
+        assert!(
+            recognize_evin_document(
+                Path::new(".evin/workspace.yaml"),
+                "workspace: { name: app, version: 1.0.0 }\n",
+            )
+            .unwrap()
+            .is_none()
+        );
 
         let marked = recognize_evin_document(
             Path::new("automation.yaml"),

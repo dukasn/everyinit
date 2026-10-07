@@ -92,7 +92,9 @@ fn catalog_view(config: &EverInitConfig) -> Result<CatalogView, Diagnostic> {
         };
         if let Some((module, _)) = task.name.split_once(':') {
             let source = crate::commands::file_uri(
-                task.source_file.as_deref().unwrap_or(".evin/module.yaml"),
+                task.source_file
+                    .as_deref()
+                    .unwrap_or(evin_config::paths::MODULE_MANIFEST),
             )?;
             grouped_modules
                 .entry(module.to_string())
@@ -105,7 +107,7 @@ fn catalog_view(config: &EverInitConfig) -> Result<CatalogView, Diagnostic> {
     }
 
     let mut groups = vec![TaskGroup {
-        source: crate::commands::file_uri(".evin/workspace.yaml")?,
+        source: crate::commands::file_uri(evin_config::paths::WORKSPACE_MANIFEST)?,
         module: None,
         tasks: root_tasks,
     }];

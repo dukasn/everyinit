@@ -67,7 +67,7 @@ init-template-workspace =
     workspace:
       name: evin-project
       version: "0.1.0"
-      rules: ".evin/gitrules.yaml" # Binds your pipeline to your version control policies.
+      rules: ".evin/gitrules.flow" # Binds your pipeline to your version control policies.
       # execution: linear # Task execution mode: 'linear' (default) or 'parallel'.
 
     # Stages define the visual structure and execution order of your pipeline.

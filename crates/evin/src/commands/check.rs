@@ -36,17 +36,13 @@ pub async fn check(
     let config = match semantic.config.as_ref() {
         Some(config) => config,
         None => {
-            let diagnostic = semantic
-                .index
-                .diagnostics
-                .first()
-                .cloned()
-                .unwrap_or_else(|| {
-                    evin_locales::diagnostic(IssueCode::custom(
-                        "workspace configuration could not be loaded",
-                    ))
-                });
-            let view = failed_report(unresolved_identity(), diagnostic);
+            let mut diagnostics = semantic.index.diagnostics.clone();
+            if diagnostics.is_empty() {
+                diagnostics.push(evin_locales::diagnostic(IssueCode::custom(
+                    "workspace configuration could not be loaded",
+                )));
+            }
+            let view = failed_report_many(unresolved_identity(), diagnostics);
             emit(render_check(&view, terminal_width(), None), false);
             return Ok(false);
         }
@@ -59,6 +55,8 @@ pub async fn check(
         Some(&semantic.findings),
     ) {
         Ok(mut view) => {
+            view.issues
+                .extend(semantic.index.diagnostics.iter().cloned().map(issue_view));
             if !workspace_only && module_filter.is_none() && target_filter.is_none() {
                 view.issues.extend(release_lock_issues(config).await);
             }
@@ -66,7 +64,9 @@ pub async fn check(
             emit(render_check(&view, terminal_width(), None), valid);
             Ok(valid)
         }
-        Err(diagnostic) if is_selection_error(&diagnostic) => {
+        Err(diagnostic)
+            if is_selection_error(&diagnostic) && semantic.index.diagnostics.is_empty() =>
+        {
             let kind = if diagnostic.code.key == "issue-check-unknown-module" {
                 evin_locales::t!("check-kind-unknown-module")
             } else {
@@ -92,7 +92,34 @@ pub async fn check(
             Ok(false)
         }
         Err(diagnostic) => {
-            let view = failed_report(identity(config), diagnostic);
+            let mut diagnostics = semantic.index.diagnostics.clone();
+            let dag_missing_dependency_is_unknown_module = diagnostic.code.key
+                == "issue-missing-dependency"
+                && diagnostic
+                    .code
+                    .args
+                    .iter()
+                    .find(|(name, _)| *name == "dep")
+                    .and_then(|(_, dependency)| dependency.rsplit_once(':'))
+                    .is_some_and(|(module, _)| {
+                        diagnostics.iter().any(|existing| {
+                            existing.code.key == "issue-check-unknown-module"
+                                && existing
+                                    .code
+                                    .args
+                                    .iter()
+                                    .any(|(name, value)| *name == "module" && value == module)
+                        })
+                    });
+            if !dag_missing_dependency_is_unknown_module
+                && !diagnostics.iter().any(|existing| {
+                    existing.code.key == diagnostic.code.key
+                        && existing.code.args == diagnostic.code.args
+                })
+            {
+                diagnostics.push(diagnostic);
+            }
+            let view = failed_report_many(identity(config), diagnostics);
             emit(render_check(&view, terminal_width(), None), false);
             Ok(false)
         }
@@ -331,7 +358,8 @@ fn check_view_with_findings(
             .tasks
             .iter()
             .filter(|t| {
-                t.source_file.as_deref() == Some(".evin/workspace.yaml") || !t.name.contains(':')
+                t.source_file.as_deref() == Some(evin_config::paths::WORKSPACE_MANIFEST)
+                    || !t.name.contains(':')
             })
             .map(|t| t.name.clone())
             .collect();
@@ -381,17 +409,18 @@ fn check_view_with_findings(
     let ws_task_count = validated_tasks
         .iter()
         .filter(|t| {
-            t.source_file.as_deref() == Some(".evin/workspace.yaml") || !t.name.contains(':')
+            t.source_file.as_deref() == Some(evin_config::paths::WORKSPACE_MANIFEST)
+                || !t.name.contains(':')
         })
         .count();
     if ws_task_count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none())
     {
         checked_files.push(CheckedManifest {
-            path: crate::commands::file_uri(".evin/workspace.yaml")?,
+            path: crate::commands::file_uri(evin_config::paths::WORKSPACE_MANIFEST)?,
             task_count: ws_task_count,
             kind: ManifestKind::Workspace,
             issues: manifest_issues
-                .remove(".evin/workspace.yaml")
+                .remove(evin_config::paths::WORKSPACE_MANIFEST)
                 .unwrap_or_default(),
         });
     }
@@ -402,7 +431,7 @@ fn check_view_with_findings(
             .filter(|t| t.source_file.as_deref() == Some(path.as_str()))
             .count();
         if count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none()) {
-            let is_namespace = path.ends_with(".yaml") && !path.ends_with(".evin/module.yaml");
+            let is_namespace = !path.ends_with(evin_config::paths::MODULE_MANIFEST);
             checked_files.push(CheckedManifest {
                 path: crate::commands::file_uri(path)?,
                 task_count: count,
@@ -417,10 +446,10 @@ fn check_view_with_findings(
     }
 
     // Git rules
-    let gitrules_path = PathBuf::from(".evin/gitrules.yaml");
+    let gitrules_path = PathBuf::from(evin_config::paths::GITRULES_MANIFEST);
     if gitrules_path.exists() {
         checked_files.push(CheckedManifest {
-            path: crate::commands::file_uri(".evin/gitrules.yaml")?,
+            path: crate::commands::file_uri(evin_config::paths::GITRULES_MANIFEST)?,
             task_count: 0,
             kind: ManifestKind::GitRules,
             issues: Vec::new(),
@@ -428,10 +457,10 @@ fn check_view_with_findings(
     }
 
     // Environment
-    let env_path = PathBuf::from(".evin/environment.yaml");
+    let env_path = PathBuf::from(evin_config::paths::ENVIRONMENT_MANIFEST);
     if env_path.exists() {
         checked_files.push(CheckedManifest {
-            path: crate::commands::file_uri(".evin/environment.yaml")?,
+            path: crate::commands::file_uri(evin_config::paths::ENVIRONMENT_MANIFEST)?,
             task_count: 0,
             kind: ManifestKind::Environment,
             issues: Vec::new(),
@@ -447,7 +476,7 @@ fn check_view_with_findings(
             .filter(|t| t.source_file.as_deref() == Some(path.as_str()))
             .count();
         if count > 0 || (!workspace_only && module_filter.is_none() && target_filter.is_none()) {
-            if path.ends_with(".yaml") && !path.ends_with(".evin/module.yaml") {
+            if !path.ends_with(evin_config::paths::MODULE_MANIFEST) {
                 namespace_set.insert(name.clone());
             } else {
                 module_set.insert(name.clone());
@@ -505,7 +534,20 @@ fn issue_view(diagnostic: Diagnostic) -> CheckIssueView {
     }
 }
 
-fn failed_report(workspace: WorkspaceIdentity, diagnostic: Diagnostic) -> CheckReportView {
+fn failed_report_many(
+    workspace: WorkspaceIdentity,
+    diagnostics: Vec<Diagnostic>,
+) -> CheckReportView {
+    let mut issues = Vec::new();
+    for diagnostic in diagnostics {
+        if issues.iter().any(|issue: &CheckIssueView| {
+            issue.diagnostic.code.key == diagnostic.code.key
+                && issue.diagnostic.code.args == diagnostic.code.args
+        }) {
+            continue;
+        }
+        issues.push(issue_view(diagnostic));
+    }
     CheckReportView {
         workspace,
         checked_files: Vec::new(),
@@ -515,8 +557,12 @@ fn failed_report(workspace: WorkspaceIdentity, diagnostic: Diagnostic) -> CheckR
         total_namespaces: 0,
         graph_nodes: 0,
         graph_edges: 0,
-        graph_cycles: usize::from(diagnostic.code.key == "issue-cycle-detected"),
-        issues: vec![issue_view(diagnostic)],
+        graph_cycles: usize::from(
+            issues
+                .iter()
+                .any(|issue| issue.diagnostic.code.key == "issue-cycle-detected"),
+        ),
+        issues,
     }
 }
 
@@ -590,8 +636,8 @@ mod tests {
             gitrules_source: evin_config::parser::GitRulesSource::Fallback,
             warnings: Vec::new(),
             modules_discovered: vec![
-                ("release".into(), ".evin/release.yaml".into(), 2),
-                ("api".into(), "crates/api/.evin/module.yaml".into(), 1),
+                ("release".into(), ".evin/release.flow".into(), 2),
+                ("api".into(), "crates/api/.evin/module.flow".into(), 1),
             ],
             module_versions: std::collections::HashMap::new(),
         }
@@ -602,25 +648,25 @@ mod tests {
         let cfg = sample_config(vec![
             TaskObject {
                 name: "build".into(),
-                source_file: Some(".evin/workspace.yaml".into()),
+                source_file: Some(".evin/workspace.flow".into()),
                 stage: Some("Build".into()),
                 ..Default::default()
             },
             TaskObject {
                 name: "test".into(),
-                source_file: Some(".evin/workspace.yaml".into()),
+                source_file: Some(".evin/workspace.flow".into()),
                 stage: Some("Test".into()),
                 needs: Some(vec!["build".into()]),
                 ..Default::default()
             },
             TaskObject {
                 name: "release:doctor".into(),
-                source_file: Some(".evin/release.yaml".into()),
+                source_file: Some(".evin/release.flow".into()),
                 ..Default::default()
             },
             TaskObject {
                 name: "release:bump".into(),
-                source_file: Some(".evin/release.yaml".into()),
+                source_file: Some(".evin/release.flow".into()),
                 needs: Some(vec!["release:doctor".into(), "build".into()]),
                 ..Default::default()
             },
@@ -638,18 +684,18 @@ mod tests {
         let cfg = sample_config(vec![
             TaskObject {
                 name: "build".into(),
-                source_file: Some(".evin/workspace.yaml".into()),
+                source_file: Some(".evin/workspace.flow".into()),
                 ..Default::default()
             },
             TaskObject {
                 name: "test".into(),
-                source_file: Some(".evin/workspace.yaml".into()),
+                source_file: Some(".evin/workspace.flow".into()),
                 needs: Some(vec!["build".into()]),
                 ..Default::default()
             },
             TaskObject {
                 name: "release:bump".into(),
-                source_file: Some(".evin/release.yaml".into()),
+                source_file: Some(".evin/release.flow".into()),
                 ..Default::default()
             },
         ]);
@@ -663,17 +709,17 @@ mod tests {
         let cfg = sample_config(vec![
             TaskObject {
                 name: "build".into(),
-                source_file: Some(".evin/workspace.yaml".into()),
+                source_file: Some(".evin/workspace.flow".into()),
                 ..Default::default()
             },
             TaskObject {
                 name: "release:doctor".into(),
-                source_file: Some(".evin/release.yaml".into()),
+                source_file: Some(".evin/release.flow".into()),
                 ..Default::default()
             },
             TaskObject {
                 name: "release:bump".into(),
-                source_file: Some(".evin/release.yaml".into()),
+                source_file: Some(".evin/release.flow".into()),
                 needs: Some(vec!["release:doctor".into(), "build".into()]),
                 ..Default::default()
             },
@@ -766,7 +812,7 @@ mod tests {
         let typo_offset = with.find("tile").unwrap();
         let cfg = sample_config(vec![TaskObject {
             name: "publish".into(),
-            source_file: Some(".evin/workspace.yaml".into()),
+            source_file: Some(".evin/workspace.flow".into()),
             steps: Some(vec![StepObject {
                 run: None,
                 uses: Some(evin_yaml::Spanned::new(
@@ -792,7 +838,7 @@ mod tests {
                 offset,
                 length: 4,
                 ..
-            }) if path == ".evin/workspace.yaml" && offset == typo_offset
+            }) if path == ".evin/workspace.flow" && offset == typo_offset
         ));
     }
 
@@ -811,13 +857,13 @@ mod tests {
         let cfg = sample_config(vec![
             TaskObject {
                 name: "docs".into(),
-                source_file: Some(".evin/workspace.yaml".into()),
+                source_file: Some(".evin/workspace.flow".into()),
                 steps: Some(vec![invalid_step()]),
                 ..Default::default()
             },
             TaskObject {
                 name: "release:docs".into(),
-                source_file: Some(".evin/release.yaml".into()),
+                source_file: Some(".evin/release.flow".into()),
                 steps: Some(vec![invalid_step()]),
                 ..Default::default()
             },

@@ -47,7 +47,7 @@ impl Phase for ResolveConfigPhase {
         super::emit_resolving_configuration_debug_logs(emitter).await;
         let config = evin_config::load_workspace_tasks().await?;
 
-        let workspace_yaml_path = std::path::PathBuf::from(".evin/workspace.yaml");
+        let workspace_yaml_path = std::path::PathBuf::from(evin_config::paths::WORKSPACE_MANIFEST);
         let bytes = if let Ok(metadata) = std::fs::metadata(&workspace_yaml_path) {
             metadata.len() as usize
         } else {
@@ -57,7 +57,7 @@ impl Phase for ResolveConfigPhase {
         emitter.emit(PipelineEvent::DebugLog(
             None,
             evin_action_sdk::debug::ConfigLoaded {
-                target: ".evin/workspace.yaml".into(),
+                target: evin_config::paths::WORKSPACE_MANIFEST.into(),
                 name: config.workspace_name.clone(),
                 bytes,
                 status: "ok".into(),
@@ -127,7 +127,7 @@ impl Phase for ResolveConfigPhase {
         let workspace_root =
             std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
 
-        let env_schema_path = workspace_root.join(".evin").join("environment.yaml");
+        let env_schema_path = workspace_root.join(evin_config::paths::ENVIRONMENT_MANIFEST);
         let env_schema = if env_schema_path.exists() {
             match <evin_config::environment::EnvironmentYaml as evin_yaml::YamlDocument>::from_file(
                 &env_schema_path,
@@ -429,7 +429,7 @@ mod tests {
         TaskObject {
             name: name.into(),
             needs,
-            source_file: Some("docs/.evin/module.yaml".into()),
+            source_file: Some("docs/.evin/module.flow".into()),
             steps: Some(vec![StepObject {
                 run: None,
                 uses: Some(evin_yaml::Spanned::new(

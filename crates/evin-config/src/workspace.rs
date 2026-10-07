@@ -188,6 +188,226 @@ pub struct NamespaceYaml {
     pub tasks: Option<HashMap<evin_yaml::Spanned<String>, crate::models::TaskObject>>,
 }
 
+use evin_yaml::schema::{Field as EditorField, FieldRole as EditorRole, Schema as EditorSchema};
+
+const EDITOR_STRING: EditorSchema = EditorSchema::String;
+const EDITOR_STRING_LIST: EditorSchema = EditorSchema::Sequence(&EDITOR_STRING);
+const EDITOR_STRING_MAP: EditorSchema = EditorSchema::Map(&EDITOR_STRING);
+const EDITOR_TASKS: EditorSchema = EditorSchema::Map(&crate::models::TASK_EDITOR_SCHEMA);
+const EDITOR_INCLUDE: EditorSchema = EditorSchema::Union(&[EDITOR_STRING_LIST, EDITOR_STRING_MAP]);
+const EDITOR_HOOK_RUNNER: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "command",
+        EditorSchema::String,
+        "flow-schema-executable-for-generated-git-hooks",
+    )
+    .required()
+    .catalog("workspace.hook_runner.command"),
+    EditorField::new(
+        "args",
+        EDITOR_STRING_LIST,
+        "flow-schema-arguments-passed-to-the-hook-runner",
+    )
+    .non_nullable()
+    .default_value("[]")
+    .catalog("workspace.hook_runner.args"),
+]);
+const EDITOR_WORKSPACE: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "name",
+        EditorSchema::String,
+        "flow-schema-workspace-identifier",
+    )
+    .required()
+    .catalog("workspace.name"),
+    EditorField::new(
+        "version",
+        EditorSchema::String,
+        "flow-schema-workspace-version-string",
+    )
+    .required()
+    .catalog("workspace.version"),
+    EditorField::new(
+        "modules",
+        EDITOR_STRING_LIST,
+        "flow-schema-directories-scanned-for-modules",
+    )
+    .catalog("workspace.modules"),
+    EditorField::new(
+        "include",
+        EDITOR_INCLUDE,
+        "flow-schema-external-namespace-flow-files",
+    )
+    .catalog("workspace.include"),
+    EditorField::new("includes", EDITOR_INCLUDE, "flow-schema-alias-for-include")
+        .alias_of("include")
+        .catalog("workspace.include"),
+    EditorField::new(
+        "install_hint",
+        EditorSchema::String,
+        "flow-schema-message-shown-when-evin-is-missing",
+    )
+    .catalog("workspace.install_hint"),
+    EditorField::new(
+        "hook_runner",
+        EDITOR_HOOK_RUNNER,
+        "flow-schema-command-for-generated-git-hooks",
+    )
+    .catalog("workspace.hook_runner"),
+    EditorField::new(
+        "rules",
+        EditorSchema::String,
+        "flow-schema-path-to-git-rules-configuration",
+    )
+    .catalog("workspace.rules"),
+    EditorField::new(
+        "execution",
+        EditorSchema::Enum(&["linear", "parallel"]),
+        "flow-schema-task-dispatch-execution-mode",
+    )
+    .catalog("workspace.execution"),
+]);
+const EDITOR_MODULE: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "name",
+        EditorSchema::String,
+        "flow-schema-module-namespace-identifier",
+    )
+    .required()
+    .catalog("module.name"),
+    EditorField::new(
+        "version",
+        EditorSchema::String,
+        "flow-schema-independent-module-version",
+    )
+    .catalog("module.version"),
+    EditorField::new(
+        "include",
+        EDITOR_INCLUDE,
+        "flow-schema-namespace-flow-files-declared-by-module",
+    )
+    .catalog("module.include"),
+    EditorField::new("includes", EDITOR_INCLUDE, "flow-schema-alias-for-include")
+        .alias_of("include")
+        .catalog("module.include"),
+]);
+const EDITOR_NAMESPACE: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "name",
+        EditorSchema::String,
+        "flow-schema-namespace-identifier-prepended-to-tasks",
+    )
+    .required()
+    .catalog("namespace.name"),
+    EditorField::new(
+        "description",
+        EditorSchema::String,
+        "flow-schema-human-readable-namespace-description",
+    )
+    .catalog("namespace.description"),
+]);
+
+pub const WORKSPACE_EDITOR_SCHEMA: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "workspace",
+        EDITOR_WORKSPACE,
+        "flow-schema-workspace-metadata",
+    )
+    .required()
+    .role(EditorRole::Namespace)
+    .catalog("workspace"),
+    EditorField::new(
+        "stages",
+        EDITOR_STRING_LIST,
+        "flow-schema-workspace-stage-definitions",
+    )
+    .required()
+    .value_role(EditorRole::EnumMember)
+    .catalog("workspace.stages"),
+    EditorField::new(
+        "env",
+        EDITOR_STRING_MAP,
+        "flow-schema-workspace-environment-values",
+    )
+    .non_nullable()
+    .default_value("{}")
+    .catalog("workspace.env"),
+    EditorField::new(
+        "values",
+        EDITOR_STRING_MAP,
+        "flow-schema-workspace-template-values",
+    )
+    .non_nullable()
+    .default_value("{}")
+    .catalog("workspace.values"),
+    EditorField::new(
+        "tasks",
+        EDITOR_TASKS,
+        "flow-schema-workspace-task-definitions",
+    )
+    .catalog("workspace.tasks"),
+    EditorField::new(
+        "expose",
+        EDITOR_STRING_LIST,
+        "flow-schema-tasks-exposed-to-callers",
+    )
+    .non_nullable()
+    .default_value("[]")
+    .catalog("workspace.expose"),
+]);
+pub const MODULE_EDITOR_SCHEMA: EditorSchema = EditorSchema::Object(&[
+    EditorField::new("module", EDITOR_MODULE, "flow-schema-module-metadata")
+        .required()
+        .role(EditorRole::Namespace)
+        .catalog("module"),
+    EditorField::new(
+        "env",
+        EDITOR_STRING_MAP,
+        "flow-schema-module-environment-values",
+    )
+    .non_nullable()
+    .catalog("module.env"),
+    EditorField::new(
+        "values",
+        EDITOR_STRING_MAP,
+        "flow-schema-module-template-values",
+    )
+    .non_nullable()
+    .catalog("module.values"),
+    EditorField::new("tasks", EDITOR_TASKS, "flow-schema-module-task-definitions")
+        .catalog("module.tasks"),
+]);
+pub const NAMESPACE_EDITOR_SCHEMA: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "namespace",
+        EDITOR_NAMESPACE,
+        "flow-schema-namespace-metadata",
+    )
+    .required()
+    .role(EditorRole::Namespace)
+    .catalog("namespace"),
+    EditorField::new(
+        "env",
+        EDITOR_STRING_MAP,
+        "flow-schema-namespace-environment-values",
+    )
+    .non_nullable()
+    .catalog("namespace.env"),
+    EditorField::new(
+        "values",
+        EDITOR_STRING_MAP,
+        "flow-schema-namespace-template-values",
+    )
+    .non_nullable()
+    .catalog("namespace.values"),
+    EditorField::new(
+        "tasks",
+        EDITOR_TASKS,
+        "flow-schema-namespace-task-definitions",
+    )
+    .catalog("namespace.tasks"),
+]);
+
 impl evin_yaml::YamlDocument for WorkspaceYaml {}
 impl evin_yaml::YamlDocument for ModuleYaml {}
 impl evin_yaml::YamlDocument for NamespaceYaml {}
@@ -203,8 +423,8 @@ mod include_tests {
 name: example
 version: 1.0.0
 include:
-  - .evin/release.yaml
-  - .evin/maintenance.yaml
+  - .evin/release.flow
+  - .evin/maintenance.flow
 "#,
         )
         .unwrap();
@@ -212,8 +432,8 @@ include:
         assert_eq!(
             list_config.include,
             Some(IncludeConfig::List(vec![
-                ".evin/release.yaml".to_string(),
-                ".evin/maintenance.yaml".to_string(),
+                ".evin/release.flow".to_string(),
+                ".evin/maintenance.flow".to_string(),
             ]))
         );
 
@@ -222,17 +442,17 @@ include:
 name: example
 version: 1.0.0
 includes:
-  release: .evin/release.yaml
-  maintenance: .evin/maintenance.yaml
+  release: .evin/release.flow
+  maintenance: .evin/maintenance.flow
 "#,
         )
         .unwrap();
 
         let mut expected = HashMap::new();
-        expected.insert("release".to_string(), ".evin/release.yaml".to_string());
+        expected.insert("release".to_string(), ".evin/release.flow".to_string());
         expected.insert(
             "maintenance".to_string(),
-            ".evin/maintenance.yaml".to_string(),
+            ".evin/maintenance.flow".to_string(),
         );
         assert_eq!(map_config.include, Some(IncludeConfig::Map(expected)));
     }
@@ -328,16 +548,16 @@ namespace:
 module:
   name: api
   include:
-    - .evin/routes.yaml
-    - .evin/db.yaml
+    - .evin/routes.flow
+    - .evin/db.flow
 "#,
         )
         .unwrap();
         assert_eq!(
             list_config.module.include,
             Some(IncludeConfig::List(vec![
-                ".evin/routes.yaml".to_string(),
-                ".evin/db.yaml".to_string()
+                ".evin/routes.flow".to_string(),
+                ".evin/db.flow".to_string()
             ]))
         );
 
@@ -346,12 +566,12 @@ module:
 module:
   name: api
   include:
-    routes: .evin/routes.yaml
+    routes: .evin/routes.flow
 "#,
         )
         .unwrap();
         let mut expected = HashMap::new();
-        expected.insert("routes".to_string(), ".evin/routes.yaml".to_string());
+        expected.insert("routes".to_string(), ".evin/routes.flow".to_string());
         assert_eq!(
             map_config.module.include,
             Some(IncludeConfig::Map(expected))

@@ -303,7 +303,7 @@ mod tests {
             evin_yaml::parse_yaml(&format!("format: arch\npackage:\n  name: {name}\n")).unwrap();
         let task = TaskObject {
             name: "packages:arch".into(),
-            source_file: Some(".evin/packages.yaml".into()),
+            source_file: Some(".evin/packages.flow".into()),
             steps: Some(vec![crate::models::StepObject {
                 run: None,
                 uses: Some(Spanned {

@@ -15,11 +15,12 @@
 pub mod de;
 pub mod de_enum;
 pub mod header;
+pub mod schema;
 pub mod template;
 
 use std::fmt::Display;
 use yaml_rust2::parser::{Event, Parser};
-use yaml_rust2::scanner::Marker;
+use yaml_rust2::scanner::{Marker, TScalarStyle};
 
 pub use evin_diagnostic::{Span, Spanned};
 pub use header::{EVIN_HEADER_V1, EvinHeader, inspect_evin_header, validate_evin_header};
@@ -31,6 +32,37 @@ fn marker_to_span(marker: Marker) -> Span {
         offset: marker.index(),
         length: 1,
     }
+}
+
+fn scalar_source_length(input: &str, start: usize, value: &str, style: TScalarStyle) -> usize {
+    let quote = match style {
+        TScalarStyle::SingleQuoted => '\'',
+        TScalarStyle::DoubleQuoted => '"',
+        _ => return value.chars().count().max(1),
+    };
+    let mut source = input.chars().skip(start).peekable();
+    if source.next() != Some(quote) {
+        return value.chars().count().max(1);
+    }
+    let mut length = 1;
+    let mut escaped = false;
+    while let Some(character) = source.next() {
+        length += 1;
+        if quote == '"' && !escaped && character == '\\' {
+            escaped = true;
+            continue;
+        }
+        if character == quote && !escaped {
+            if quote == '\'' && source.peek() == Some(&'\'') {
+                source.next();
+                length += 1;
+                continue;
+            }
+            return length;
+        }
+        escaped = false;
+    }
+    value.chars().count().max(1)
 }
 
 use serde::{Deserialize, Serialize};
@@ -173,9 +205,9 @@ pub fn parse_yaml(input: &str) -> Result<SpannedValue, ConfigError> {
                     return Ok(stack.pop().unwrap());
                 }
             }
-            Event::Scalar(value, _style, _anchor, _tag) => {
+            Event::Scalar(value, style, _anchor, _tag) => {
                 let mut span = span;
-                span.length = value.len().max(1);
+                span.length = scalar_source_length(input, span.offset, &value, style);
                 // Determine true type of scalar
                 let v = if value == "null" || value == "~" {
                     SpannedValue::Null(span)
@@ -197,16 +229,20 @@ pub fn parse_yaml(input: &str) -> Result<SpannedValue, ConfigError> {
                 stack.push(SpannedValue::Sequence(Vec::new(), span));
             }
             Event::SequenceEnd => {
-                let seq = stack.pop().unwrap();
+                let mut seq = stack.pop().unwrap();
+                if let SpannedValue::Sequence(_, start) = &mut seq {
+                    start.length = span.offset.saturating_sub(start.offset).max(1);
+                }
                 push_value(&mut stack, seq);
             }
             Event::MappingStart(_idx, _anchor) => {
                 stack.push(SpannedValue::Mapping(Vec::new(), span));
             }
             Event::MappingEnd => {
-                // In stack, we should have a Mapping waiting, but push_value will have pushed alternating keys and values.
-                // Wait, push_value implementation for Mapping below needs to be careful.
-                let map = stack.pop().unwrap();
+                let mut map = stack.pop().unwrap();
+                if let SpannedValue::Mapping(_, start) = &mut map {
+                    start.length = span.offset.saturating_sub(start.offset).max(1);
+                }
                 push_value(&mut stack, map);
             }
             _ => {}
@@ -290,5 +326,141 @@ fn push_value(stack: &mut Vec<SpannedValue>, value: SpannedValue) {
             // Document root
             stack.push(value);
         }
+    }
+}
+
+/// Return the byte index within `line` where a YAML comment starts, if any.
+///
+/// The scan is line-local: a quote only opens a quoted scalar when it is the
+/// first character of a scalar (after indentation, `- `, `: `, `[`, `{`, or
+/// `,`). Apostrophes inside plain scalars such as `Don't` are therefore
+/// ordinary characters and cannot hide later comments.
+pub fn comment_start_in_line(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let mut index = 0;
+    // `true` when the next non-blank character would begin a new scalar.
+    let mut at_scalar_start = true;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        match byte {
+            b' ' | b'\t' => {
+                index += 1;
+                continue;
+            }
+            b'#' if index == 0 || matches!(bytes[index - 1], b' ' | b'\t' | b':') => {
+                return Some(index);
+            }
+            b'\'' | b'"' if at_scalar_start => {
+                // Skip the quoted scalar. An unterminated quote continues on
+                // a following line, so nothing after it on this line can be a
+                // comment.
+                let quote = byte;
+                index += 1;
+                loop {
+                    let &current = bytes.get(index)?;
+                    index += 1;
+                    if quote == b'"' && current == b'\\' {
+                        index += 1;
+                    } else if current == quote {
+                        if quote == b'\'' && bytes.get(index) == Some(&b'\'') {
+                            index += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                at_scalar_start = false;
+                continue;
+            }
+            b'[' | b'{' | b',' => at_scalar_start = true,
+            b'-' | b':' | b'?'
+                if bytes
+                    .get(index + 1)
+                    .is_none_or(|next| matches!(next, b' ' | b'\t')) =>
+            {
+                at_scalar_start = true
+            }
+            _ => at_scalar_start = false,
+        }
+        index += 1;
+    }
+    None
+}
+
+/// Returns true if the given byte `offset` in `input` falls inside a YAML
+/// comment, including the indentation of a comment-only line.
+///
+/// This is a lexical check on the offset's own line. Callers holding a parsed
+/// AST should additionally treat offsets inside scalar spans as non-comments,
+/// which covers `#` lines inside multi-line quoted and block scalars.
+pub fn is_comment_at(input: &str, offset: usize) -> bool {
+    if offset > input.len() || !input.is_char_boundary(offset) {
+        return false;
+    }
+    let line_start = input[..offset].rfind('\n').map_or(0, |index| index + 1);
+    let line_end = input[offset..]
+        .find('\n')
+        .map_or(input.len(), |index| offset + index);
+    let line = input[line_start..line_end].trim_end_matches('\r');
+    let Some(start) = comment_start_in_line(line) else {
+        return false;
+    };
+    let comment_only = line[..start].trim().is_empty();
+    let start = if comment_only { 0 } else { start };
+    offset >= line_start + start
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_comment_at() {
+        let text = "#!evin/v1\nversion: 1\ncommits:\n  # The conventional commit format\n  message_format: \"{type} # not comment\"\n  policies:\n    require_body: false # inline comment\n";
+        // Header
+        assert!(is_comment_at(text, 0));
+        assert!(is_comment_at(text, 5));
+        assert!(is_comment_at(text, 9));
+
+        // Code: version: 1
+        let v_offset = text.find("version").unwrap();
+        assert!(!is_comment_at(text, v_offset));
+        let one_offset = text.find("version: 1").unwrap() + "version: ".len();
+        assert!(!is_comment_at(text, one_offset));
+
+        // Full line comment (including indentation)
+        let comment_line = text.find("  # The").unwrap();
+        assert!(is_comment_at(text, comment_line)); // spaces before '#'
+        assert!(is_comment_at(text, comment_line + 2)); // '#'
+        assert!(is_comment_at(text, comment_line + 5)); // 'The'
+
+        // String containing '#'
+        let inside_str = text.find("# not comment").unwrap();
+        assert!(!is_comment_at(text, inside_str));
+
+        // Inline comment
+        let req_offset = text.find("require_body").unwrap();
+        assert!(!is_comment_at(text, req_offset));
+        let false_offset = text.find("false").unwrap();
+        assert!(!is_comment_at(text, false_offset));
+        let inline_hash = text.find("# inline comment").unwrap();
+        assert!(is_comment_at(text, inline_hash));
+        assert!(is_comment_at(text, inline_hash + 5));
+    }
+
+    #[test]
+    fn apostrophes_in_plain_scalars_do_not_hide_later_comments() {
+        let text = "name: Don't panic\nnote: it's \"fine\n  # after\nlist: [a, 'b # c', \"d\"] # tail\nhash: a#b # real\nquoted: 'it''s # in' # out\n";
+        let at = |needle: &str| text.find(needle).unwrap();
+        assert!(is_comment_at(text, at("# after")));
+        assert!(is_comment_at(text, at("# after") - 2)); // indentation
+        assert!(!is_comment_at(text, at("Don't")));
+        assert!(!is_comment_at(text, at("# c")));
+        assert!(is_comment_at(text, at("# tail")));
+        assert!(!is_comment_at(text, at("a#b") + 1));
+        assert!(is_comment_at(text, at("# real")));
+        assert!(!is_comment_at(text, at("# in")));
+        assert!(is_comment_at(text, at("# out")));
+        assert!(is_comment_at(text, at("# out") + "# out".len())); // line end
     }
 }

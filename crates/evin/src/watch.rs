@@ -193,10 +193,10 @@ pub async fn resolve_watch_spec(
         return Ok(None);
     };
 
-    let mut config_paths = BTreeSet::from([".evin/workspace.yaml".to_string()]);
+    let mut config_paths = BTreeSet::from([evin_config::paths::WORKSPACE_MANIFEST.to_string()]);
     // Creation and deletion matter too, so absent optional configuration
     // inputs remain in the snapshot as watched exact paths.
-    config_paths.insert(".evin/environment.yaml".to_string());
+    config_paths.insert(evin_config::paths::ENVIRONMENT_MANIFEST.to_string());
     if let GitRulesSource::Local(path) = &config.gitrules_source {
         config_paths.insert(normalize_relative(path));
     }
@@ -740,7 +740,7 @@ mod tests {
             "Task description".to_string(),
             paths.iter().map(|value| value.to_string()).collect(),
             ignores.iter().map(|value| value.to_string()).collect(),
-            BTreeSet::from([".evin/workspace.yaml".to_string()]),
+            BTreeSet::from([".evin/workspace.flow".to_string()]),
             debounce,
         )
         .unwrap()
@@ -762,7 +762,7 @@ mod tests {
     #[test]
     fn configuration_inputs_are_mandatory() {
         let value = spec(Path::new("."), &["crates/**"], &[".evin/**"]);
-        assert!(value.matches(".evin/workspace.yaml"));
+        assert!(value.matches(".evin/workspace.flow"));
         assert!(!value.matches(".evin/trace.json"));
         assert_eq!(value.debounce(), Duration::from_millis(300));
     }

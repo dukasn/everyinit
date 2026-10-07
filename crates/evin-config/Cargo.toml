@@ -14,7 +14,9 @@ evin-gitrules = { workspace = true }
 evin-diagnostic = { workspace = true }
 evin-yaml = { workspace = true }
 evin-action-sdk = { workspace = true }
+evin-policy = { workspace = true }
 globset = { workspace = true }
+regex = { workspace = true }
 
 [dev-dependencies]
 async-trait = { workspace = true }

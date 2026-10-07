@@ -32,7 +32,7 @@ pub async fn reconcile(dry_run: bool) -> Result<ReconcileOutcome, Diagnostic> {
     let config = evin_config::load_workspace_tasks().await?;
     let rules = config
         .gitrules
-        .ok_or_else(|| diagnostic("release-lock reconciliation requires .evin/gitrules.yaml"))?;
+        .ok_or_else(|| diagnostic("release-lock reconciliation requires .evin/gitrules.flow"))?;
     let policies = rules
         .releases
         .as_ref()

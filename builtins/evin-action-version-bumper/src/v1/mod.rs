@@ -341,14 +341,14 @@ async fn hydrate_channel(
     }
 
     if let Some((_missing_name, span_start, span_length, msg, help_msg)) = missing_vars.first() {
-        if let Ok(source) = std::fs::read_to_string(".evin/gitrules.yaml") {
+        if let Ok(source) = std::fs::read_to_string(".evin/gitrules.flow") {
             // Find the offset of this string in the file
             if let Some(file_offset) = source.find(template) {
                 ctx.log.diagnostic(
                     evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(msg.clone()))
                         .with_hint(help_msg.clone())
                         .with_file_span(
-                            ".evin/gitrules.yaml",
+                            ".evin/gitrules.flow",
                             file_offset + span_start,
                             *span_length,
                             Some("missing variable here".to_string()),
@@ -451,7 +451,7 @@ pub async fn execute(
             .and_then(|p| p.channels.get(channel_name))
             .ok_or_else(|| {
                 format!(
-                    "Prerelease channel '{}' is not defined in gitrules.yaml",
+                    "Prerelease channel '{}' is not defined in gitrules.flow",
                     channel_name
                 )
             })?;

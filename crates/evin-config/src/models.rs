@@ -122,6 +122,185 @@ pub struct TaskObject {
     pub steps: Option<Vec<StepObject>>,
 }
 
+use evin_yaml::schema::{Field as EditorField, FieldRole as EditorRole, Schema as EditorSchema};
+
+const EDITOR_STRING: EditorSchema = EditorSchema::String;
+const EDITOR_STRING_LIST: EditorSchema = EditorSchema::Sequence(&EDITOR_STRING);
+const EDITOR_STRING_MAP: EditorSchema = EditorSchema::Map(&EDITOR_STRING);
+const EDITOR_ENV: EditorSchema = EditorSchema::Union(&[EDITOR_STRING_LIST, EDITOR_STRING_MAP]);
+const EDITOR_TRIGGER: EditorSchema = EditorSchema::Object(&[EditorField::new(
+    "hooks",
+    EDITOR_STRING_LIST,
+    "flow-schema-hooks-that-select-this-task",
+)
+.catalog("task.on.hooks")
+.value_role(EditorRole::EnumMember)
+.snippet("hooks: [${1}]")]);
+const EDITOR_WATCH: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "paths",
+        EDITOR_STRING_LIST,
+        "flow-schema-workspace-relative-glob-patterns-to-watch",
+    )
+    .required()
+    .catalog("task.watch.paths")
+    .snippet("paths: [${1}]"),
+    EditorField::new(
+        "ignore",
+        EDITOR_STRING_LIST,
+        "flow-schema-workspace-relative-glob-patterns-to-ignore",
+    )
+    .non_nullable()
+    .default_value("[]")
+    .catalog("task.watch.ignore")
+    .snippet("ignore: [${1}]"),
+    EditorField::new(
+        "debounce",
+        EditorSchema::String,
+        "flow-schema-delay-before-the-task-graph-reruns",
+    )
+    .non_nullable()
+    .default_value("300ms")
+    .catalog("task.watch.debounce")
+    .snippet("debounce: ${1:300ms}"),
+]);
+const EDITOR_STEP: EditorSchema = EditorSchema::Object(&[
+    EditorField::new("run", EditorSchema::String, "flow-schema-esh-command-step")
+        .catalog("task.steps.run")
+        .snippet("run: ${1}"),
+    EditorField::new(
+        "uses",
+        EditorSchema::String,
+        "flow-schema-built-in-action-identifier",
+    )
+    .catalog("task.steps.uses")
+    .snippet("uses: ${1}"),
+    EditorField::new(
+        "with",
+        EditorSchema::Any,
+        "flow-schema-action-specific-configuration",
+    )
+    .catalog("task.steps.with")
+    .snippet("with:\n  ${1:field}: ${2:value}"),
+]);
+
+pub const TASK_EDITOR_SCHEMA: EditorSchema = EditorSchema::Object(&[
+    EditorField::new(
+        "name",
+        EditorSchema::String,
+        "flow-schema-optional-task-name-override",
+    )
+    .non_nullable()
+    .default_value("empty string"),
+    EditorField::new(
+        "description",
+        EditorSchema::String,
+        "flow-schema-human-readable-task-label",
+    )
+    .catalog("task.description")
+    .snippet("description: \"${1}\""),
+    EditorField::new(
+        "stage",
+        EditorSchema::String,
+        "flow-schema-declared-workspace-stage-for-this-task",
+    )
+    .catalog("task.stage")
+    .value_role(EditorRole::EnumMember)
+    .snippet("stage: ${1}"),
+    EditorField::new(
+        "needs",
+        EDITOR_STRING_LIST,
+        "flow-schema-task-prerequisites",
+    )
+    .catalog("task.needs")
+    .role(EditorRole::Modifier)
+    .snippet("needs: [${1}]"),
+    EditorField::new(
+        "on",
+        EDITOR_TRIGGER,
+        "flow-schema-hook-trigger-configuration",
+    )
+    .catalog("task.on")
+    .role(EditorRole::Modifier)
+    .snippet("on:\n  hooks: [${1}]"),
+    EditorField::new(
+        "env",
+        EDITOR_ENV,
+        "flow-schema-environment-selection-or-literal-task-variables",
+    )
+    .catalog("task.env")
+    .snippet("env:\n  ${1:NAME}: ${2:value}"),
+    EditorField::new(
+        "presets",
+        EDITOR_STRING_LIST,
+        "flow-schema-environment-variable-presets-selected-by-the-task",
+    )
+    .catalog("task.presets")
+    .value_role(EditorRole::EnumMember)
+    .snippet("presets: [${1}]"),
+    EditorField::new(
+        "module_env",
+        EDITOR_STRING_MAP,
+        "flow-schema-module-provided-task-environment-overrides",
+    ),
+    EditorField::new(
+        "values",
+        EDITOR_STRING_MAP,
+        "flow-schema-task-local-template-values",
+    )
+    .catalog("task.values")
+    .snippet("values:\n  ${1:name}: ${2:value}"),
+    EditorField::new(
+        "module_values",
+        EDITOR_STRING_MAP,
+        "flow-schema-module-provided-template-values",
+    ),
+    EditorField::new(
+        "cwd",
+        EditorSchema::String,
+        "flow-schema-working-directory-for-task-commands-and-actions",
+    )
+    .catalog("task.cwd")
+    .snippet("cwd: ${1}"),
+    EditorField::new(
+        "pure",
+        EditorSchema::Boolean,
+        "flow-schema-disable-the-default-host-environment-safelist",
+    )
+    .catalog("task.pure")
+    .snippet("pure: ${1:false}"),
+    EditorField::new(
+        "parallel",
+        EditorSchema::Boolean,
+        "flow-schema-allow-concurrent-dispatch-when-prerequisites-are-ready",
+    )
+    .catalog("task.parallel")
+    .snippet("parallel: ${1:false}"),
+    EditorField::new(
+        "watch",
+        EDITOR_WATCH,
+        "flow-schema-watch-supervision-configuration",
+    )
+    .catalog("task.watch")
+    .role(EditorRole::Modifier)
+    .snippet("watch:\n  paths: [${1}]"),
+    EditorField::new(
+        "run",
+        EditorSchema::String,
+        "flow-schema-single-esh-command-body",
+    )
+    .catalog("task.run")
+    .snippet("run: ${1}"),
+    EditorField::new(
+        "steps",
+        EditorSchema::Sequence(&EDITOR_STEP),
+        "flow-schema-ordered-command-and-action-steps",
+    )
+    .catalog("task.steps")
+    .role(EditorRole::Modifier)
+    .snippet("steps:\n  - run: ${1}"),
+]);
+
 #[cfg(test)]
 mod tests {
     use super::*;

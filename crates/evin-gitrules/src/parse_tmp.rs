@@ -15,7 +15,7 @@
 #[test]
 #[ignore]
 fn test_parse_tmp() {
-    let path = std::path::PathBuf::from("/tmp/evin-test-repo/.evin/gitrules.yaml");
+    let path = std::path::PathBuf::from("/tmp/evin-test-repo/.evin/gitrules.flow");
     let result = crate::parse_file(&path);
     println!("RESULT: {:#?}", result);
     assert!(result.is_ok());

@@ -190,7 +190,7 @@ mod tests {
     fn action_task(name: &str, yaml: &str) -> TaskObject {
         TaskObject {
             name: name.into(),
-            source_file: Some(".evin/workspace.yaml".into()),
+            source_file: Some(".evin/workspace.flow".into()),
             steps: Some(vec![StepObject {
                 run: None,
                 uses: Some(evin_yaml::Spanned::new(

@@ -2,7 +2,7 @@
 workspace:
   name: main
   version: "1.0.0-canary.100"
-  rules: ".evin/gitrules.yaml"
+  rules: ".evin/gitrules.flow"
   install_hint: "cargo install --path crates/evin"
   hook_runner:
     command: cargo
@@ -12,7 +12,7 @@ workspace:
     - crates/evin/
     - crates/esh/
   include:
-    - .evin/release.yaml
+    - .evin/release.flow
 
 stages:
   - Build

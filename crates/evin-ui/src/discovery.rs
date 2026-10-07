@@ -875,7 +875,7 @@ mod tests {
             &CatalogView {
                 workspace: workspace(),
                 groups: vec![TaskGroup {
-                    source: "file:///repo/.evin/workspace.yaml".into(),
+                    source: "file:///repo/.evin/workspace.flow".into(),
                     module: None,
                     tasks: vec![TargetCard {
                         name: "verify".into(),
@@ -897,7 +897,7 @@ mod tests {
         );
         let output = console::strip_ansi_codes(&output);
         assert!(output.contains("╭   Workspace › Catalog "));
-        assert!(output.contains("✓  Tasks at (file:///repo/.evin/workspace.yaml)"));
+        assert!(output.contains("✓  Tasks at (file:///repo/.evin/workspace.flow)"));
         assert!(output.contains("│   verify  Validate everything"));
         assert!(output.contains("• Stages: Test(1)"));
         assert!(output.contains("╰  Finished!"));
@@ -962,13 +962,13 @@ mod tests {
                 workspace: workspace(),
                 checked_files: vec![
                     CheckedManifest {
-                        path: ".evin/workspace.yaml".into(),
+                        path: ".evin/workspace.flow".into(),
                         task_count: 5,
                         kind: ManifestKind::Workspace,
                         issues: Vec::new(),
                     },
                     CheckedManifest {
-                        path: ".evin/gitrules.yaml".into(),
+                        path: ".evin/gitrules.flow".into(),
                         task_count: 0,
                         kind: ManifestKind::GitRules,
                         issues: Vec::new(),
@@ -988,8 +988,8 @@ mod tests {
         );
         let output = console::strip_ansi_codes(&output);
         assert!(output.contains("╭   Workspace › Check "));
-        assert!(output.contains("Checked .evin/workspace.yaml (5 tasks)"));
-        assert!(output.contains("Checked .evin/gitrules.yaml"));
+        assert!(output.contains("Checked .evin/workspace.flow (5 tasks)"));
+        assert!(output.contains("Checked .evin/gitrules.flow"));
         assert!(output.contains("Validation Summary"));
         assert!(output.contains("Status: Valid (0 errors, 0 warnings)"));
         assert!(output.contains("5 tasks, 2 stages, 0 modules, 0 namespaces"));
@@ -1001,14 +1001,14 @@ mod tests {
     fn check_error_renders_a_fenced_source_diagnostic() {
         let source_cache = SourceCache::default();
         let source = "tasks:\n  publish:\n    steps:\n      - uses: example/action@v1\n        with: '{{ old.syntax }}'\n";
-        source_cache.insert(".evin/workspace.yaml", source);
+        source_cache.insert(".evin/workspace.flow", source);
         let offset = source.find("{{ old.syntax }}").unwrap();
         let diagnostic = Diagnostic::new(
             "Invalid action configuration",
             IssueCode::new("issue-action-config-invalid"),
         )
         .with_file_span(
-            ".evin/workspace.yaml",
+            ".evin/workspace.flow",
             offset,
             16,
             Some("invalid template expression".into()),
@@ -1021,7 +1021,7 @@ mod tests {
             &CheckReportView {
                 workspace: workspace(),
                 checked_files: vec![CheckedManifest {
-                    path: ".evin/workspace.yaml".into(),
+                    path: ".evin/workspace.flow".into(),
                     task_count: 1,
                     kind: ManifestKind::Workspace,
                     issues: vec![issue],
@@ -1041,8 +1041,8 @@ mod tests {
         let output = console::strip_ansi_codes(&output);
 
         assert!(output.contains("╭─(error) ↩ Invalid action configuration"));
-        assert!(output.contains("×   Checked .evin/workspace.yaml (1 task)"));
-        assert!(output.contains(".evin/workspace.yaml"));
+        assert!(output.contains("×   Checked .evin/workspace.flow (1 task)"));
+        assert!(output.contains(".evin/workspace.flow"));
         assert!(output.contains("with: '{{ old.syntax }}'"));
         assert!(output.contains("invalid template express"));
         assert!(output.contains("╰─(action) ↩ aborted"));

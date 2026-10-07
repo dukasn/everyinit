@@ -96,27 +96,9 @@ pub fn load_global_env(
     Ok(global)
 }
 
+/// Compatibility wrapper around the shared built-in preset definitions.
 pub fn builtin_presets(name: &str) -> Option<&'static [&'static str]> {
-    match name.to_lowercase().as_str() {
-        "rust" => Some(&[
-            "CARGO_HOME",
-            "RUST_BACKTRACE",
-            "RUSTFLAGS",
-            "CARGO_TARGET_DIR",
-        ]),
-        "node" => Some(&["NODE_ENV", "NPM_CONFIG_COLOR", "PATH"]),
-        "ci" => Some(&[
-            "CI",
-            "CONTINUOUS_INTEGRATION",
-            "GITHUB_ACTIONS",
-            "GIT_BRANCH",
-            "GIT_COMMIT",
-        ]),
-        "python" => Some(&["PYTHONPATH", "PYTHONUNBUFFERED", "VIRTUAL_ENV"]),
-        "aws" => Some(&["AWS_REGION", "AWS_DEFAULT_REGION", "AWS_PROFILE"]),
-        "docker" => Some(&["DOCKER_HOST", "DOCKER_BUILDKIT", "DOCKER_CONFIG"]),
-        _ => None,
-    }
+    evin_config::environment::builtin_environment_preset(name)
 }
 
 /// Builds a strictly isolated environment map based on the task declaration and presets.
@@ -151,7 +133,7 @@ pub fn build_task_env<P: EnvironmentProvider>(
     if let Some(preset_names) = presets {
         for preset_name in preset_names {
             // Check built-in presets
-            if let Some(keys) = builtin_presets(preset_name) {
+            if let Some(keys) = evin_config::environment::builtin_environment_preset(preset_name) {
                 for &k in keys {
                     if let Some(v) = pool.get(k) {
                         task_env.insert(k.to_string(), v.clone());

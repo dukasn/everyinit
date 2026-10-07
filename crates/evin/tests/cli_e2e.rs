@@ -32,7 +32,7 @@ fn output_text(output: &Output) -> String {
 fn write_workspace(root: &Path, tasks: &str) {
     fs::create_dir_all(root.join(".evin")).unwrap();
     fs::write(
-        root.join(".evin/workspace.yaml"),
+        root.join(".evin/workspace.flow"),
         format!(
             "workspace:\n  name: cross-platform-e2e\n  version: \"0.1.0\"\nstages: [Test]\ntasks:\n{tasks}"
         ),
@@ -55,7 +55,7 @@ fn init_supports_a_destination_with_spaces() {
         .unwrap();
 
     assert!(output.status.success(), "{}", output_text(&output));
-    assert!(destination.join(".evin/workspace.yaml").is_file());
+    assert!(destination.join(".evin/workspace.flow").is_file());
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn discovery_commands_emit_valid_file_uris() {
     fs::create_dir(workspace.join("nested directory")).unwrap();
 
     let manifest = workspace
-        .join(".evin/workspace.yaml")
+        .join(".evin/workspace.flow")
         .canonicalize()
         .unwrap();
     let cwd = workspace.join("nested directory").canonicalize().unwrap();

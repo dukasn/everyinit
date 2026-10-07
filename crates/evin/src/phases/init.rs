@@ -187,7 +187,7 @@ impl Phase for InitWorkspacePhase {
         if do_workspace {
             let workspace_content = evin_locales::bundle::get("init-template-workspace");
             write_config_file(
-                &evin_dir.join("workspace.yaml"),
+                &evin_dir.join(evin_config::paths::WORKSPACE_FILE),
                 &workspace_content,
                 &cwd,
                 ctx.verbose,
@@ -198,7 +198,7 @@ impl Phase for InitWorkspacePhase {
         if do_gitrules {
             let gitrules_content = evin_locales::bundle::get("init-template-gitrules");
             write_config_file(
-                &evin_dir.join("gitrules.yaml"),
+                &evin_dir.join(evin_config::paths::GITRULES_FILE),
                 &gitrules_content,
                 &cwd,
                 ctx.verbose,
@@ -209,7 +209,7 @@ impl Phase for InitWorkspacePhase {
         if do_env {
             let env_content = evin_locales::bundle::get("init-template-environment");
             write_config_file(
-                &evin_dir.join("environment.yaml"),
+                &evin_dir.join(evin_config::paths::ENVIRONMENT_FILE),
                 &env_content,
                 &cwd,
                 ctx.verbose,
@@ -224,7 +224,7 @@ impl Phase for InitWorkspacePhase {
             }
             let module_content = evin_locales::bundle::get("init-template-module");
             write_config_file(
-                &module_dir.join("module.yaml"),
+                &module_dir.join(evin_config::paths::MODULE_FILE),
                 &module_content,
                 &cwd,
                 ctx.verbose,
@@ -259,14 +259,14 @@ mod tests {
 
         phase.execute(&mut ctx, &emitter).await.unwrap();
 
-        assert!(dir.path().join(".evin/workspace.yaml").exists());
+        assert!(dir.path().join(".evin/workspace.flow").exists());
         assert!(
-            std::fs::read_to_string(dir.path().join(".evin/workspace.yaml"))
+            std::fs::read_to_string(dir.path().join(".evin/workspace.flow"))
                 .unwrap()
                 .starts_with("#!evin/v1\n")
         );
-        assert!(!dir.path().join(".evin/gitrules.yaml").exists());
-        assert!(!dir.path().join(".evin/environment.yaml").exists());
+        assert!(!dir.path().join(".evin/gitrules.flow").exists());
+        assert!(!dir.path().join(".evin/environment.flow").exists());
     }
 
     #[tokio::test]
@@ -287,10 +287,10 @@ mod tests {
 
         phase.execute(&mut ctx, &emitter).await.unwrap();
 
-        assert!(dir.path().join(".evin/workspace.yaml").exists());
-        assert!(dir.path().join(".evin/gitrules.yaml").exists());
-        assert!(dir.path().join(".evin/environment.yaml").exists());
-        for name in ["workspace.yaml", "gitrules.yaml", "environment.yaml"] {
+        assert!(dir.path().join(".evin/workspace.flow").exists());
+        assert!(dir.path().join(".evin/gitrules.flow").exists());
+        assert!(dir.path().join(".evin/environment.flow").exists());
+        for name in ["workspace.flow", "gitrules.flow", "environment.flow"] {
             assert!(
                 std::fs::read_to_string(dir.path().join(".evin").join(name))
                     .unwrap()
@@ -317,10 +317,10 @@ mod tests {
 
         phase.execute(&mut ctx, &emitter).await.unwrap();
 
-        assert!(!dir.path().join(".evin/workspace.yaml").exists());
-        assert!(dir.path().join(".evin/gitrules.yaml").exists());
-        assert!(dir.path().join(".evin/environment.yaml").exists());
-        for name in ["gitrules.yaml", "environment.yaml"] {
+        assert!(!dir.path().join(".evin/workspace.flow").exists());
+        assert!(dir.path().join(".evin/gitrules.flow").exists());
+        assert!(dir.path().join(".evin/environment.flow").exists());
+        for name in ["gitrules.flow", "environment.flow"] {
             assert!(
                 std::fs::read_to_string(dir.path().join(".evin").join(name))
                     .unwrap()
@@ -346,7 +346,7 @@ mod tests {
 
         phase.execute(&mut ctx, &emitter).await.unwrap();
         assert!(
-            std::fs::read_to_string(dir.path().join("crates/example/.evin/module.yaml"))
+            std::fs::read_to_string(dir.path().join("crates/example/.evin/module.flow"))
                 .unwrap()
                 .starts_with("#!evin/v1\n")
         );

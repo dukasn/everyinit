@@ -35,9 +35,9 @@ pub async fn emit_resolving_configuration_debug_logs(emitter: &crate::engine::Pi
         .ok()
         .and_then(|p| p.canonicalize().ok().or(Some(p)))
         .unwrap_or_else(|| std::path::PathBuf::from("."));
-    let config_path = cwd.join(".evin").join("workspace.yaml");
+    let config_path = cwd.join(evin_config::paths::WORKSPACE_MANIFEST);
     let config_origin = if config_path.exists() {
-        ".evin/workspace.yaml".to_string()
+        evin_config::paths::WORKSPACE_MANIFEST.to_string()
     } else {
         "none".to_string()
     };
@@ -101,8 +101,8 @@ pub async fn emit_resolving_configuration_debug_logs(emitter: &crate::engine::Pi
     if cwd.join(".env.local").exists() {
         env_sources_list.push(".env.local");
     }
-    if cwd.join(".evin").join("environment.yaml").exists() {
-        env_sources_list.push(".evin/environment.yaml");
+    if cwd.join(evin_config::paths::ENVIRONMENT_MANIFEST).exists() {
+        env_sources_list.push(evin_config::paths::ENVIRONMENT_MANIFEST);
     }
     let env_sources = env_sources_list.into_iter().map(String::from).collect();
 
