@@ -2,9 +2,10 @@
 title: EVIN
 description: EVIN - The Workflow Engine for software repositories.
 search_prompts:
-  - What would you like to build with EVIN?
-  - Need a hand getting your workflow running?
-  - Find a guide, command, action, or diagnostic
+  - How do I build a cross-platform workflow?
+  - Enforce Git commit rules and block secret leaks
+  - Eliminate CI shell drift with ESH
+  - Contribute to EVIN or inspect the architecture
 topbar:
   id: first-public-canary
   variant: holo
@@ -22,17 +23,17 @@ The Workflow Engine
 
 > [!FEATURE]
 >
-> ## Declare Workflows Once
+> ## Declare Once. Orchestrate Everything.
 >
-> Stop scattering shell scripts, CI configs, and task runners across your
-> repository. `.evin/workspace.yaml` is the single declarative home for your
-> project's lifecycle: tasks, stages, dependencies, environments, and modular
-> components.
+> Eliminate sprawling Makefiles, detached npm scripts, and brittle CI
+> manifests. `.evin/workspace.flow` brings your entire repository lifecycle
+> into one deterministic task graph: modular stages, explicit dependencies,
+> and seamless local-to-CI parity.
 >
 > - [Build your first workspace](/book/first-workspace)
 > - [Workspace schema and modules](/reference/workspace-configuration)
 >
-> ```yaml
+> ```flow
 > workspace:
 >   name: storefront
 >   version: "0.1.0"
@@ -59,59 +60,55 @@ The Workflow Engine
 
 > [!FEATURE]
 >
-> ## Git, Built In
+> ## Native Git Governance. Zero Wrappers.
 >
-> EVIN has exactly one external expectation: Git. It extends what Git
-> already provides rather than wrapping it behind adapters. Hook shims are
-> generated and kept in sync by `evin sync`. Repository policies covering commit
-> message formats, branch naming, staged-file rules, authorship, and secret
-> detection are evaluated in-memory against the live Git state before tasks
-> run.
+> No fragile hook wrappers. No external linters. EVIN evaluates commit
+> conventions, branch policies, cryptographic authorship, and secret detection
+> directly in memory against live Git state. Run `evin sync` once, and your
+> repository governance stays synchronized and unbreakable.
 >
-> - [Pipelines & Git Hooks](/book/pipelines-and-hooks)
-> - [Git Rules configuration](/reference/git-rules-configuration)
+> - [Explore Git pipelines & hooks](/book/pipelines-and-hooks)
+> - [Configure Git rules](/reference/git-rules-configuration)
 >
-> ```yaml
-> tasks:
->   check:
->     stage: Check
->     on:
->       hooks: [pre-commit]
->     steps:
->       - run: cargo clippy -- -D warnings
+> ```mermaid "In-memory Git Governance"
+> flowchart LR
+>     Hook[git commit] --> Inspect[In-Memory Git State]
+>     Inspect --> Rules{Git Rules}
+>     Rules -->|Verified| Tasks[Execute Tasks]
+>     Rules -->|Violation| Diagnostic[Instant Diagnostic]
 > ```
 
 > [!FEATURE]
 >
-> ## Portable Scripting with ESH
+> ## Deterministic Scripting. Zero Platform Drift.
 >
-> Evin Shell (ESH) eliminates platform-specific shell drift across Linux,
-> macOS, and Windows. One deterministic runtime handles pipelines, structured
-> JSON/YAML, arithmetic, redirections, and concurrent work without depending
-> on `sh`, Bash, `cmd.exe`, or WSL.
+> Never debug "works on my machine" shell divergence again. Evin Shell (ESH)
+> delivers an identical runtime across macOS, Linux, and Windows—handling
+> structured JSON, YAML parsing, arithmetic, and concurrency natively without
+> dependencies on Bash, WSL, or PowerShell.
 >
 > - [Write portable ESH scripts](/reference/esh/writing-scripts)
-> - [ESH built-ins and operators](/reference/esh/runtime-reference)
+> - [ESH runtime reference](/reference/esh/runtime-reference)
 >
-> ```tape title="Pipe and branch in one command" rows=6 cols=76
-> type "json -g bytes '{\"bytes\": 15728640}' | numfmt --to=iec && { echo \"artifact is ready\"; } || { echo \"format failed\"; }"
+> ```tape title="Deterministic scripting with ESH" rows=5 cols=68 speed=60ms
+> type "echo '{\"status\": \"ok\", \"artifacts\": 3}' | json -g status && echo \"pipeline ready\""
 > enter
 > wait
 > ```
 
 > [!FEATURE]
 >
-> ## Zero-Dependency Delivery
+> ## From Commit to Release. Compiled Right In.
 >
-> No CI plugins. No external services. Standard delivery tasks including
-> semantic versioning, changelog generation, release archiving, and Git
-> releases are compiled directly into the EVIN binary and run inside the same
-> task graph as everyday checks.
+> Cut third-party CI plugins, marketplace security vulnerabilities, and network
+> flakiness out of your release pipeline. Automated changelogs, semantic version
+> bumping, and multi-format release archives are compiled directly into EVIN and
+> execute within the same verified task graph.
 >
-> - [Built-in actions](/reference/actions)
-> - [Archive action](/reference/actions/archive-action)
+> - [Explore built-in actions](/reference/actions)
+> - [Archive & release guide](/reference/actions/archive-action)
 >
-> ```yaml
+> ```flow
 > tasks:
 >   package-release:
 >     stage: Release
@@ -125,26 +122,29 @@ The Workflow Engine
 >           layout: relative
 > ```
 
-## Reference & Guides
+## Guides & Workflows
 
-The full technical story covering workspace contracts, ESH language
-semantics, built-in action schemas, diagnostic references, and the
-contribution path.
+Practical, hands-on journeys to accelerate your development loop—from creating your initial workspace to automating Git hooks and writing portable shell scripts.
 
-- [The EVIN Book](/book) - Learn to define and run repository workflows.
-- [Pipelines & Git Hooks](/book/pipelines-and-hooks) - Connect the task graph to Git and CI.
-- [ESH Language Reference](/reference/esh/language-reference) - Syntax, expansion, arithmetic, pipes, and built-ins.
-- [Built-in Actions](/reference/actions) - Delivery capabilities compiled into the binary.
-- [Configuration & Schemas](/reference) - Workspace manifests, environment contracts, and diagnostics.
-- [Contribute to EVIN](/contributing) - Set up the native toolchain and shape upcoming features.
+- [The EVIN Book](/book) - Step-by-step guidance to design, test, and run repository workflows.
+- [Pipelines & Git Hooks](/book/pipelines-and-hooks) - Connect your task graph to Git lifecycle events and automated checks.
+- [Portable ESH Shell](/reference/esh) - Write deterministic cross-platform scripts with built-in JSON and pipes.
 
-> [!SPOTLIGHT] holo
+> [!SPOTLIGHT] holo | THE SINGLE-BINARY STANDARD
 >
 > ## Declare once. Run everywhere.
 >
-> One workflow definition. Your laptop, your Git hooks, your CI.
+> One workflow definition powering your local terminal, your Git hooks, and your production CI. Zero external runtimes, zero platform drift, and complete supply chain certainty.
 >
-> [Read The EVIN Book](/book)
+> [Start with The EVIN Book](/book)
+
+## Governance & Architecture
+
+Technical specifications, in-memory Git policy contracts, compiled delivery capabilities, and native contribution paths for teams analyzing safety and scale.
+
+- [Git Rules & Security](/reference/git-rules-configuration) - Enforce conventional commits, branch hygiene, and in-memory secret detection.
+- [Built-in Delivery Actions](/reference/actions) - Compiled-in semantic versioning, changelog generation, and archive distribution.
+- [Contribute to EVIN](/contributing) - Inspect the modular Rust workspace, Language Server, and contribution workflows.
 
 ## Footer
 
