@@ -430,8 +430,10 @@ impl LspServer {
                     kind: "markdown".to_string(),
                     value: kw.doc_markdown.to_string(),
                 }),
+                filter_text: None,
                 insert_text: Some(kw.name.to_string()),
                 insert_text_format: None,
+                text_edit: None,
             });
         }
 
@@ -444,8 +446,10 @@ impl LspServer {
                     kind: "markdown".to_string(),
                     value: bi.doc_markdown.to_string(),
                 }),
+                filter_text: None,
                 insert_text: Some(bi.name.to_string()),
                 insert_text_format: None,
+                text_edit: None,
             });
         }
 

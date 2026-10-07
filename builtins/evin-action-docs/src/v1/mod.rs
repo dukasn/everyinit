@@ -2016,19 +2016,71 @@ mod tests {
 
         assert!(out_path.exists());
         let raw = std::fs::read_to_string(&out_path).unwrap();
-        let catalog: evin_doc::LspCatalogExport = serde_json::from_str(&raw).unwrap();
+        let catalog: evin_catalog::CatalogExport = serde_json::from_str(&raw).unwrap();
         assert_eq!(catalog.version, 1);
         assert!(catalog.symbols.contains_key("echo"));
         let echo_meta = &catalog.symbols["echo"];
         assert_eq!(echo_meta.synopsis, "echo [args...]");
         assert_eq!(echo_meta.summary, "Print text");
-        assert_eq!(echo_meta.handler, "builtins::echo");
+        assert_eq!(echo_meta.binding, "builtins::echo");
         assert!(echo_meta.hover_markdown.contains("Prints strings."));
         assert!(echo_meta.terminal_ansi.contains("Prints strings."));
 
         let first = std::fs::read_to_string(&out_path).unwrap();
         lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
         assert_eq!(std::fs::read_to_string(&out_path).unwrap(), first);
+    }
+
+    #[test]
+    fn lsp_target_builds_flow_catalog_from_configuration_references() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
+        let docs_dir = workspace_root.join("docs/reference");
+        let temp_dir = tempfile::tempdir().unwrap();
+        let out_json = temp_dir.path().join("catalog/flow.json");
+        let config = DocsConfig {
+            target: DocsTarget::Lsp,
+            source_dir: docs_dir.to_string_lossy().to_string(),
+            include: vec![
+                "20.workspace-configuration.4500.md".into(),
+                "30.module-configuration.4510.md".into(),
+                "35.namespace-configuration.4515.md".into(),
+                "40.environment-configuration.4520.md".into(),
+                "50.git-rules-configuration.4530.md".into(),
+            ],
+            out: out_json.to_string_lossy().to_string(),
+            ..DocsConfig::default()
+        };
+
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
+            workspace_root,
+        ));
+        let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
+        let mut stats = DocsDebugStats::default();
+        let site_ast = parse_docs(workspace_root, &config, &logger, &mut stats).unwrap();
+        let fs = evin_action_sdk::fs::WorkspaceFs::new(
+            temp_dir.path().to_path_buf(),
+            temp_dir.path().to_path_buf(),
+            evin_action_sdk::PipelineMode::Normal,
+            logger.clone(),
+        );
+
+        let out_path = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
+
+        assert_eq!(out_path, out_json);
+        let raw = std::fs::read_to_string(&out_path).unwrap();
+        let catalog = evin_catalog::CatalogExport::from_json(&raw).unwrap();
+        let tasks = &catalog.symbols["workspace.tasks"];
+        assert!(tasks.binding.is_empty());
+        assert!(tasks.hover_markdown.starts_with("```flow\ntasks:"));
+        assert!(
+            tasks
+                .hover_markdown
+                .contains("**Task definitions** (`workspace.tasks`):")
+        );
+        assert!(catalog.symbols.contains_key("GitRules.releases"));
+        assert!(out_path.parent().unwrap().is_dir());
     }
 
     #[test]
@@ -2100,7 +2152,7 @@ mod tests {
 
         assert!(out_path.exists());
         let raw = std::fs::read_to_string(&out_path).unwrap();
-        let catalog: evin_doc::LspCatalogExport = serde_json::from_str(&raw).unwrap();
+        let catalog: evin_catalog::CatalogExport = serde_json::from_str(&raw).unwrap();
         assert_eq!(catalog.version, 1);
         assert!(
             catalog.symbols.len() >= 60,

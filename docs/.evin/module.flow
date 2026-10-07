@@ -7,6 +7,31 @@ values:
   site_url: "https://dukasn.github.io/evin/"
 
 tasks:
+  evin-catalog:
+    stage: Docs
+    description: "Generate the tracked Evin configuration catalog intentionally"
+    needs: [main:build]
+    steps:
+      - uses: evin/docs@v1
+        with:
+          target: lsp
+          title: "${site_title}"
+          site_url: "${site_url}"
+          source_dir: docs/reference
+          include:
+            - 20.workspace-configuration.4500.md
+            - 30.module-configuration.4510.md
+            - 35.namespace-configuration.4515.md
+            - 40.environment-configuration.4520.md
+            - 50.git-rules-configuration.4530.md
+            - actions/10.documentation-action.5100.md
+            - actions/20.archive-action.5110.md
+            - actions/30.changelog-action.5120.md
+            - actions/40.git-release-action.5130.md
+            - actions/50.version-bumper-action.5140.md
+            - actions/60.ci-action.5150.md
+          out: crates/evin/assets/config-catalog.json
+
   catalog:
     stage: Docs
     description: "Generate the tracked ESH runtime catalog intentionally"

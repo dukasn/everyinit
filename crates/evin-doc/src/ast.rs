@@ -13,30 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LspSymbolMeta {
-    pub name: String,
-    pub synopsis: String,
-    pub summary: String,
-    pub category: String,
-    #[serde(default)]
-    pub handler: String,
-    pub hover_markdown: String,
-    pub hover_plaintext: String,
-    pub terminal_ansi: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct LspCatalogExport {
-    pub version: u32,
-    pub generator: String,
-    pub generated_at: String,
-    pub symbols: BTreeMap<String, LspSymbolMeta>,
-    #[serde(default)]
-    pub keywords: BTreeMap<String, LspSymbolMeta>,
-}
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DocSiteAst {
@@ -179,11 +156,19 @@ pub enum DocNode {
     },
     LspSymbol {
         name: String,
+        /// A generic, hierarchical subject path. The catalog compiler joins
+        /// this into its stable lookup name while renderers retain a readable
+        /// display label.
+        target: Option<Vec<String>>,
+        language: Option<String>,
+        title: Option<String>,
         kind: String,
         synopsis: String,
         summary: String,
         category: String,
-        handler: String,
+        /// An opaque consumer binding. `handler` remains the legacy source
+        /// spelling for ESH compatibility.
+        binding: String,
         children: Vec<DocNode>,
     },
     HorizontalRule,

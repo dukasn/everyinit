@@ -1012,6 +1012,11 @@ impl RstParser {
         } else if name == "lsp" || name == "symbol" || name == "keyword" {
             let symbol_name = args.first().cloned().unwrap_or_default();
             let options = Self::directive_options(&trimmed_body_lines);
+            let target = options.get("target").and_then(|value| {
+                serde_yaml::from_str::<Vec<String>>(value)
+                    .ok()
+                    .filter(|target| !target.is_empty())
+            });
             let kind = options.get("kind").cloned().unwrap_or_else(|| {
                 if name == "keyword" {
                     "keyword".to_string()
@@ -1025,7 +1030,11 @@ impl RstParser {
                 .get("category")
                 .cloned()
                 .unwrap_or_else(|| "general".to_string());
-            let handler = options.get("handler").cloned().unwrap_or_default();
+            let binding = options
+                .get("binding")
+                .cloned()
+                .or_else(|| options.get("handler").cloned())
+                .unwrap_or_default();
 
             let mut non_option_lines = Vec::new();
             let mut past_options = false;
@@ -1047,12 +1056,18 @@ impl RstParser {
             };
 
             Some(DocNode::LspSymbol {
-                name: symbol_name,
+                name: target
+                    .as_ref()
+                    .map(|target| target.join("."))
+                    .unwrap_or(symbol_name),
+                target,
+                language: options.get("language").cloned(),
+                title: options.get("title").cloned(),
                 kind,
                 synopsis,
                 summary,
                 category,
-                handler,
+                binding,
                 children: inner_ast,
             })
         } else if name == "steps" || name == "stepper" {
@@ -1821,16 +1836,52 @@ mod tests {
                 synopsis,
                 summary,
                 category,
-                handler,
+                binding,
                 children,
+                ..
             } => {
                 assert_eq!(name, "echo");
                 assert_eq!(kind, "builtin");
                 assert_eq!(synopsis, "echo [-n] [args...]");
                 assert_eq!(summary, "Standard output engine");
                 assert_eq!(category, "flow");
-                assert_eq!(handler, "builtins::echo");
+                assert_eq!(binding, "builtins::echo");
                 assert_eq!(children.len(), 1);
+            }
+            other => panic!("Expected LspSymbol node, found {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_generic_catalog_directive() {
+        let rst = r#"
+.. lsp::
+   :target: [workspace, tasks]
+   :language: flow
+   :title: Task definitions
+   :synopsis: tasks:
+   :summary: Define tasks
+
+   Task documentation.
+"#;
+        let res = RstParser::parse(rst);
+        match &res.ast[0] {
+            DocNode::LspSymbol {
+                name,
+                target,
+                language,
+                title,
+                binding,
+                ..
+            } => {
+                assert_eq!(name, "workspace.tasks");
+                assert_eq!(
+                    target.as_deref(),
+                    Some(["workspace".to_owned(), "tasks".to_owned()].as_slice())
+                );
+                assert_eq!(language.as_deref(), Some("flow"));
+                assert_eq!(title.as_deref(), Some("Task definitions"));
+                assert!(binding.is_empty());
             }
             other => panic!("Expected LspSymbol node, found {:?}", other),
         }

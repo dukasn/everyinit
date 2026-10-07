@@ -61,6 +61,6 @@ Run the ESH test suite with:
 cargo test -p esh
 ```
 
-The runtime catalog is generated from `docs/reference/esh/100.runtime-reference.3010.md`. Run `cargo test -p evin-action-docs` after changing a catalog entry so `crates/esh/assets/builtins-catalog.json` stays current.
+The runtime catalog v1 is generated from `docs/reference/esh/100.runtime-reference.3010.md`. Run `cargo test -p evin-action-docs` after changing a catalog entry so `crates/esh/assets/builtins-catalog.json` stays current.
 
 ESH is licensed under GNU GPLv3, like the rest of this workspace.

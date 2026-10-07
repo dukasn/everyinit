@@ -12,6 +12,7 @@ categories = ["command-line-utilities", "parser-implementations"]
 
 [dependencies]
 evin-diagnostic = { workspace = true }
+evin-catalog = { workspace = true }
 evin-lsp = { workspace = true }
 evin-ui = { workspace = true }
 evin-io = { workspace = true }
@@ -47,8 +48,7 @@ criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
 libc = { workspace = true }
 
 [build-dependencies]
-evin-doc = { workspace = true }
-serde_json = { workspace = true }
+evin-catalog = { workspace = true }
 
 [[bench]]
 name = "bench_lexer"

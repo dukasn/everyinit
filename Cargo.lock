@@ -1079,8 +1079,8 @@ dependencies = [
  "crc32fast",
  "criterion",
  "crossterm",
+ "evin-catalog",
  "evin-diagnostic",
- "evin-doc",
  "evin-io",
  "evin-lsp",
  "evin-process",
@@ -1131,6 +1131,7 @@ dependencies = [
  "evin-action-git-release",
  "evin-action-sdk",
  "evin-action-version-bumper",
+ "evin-catalog",
  "evin-config",
  "evin-diagnostic",
  "evin-git",
@@ -1229,6 +1230,7 @@ dependencies = [
  "criterion",
  "esh",
  "evin-action-sdk",
+ "evin-catalog",
  "evin-diagnostic",
  "evin-doc",
  "evin-locales",
@@ -1329,6 +1331,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "evin-catalog"
+version = "1.0.0-canary.100"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+]
+
+[[package]]
 name = "evin-ci"
 version = "1.0.0-canary.100"
 dependencies = [
@@ -1373,6 +1384,7 @@ name = "evin-doc"
 version = "1.0.0-canary.100"
 dependencies = [
  "criterion",
+ "evin-catalog",
  "globset",
  "latex2mathml",
  "pulldown-cmark 0.13.4",

@@ -90,10 +90,20 @@ pub struct CompletionItem {
     pub detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documentation: Option<MarkupContent>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "filterText", skip_serializing_if = "Option::is_none")]
+    pub filter_text: Option<String>,
+    #[serde(rename = "insertText", skip_serializing_if = "Option::is_none")]
     pub insert_text: Option<String>,
     #[serde(rename = "insertTextFormat", skip_serializing_if = "Option::is_none")]
     pub insert_text_format: Option<u32>,
+    #[serde(rename = "textEdit", skip_serializing_if = "Option::is_none")]
+    pub text_edit: Option<TextEdit>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextEdit {
+    pub range: Range,
+    #[serde(rename = "newText")]
+    pub new_text: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemanticTokens {

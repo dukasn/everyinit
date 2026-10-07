@@ -3519,12 +3519,16 @@ impl HtmlRenderer {
                 }
                 DocNode::LspSymbol {
                     name,
+                    language,
+                    title,
                     synopsis,
                     summary,
                     category,
                     children,
                     ..
                 } => {
+                    let derived_title = name.replace('.', " › ");
+                    let display_name = title.as_deref().unwrap_or(&derived_title);
                     let symbol_id =
                         format!("symbol-{}", name.trim().to_lowercase().replace(' ', "-"));
                     out.push_str(&format!(
@@ -3534,7 +3538,7 @@ impl HtmlRenderer {
                     out.push_str("  <div class=\"docs-lsp-header\">\n");
                     out.push_str(&format!(
                         "    <h3 class=\"docs-lsp-name\"><code>{}</code></h3>\n",
-                        name
+                        display_name
                     ));
                     if !category.is_empty() {
                         out.push_str(&format!(
@@ -3544,21 +3548,22 @@ impl HtmlRenderer {
                     }
                     out.push_str("  </div>\n");
 
+                    if !summary.is_empty() {
+                        out.push_str(&format!(
+                            "  <p class=\"docs-lsp-summary\">{}</p>\n",
+                            summary
+                        ));
+                    }
+
                     if !synopsis.is_empty() {
                         out.push_str("  <div class=\"docs-lsp-synopsis\">\n");
-                        let highlighted = highlighter.highlight(Some("esh"), synopsis);
+                        let highlighted =
+                            highlighter.highlight(language.as_deref().or(Some("esh")), synopsis);
                         out.push_str(&format!(
                             "    <pre class=\"syn-container\"><code>{}</code></pre>\n",
                             highlighted
                         ));
                         out.push_str("  </div>\n");
-                    }
-
-                    if !summary.is_empty() {
-                        out.push_str(&format!(
-                            "  <p class=\"docs-lsp-summary\"><strong>{}</strong>: {}</p>\n",
-                            name, summary
-                        ));
                     }
 
                     if !children.is_empty() {

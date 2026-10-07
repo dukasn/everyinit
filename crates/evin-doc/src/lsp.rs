@@ -12,10 +12,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Pure LSP catalog construction. Persistence belongs to the embedding application.
+//! Pure documentation-catalog construction. Persistence belongs to the embedding application.
 
-use crate::ast::{DocNode, DocSiteAst, LspCatalogExport, LspSymbolMeta};
+use crate::ast::{DocNode, DocSiteAst};
 use crate::{render_ansi, render_markdown, render_plain};
+use evin_catalog::{CATALOG_VERSION_V1, CatalogEntry, CatalogExport};
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -23,7 +24,7 @@ pub fn build_lsp_catalog(
     site: &DocSiteAst,
     generator: impl Into<String>,
     generated_at: impl Into<String>,
-) -> LspCatalogExport {
+) -> CatalogExport {
     let mut symbols = BTreeMap::new();
     let mut keywords = BTreeMap::new();
     for page in &site.pages {
@@ -59,10 +60,12 @@ pub fn build_lsp_catalog(
         let body: Vec<_> = page.ast.iter().filter(|node| !matches!(node, DocNode::Heading { text, .. } if text.trim().eq_ignore_ascii_case(&name))).cloned().collect();
         let meta = symbol_meta(
             name.clone(),
+            None,
             synopsis,
             summary,
             category.clone(),
             handler,
+            "esh",
             &body,
         );
         if page.source_path.contains("keywords") || category == "keyword" {
@@ -76,20 +79,20 @@ pub fn build_lsp_catalog(
     {
         symbols.insert(
             "[".to_owned(),
-            LspSymbolMeta {
+            CatalogEntry {
                 name: "[".to_owned(),
                 synopsis: "[ <expression> ]".to_owned(),
                 summary: "POSIX conditional expression brackets".to_owned(),
                 category: test.category,
-                handler: test.handler,
+                binding: test.binding,
                 hover_markdown: test.hover_markdown,
                 hover_plaintext: test.hover_plaintext,
                 terminal_ansi: test.terminal_ansi,
             },
         );
     }
-    LspCatalogExport {
-        version: 1,
+    CatalogExport {
+        version: CATALOG_VERSION_V1,
         generator: generator.into(),
         generated_at: generated_at.into(),
         symbols,
@@ -99,8 +102,8 @@ pub fn build_lsp_catalog(
 
 fn extract_lsp_symbols(
     nodes: &[DocNode],
-    symbols: &mut BTreeMap<String, LspSymbolMeta>,
-    keywords: &mut BTreeMap<String, LspSymbolMeta>,
+    symbols: &mut BTreeMap<String, CatalogEntry>,
+    keywords: &mut BTreeMap<String, CatalogEntry>,
 ) -> bool {
     let mut found = false;
     for node in nodes {
@@ -111,20 +114,28 @@ fn extract_lsp_symbols(
                 synopsis,
                 summary,
                 category,
-                handler,
+                binding,
+                target,
+                language,
+                title,
                 children,
+                ..
             } => {
                 found = true;
                 let meta = symbol_meta(
                     name.clone(),
+                    title.as_deref(),
                     synopsis.clone(),
                     summary.clone(),
                     category.clone(),
-                    if handler.is_empty() {
+                    if binding.is_empty() && target.is_none() {
                         default_handler(name)
                     } else {
-                        handler.clone()
+                        binding.clone()
                     },
+                    language
+                        .as_deref()
+                        .unwrap_or(if target.is_some() { "text" } else { "esh" }),
                     children,
                 );
                 if kind == "keyword" || category == "keyword" {
@@ -158,27 +169,79 @@ fn default_handler(name: &str) -> String {
         _ => format!("builtins::{name}"),
     }
 }
+#[allow(clippy::too_many_arguments)]
 fn symbol_meta(
     name: String,
+    title: Option<&str>,
     synopsis: String,
     summary: String,
     category: String,
-    handler: String,
+    binding: String,
+    language: &str,
     body: &[DocNode],
-) -> LspSymbolMeta {
+) -> CatalogEntry {
     let markdown = render_markdown(body);
     let plain = render_plain(body);
     let ansi = render_ansi(body);
-    LspSymbolMeta {
+    let label = title
+        .filter(|title| !title.trim().is_empty())
+        .unwrap_or(&name);
+    CatalogEntry {
         name: name.clone(),
         synopsis: synopsis.clone(),
         summary: summary.clone(),
         category,
-        handler,
-        hover_markdown: format!("```esh\n{synopsis}\n```\n\n**{name}**: {summary}\n\n{markdown}"),
-        hover_plaintext: format!("{synopsis}\n\n{name}: {summary}\n\n{plain}"),
-        terminal_ansi: format!(
-            "\x1b[1;36m{synopsis}\x1b[0m\n\n\x1b[1m{name}\x1b[0m: {summary}\n\n{ansi}"
+        binding,
+        hover_markdown: format!(
+            "```{language}\n{synopsis}\n```\n\n**{label}** (`{name}`): {summary}\n\n{markdown}"
         ),
+        hover_plaintext: format!("{synopsis}\n\n{label} ({name}): {summary}\n\n{plain}"),
+        terminal_ansi: format!(
+            "\x1b[1;36m{synopsis}\x1b[0m\n\n\x1b[1m{label}\x1b[0m ({name}): {summary}\n\n{ansi}"
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_lsp_catalog;
+    use crate::MarkdownParser;
+    use crate::ast::{DocFormat, DocPage, DocSiteAst};
+    use std::collections::HashMap;
+
+    #[test]
+    fn generic_target_uses_its_language_and_empty_binding() {
+        let page = DocPage {
+            slug: "workspace".into(),
+            source_path: "workspace.md".into(),
+            format: DocFormat::Markdown,
+            metadata: HashMap::new(),
+            reference: None,
+            toc: Vec::new(),
+            ast: MarkdownParser::parse(
+                "````lsp\ntarget: [workspace, tasks]\nlanguage: flow\ntitle: Task definitions\nsynopsis: 'tasks:'\nsummary: Define tasks\n---\nTask prose.\n````",
+                true,
+            )
+            .ast,
+        };
+        let catalog = build_lsp_catalog(
+            &DocSiteAst {
+                version: "1".into(),
+                title: None,
+                reference_prefix: "REF".into(),
+                pages: vec![page],
+            },
+            "test",
+            "1970-01-01T00:00:00Z",
+        );
+        let entry = &catalog.symbols["workspace.tasks"];
+        assert!(entry.binding.is_empty());
+        assert!(entry.hover_markdown.starts_with("```flow\ntasks:"));
+        assert!(
+            entry
+                .hover_markdown
+                .contains("**Task definitions** (`workspace.tasks`):")
+        );
+        assert!(entry.hover_markdown.contains("Task prose."));
     }
 }

@@ -350,12 +350,21 @@ impl MarkdownParser {
                     };
 
                     let mut meta_map: HashMap<String, String> = HashMap::new();
+                    let mut target = None;
                     if !header_part.trim().is_empty()
                         && let Ok(val) = serde_yaml::from_str::<serde_json::Value>(header_part)
                         && let Some(obj) = val.as_object()
                     {
                         for (k, v) in obj {
-                            if let Some(s) = v.as_str() {
+                            if k.eq_ignore_ascii_case("target") {
+                                target = v.as_array().map(|parts| {
+                                    parts
+                                        .iter()
+                                        .filter_map(|part| part.as_str())
+                                        .map(str::to_owned)
+                                        .collect::<Vec<_>>()
+                                });
+                            } else if let Some(s) = v.as_str() {
                                 meta_map.insert(k.to_ascii_lowercase(), s.to_string());
                             }
                         }
@@ -366,8 +375,11 @@ impl MarkdownParser {
                             let trimmed = line.trim();
                             if let Some((k, v)) = trimmed.split_once(':') {
                                 let k = k.trim().trim_start_matches(':').to_ascii_lowercase();
-                                if ["name", "kind", "synopsis", "summary", "category", "handler"]
-                                    .contains(&k.as_str())
+                                if [
+                                    "name", "kind", "synopsis", "summary", "category", "handler",
+                                    "binding", "language", "title",
+                                ]
+                                .contains(&k.as_str())
                                 {
                                     meta_map.insert(k, v.trim().to_string());
                                 }
@@ -375,11 +387,14 @@ impl MarkdownParser {
                         }
                     }
 
-                    let final_name = if !symbol_name.is_empty() {
-                        symbol_name
-                    } else {
-                        meta_map.get("name").cloned().unwrap_or_default()
-                    };
+                    let final_name =
+                        if let Some(target) = target.as_ref().filter(|target| !target.is_empty()) {
+                            target.join(".")
+                        } else if !symbol_name.is_empty() {
+                            symbol_name
+                        } else {
+                            meta_map.get("name").cloned().unwrap_or_default()
+                        };
 
                     let kind = meta_map.get("kind").cloned().unwrap_or_else(|| {
                         if directive_name == "keyword" {
@@ -394,7 +409,11 @@ impl MarkdownParser {
                         .get("category")
                         .cloned()
                         .unwrap_or_else(|| "general".to_string());
-                    let handler = meta_map.get("handler").cloned().unwrap_or_default();
+                    let binding = meta_map
+                        .get("binding")
+                        .cloned()
+                        .or_else(|| meta_map.get("handler").cloned())
+                        .unwrap_or_default();
 
                     let inner_ast = if body_part.trim().is_empty() {
                         Vec::new()
@@ -405,11 +424,14 @@ impl MarkdownParser {
                     Some((
                         DocNode::LspSymbol {
                             name: final_name,
+                            target,
+                            language: meta_map.get("language").cloned(),
+                            title: meta_map.get("title").cloned(),
                             kind,
                             synopsis,
                             summary,
                             category,
-                            handler,
+                            binding,
                             children: inner_ast,
                         },
                         start,
@@ -1421,16 +1443,53 @@ Prints arguments to stdout.
                 synopsis,
                 summary,
                 category,
-                handler,
+                binding,
                 children,
+                ..
             } => {
                 assert_eq!(name, "echo");
                 assert_eq!(kind, "builtin");
                 assert_eq!(synopsis, "echo [-n] [args...]");
                 assert_eq!(summary, "Standard output engine");
                 assert_eq!(category, "flow");
-                assert_eq!(handler, "builtins::echo");
+                assert_eq!(binding, "builtins::echo");
                 assert_eq!(children.len(), 1);
+            }
+            other => panic!("Expected LspSymbol node, found {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_markdown_generic_catalog_block() {
+        let md = r#"
+````lsp
+target: [workspace, tasks]
+language: flow
+title: Task definitions
+synopsis: "tasks:"
+summary: Define tasks
+---
+Task documentation.
+````
+"#;
+        let res = MarkdownParser::parse(md, true);
+        match &res.ast[0] {
+            DocNode::LspSymbol {
+                name,
+                target,
+                language,
+                title,
+                binding,
+                ..
+            } => {
+                assert_eq!(name, "workspace.tasks");
+                assert_eq!(
+                    target.as_deref(),
+                    Some(["workspace".to_owned(), "tasks".to_owned()].as_slice())
+                );
+                assert_eq!(language.as_deref(), Some("flow"));
+                assert_eq!(title.as_deref(), Some("Task definitions"));
+                assert!(binding.is_empty());
             }
             other => panic!("Expected LspSymbol node, found {:?}", other),
         }

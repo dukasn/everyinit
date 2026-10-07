@@ -24,9 +24,9 @@ pub mod validation;
 
 pub use ast::{
     DefinitionListItem, DocFormat, DocNode, DocPage, DocSiteAst, FieldListItem, FormalReference,
-    InlineNode, LspCatalogExport, LspSymbolMeta, MediaKind, NumberingKind, OptionListItem,
-    StepItem, TaskListItem, TocEntry,
+    InlineNode, MediaKind, NumberingKind, OptionListItem, StepItem, TaskListItem, TocEntry,
 };
+pub use evin_catalog::{CatalogEntry, CatalogExport};
 pub use lsp::build_lsp_catalog;
 pub use parser::{MarkdownParseResult, MarkdownParser, RstParseResult, RstParser};
 pub use render::{

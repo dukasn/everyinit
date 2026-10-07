@@ -143,6 +143,19 @@ $presentation-variants: () !default;
     --ui-syn-attribute: var(--ui-palette-yellow);
     --ui-syn-operator: var(--ui-palette-cyan);
 
+    /* Flow syntax roles distinguish Evin structure from YAML-compatible values. */
+    --ui-flow-root: var(--ui-syn-comment);
+    --ui-flow-task: var(--ui-color-code-on-surface);
+    --ui-flow-directive: var(--ui-palette-yellow);
+    --ui-flow-property: var(--ui-palette-red);
+    --ui-flow-pragma: var(--ui-syn-comment);
+    --ui-flow-string: var(--ui-palette-yellow);
+    --ui-flow-path: var(--ui-palette-yellow);
+    --ui-flow-enum: var(--ui-palette-green);
+    --ui-flow-action: var(--ui-palette-magenta);
+    --ui-flow-variable: var(--ui-palette-blue);
+    --ui-flow-comment: var(--ui-syn-comment);
+
     /* Diagram Surface & Node Design Tokens (Warm Cohesive Matter Palette) */
     --ui-diagram-bg: #EAE3D9;
     --ui-diagram-node-bg: #F5EFE7;
@@ -424,6 +437,19 @@ $presentation-variants: () !default;
     --ui-syn-punctuation: #CDD6F4;
     --ui-syn-attribute: var(--ui-palette-yellow);
     --ui-syn-operator: var(--ui-palette-cyan);
+
+    /* Flow syntax roles distinguish Evin structure from YAML-compatible values. */
+    --ui-flow-root: var(--ui-syn-comment);
+    --ui-flow-task: var(--ui-color-code-on-surface);
+    --ui-flow-directive: var(--ui-palette-yellow);
+    --ui-flow-property: var(--ui-palette-red);
+    --ui-flow-pragma: var(--ui-syn-comment);
+    --ui-flow-string: var(--ui-palette-yellow);
+    --ui-flow-path: var(--ui-palette-yellow);
+    --ui-flow-enum: var(--ui-palette-green);
+    --ui-flow-action: var(--ui-palette-magenta);
+    --ui-flow-variable: var(--ui-palette-blue);
+    --ui-flow-comment: var(--ui-syn-comment);
 
     /* Dark Diagram Surface & Node Design Tokens */
     --ui-diagram-bg: #040406;

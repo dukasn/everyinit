@@ -12,8 +12,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use evin_doc::ast::LspCatalogExport;
+use evin_catalog::{CatalogExport, codegen::emit_static_catalog};
 use std::env;
+use std::fmt::Write;
 use std::fs;
 use std::path::Path;
 
@@ -39,68 +40,43 @@ fn main() {
         panic!("Failed to read {}: {e}", catalog_path.display());
     });
 
-    let catalog: LspCatalogExport = serde_json::from_str(&raw_json).unwrap_or_else(|e| {
+    let catalog = CatalogExport::from_json(&raw_json).unwrap_or_else(|e| {
         panic!(
             "Malformed catalog artifact in {}: {e}",
             catalog_path.display()
         );
     });
 
-    let mut out = String::new();
-
-    // 1. Generate BUILTIN_CATALOG static slice
-    out.push_str("pub static BUILTIN_CATALOG: &[BuiltinInfo] = &[\n");
-    for (name, meta) in &catalog.symbols {
-        let handler = match meta.handler.as_str() {
-            "" => match name.as_str() {
-                "break" => "builtins::r#break".to_string(),
-                "continue" => "builtins::r#continue".to_string(),
-                "return" => "builtins::r#return".to_string(),
-                "[" => "builtins::test".to_string(),
-                "typeset" => "builtins::declare".to_string(),
-                other => format!("builtins::{}", other),
-            },
-            "builtins::typeset" => "builtins::declare".to_string(),
-            other => other.to_string(),
-        };
-
-        out.push_str(&format!(
-            "    BuiltinInfo {{\n        name: {:?},\n        synopsis: {:?},\n        summary: {:?},\n        doc_markdown: {:?},\n        doc_plaintext: {:?},\n        doc_ansi: {:?},\n        handler: {},\n    }},\n",
-            name, meta.synopsis, meta.summary, meta.hover_markdown, meta.hover_plaintext, meta.terminal_ansi, handler
-        ));
-    }
-    out.push_str("];\n\n");
-
-    // 2. Generate KEYWORD_CATALOG static slice
-    out.push_str("pub static KEYWORD_CATALOG: &[KeywordInfo] = &[\n");
-    for (name, meta) in &catalog.keywords {
-        out.push_str(&format!(
-            "    KeywordInfo {{\n        name: {:?},\n        synopsis: {:?},\n        summary: {:?},\n        doc_markdown: {:?},\n        doc_plaintext: {:?},\n        doc_ansi: {:?},\n    }},\n",
-            name, meta.synopsis, meta.summary, meta.hover_markdown, meta.hover_plaintext, meta.terminal_ansi
-        ));
-    }
-    out.push_str("];\n\n");
-
-    // 3. Generate BUILTIN_DISPATCH_LUT phf_map
+    let mut out = emit_static_catalog(&catalog).expect("validated catalog must emit static Rust");
     out.push_str(
-        "pub static BUILTIN_DISPATCH_LUT: phf::Map<&'static str, BuiltinFn> = phf::phf_map! {\n",
+        "\npub static BUILTIN_DISPATCH_LUT: phf::Map<&'static str, BuiltinFn> = phf::phf_map! {\n",
     );
-    for (name, meta) in &catalog.symbols {
-        let handler = match meta.handler.as_str() {
-            "" => match name.as_str() {
-                "break" => "builtins::r#break".to_string(),
-                "continue" => "builtins::r#continue".to_string(),
-                "return" => "builtins::r#return".to_string(),
-                "[" => "builtins::test".to_string(),
-                "typeset" => "builtins::declare".to_string(),
-                other => format!("builtins::{}", other),
-            },
-            "builtins::typeset" => "builtins::declare".to_string(),
-            other => other.to_string(),
-        };
-        out.push_str(&format!("    {:?} => {},\n", name, handler));
+    for (name, entry) in &catalog.symbols {
+        writeln!(
+            out,
+            "    {:?} => {},",
+            name,
+            handler_path(name, &entry.binding),
+        )
+        .expect("writing to String cannot fail");
     }
     out.push_str("};\n\n");
 
     fs::write(&dest_path, out).expect("Failed to write catalog_gen.rs");
+}
+
+/// ESH is the only catalog consumer that turns an opaque binding into Rust code.
+fn handler_path(name: &str, binding: &str) -> String {
+    match binding {
+        "" => match name {
+            "break" => "builtins::r#break".to_owned(),
+            "continue" => "builtins::r#continue".to_owned(),
+            "return" => "builtins::r#return".to_owned(),
+            "[" => "builtins::test".to_owned(),
+            "typeset" => "builtins::declare".to_owned(),
+            other => format!("builtins::{other}"),
+        },
+        "builtins::typeset" => "builtins::declare".to_owned(),
+        other => other.to_owned(),
+    }
 }

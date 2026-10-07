@@ -36,6 +36,12 @@ pub fn build_lsp_catalog(
     let generator = format!("docs-generator@{}", env!("CARGO_PKG_VERSION"));
     let generated_at = reproducible_generated_at();
     let catalog = evin_doc::build_lsp_catalog(site, generator, generated_at);
+    catalog.validate().map_err(|error| {
+        evin_diagnostic::Diagnostic::new(
+            format!("Generated documentation catalog is invalid: {error}"),
+            evin_diagnostic::IssueCode::new("invalid-catalog"),
+        )
+    })?;
     let out_path = if Path::new(&config.out).is_absolute() {
         PathBuf::from(&config.out)
     } else {

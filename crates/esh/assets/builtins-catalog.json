@@ -9,9 +9,9 @@
       "summary": "POSIX conditional expression brackets",
       "category": "flow",
       "handler": "builtins::test",
-      "hover_markdown": "```esh\ntest <expression>\n```\n\n**test**: Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n### File Predicates\n\n* `-f <file>`: True if regular file exists.\n* `-d <dir>`: True if directory exists.\n* `-e <path>`: True if path exists.\n* `-s <file>`: True if file exists and has size > 0.\n* `-r`, `-w`, `-x`: True if readable, writable, executable.\n\n### String Predicates\n\n* `-z <str>`: True if string length is 0.\n* `-n <str>`: True if string length is non-zero.\n* `<s1> = <s2>`: True if strings are equal.\n* `<s1> != <s2>`: True if strings differ.\n\n### Integer Predicates\n\n* `-eq`, `-ne`, `-lt`, `-le`, `-gt`, `-ge`.\n\n### Exit Status\n\n* `0`: Expression is True.\n* `1`: Expression is False.\n\n---",
-      "hover_plaintext": "test <expression>\n\ntest: Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\nFile Predicates\n\n- -f <file>: True if regular file exists.\n- -d <dir>: True if directory exists.\n- -e <path>: True if path exists.\n- -s <file>: True if file exists and has size > 0.\n- -r, -w, -x: True if readable, writable, executable.\n\nString Predicates\n\n- -z <str>: True if string length is 0.\n- -n <str>: True if string length is non-zero.\n- <s1> = <s2>: True if strings are equal.\n- <s1> != <s2>: True if strings differ.\n\nInteger Predicates\n\n- -eq, -ne, -lt, -le, -gt, -ge.\n\nExit Status\n\n- 0: Expression is True.\n- 1: Expression is False.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mtest <expression>\u001b[0m\n\n\u001b[1mtest\u001b[0m: Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n\u001b[1;33mFile Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-f <file>\u001b[0m: True if regular file exists.\n\u001b[36m•\u001b[0m \u001b[33m-d <dir>\u001b[0m: True if directory exists.\n\u001b[36m•\u001b[0m \u001b[33m-e <path>\u001b[0m: True if path exists.\n\u001b[36m•\u001b[0m \u001b[33m-s <file>\u001b[0m: True if file exists and has size > 0.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-w\u001b[0m, \u001b[33m-x\u001b[0m: True if readable, writable, executable.\n\n\u001b[1;33mString Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-z <str>\u001b[0m: True if string length is 0.\n\u001b[36m•\u001b[0m \u001b[33m-n <str>\u001b[0m: True if string length is non-zero.\n\u001b[36m•\u001b[0m \u001b[33m<s1> = <s2>\u001b[0m: True if strings are equal.\n\u001b[36m•\u001b[0m \u001b[33m<s1> != <s2>\u001b[0m: True if strings differ.\n\n\u001b[1;33mInteger Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-eq\u001b[0m, \u001b[33m-ne\u001b[0m, \u001b[33m-lt\u001b[0m, \u001b[33m-le\u001b[0m, \u001b[33m-gt\u001b[0m, \u001b[33m-ge\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Expression is True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Expression is False.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\ntest <expression>\n```\n\n**test** (`test`): Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n### File Predicates\n\n* `-f <file>`: True if regular file exists.\n* `-d <dir>`: True if directory exists.\n* `-e <path>`: True if path exists.\n* `-s <file>`: True if file exists and has size > 0.\n* `-r`, `-w`, `-x`: True if readable, writable, executable.\n\n### String Predicates\n\n* `-z <str>`: True if string length is 0.\n* `-n <str>`: True if string length is non-zero.\n* `<s1> = <s2>`: True if strings are equal.\n* `<s1> != <s2>`: True if strings differ.\n\n### Integer Predicates\n\n* `-eq`, `-ne`, `-lt`, `-le`, `-gt`, `-ge`.\n\n### Exit Status\n\n* `0`: Expression is True.\n* `1`: Expression is False.\n\n---",
+      "hover_plaintext": "test <expression>\n\ntest (test): Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\nFile Predicates\n\n- -f <file>: True if regular file exists.\n- -d <dir>: True if directory exists.\n- -e <path>: True if path exists.\n- -s <file>: True if file exists and has size > 0.\n- -r, -w, -x: True if readable, writable, executable.\n\nString Predicates\n\n- -z <str>: True if string length is 0.\n- -n <str>: True if string length is non-zero.\n- <s1> = <s2>: True if strings are equal.\n- <s1> != <s2>: True if strings differ.\n\nInteger Predicates\n\n- -eq, -ne, -lt, -le, -gt, -ge.\n\nExit Status\n\n- 0: Expression is True.\n- 1: Expression is False.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mtest <expression>\u001b[0m\n\n\u001b[1mtest\u001b[0m (test): Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n\u001b[1;33mFile Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-f <file>\u001b[0m: True if regular file exists.\n\u001b[36m•\u001b[0m \u001b[33m-d <dir>\u001b[0m: True if directory exists.\n\u001b[36m•\u001b[0m \u001b[33m-e <path>\u001b[0m: True if path exists.\n\u001b[36m•\u001b[0m \u001b[33m-s <file>\u001b[0m: True if file exists and has size > 0.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-w\u001b[0m, \u001b[33m-x\u001b[0m: True if readable, writable, executable.\n\n\u001b[1;33mString Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-z <str>\u001b[0m: True if string length is 0.\n\u001b[36m•\u001b[0m \u001b[33m-n <str>\u001b[0m: True if string length is non-zero.\n\u001b[36m•\u001b[0m \u001b[33m<s1> = <s2>\u001b[0m: True if strings are equal.\n\u001b[36m•\u001b[0m \u001b[33m<s1> != <s2>\u001b[0m: True if strings differ.\n\n\u001b[1;33mInteger Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-eq\u001b[0m, \u001b[33m-ne\u001b[0m, \u001b[33m-lt\u001b[0m, \u001b[33m-le\u001b[0m, \u001b[33m-gt\u001b[0m, \u001b[33m-ge\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Expression is True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Expression is False.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "archive": {
       "name": "archive",
@@ -19,9 +19,9 @@
       "summary": "Format-agnostic archive creator",
       "category": "archive",
       "handler": "builtins::archive",
-      "hover_markdown": "```esh\narchive <target> <sources...>\n```\n\n**archive**: Format-agnostic archive creator\n\nAutomatically detects format (.tar.gz, .zip) from file extension and packages assets.\n\n### Examples\n\n```esh\narchive output.tar.gz ./files...\narchive output.zip ./files...\n```\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "archive <target> <sources...>\n\narchive: Format-agnostic archive creator\n\nAutomatically detects format (.tar.gz, .zip) from file extension and packages assets.\n\nExamples\n\narchive output.tar.gz ./files...\narchive output.zip ./files...\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36marchive <target> <sources...>\u001b[0m\n\n\u001b[1marchive\u001b[0m: Format-agnostic archive creator\n\nAutomatically detects format (.tar.gz, .zip) from file extension and packages assets.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32marchive output.tar.gz ./files...\u001b[0m\n\u001b[90m  │ \u001b[32marchive output.zip ./files...\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\narchive <target> <sources...>\n```\n\n**archive** (`archive`): Format-agnostic archive creator\n\nAutomatically detects format (.tar.gz, .zip) from file extension and packages assets.\n\n### Examples\n\n```esh\narchive output.tar.gz ./files...\narchive output.zip ./files...\n```\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "archive <target> <sources...>\n\narchive (archive): Format-agnostic archive creator\n\nAutomatically detects format (.tar.gz, .zip) from file extension and packages assets.\n\nExamples\n\narchive output.tar.gz ./files...\narchive output.zip ./files...\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36marchive <target> <sources...>\u001b[0m\n\n\u001b[1marchive\u001b[0m (archive): Format-agnostic archive creator\n\nAutomatically detects format (.tar.gz, .zip) from file extension and packages assets.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32marchive output.tar.gz ./files...\u001b[0m\n\u001b[90m  │ \u001b[32marchive output.zip ./files...\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "assert": {
       "name": "assert",
@@ -29,9 +29,9 @@
       "summary": "Assert condition or abort with diagnostic",
       "category": "flow",
       "handler": "builtins::assert",
-      "hover_markdown": "```esh\nassert <expression> [message]\n```\n\n**assert**: Assert condition or abort with diagnostic\n\nEvaluates a condition and immediately aborts execution with diagnostic telemetry if false.\n\n### Examples\n\n```esh\nassert [ -d ./dist ] \"Dist directory must exist before packaging\"\n```\n\n### Exit Status\n\n* `0`: Condition is True.\n* `1`: Assertion failed.",
-      "hover_plaintext": "assert <expression> [message]\n\nassert: Assert condition or abort with diagnostic\n\nEvaluates a condition and immediately aborts execution with diagnostic telemetry if false.\n\nExamples\n\nassert [ -d ./dist ] \"Dist directory must exist before packaging\"\n\nExit Status\n\n- 0: Condition is True.\n- 1: Assertion failed.",
-      "terminal_ansi": "\u001b[1;36massert <expression> [message]\u001b[0m\n\n\u001b[1massert\u001b[0m: Assert condition or abort with diagnostic\n\nEvaluates a condition and immediately aborts execution with diagnostic telemetry if false.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32massert [ -d ./dist ] \"Dist directory must exist before packaging\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Condition is True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Assertion failed."
+      "hover_markdown": "```esh\nassert <expression> [message]\n```\n\n**assert** (`assert`): Assert condition or abort with diagnostic\n\nEvaluates a condition and immediately aborts execution with diagnostic telemetry if false.\n\n### Examples\n\n```esh\nassert [ -d ./dist ] \"Dist directory must exist before packaging\"\n```\n\n### Exit Status\n\n* `0`: Condition is True.\n* `1`: Assertion failed.",
+      "hover_plaintext": "assert <expression> [message]\n\nassert (assert): Assert condition or abort with diagnostic\n\nEvaluates a condition and immediately aborts execution with diagnostic telemetry if false.\n\nExamples\n\nassert [ -d ./dist ] \"Dist directory must exist before packaging\"\n\nExit Status\n\n- 0: Condition is True.\n- 1: Assertion failed.",
+      "terminal_ansi": "\u001b[1;36massert <expression> [message]\u001b[0m\n\n\u001b[1massert\u001b[0m (assert): Assert condition or abort with diagnostic\n\nEvaluates a condition and immediately aborts execution with diagnostic telemetry if false.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32massert [ -d ./dist ] \"Dist directory must exist before packaging\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Condition is True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Assertion failed."
     },
     "base64": {
       "name": "base64",
@@ -39,9 +39,9 @@
       "summary": "Encode or decode Base64 data",
       "category": "crypto",
       "handler": "builtins::base64",
-      "hover_markdown": "```esh\nbase64 [-d] [file]\n```\n\n**base64**: Encode or decode Base64 data\n\nEncodes or decodes standard Base64 streams.\n\n### Options\n\n* `-d`, `--decode`: Decode Base64 input into raw data.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "base64 [-d] [file]\n\nbase64: Encode or decode Base64 data\n\nEncodes or decodes standard Base64 streams.\n\nOptions\n\n- -d, --decode: Decode Base64 input into raw data.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mbase64 [-d] [file]\u001b[0m\n\n\u001b[1mbase64\u001b[0m: Encode or decode Base64 data\n\nEncodes or decodes standard Base64 streams.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-d\u001b[0m, \u001b[33m--decode\u001b[0m: Decode Base64 input into raw data.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nbase64 [-d] [file]\n```\n\n**base64** (`base64`): Encode or decode Base64 data\n\nEncodes or decodes standard Base64 streams.\n\n### Options\n\n* `-d`, `--decode`: Decode Base64 input into raw data.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "base64 [-d] [file]\n\nbase64 (base64): Encode or decode Base64 data\n\nEncodes or decodes standard Base64 streams.\n\nOptions\n\n- -d, --decode: Decode Base64 input into raw data.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mbase64 [-d] [file]\u001b[0m\n\n\u001b[1mbase64\u001b[0m (base64): Encode or decode Base64 data\n\nEncodes or decodes standard Base64 streams.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-d\u001b[0m, \u001b[33m--decode\u001b[0m: Decode Base64 input into raw data.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "basename": {
       "name": "basename",
@@ -49,9 +49,9 @@
       "summary": "Extract filename component of a path",
       "category": "fs",
       "handler": "builtins::basename",
-      "hover_markdown": "```esh\nbasename <path> [suffix]\n```\n\n**basename**: Extract filename component of a path\n\nExtracts the trailing filename component from a path, optionally stripping a trailing suffix.\n\n### Examples\n\n```esh\nNAME=\"$(basename ./src/main.rs)\"      # \"main.rs\"\nSTEM=\"$(basename ./src/main.rs .rs)\"  # \"main\"\n```\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "basename <path> [suffix]\n\nbasename: Extract filename component of a path\n\nExtracts the trailing filename component from a path, optionally stripping a trailing suffix.\n\nExamples\n\nNAME=\"$(basename ./src/main.rs)\"      # \"main.rs\"\nSTEM=\"$(basename ./src/main.rs .rs)\"  # \"main\"\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mbasename <path> [suffix]\u001b[0m\n\n\u001b[1mbasename\u001b[0m: Extract filename component of a path\n\nExtracts the trailing filename component from a path, optionally stripping a trailing suffix.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mNAME=\"$(basename ./src/main.rs)\"      # \"main.rs\"\u001b[0m\n\u001b[90m  │ \u001b[32mSTEM=\"$(basename ./src/main.rs .rs)\"  # \"main\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nbasename <path> [suffix]\n```\n\n**basename** (`basename`): Extract filename component of a path\n\nExtracts the trailing filename component from a path, optionally stripping a trailing suffix.\n\n### Examples\n\n```esh\nNAME=\"$(basename ./src/main.rs)\"      # \"main.rs\"\nSTEM=\"$(basename ./src/main.rs .rs)\"  # \"main\"\n```\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "basename <path> [suffix]\n\nbasename (basename): Extract filename component of a path\n\nExtracts the trailing filename component from a path, optionally stripping a trailing suffix.\n\nExamples\n\nNAME=\"$(basename ./src/main.rs)\"      # \"main.rs\"\nSTEM=\"$(basename ./src/main.rs .rs)\"  # \"main\"\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mbasename <path> [suffix]\u001b[0m\n\n\u001b[1mbasename\u001b[0m (basename): Extract filename component of a path\n\nExtracts the trailing filename component from a path, optionally stripping a trailing suffix.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mNAME=\"$(basename ./src/main.rs)\"      # \"main.rs\"\u001b[0m\n\u001b[90m  │ \u001b[32mSTEM=\"$(basename ./src/main.rs .rs)\"  # \"main\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "break": {
       "name": "break",
@@ -59,9 +59,9 @@
       "summary": "Break from innermost loop(s)",
       "category": "flow",
       "handler": "builtins::r#break",
-      "hover_markdown": "```esh\nbreak [n]\n```\n\n**break**: Break from innermost loop(s)\n\nTerminates execution of the enclosing for, while, or until loop.",
-      "hover_plaintext": "break [n]\n\nbreak: Break from innermost loop(s)\n\nTerminates execution of the enclosing for, while, or until loop.",
-      "terminal_ansi": "\u001b[1;36mbreak [n]\u001b[0m\n\n\u001b[1mbreak\u001b[0m: Break from innermost loop(s)\n\nTerminates execution of the enclosing for, while, or until loop."
+      "hover_markdown": "```esh\nbreak [n]\n```\n\n**break** (`break`): Break from innermost loop(s)\n\nTerminates execution of the enclosing for, while, or until loop.",
+      "hover_plaintext": "break [n]\n\nbreak (break): Break from innermost loop(s)\n\nTerminates execution of the enclosing for, while, or until loop.",
+      "terminal_ansi": "\u001b[1;36mbreak [n]\u001b[0m\n\n\u001b[1mbreak\u001b[0m (break): Break from innermost loop(s)\n\nTerminates execution of the enclosing for, while, or until loop."
     },
     "cat": {
       "name": "cat",
@@ -69,9 +69,9 @@
       "summary": "Concatenate and print files",
       "category": "text",
       "handler": "builtins::cat",
-      "hover_markdown": "```esh\ncat [file...]\n```\n\n**cat**: Concatenate and print files\n\nReads files sequentially and writes their contents to standard output.\n\n### Exit Status\n\n* `0`: All files read successfully.\n* `1`: Read error or file not found.",
-      "hover_plaintext": "cat [file...]\n\ncat: Concatenate and print files\n\nReads files sequentially and writes their contents to standard output.\n\nExit Status\n\n- 0: All files read successfully.\n- 1: Read error or file not found.",
-      "terminal_ansi": "\u001b[1;36mcat [file...]\u001b[0m\n\n\u001b[1mcat\u001b[0m: Concatenate and print files\n\nReads files sequentially and writes their contents to standard output.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All files read successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Read error or file not found."
+      "hover_markdown": "```esh\ncat [file...]\n```\n\n**cat** (`cat`): Concatenate and print files\n\nReads files sequentially and writes their contents to standard output.\n\n### Exit Status\n\n* `0`: All files read successfully.\n* `1`: Read error or file not found.",
+      "hover_plaintext": "cat [file...]\n\ncat (cat): Concatenate and print files\n\nReads files sequentially and writes their contents to standard output.\n\nExit Status\n\n- 0: All files read successfully.\n- 1: Read error or file not found.",
+      "terminal_ansi": "\u001b[1;36mcat [file...]\u001b[0m\n\n\u001b[1mcat\u001b[0m (cat): Concatenate and print files\n\nReads files sequentially and writes their contents to standard output.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All files read successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Read error or file not found."
     },
     "cd": {
       "name": "cd",
@@ -79,9 +79,9 @@
       "summary": "Change current working directory",
       "category": "fs",
       "handler": "builtins::cd",
-      "hover_markdown": "```esh\ncd [directory]\n```\n\n**cd**: Change current working directory\n\nChanges the current working directory of the ESH execution context. If no\ndirectory is provided, defaults to `$HOME` (or `%USERPROFILE%` on Windows).\n\n### Options\n\n* `-`: Change to the previous working directory (`$OLDPWD`).\n\n### Examples\n\n```esh\ncd ./src\ncd -\n```\n\n### Exit Status\n\n* `0`: Directory changed successfully.\n* `1`: Target directory does not exist or permission denied.",
-      "hover_plaintext": "cd [directory]\n\ncd: Change current working directory\n\nChanges the current working directory of the ESH execution context. If no\ndirectory is provided, defaults to $HOME (or %USERPROFILE% on Windows).\n\nOptions\n\n- -: Change to the previous working directory ($OLDPWD).\n\nExamples\n\ncd ./src\ncd -\n\nExit Status\n\n- 0: Directory changed successfully.\n- 1: Target directory does not exist or permission denied.",
-      "terminal_ansi": "\u001b[1;36mcd [directory]\u001b[0m\n\n\u001b[1mcd\u001b[0m: Change current working directory\n\nChanges the current working directory of the ESH execution context. If no\ndirectory is provided, defaults to \u001b[33m$HOME\u001b[0m (or \u001b[33m%USERPROFILE%\u001b[0m on Windows).\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-\u001b[0m: Change to the previous working directory (\u001b[33m$OLDPWD\u001b[0m).\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mcd ./src\u001b[0m\n\u001b[90m  │ \u001b[32mcd -\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Directory changed successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Target directory does not exist or permission denied."
+      "hover_markdown": "```esh\ncd [directory]\n```\n\n**cd** (`cd`): Change current working directory\n\nChanges the current working directory of the ESH execution context. If no\ndirectory is provided, defaults to `$HOME` (or `%USERPROFILE%` on Windows).\n\n### Options\n\n* `-`: Change to the previous working directory (`$OLDPWD`).\n\n### Examples\n\n```esh\ncd ./src\ncd -\n```\n\n### Exit Status\n\n* `0`: Directory changed successfully.\n* `1`: Target directory does not exist or permission denied.",
+      "hover_plaintext": "cd [directory]\n\ncd (cd): Change current working directory\n\nChanges the current working directory of the ESH execution context. If no\ndirectory is provided, defaults to $HOME (or %USERPROFILE% on Windows).\n\nOptions\n\n- -: Change to the previous working directory ($OLDPWD).\n\nExamples\n\ncd ./src\ncd -\n\nExit Status\n\n- 0: Directory changed successfully.\n- 1: Target directory does not exist or permission denied.",
+      "terminal_ansi": "\u001b[1;36mcd [directory]\u001b[0m\n\n\u001b[1mcd\u001b[0m (cd): Change current working directory\n\nChanges the current working directory of the ESH execution context. If no\ndirectory is provided, defaults to \u001b[33m$HOME\u001b[0m (or \u001b[33m%USERPROFILE%\u001b[0m on Windows).\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-\u001b[0m: Change to the previous working directory (\u001b[33m$OLDPWD\u001b[0m).\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mcd ./src\u001b[0m\n\u001b[90m  │ \u001b[32mcd -\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Directory changed successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Target directory does not exist or permission denied."
     },
     "continue": {
       "name": "continue",
@@ -89,9 +89,9 @@
       "summary": "Continue to next iteration of loop(s)",
       "category": "flow",
       "handler": "builtins::r#continue",
-      "hover_markdown": "```esh\ncontinue [n]\n```\n\n**continue**: Continue to next iteration of loop(s)\n\nResumes execution at the next iteration of the enclosing loop.",
-      "hover_plaintext": "continue [n]\n\ncontinue: Continue to next iteration of loop(s)\n\nResumes execution at the next iteration of the enclosing loop.",
-      "terminal_ansi": "\u001b[1;36mcontinue [n]\u001b[0m\n\n\u001b[1mcontinue\u001b[0m: Continue to next iteration of loop(s)\n\nResumes execution at the next iteration of the enclosing loop."
+      "hover_markdown": "```esh\ncontinue [n]\n```\n\n**continue** (`continue`): Continue to next iteration of loop(s)\n\nResumes execution at the next iteration of the enclosing loop.",
+      "hover_plaintext": "continue [n]\n\ncontinue (continue): Continue to next iteration of loop(s)\n\nResumes execution at the next iteration of the enclosing loop.",
+      "terminal_ansi": "\u001b[1;36mcontinue [n]\u001b[0m\n\n\u001b[1mcontinue\u001b[0m (continue): Continue to next iteration of loop(s)\n\nResumes execution at the next iteration of the enclosing loop."
     },
     "cp": {
       "name": "cp",
@@ -99,9 +99,9 @@
       "summary": "Copy files and directories",
       "category": "fs",
       "handler": "builtins::cp",
-      "hover_markdown": "```esh\ncp [-r] <source...> <destination>\n```\n\n**cp**: Copy files and directories\n\nCopies files or directories from source to destination.\n\n### Options\n\n* `-r`, `-R`: Recursive copy for directory trees.\n\n### Exit Status\n\n* `0`: Files copied successfully.\n* `1`: Copy failure.",
-      "hover_plaintext": "cp [-r] <source...> <destination>\n\ncp: Copy files and directories\n\nCopies files or directories from source to destination.\n\nOptions\n\n- -r, -R: Recursive copy for directory trees.\n\nExit Status\n\n- 0: Files copied successfully.\n- 1: Copy failure.",
-      "terminal_ansi": "\u001b[1;36mcp [-r] <source...> <destination>\u001b[0m\n\n\u001b[1mcp\u001b[0m: Copy files and directories\n\nCopies files or directories from source to destination.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-R\u001b[0m: Recursive copy for directory trees.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Files copied successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Copy failure."
+      "hover_markdown": "```esh\ncp [-r] <source...> <destination>\n```\n\n**cp** (`cp`): Copy files and directories\n\nCopies files or directories from source to destination.\n\n### Options\n\n* `-r`, `-R`: Recursive copy for directory trees.\n\n### Exit Status\n\n* `0`: Files copied successfully.\n* `1`: Copy failure.",
+      "hover_plaintext": "cp [-r] <source...> <destination>\n\ncp (cp): Copy files and directories\n\nCopies files or directories from source to destination.\n\nOptions\n\n- -r, -R: Recursive copy for directory trees.\n\nExit Status\n\n- 0: Files copied successfully.\n- 1: Copy failure.",
+      "terminal_ansi": "\u001b[1;36mcp [-r] <source...> <destination>\u001b[0m\n\n\u001b[1mcp\u001b[0m (cp): Copy files and directories\n\nCopies files or directories from source to destination.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-R\u001b[0m: Recursive copy for directory trees.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Files copied successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Copy failure."
     },
     "csv": {
       "name": "csv",
@@ -109,9 +109,9 @@
       "summary": "Parse and format CSV data",
       "category": "data",
       "handler": "builtins::csv",
-      "hover_markdown": "```esh\ncsv <parse|format> [args...]\n```\n\n**csv**: Parse and format CSV data\n\nParses and formats CSV input data.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "csv <parse|format> [args...]\n\ncsv: Parse and format CSV data\n\nParses and formats CSV input data.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mcsv <parse|format> [args...]\u001b[0m\n\n\u001b[1mcsv\u001b[0m: Parse and format CSV data\n\nParses and formats CSV input data.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\ncsv <parse|format> [args...]\n```\n\n**csv** (`csv`): Parse and format CSV data\n\nParses and formats CSV input data.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "csv <parse|format> [args...]\n\ncsv (csv): Parse and format CSV data\n\nParses and formats CSV input data.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mcsv <parse|format> [args...]\u001b[0m\n\n\u001b[1mcsv\u001b[0m (csv): Parse and format CSV data\n\nParses and formats CSV input data.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "cut": {
       "name": "cut",
@@ -119,9 +119,9 @@
       "summary": "Extract sections from lines",
       "category": "text",
       "handler": "builtins::cut",
-      "hover_markdown": "```esh\ncut [-d delim] [-f fields] [-c chars] [file...]\n```\n\n**cut**: Extract sections from lines\n\nExtracts specified field columns or character ranges from each line.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "cut [-d delim] [-f fields] [-c chars] [file...]\n\ncut: Extract sections from lines\n\nExtracts specified field columns or character ranges from each line.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mcut [-d delim] [-f fields] [-c chars] [file...]\u001b[0m\n\n\u001b[1mcut\u001b[0m: Extract sections from lines\n\nExtracts specified field columns or character ranges from each line.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\ncut [-d delim] [-f fields] [-c chars] [file...]\n```\n\n**cut** (`cut`): Extract sections from lines\n\nExtracts specified field columns or character ranges from each line.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "cut [-d delim] [-f fields] [-c chars] [file...]\n\ncut (cut): Extract sections from lines\n\nExtracts specified field columns or character ranges from each line.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mcut [-d delim] [-f fields] [-c chars] [file...]\u001b[0m\n\n\u001b[1mcut\u001b[0m (cut): Extract sections from lines\n\nExtracts specified field columns or character ranges from each line.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "date": {
       "name": "date",
@@ -129,9 +129,9 @@
       "summary": "Format and inspect system date and time",
       "category": "sys",
       "handler": "builtins::date",
-      "hover_markdown": "```esh\ndate [-u] [-f format] [timestamp]\n```\n\n**date**: Format and inspect system date and time\n\nDisplays or formats timestamps in ISO-8601, RFC-3339, or custom formats.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "date [-u] [-f format] [timestamp]\n\ndate: Format and inspect system date and time\n\nDisplays or formats timestamps in ISO-8601, RFC-3339, or custom formats.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mdate [-u] [-f format] [timestamp]\u001b[0m\n\n\u001b[1mdate\u001b[0m: Format and inspect system date and time\n\nDisplays or formats timestamps in ISO-8601, RFC-3339, or custom formats.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\ndate [-u] [-f format] [timestamp]\n```\n\n**date** (`date`): Format and inspect system date and time\n\nDisplays or formats timestamps in ISO-8601, RFC-3339, or custom formats.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "date [-u] [-f format] [timestamp]\n\ndate (date): Format and inspect system date and time\n\nDisplays or formats timestamps in ISO-8601, RFC-3339, or custom formats.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mdate [-u] [-f format] [timestamp]\u001b[0m\n\n\u001b[1mdate\u001b[0m (date): Format and inspect system date and time\n\nDisplays or formats timestamps in ISO-8601, RFC-3339, or custom formats.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "declare": {
       "name": "declare",
@@ -139,9 +139,9 @@
       "summary": "Declare variables with attributes",
       "category": "flow",
       "handler": "builtins::declare",
-      "hover_markdown": "```esh\ndeclare [-a] [-A] [-r] [-i] [name[=value]...]\n```\n\n**declare**: Declare variables with attributes\n\nDeclares indexed arrays (-a), associative maps (-A), readonly variables (-r), or integers (-i).",
-      "hover_plaintext": "declare [-a] [-A] [-r] [-i] [name[=value]...]\n\ndeclare: Declare variables with attributes\n\nDeclares indexed arrays (-a), associative maps (-A), readonly variables (-r), or integers (-i).",
-      "terminal_ansi": "\u001b[1;36mdeclare [-a] [-A] [-r] [-i] [name[=value]...]\u001b[0m\n\n\u001b[1mdeclare\u001b[0m: Declare variables with attributes\n\nDeclares indexed arrays (-a), associative maps (-A), readonly variables (-r), or integers (-i)."
+      "hover_markdown": "```esh\ndeclare [-a] [-A] [-r] [-i] [name[=value]...]\n```\n\n**declare** (`declare`): Declare variables with attributes\n\nDeclares indexed arrays (-a), associative maps (-A), readonly variables (-r), or integers (-i).",
+      "hover_plaintext": "declare [-a] [-A] [-r] [-i] [name[=value]...]\n\ndeclare (declare): Declare variables with attributes\n\nDeclares indexed arrays (-a), associative maps (-A), readonly variables (-r), or integers (-i).",
+      "terminal_ansi": "\u001b[1;36mdeclare [-a] [-A] [-r] [-i] [name[=value]...]\u001b[0m\n\n\u001b[1mdeclare\u001b[0m (declare): Declare variables with attributes\n\nDeclares indexed arrays (-a), associative maps (-A), readonly variables (-r), or integers (-i)."
     },
     "diff": {
       "name": "diff",
@@ -149,9 +149,9 @@
       "summary": "Compare files line by line",
       "category": "text",
       "handler": "builtins::diff",
-      "hover_markdown": "```esh\ndiff [-u] <file1> <file2>\n```\n\n**diff**: Compare files line by line\n\nComputes unified line-by-line differences between two files.\n\n### Exit Status\n\n* `0`: Files are identical.\n* `1`: Files differ.",
-      "hover_plaintext": "diff [-u] <file1> <file2>\n\ndiff: Compare files line by line\n\nComputes unified line-by-line differences between two files.\n\nExit Status\n\n- 0: Files are identical.\n- 1: Files differ.",
-      "terminal_ansi": "\u001b[1;36mdiff [-u] <file1> <file2>\u001b[0m\n\n\u001b[1mdiff\u001b[0m: Compare files line by line\n\nComputes unified line-by-line differences between two files.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Files are identical.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Files differ."
+      "hover_markdown": "```esh\ndiff [-u] <file1> <file2>\n```\n\n**diff** (`diff`): Compare files line by line\n\nComputes unified line-by-line differences between two files.\n\n### Exit Status\n\n* `0`: Files are identical.\n* `1`: Files differ.",
+      "hover_plaintext": "diff [-u] <file1> <file2>\n\ndiff (diff): Compare files line by line\n\nComputes unified line-by-line differences between two files.\n\nExit Status\n\n- 0: Files are identical.\n- 1: Files differ.",
+      "terminal_ansi": "\u001b[1;36mdiff [-u] <file1> <file2>\u001b[0m\n\n\u001b[1mdiff\u001b[0m (diff): Compare files line by line\n\nComputes unified line-by-line differences between two files.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Files are identical.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Files differ."
     },
     "dirname": {
       "name": "dirname",
@@ -159,9 +159,9 @@
       "summary": "Extract directory component of a path",
       "category": "fs",
       "handler": "builtins::dirname",
-      "hover_markdown": "```esh\ndirname <path>\n```\n\n**dirname**: Extract directory component of a path\n\nExtracts the parent directory path from a file path.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "dirname <path>\n\ndirname: Extract directory component of a path\n\nExtracts the parent directory path from a file path.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mdirname <path>\u001b[0m\n\n\u001b[1mdirname\u001b[0m: Extract directory component of a path\n\nExtracts the parent directory path from a file path.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\ndirname <path>\n```\n\n**dirname** (`dirname`): Extract directory component of a path\n\nExtracts the parent directory path from a file path.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "dirname <path>\n\ndirname (dirname): Extract directory component of a path\n\nExtracts the parent directory path from a file path.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mdirname <path>\u001b[0m\n\n\u001b[1mdirname\u001b[0m (dirname): Extract directory component of a path\n\nExtracts the parent directory path from a file path.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "duration": {
       "name": "duration",
@@ -169,9 +169,9 @@
       "summary": "Parse, convert, and format durations",
       "category": "sys",
       "handler": "builtins::duration",
-      "hover_markdown": "```esh\nduration <format|parse|diff> [args...]\n```\n\n**duration**: Parse, convert, and format durations\n\nConverts durations between human strings (2h30m, 45s) and milliseconds.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "duration <format|parse|diff> [args...]\n\nduration: Parse, convert, and format durations\n\nConverts durations between human strings (2h30m, 45s) and milliseconds.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mduration <format|parse|diff> [args...]\u001b[0m\n\n\u001b[1mduration\u001b[0m: Parse, convert, and format durations\n\nConverts durations between human strings (2h30m, 45s) and milliseconds.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nduration <format|parse|diff> [args...]\n```\n\n**duration** (`duration`): Parse, convert, and format durations\n\nConverts durations between human strings (2h30m, 45s) and milliseconds.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "duration <format|parse|diff> [args...]\n\nduration (duration): Parse, convert, and format durations\n\nConverts durations between human strings (2h30m, 45s) and milliseconds.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mduration <format|parse|diff> [args...]\u001b[0m\n\n\u001b[1mduration\u001b[0m (duration): Parse, convert, and format durations\n\nConverts durations between human strings (2h30m, 45s) and milliseconds.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "echo": {
       "name": "echo",
@@ -179,9 +179,9 @@
       "summary": "Unified standard output & formatting engine",
       "category": "flow",
       "handler": "builtins::echo",
-      "hover_markdown": "```esh\necho [-n] [-e] [-E] [-f format] [args...]\n```\n\n**echo**: Unified standard output & formatting engine\n\nThe canonical ESH output tool. Unifies standard string printing, backslash escapes,\nand C-style printf format strings into a single high-performance built-in.\n\n### Options\n\n* `-n`: Do not output trailing newline.\n* `-e`: Enable escape sequence interpretation (\\n, \\t, \\x1b).\n* `-E`: Disable escape interpretation (default).\n* `-f <format>`: C-style printf format string.\n\n### Examples\n\n```esh\necho \"Hello world\"\necho -f \"User: %s (ID: %d)\\n\" \"$USER\" \"$UID\"\n```\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "echo [-n] [-e] [-E] [-f format] [args...]\n\necho: Unified standard output & formatting engine\n\nThe canonical ESH output tool. Unifies standard string printing, backslash escapes,\nand C-style printf format strings into a single high-performance built-in.\n\nOptions\n\n- -n: Do not output trailing newline.\n- -e: Enable escape sequence interpretation (\\n, \\t, \\x1b).\n- -E: Disable escape interpretation (default).\n- -f <format>: C-style printf format string.\n\nExamples\n\necho \"Hello world\"\necho -f \"User: %s (ID: %d)\\n\" \"$USER\" \"$UID\"\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mecho [-n] [-e] [-E] [-f format] [args...]\u001b[0m\n\n\u001b[1mecho\u001b[0m: Unified standard output & formatting engine\n\nThe canonical ESH output tool. Unifies standard string printing, backslash escapes,\nand C-style printf format strings into a single high-performance built-in.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-n\u001b[0m: Do not output trailing newline.\n\u001b[36m•\u001b[0m \u001b[33m-e\u001b[0m: Enable escape sequence interpretation (\\n, \\t, \\x1b).\n\u001b[36m•\u001b[0m \u001b[33m-E\u001b[0m: Disable escape interpretation (default).\n\u001b[36m•\u001b[0m \u001b[33m-f <format>\u001b[0m: C-style printf format string.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mecho \"Hello world\"\u001b[0m\n\u001b[90m  │ \u001b[32mecho -f \"User: %s (ID: %d)\\n\" \"$USER\" \"$UID\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\necho [-n] [-e] [-E] [-f format] [args...]\n```\n\n**echo** (`echo`): Unified standard output & formatting engine\n\nThe canonical ESH output tool. Unifies standard string printing, backslash escapes,\nand C-style printf format strings into a single high-performance built-in.\n\n### Options\n\n* `-n`: Do not output trailing newline.\n* `-e`: Enable escape sequence interpretation (\\n, \\t, \\x1b).\n* `-E`: Disable escape interpretation (default).\n* `-f <format>`: C-style printf format string.\n\n### Examples\n\n```esh\necho \"Hello world\"\necho -f \"User: %s (ID: %d)\\n\" \"$USER\" \"$UID\"\n```\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "echo [-n] [-e] [-E] [-f format] [args...]\n\necho (echo): Unified standard output & formatting engine\n\nThe canonical ESH output tool. Unifies standard string printing, backslash escapes,\nand C-style printf format strings into a single high-performance built-in.\n\nOptions\n\n- -n: Do not output trailing newline.\n- -e: Enable escape sequence interpretation (\\n, \\t, \\x1b).\n- -E: Disable escape interpretation (default).\n- -f <format>: C-style printf format string.\n\nExamples\n\necho \"Hello world\"\necho -f \"User: %s (ID: %d)\\n\" \"$USER\" \"$UID\"\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mecho [-n] [-e] [-E] [-f format] [args...]\u001b[0m\n\n\u001b[1mecho\u001b[0m (echo): Unified standard output & formatting engine\n\nThe canonical ESH output tool. Unifies standard string printing, backslash escapes,\nand C-style printf format strings into a single high-performance built-in.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-n\u001b[0m: Do not output trailing newline.\n\u001b[36m•\u001b[0m \u001b[33m-e\u001b[0m: Enable escape sequence interpretation (\\n, \\t, \\x1b).\n\u001b[36m•\u001b[0m \u001b[33m-E\u001b[0m: Disable escape interpretation (default).\n\u001b[36m•\u001b[0m \u001b[33m-f <format>\u001b[0m: C-style printf format string.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mecho \"Hello world\"\u001b[0m\n\u001b[90m  │ \u001b[32mecho -f \"User: %s (ID: %d)\\n\" \"$USER\" \"$UID\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "env": {
       "name": "env",
@@ -189,9 +189,9 @@
       "summary": "Print or modify execution environment",
       "category": "sys",
       "handler": "builtins::env",
-      "hover_markdown": "```esh\nenv [KEY=value...] [command...]\n```\n\n**env**: Print or modify execution environment\n\nPrints all environment variables, or executes a command with modified environment.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "env [KEY=value...] [command...]\n\nenv: Print or modify execution environment\n\nPrints all environment variables, or executes a command with modified environment.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36menv [KEY=value...] [command...]\u001b[0m\n\n\u001b[1menv\u001b[0m: Print or modify execution environment\n\nPrints all environment variables, or executes a command with modified environment.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nenv [KEY=value...] [command...]\n```\n\n**env** (`env`): Print or modify execution environment\n\nPrints all environment variables, or executes a command with modified environment.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "env [KEY=value...] [command...]\n\nenv (env): Print or modify execution environment\n\nPrints all environment variables, or executes a command with modified environment.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36menv [KEY=value...] [command...]\u001b[0m\n\n\u001b[1menv\u001b[0m (env): Print or modify execution environment\n\nPrints all environment variables, or executes a command with modified environment.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "exit": {
       "name": "exit",
@@ -199,9 +199,9 @@
       "summary": "Terminate execution with exit status",
       "category": "flow",
       "handler": "builtins::exit",
-      "hover_markdown": "```esh\nexit [status]\n```\n\n**exit**: Terminate execution with exit status\n\nTerminates the script or subshell context with specified integer status (default: 0).",
-      "hover_plaintext": "exit [status]\n\nexit: Terminate execution with exit status\n\nTerminates the script or subshell context with specified integer status (default: 0).",
-      "terminal_ansi": "\u001b[1;36mexit [status]\u001b[0m\n\n\u001b[1mexit\u001b[0m: Terminate execution with exit status\n\nTerminates the script or subshell context with specified integer status (default: 0)."
+      "hover_markdown": "```esh\nexit [status]\n```\n\n**exit** (`exit`): Terminate execution with exit status\n\nTerminates the script or subshell context with specified integer status (default: 0).",
+      "hover_plaintext": "exit [status]\n\nexit (exit): Terminate execution with exit status\n\nTerminates the script or subshell context with specified integer status (default: 0).",
+      "terminal_ansi": "\u001b[1;36mexit [status]\u001b[0m\n\n\u001b[1mexit\u001b[0m (exit): Terminate execution with exit status\n\nTerminates the script or subshell context with specified integer status (default: 0)."
     },
     "export": {
       "name": "export",
@@ -209,9 +209,9 @@
       "summary": "Export variables to child processes",
       "category": "flow",
       "handler": "builtins::export",
-      "hover_markdown": "```esh\nexport [name[=value]...]\n```\n\n**export**: Export variables to child processes\n\nMarks variables to be automatically passed to the environment of child processes.",
-      "hover_plaintext": "export [name[=value]...]\n\nexport: Export variables to child processes\n\nMarks variables to be automatically passed to the environment of child processes.",
-      "terminal_ansi": "\u001b[1;36mexport [name[=value]...]\u001b[0m\n\n\u001b[1mexport\u001b[0m: Export variables to child processes\n\nMarks variables to be automatically passed to the environment of child processes."
+      "hover_markdown": "```esh\nexport [name[=value]...]\n```\n\n**export** (`export`): Export variables to child processes\n\nMarks variables to be automatically passed to the environment of child processes.",
+      "hover_plaintext": "export [name[=value]...]\n\nexport (export): Export variables to child processes\n\nMarks variables to be automatically passed to the environment of child processes.",
+      "terminal_ansi": "\u001b[1;36mexport [name[=value]...]\u001b[0m\n\n\u001b[1mexport\u001b[0m (export): Export variables to child processes\n\nMarks variables to be automatically passed to the environment of child processes."
     },
     "getopts": {
       "name": "getopts",
@@ -219,9 +219,9 @@
       "summary": "Parse positional command-line options",
       "category": "flow",
       "handler": "builtins::getopts",
-      "hover_markdown": "```esh\ngetopts <optstring> <varname> [args...]\n```\n\n**getopts**: Parse positional command-line options\n\nParses short option flags in standard POSIX loop pattern.\n\n### Exit Status\n\n* `0`: Option parsed successfully.\n* `1`: End of options reached.",
-      "hover_plaintext": "getopts <optstring> <varname> [args...]\n\ngetopts: Parse positional command-line options\n\nParses short option flags in standard POSIX loop pattern.\n\nExit Status\n\n- 0: Option parsed successfully.\n- 1: End of options reached.",
-      "terminal_ansi": "\u001b[1;36mgetopts <optstring> <varname> [args...]\u001b[0m\n\n\u001b[1mgetopts\u001b[0m: Parse positional command-line options\n\nParses short option flags in standard POSIX loop pattern.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Option parsed successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: End of options reached."
+      "hover_markdown": "```esh\ngetopts <optstring> <varname> [args...]\n```\n\n**getopts** (`getopts`): Parse positional command-line options\n\nParses short option flags in standard POSIX loop pattern.\n\n### Exit Status\n\n* `0`: Option parsed successfully.\n* `1`: End of options reached.",
+      "hover_plaintext": "getopts <optstring> <varname> [args...]\n\ngetopts (getopts): Parse positional command-line options\n\nParses short option flags in standard POSIX loop pattern.\n\nExit Status\n\n- 0: Option parsed successfully.\n- 1: End of options reached.",
+      "terminal_ansi": "\u001b[1;36mgetopts <optstring> <varname> [args...]\u001b[0m\n\n\u001b[1mgetopts\u001b[0m (getopts): Parse positional command-line options\n\nParses short option flags in standard POSIX loop pattern.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Option parsed successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: End of options reached."
     },
     "glob": {
       "name": "glob",
@@ -229,9 +229,9 @@
       "summary": "Expand filesystem glob patterns",
       "category": "fs",
       "handler": "builtins::glob",
-      "hover_markdown": "```esh\nglob <pattern...>\n```\n\n**glob**: Expand filesystem glob patterns\n\nExplicitly expands wildcard patterns against the filesystem, returning matching paths sorted lexicographically.\n\n### Exit Status\n\n* `0`: One or more matches found.\n* `1`: No matches found.\n\n---",
-      "hover_plaintext": "glob <pattern...>\n\nglob: Expand filesystem glob patterns\n\nExplicitly expands wildcard patterns against the filesystem, returning matching paths sorted lexicographically.\n\nExit Status\n\n- 0: One or more matches found.\n- 1: No matches found.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mglob <pattern...>\u001b[0m\n\n\u001b[1mglob\u001b[0m: Expand filesystem glob patterns\n\nExplicitly expands wildcard patterns against the filesystem, returning matching paths sorted lexicographically.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: One or more matches found.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: No matches found.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\nglob <pattern...>\n```\n\n**glob** (`glob`): Expand filesystem glob patterns\n\nExplicitly expands wildcard patterns against the filesystem, returning matching paths sorted lexicographically.\n\n### Exit Status\n\n* `0`: One or more matches found.\n* `1`: No matches found.\n\n---",
+      "hover_plaintext": "glob <pattern...>\n\nglob (glob): Expand filesystem glob patterns\n\nExplicitly expands wildcard patterns against the filesystem, returning matching paths sorted lexicographically.\n\nExit Status\n\n- 0: One or more matches found.\n- 1: No matches found.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mglob <pattern...>\u001b[0m\n\n\u001b[1mglob\u001b[0m (glob): Expand filesystem glob patterns\n\nExplicitly expands wildcard patterns against the filesystem, returning matching paths sorted lexicographically.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: One or more matches found.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: No matches found.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "grep": {
       "name": "grep",
@@ -239,9 +239,9 @@
       "summary": "Search text for patterns",
       "category": "text",
       "handler": "builtins::grep",
-      "hover_markdown": "```esh\ngrep [-i] [-v] [-q] [-E] [-n] <pattern> [file...]\n```\n\n**grep**: Search text for patterns\n\nFilters lines matching a regular expression or literal string.\n\n### Options\n\n* `-i`: Case-insensitive search.\n* `-v`: Invert match.\n* `-q`: Quiet mode.\n* `-n`: Line numbers.\n\n### Exit Status\n\n* `0`: Match found.\n* `1`: No matches found.",
-      "hover_plaintext": "grep [-i] [-v] [-q] [-E] [-n] <pattern> [file...]\n\ngrep: Search text for patterns\n\nFilters lines matching a regular expression or literal string.\n\nOptions\n\n- -i: Case-insensitive search.\n- -v: Invert match.\n- -q: Quiet mode.\n- -n: Line numbers.\n\nExit Status\n\n- 0: Match found.\n- 1: No matches found.",
-      "terminal_ansi": "\u001b[1;36mgrep [-i] [-v] [-q] [-E] [-n] <pattern> [file...]\u001b[0m\n\n\u001b[1mgrep\u001b[0m: Search text for patterns\n\nFilters lines matching a regular expression or literal string.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-i\u001b[0m: Case-insensitive search.\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m: Invert match.\n\u001b[36m•\u001b[0m \u001b[33m-q\u001b[0m: Quiet mode.\n\u001b[36m•\u001b[0m \u001b[33m-n\u001b[0m: Line numbers.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Match found.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: No matches found."
+      "hover_markdown": "```esh\ngrep [-i] [-v] [-q] [-E] [-n] <pattern> [file...]\n```\n\n**grep** (`grep`): Search text for patterns\n\nFilters lines matching a regular expression or literal string.\n\n### Options\n\n* `-i`: Case-insensitive search.\n* `-v`: Invert match.\n* `-q`: Quiet mode.\n* `-n`: Line numbers.\n\n### Exit Status\n\n* `0`: Match found.\n* `1`: No matches found.",
+      "hover_plaintext": "grep [-i] [-v] [-q] [-E] [-n] <pattern> [file...]\n\ngrep (grep): Search text for patterns\n\nFilters lines matching a regular expression or literal string.\n\nOptions\n\n- -i: Case-insensitive search.\n- -v: Invert match.\n- -q: Quiet mode.\n- -n: Line numbers.\n\nExit Status\n\n- 0: Match found.\n- 1: No matches found.",
+      "terminal_ansi": "\u001b[1;36mgrep [-i] [-v] [-q] [-E] [-n] <pattern> [file...]\u001b[0m\n\n\u001b[1mgrep\u001b[0m (grep): Search text for patterns\n\nFilters lines matching a regular expression or literal string.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-i\u001b[0m: Case-insensitive search.\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m: Invert match.\n\u001b[36m•\u001b[0m \u001b[33m-q\u001b[0m: Quiet mode.\n\u001b[36m•\u001b[0m \u001b[33m-n\u001b[0m: Line numbers.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Match found.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: No matches found."
     },
     "hash": {
       "name": "hash",
@@ -249,9 +249,9 @@
       "summary": "Multi-algorithm cryptographic hash generator",
       "category": "crypto",
       "handler": "builtins::hash",
-      "hover_markdown": "```esh\nhash [-a algo|--sha256|--sha512|--md5|--crc32] [file|-]\n```\n\n**hash**: Multi-algorithm cryptographic hash generator\n\nComputes cryptographic digests from a file, string, or standard input stream.\n\n### Options\n\n* `-a`, `--algo <algo>`: Compute hash using `sha256`, `sha512`, `md5`, or `crc32`.\n* `--sha256`: Shorthand for `-a sha256`.\n* `--sha512`: Shorthand for `-a sha512`.\n* `--md5`: Shorthand for `-a md5`.\n* `--crc32`: Shorthand for `-a crc32`.\n\n### Exit Status\n\n* `0`: Success.\n* `1`: Failure reading file or computing hash.",
-      "hover_plaintext": "hash [-a algo|--sha256|--sha512|--md5|--crc32] [file|-]\n\nhash: Multi-algorithm cryptographic hash generator\n\nComputes cryptographic digests from a file, string, or standard input stream.\n\nOptions\n\n- -a, --algo <algo>: Compute hash using sha256, sha512, md5, or crc32.\n- --sha256: Shorthand for -a sha256.\n- --sha512: Shorthand for -a sha512.\n- --md5: Shorthand for -a md5.\n- --crc32: Shorthand for -a crc32.\n\nExit Status\n\n- 0: Success.\n- 1: Failure reading file or computing hash.",
-      "terminal_ansi": "\u001b[1;36mhash [-a algo|--sha256|--sha512|--md5|--crc32] [file|-]\u001b[0m\n\n\u001b[1mhash\u001b[0m: Multi-algorithm cryptographic hash generator\n\nComputes cryptographic digests from a file, string, or standard input stream.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-a\u001b[0m, \u001b[33m--algo <algo>\u001b[0m: Compute hash using \u001b[33msha256\u001b[0m, \u001b[33msha512\u001b[0m, \u001b[33mmd5\u001b[0m, or \u001b[33mcrc32\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--sha256\u001b[0m: Shorthand for \u001b[33m-a sha256\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--sha512\u001b[0m: Shorthand for \u001b[33m-a sha512\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--md5\u001b[0m: Shorthand for \u001b[33m-a md5\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--crc32\u001b[0m: Shorthand for \u001b[33m-a crc32\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Failure reading file or computing hash."
+      "hover_markdown": "```esh\nhash [-a algo|--sha256|--sha512|--md5|--crc32] [file|-]\n```\n\n**hash** (`hash`): Multi-algorithm cryptographic hash generator\n\nComputes cryptographic digests from a file, string, or standard input stream.\n\n### Options\n\n* `-a`, `--algo <algo>`: Compute hash using `sha256`, `sha512`, `md5`, or `crc32`.\n* `--sha256`: Shorthand for `-a sha256`.\n* `--sha512`: Shorthand for `-a sha512`.\n* `--md5`: Shorthand for `-a md5`.\n* `--crc32`: Shorthand for `-a crc32`.\n\n### Exit Status\n\n* `0`: Success.\n* `1`: Failure reading file or computing hash.",
+      "hover_plaintext": "hash [-a algo|--sha256|--sha512|--md5|--crc32] [file|-]\n\nhash (hash): Multi-algorithm cryptographic hash generator\n\nComputes cryptographic digests from a file, string, or standard input stream.\n\nOptions\n\n- -a, --algo <algo>: Compute hash using sha256, sha512, md5, or crc32.\n- --sha256: Shorthand for -a sha256.\n- --sha512: Shorthand for -a sha512.\n- --md5: Shorthand for -a md5.\n- --crc32: Shorthand for -a crc32.\n\nExit Status\n\n- 0: Success.\n- 1: Failure reading file or computing hash.",
+      "terminal_ansi": "\u001b[1;36mhash [-a algo|--sha256|--sha512|--md5|--crc32] [file|-]\u001b[0m\n\n\u001b[1mhash\u001b[0m (hash): Multi-algorithm cryptographic hash generator\n\nComputes cryptographic digests from a file, string, or standard input stream.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-a\u001b[0m, \u001b[33m--algo <algo>\u001b[0m: Compute hash using \u001b[33msha256\u001b[0m, \u001b[33msha512\u001b[0m, \u001b[33mmd5\u001b[0m, or \u001b[33mcrc32\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--sha256\u001b[0m: Shorthand for \u001b[33m-a sha256\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--sha512\u001b[0m: Shorthand for \u001b[33m-a sha512\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--md5\u001b[0m: Shorthand for \u001b[33m-a md5\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m--crc32\u001b[0m: Shorthand for \u001b[33m-a crc32\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Failure reading file or computing hash."
     },
     "head": {
       "name": "head",
@@ -259,9 +259,9 @@
       "summary": "Output first part of files",
       "category": "text",
       "handler": "builtins::head",
-      "hover_markdown": "```esh\nhead [-n lines] [-c bytes] [file...]\n```\n\n**head**: Output first part of files\n\nOutputs the first N lines (default: 10) or bytes of input.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "head [-n lines] [-c bytes] [file...]\n\nhead: Output first part of files\n\nOutputs the first N lines (default: 10) or bytes of input.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mhead [-n lines] [-c bytes] [file...]\u001b[0m\n\n\u001b[1mhead\u001b[0m: Output first part of files\n\nOutputs the first N lines (default: 10) or bytes of input.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nhead [-n lines] [-c bytes] [file...]\n```\n\n**head** (`head`): Output first part of files\n\nOutputs the first N lines (default: 10) or bytes of input.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "head [-n lines] [-c bytes] [file...]\n\nhead (head): Output first part of files\n\nOutputs the first N lines (default: 10) or bytes of input.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mhead [-n lines] [-c bytes] [file...]\u001b[0m\n\n\u001b[1mhead\u001b[0m (head): Output first part of files\n\nOutputs the first N lines (default: 10) or bytes of input.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "http": {
       "name": "http",
@@ -269,9 +269,9 @@
       "summary": "In-process HTTP client",
       "category": "net",
       "handler": "builtins::http",
-      "hover_markdown": "```esh\nhttp <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\n```\n\n**http**: In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n### Options\n\n* `-H <key:value>`: Request header.\n* `-d <data>`: Request body payload.\n* `-o <file>`: Destination file.\n\n### Exit Status\n\n* `0`: HTTP 2xx response.\n* `1`: Network error or HTTP error status.",
-      "hover_plaintext": "http <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\n\nhttp: In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\nOptions\n\n- -H <key:value>: Request header.\n- -d <data>: Request body payload.\n- -o <file>: Destination file.\n\nExit Status\n\n- 0: HTTP 2xx response.\n- 1: Network error or HTTP error status.",
-      "terminal_ansi": "\u001b[1;36mhttp <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\u001b[0m\n\n\u001b[1mhttp\u001b[0m: In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-H <key:value>\u001b[0m: Request header.\n\u001b[36m•\u001b[0m \u001b[33m-d <data>\u001b[0m: Request body payload.\n\u001b[36m•\u001b[0m \u001b[33m-o <file>\u001b[0m: Destination file.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: HTTP 2xx response.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Network error or HTTP error status."
+      "hover_markdown": "```esh\nhttp <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\n```\n\n**http** (`http`): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n### Options\n\n* `-H <key:value>`: Request header.\n* `-d <data>`: Request body payload.\n* `-o <file>`: Destination file.\n\n### Exit Status\n\n* `0`: HTTP 2xx response.\n* `1`: Network error or HTTP error status.",
+      "hover_plaintext": "http <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\n\nhttp (http): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\nOptions\n\n- -H <key:value>: Request header.\n- -d <data>: Request body payload.\n- -o <file>: Destination file.\n\nExit Status\n\n- 0: HTTP 2xx response.\n- 1: Network error or HTTP error status.",
+      "terminal_ansi": "\u001b[1;36mhttp <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\u001b[0m\n\n\u001b[1mhttp\u001b[0m (http): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-H <key:value>\u001b[0m: Request header.\n\u001b[36m•\u001b[0m \u001b[33m-d <data>\u001b[0m: Request body payload.\n\u001b[36m•\u001b[0m \u001b[33m-o <file>\u001b[0m: Destination file.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: HTTP 2xx response.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Network error or HTTP error status."
     },
     "json": {
       "name": "json",
@@ -279,9 +279,9 @@
       "summary": "In-process JSON query and validation",
       "category": "data",
       "handler": "builtins::json",
-      "hover_markdown": "```esh\njson [-g key_path|-v|-k|-p] [file|-]\n```\n\n**json**: In-process JSON query and validation\n\nQuery and extract values from JSON structures without external dependencies like jq. Reads from standard input when file is omitted or `-`.\n\n### Options\n\n* `-g`, `--get <key_path>`: Extract value by dot path (e.g. `json -g pkg.version package.json`).\n* `-v`, `--valid`: Validate JSON syntax (exit 0 if valid, 1 if malformed).\n* `-k`, `--keys`: List top-level object keys.\n* `-p`, `--pretty`: Format and pretty-print JSON payload.\n\n### Examples\n\n```esh\nVERSION=\"$(json -g version package.json)\"\n```\n\n### Exit Status\n\n* `0`: Match found / Valid syntax.\n* `1`: Key not found or invalid JSON.",
-      "hover_plaintext": "json [-g key_path|-v|-k|-p] [file|-]\n\njson: In-process JSON query and validation\n\nQuery and extract values from JSON structures without external dependencies like jq. Reads from standard input when file is omitted or -.\n\nOptions\n\n- -g, --get <key_path>: Extract value by dot path (e.g. json -g pkg.version package.json).\n- -v, --valid: Validate JSON syntax (exit 0 if valid, 1 if malformed).\n- -k, --keys: List top-level object keys.\n- -p, --pretty: Format and pretty-print JSON payload.\n\nExamples\n\nVERSION=\"$(json -g version package.json)\"\n\nExit Status\n\n- 0: Match found / Valid syntax.\n- 1: Key not found or invalid JSON.",
-      "terminal_ansi": "\u001b[1;36mjson [-g key_path|-v|-k|-p] [file|-]\u001b[0m\n\n\u001b[1mjson\u001b[0m: In-process JSON query and validation\n\nQuery and extract values from JSON structures without external dependencies like jq. Reads from standard input when file is omitted or \u001b[33m-\u001b[0m.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-g\u001b[0m, \u001b[33m--get <key_path>\u001b[0m: Extract value by dot path (e.g. \u001b[33mjson -g pkg.version package.json\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m, \u001b[33m--valid\u001b[0m: Validate JSON syntax (exit 0 if valid, 1 if malformed).\n\u001b[36m•\u001b[0m \u001b[33m-k\u001b[0m, \u001b[33m--keys\u001b[0m: List top-level object keys.\n\u001b[36m•\u001b[0m \u001b[33m-p\u001b[0m, \u001b[33m--pretty\u001b[0m: Format and pretty-print JSON payload.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mVERSION=\"$(json -g version package.json)\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Match found / Valid syntax.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Key not found or invalid JSON."
+      "hover_markdown": "```esh\njson [-g key_path|-v|-k|-p] [file|-]\n```\n\n**json** (`json`): In-process JSON query and validation\n\nQuery and extract values from JSON structures without external dependencies like jq. Reads from standard input when file is omitted or `-`.\n\n### Options\n\n* `-g`, `--get <key_path>`: Extract value by dot path (e.g. `json -g pkg.version package.json`).\n* `-v`, `--valid`: Validate JSON syntax (exit 0 if valid, 1 if malformed).\n* `-k`, `--keys`: List top-level object keys.\n* `-p`, `--pretty`: Format and pretty-print JSON payload.\n\n### Examples\n\n```esh\nVERSION=\"$(json -g version package.json)\"\n```\n\n### Exit Status\n\n* `0`: Match found / Valid syntax.\n* `1`: Key not found or invalid JSON.",
+      "hover_plaintext": "json [-g key_path|-v|-k|-p] [file|-]\n\njson (json): In-process JSON query and validation\n\nQuery and extract values from JSON structures without external dependencies like jq. Reads from standard input when file is omitted or -.\n\nOptions\n\n- -g, --get <key_path>: Extract value by dot path (e.g. json -g pkg.version package.json).\n- -v, --valid: Validate JSON syntax (exit 0 if valid, 1 if malformed).\n- -k, --keys: List top-level object keys.\n- -p, --pretty: Format and pretty-print JSON payload.\n\nExamples\n\nVERSION=\"$(json -g version package.json)\"\n\nExit Status\n\n- 0: Match found / Valid syntax.\n- 1: Key not found or invalid JSON.",
+      "terminal_ansi": "\u001b[1;36mjson [-g key_path|-v|-k|-p] [file|-]\u001b[0m\n\n\u001b[1mjson\u001b[0m (json): In-process JSON query and validation\n\nQuery and extract values from JSON structures without external dependencies like jq. Reads from standard input when file is omitted or \u001b[33m-\u001b[0m.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-g\u001b[0m, \u001b[33m--get <key_path>\u001b[0m: Extract value by dot path (e.g. \u001b[33mjson -g pkg.version package.json\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m, \u001b[33m--valid\u001b[0m: Validate JSON syntax (exit 0 if valid, 1 if malformed).\n\u001b[36m•\u001b[0m \u001b[33m-k\u001b[0m, \u001b[33m--keys\u001b[0m: List top-level object keys.\n\u001b[36m•\u001b[0m \u001b[33m-p\u001b[0m, \u001b[33m--pretty\u001b[0m: Format and pretty-print JSON payload.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mVERSION=\"$(json -g version package.json)\"\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Match found / Valid syntax.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Key not found or invalid JSON."
     },
     "local": {
       "name": "local",
@@ -289,9 +289,9 @@
       "summary": "Declare local variables in function",
       "category": "flow",
       "handler": "builtins::local",
-      "hover_markdown": "```esh\nlocal [name[=value]...]\n```\n\n**local**: Declare local variables in function\n\nDeclares variables scoped strictly to the enclosing function body.",
-      "hover_plaintext": "local [name[=value]...]\n\nlocal: Declare local variables in function\n\nDeclares variables scoped strictly to the enclosing function body.",
-      "terminal_ansi": "\u001b[1;36mlocal [name[=value]...]\u001b[0m\n\n\u001b[1mlocal\u001b[0m: Declare local variables in function\n\nDeclares variables scoped strictly to the enclosing function body."
+      "hover_markdown": "```esh\nlocal [name[=value]...]\n```\n\n**local** (`local`): Declare local variables in function\n\nDeclares variables scoped strictly to the enclosing function body.",
+      "hover_plaintext": "local [name[=value]...]\n\nlocal (local): Declare local variables in function\n\nDeclares variables scoped strictly to the enclosing function body.",
+      "terminal_ansi": "\u001b[1;36mlocal [name[=value]...]\u001b[0m\n\n\u001b[1mlocal\u001b[0m (local): Declare local variables in function\n\nDeclares variables scoped strictly to the enclosing function body."
     },
     "md5sum": {
       "name": "md5sum",
@@ -299,9 +299,9 @@
       "summary": "Compute and check MD5 digests",
       "category": "crypto",
       "handler": "builtins::md5sum",
-      "hover_markdown": "```esh\nmd5sum [-c checksums.txt] [file...]\n```\n\n**md5sum**: Compute and check MD5 digests\n\nComputes and verifies MD5 checksums.\n\n### Exit Status\n\n* `0`: Success.\n\n---",
-      "hover_plaintext": "md5sum [-c checksums.txt] [file...]\n\nmd5sum: Compute and check MD5 digests\n\nComputes and verifies MD5 checksums.\n\nExit Status\n\n- 0: Success.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mmd5sum [-c checksums.txt] [file...]\u001b[0m\n\n\u001b[1mmd5sum\u001b[0m: Compute and check MD5 digests\n\nComputes and verifies MD5 checksums.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\nmd5sum [-c checksums.txt] [file...]\n```\n\n**md5sum** (`md5sum`): Compute and check MD5 digests\n\nComputes and verifies MD5 checksums.\n\n### Exit Status\n\n* `0`: Success.\n\n---",
+      "hover_plaintext": "md5sum [-c checksums.txt] [file...]\n\nmd5sum (md5sum): Compute and check MD5 digests\n\nComputes and verifies MD5 checksums.\n\nExit Status\n\n- 0: Success.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mmd5sum [-c checksums.txt] [file...]\u001b[0m\n\n\u001b[1mmd5sum\u001b[0m (md5sum): Compute and check MD5 digests\n\nComputes and verifies MD5 checksums.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "mkdir": {
       "name": "mkdir",
@@ -309,9 +309,9 @@
       "summary": "Create directories",
       "category": "fs",
       "handler": "builtins::mkdir",
-      "hover_markdown": "```esh\nmkdir [-p] <path...>\n```\n\n**mkdir**: Create directories\n\nCreates one or more directories.\n\n### Options\n\n* `-p`: Create intermediate parent directories as needed without erroring if target exists.\n\n### Examples\n\n```esh\nmkdir -p ./dist/bin\n```\n\n### Exit Status\n\n* `0`: All directories created.\n* `1`: Creation failed or permission denied.",
-      "hover_plaintext": "mkdir [-p] <path...>\n\nmkdir: Create directories\n\nCreates one or more directories.\n\nOptions\n\n- -p: Create intermediate parent directories as needed without erroring if target exists.\n\nExamples\n\nmkdir -p ./dist/bin\n\nExit Status\n\n- 0: All directories created.\n- 1: Creation failed or permission denied.",
-      "terminal_ansi": "\u001b[1;36mmkdir [-p] <path...>\u001b[0m\n\n\u001b[1mmkdir\u001b[0m: Create directories\n\nCreates one or more directories.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-p\u001b[0m: Create intermediate parent directories as needed without erroring if target exists.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mmkdir -p ./dist/bin\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All directories created.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Creation failed or permission denied."
+      "hover_markdown": "```esh\nmkdir [-p] <path...>\n```\n\n**mkdir** (`mkdir`): Create directories\n\nCreates one or more directories.\n\n### Options\n\n* `-p`: Create intermediate parent directories as needed without erroring if target exists.\n\n### Examples\n\n```esh\nmkdir -p ./dist/bin\n```\n\n### Exit Status\n\n* `0`: All directories created.\n* `1`: Creation failed or permission denied.",
+      "hover_plaintext": "mkdir [-p] <path...>\n\nmkdir (mkdir): Create directories\n\nCreates one or more directories.\n\nOptions\n\n- -p: Create intermediate parent directories as needed without erroring if target exists.\n\nExamples\n\nmkdir -p ./dist/bin\n\nExit Status\n\n- 0: All directories created.\n- 1: Creation failed or permission denied.",
+      "terminal_ansi": "\u001b[1;36mmkdir [-p] <path...>\u001b[0m\n\n\u001b[1mmkdir\u001b[0m (mkdir): Create directories\n\nCreates one or more directories.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-p\u001b[0m: Create intermediate parent directories as needed without erroring if target exists.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mmkdir -p ./dist/bin\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All directories created.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Creation failed or permission denied."
     },
     "mktemp": {
       "name": "mktemp",
@@ -319,9 +319,9 @@
       "summary": "Create a secure temporary file or directory",
       "category": "fs",
       "handler": "builtins::mktemp",
-      "hover_markdown": "```esh\nmktemp [-d] [-p dir] [template]\n```\n\n**mktemp**: Create a secure temporary file or directory\n\nCreates a cryptographically randomized temporary file or directory.\n\n### Options\n\n* `-d`, `--directory`: Create a temporary directory instead of a file.\n* `-p <dir>`: Base directory for temporary creation.\n\n### Exit Status\n\n* `0`: Temporary path created and emitted to standard output.\n* `1`: Creation failed.",
-      "hover_plaintext": "mktemp [-d] [-p dir] [template]\n\nmktemp: Create a secure temporary file or directory\n\nCreates a cryptographically randomized temporary file or directory.\n\nOptions\n\n- -d, --directory: Create a temporary directory instead of a file.\n- -p <dir>: Base directory for temporary creation.\n\nExit Status\n\n- 0: Temporary path created and emitted to standard output.\n- 1: Creation failed.",
-      "terminal_ansi": "\u001b[1;36mmktemp [-d] [-p dir] [template]\u001b[0m\n\n\u001b[1mmktemp\u001b[0m: Create a secure temporary file or directory\n\nCreates a cryptographically randomized temporary file or directory.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-d\u001b[0m, \u001b[33m--directory\u001b[0m: Create a temporary directory instead of a file.\n\u001b[36m•\u001b[0m \u001b[33m-p <dir>\u001b[0m: Base directory for temporary creation.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Temporary path created and emitted to standard output.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Creation failed."
+      "hover_markdown": "```esh\nmktemp [-d] [-p dir] [template]\n```\n\n**mktemp** (`mktemp`): Create a secure temporary file or directory\n\nCreates a cryptographically randomized temporary file or directory.\n\n### Options\n\n* `-d`, `--directory`: Create a temporary directory instead of a file.\n* `-p <dir>`: Base directory for temporary creation.\n\n### Exit Status\n\n* `0`: Temporary path created and emitted to standard output.\n* `1`: Creation failed.",
+      "hover_plaintext": "mktemp [-d] [-p dir] [template]\n\nmktemp (mktemp): Create a secure temporary file or directory\n\nCreates a cryptographically randomized temporary file or directory.\n\nOptions\n\n- -d, --directory: Create a temporary directory instead of a file.\n- -p <dir>: Base directory for temporary creation.\n\nExit Status\n\n- 0: Temporary path created and emitted to standard output.\n- 1: Creation failed.",
+      "terminal_ansi": "\u001b[1;36mmktemp [-d] [-p dir] [template]\u001b[0m\n\n\u001b[1mmktemp\u001b[0m (mktemp): Create a secure temporary file or directory\n\nCreates a cryptographically randomized temporary file or directory.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-d\u001b[0m, \u001b[33m--directory\u001b[0m: Create a temporary directory instead of a file.\n\u001b[36m•\u001b[0m \u001b[33m-p <dir>\u001b[0m: Base directory for temporary creation.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Temporary path created and emitted to standard output.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Creation failed."
     },
     "mv": {
       "name": "mv",
@@ -329,9 +329,9 @@
       "summary": "Move or rename files and directories",
       "category": "fs",
       "handler": "builtins::mv",
-      "hover_markdown": "```esh\nmv <source...> <destination>\n```\n\n**mv**: Move or rename files and directories\n\nMoves or renames files and directories.\n\n### Exit Status\n\n* `0`: Move completed successfully.\n* `1`: Source missing or move failed.",
-      "hover_plaintext": "mv <source...> <destination>\n\nmv: Move or rename files and directories\n\nMoves or renames files and directories.\n\nExit Status\n\n- 0: Move completed successfully.\n- 1: Source missing or move failed.",
-      "terminal_ansi": "\u001b[1;36mmv <source...> <destination>\u001b[0m\n\n\u001b[1mmv\u001b[0m: Move or rename files and directories\n\nMoves or renames files and directories.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Move completed successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Source missing or move failed."
+      "hover_markdown": "```esh\nmv <source...> <destination>\n```\n\n**mv** (`mv`): Move or rename files and directories\n\nMoves or renames files and directories.\n\n### Exit Status\n\n* `0`: Move completed successfully.\n* `1`: Source missing or move failed.",
+      "hover_plaintext": "mv <source...> <destination>\n\nmv (mv): Move or rename files and directories\n\nMoves or renames files and directories.\n\nExit Status\n\n- 0: Move completed successfully.\n- 1: Source missing or move failed.",
+      "terminal_ansi": "\u001b[1;36mmv <source...> <destination>\u001b[0m\n\n\u001b[1mmv\u001b[0m (mv): Move or rename files and directories\n\nMoves or renames files and directories.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Move completed successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Source missing or move failed."
     },
     "numfmt": {
       "name": "numfmt",
@@ -339,9 +339,9 @@
       "summary": "Convert numbers to/from human-readable strings",
       "category": "text",
       "handler": "builtins::numfmt",
-      "hover_markdown": "```esh\nnumfmt [--to=iec|si] [--from=iec|si] [number...]\n```\n\n**numfmt**: Convert numbers to/from human-readable strings\n\nFormats numbers into human-readable units (e.g. 1024 -> 1.0K).\n\n### Exit Status\n\n* `0`: Conversion successful.\n\n---",
-      "hover_plaintext": "numfmt [--to=iec|si] [--from=iec|si] [number...]\n\nnumfmt: Convert numbers to/from human-readable strings\n\nFormats numbers into human-readable units (e.g. 1024 -> 1.0K).\n\nExit Status\n\n- 0: Conversion successful.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mnumfmt [--to=iec|si] [--from=iec|si] [number...]\u001b[0m\n\n\u001b[1mnumfmt\u001b[0m: Convert numbers to/from human-readable strings\n\nFormats numbers into human-readable units (e.g. 1024 -> 1.0K).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Conversion successful.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\nnumfmt [--to=iec|si] [--from=iec|si] [number...]\n```\n\n**numfmt** (`numfmt`): Convert numbers to/from human-readable strings\n\nFormats numbers into human-readable units (e.g. 1024 -> 1.0K).\n\n### Exit Status\n\n* `0`: Conversion successful.\n\n---",
+      "hover_plaintext": "numfmt [--to=iec|si] [--from=iec|si] [number...]\n\nnumfmt (numfmt): Convert numbers to/from human-readable strings\n\nFormats numbers into human-readable units (e.g. 1024 -> 1.0K).\n\nExit Status\n\n- 0: Conversion successful.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mnumfmt [--to=iec|si] [--from=iec|si] [number...]\u001b[0m\n\n\u001b[1mnumfmt\u001b[0m (numfmt): Convert numbers to/from human-readable strings\n\nFormats numbers into human-readable units (e.g. 1024 -> 1.0K).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Conversion successful.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "os": {
       "name": "os",
@@ -349,9 +349,9 @@
       "summary": "Query host operating system attributes",
       "category": "sys",
       "handler": "builtins::os",
-      "hover_markdown": "```esh\nos [-n|-m|-f|-a]\n```\n\n**os**: Query host operating system attributes\n\nReturns host architecture, target family, or operating system name.\n\n### Options\n\n* `-n`, `-s`, `--name`, `--os`: Print OS name (`linux`, `macos`, `windows`).\n* `-m`, `--arch`, `--machine`: Print host CPU architecture (`x86_64`, `aarch64`).\n* `-f`, `--family`: Print target family (`unix`, `windows`).\n* `-a`, `--all`, `--info`: Print combined `OS-ARCH` string (default).\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "os [-n|-m|-f|-a]\n\nos: Query host operating system attributes\n\nReturns host architecture, target family, or operating system name.\n\nOptions\n\n- -n, -s, --name, --os: Print OS name (linux, macos, windows).\n- -m, --arch, --machine: Print host CPU architecture (x86_64, aarch64).\n- -f, --family: Print target family (unix, windows).\n- -a, --all, --info: Print combined OS-ARCH string (default).\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mos [-n|-m|-f|-a]\u001b[0m\n\n\u001b[1mos\u001b[0m: Query host operating system attributes\n\nReturns host architecture, target family, or operating system name.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-n\u001b[0m, \u001b[33m-s\u001b[0m, \u001b[33m--name\u001b[0m, \u001b[33m--os\u001b[0m: Print OS name (\u001b[33mlinux\u001b[0m, \u001b[33mmacos\u001b[0m, \u001b[33mwindows\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-m\u001b[0m, \u001b[33m--arch\u001b[0m, \u001b[33m--machine\u001b[0m: Print host CPU architecture (\u001b[33mx86_64\u001b[0m, \u001b[33maarch64\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-f\u001b[0m, \u001b[33m--family\u001b[0m: Print target family (\u001b[33munix\u001b[0m, \u001b[33mwindows\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-a\u001b[0m, \u001b[33m--all\u001b[0m, \u001b[33m--info\u001b[0m: Print combined \u001b[33mOS-ARCH\u001b[0m string (default).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nos [-n|-m|-f|-a]\n```\n\n**os** (`os`): Query host operating system attributes\n\nReturns host architecture, target family, or operating system name.\n\n### Options\n\n* `-n`, `-s`, `--name`, `--os`: Print OS name (`linux`, `macos`, `windows`).\n* `-m`, `--arch`, `--machine`: Print host CPU architecture (`x86_64`, `aarch64`).\n* `-f`, `--family`: Print target family (`unix`, `windows`).\n* `-a`, `--all`, `--info`: Print combined `OS-ARCH` string (default).\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "os [-n|-m|-f|-a]\n\nos (os): Query host operating system attributes\n\nReturns host architecture, target family, or operating system name.\n\nOptions\n\n- -n, -s, --name, --os: Print OS name (linux, macos, windows).\n- -m, --arch, --machine: Print host CPU architecture (x86_64, aarch64).\n- -f, --family: Print target family (unix, windows).\n- -a, --all, --info: Print combined OS-ARCH string (default).\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mos [-n|-m|-f|-a]\u001b[0m\n\n\u001b[1mos\u001b[0m (os): Query host operating system attributes\n\nReturns host architecture, target family, or operating system name.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-n\u001b[0m, \u001b[33m-s\u001b[0m, \u001b[33m--name\u001b[0m, \u001b[33m--os\u001b[0m: Print OS name (\u001b[33mlinux\u001b[0m, \u001b[33mmacos\u001b[0m, \u001b[33mwindows\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-m\u001b[0m, \u001b[33m--arch\u001b[0m, \u001b[33m--machine\u001b[0m: Print host CPU architecture (\u001b[33mx86_64\u001b[0m, \u001b[33maarch64\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-f\u001b[0m, \u001b[33m--family\u001b[0m: Print target family (\u001b[33munix\u001b[0m, \u001b[33mwindows\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-a\u001b[0m, \u001b[33m--all\u001b[0m, \u001b[33m--info\u001b[0m: Print combined \u001b[33mOS-ARCH\u001b[0m string (default).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "path": {
       "name": "path",
@@ -359,9 +359,9 @@
       "summary": "Multi-functional path inspection & manipulation",
       "category": "fs",
       "handler": "builtins::path",
-      "hover_markdown": "```esh\npath [-d|-b|-e|-s|-a|-r|-j|--exists|--is-dir|--is-file] [operands...]\n```\n\n**path**: Multi-functional path inspection & manipulation\n\nProvides cross-platform path inspection, resolution, and joining.\n\n### Options\n\n* `-d`, `--dirname <path>`: Extract parent directory.\n* `-b`, `--basename <path>`: Extract last path component.\n* `-e`, `--ext <path>`: Extract extension without dot.\n* `-s`, `--stem <path>`: Extract filename without extension.\n* `-a`, `--abs <path>`: Resolve absolute canonical path.\n* `-r`, `--rel <target> [base]`: Compute relative path from base (default: `$PWD`).\n* `-j`, `--join <parts...>`: Join path components with platform separator.\n* `--exists <path>`: Test if path exists (exit 0/1).\n* `--is-dir <path>`: Test if path is a directory (exit 0/1).\n* `--is-file <path>`: Test if path is a regular file (exit 0/1).\n\n### Exit Status\n\n* `0`: Operation succeeded / Condition True.\n* `1`: Operation failed / Condition False.",
-      "hover_plaintext": "path [-d|-b|-e|-s|-a|-r|-j|--exists|--is-dir|--is-file] [operands...]\n\npath: Multi-functional path inspection & manipulation\n\nProvides cross-platform path inspection, resolution, and joining.\n\nOptions\n\n- -d, --dirname <path>: Extract parent directory.\n- -b, --basename <path>: Extract last path component.\n- -e, --ext <path>: Extract extension without dot.\n- -s, --stem <path>: Extract filename without extension.\n- -a, --abs <path>: Resolve absolute canonical path.\n- -r, --rel <target> [base]: Compute relative path from base (default: $PWD).\n- -j, --join <parts...>: Join path components with platform separator.\n- --exists <path>: Test if path exists (exit 0/1).\n- --is-dir <path>: Test if path is a directory (exit 0/1).\n- --is-file <path>: Test if path is a regular file (exit 0/1).\n\nExit Status\n\n- 0: Operation succeeded / Condition True.\n- 1: Operation failed / Condition False.",
-      "terminal_ansi": "\u001b[1;36mpath [-d|-b|-e|-s|-a|-r|-j|--exists|--is-dir|--is-file] [operands...]\u001b[0m\n\n\u001b[1mpath\u001b[0m: Multi-functional path inspection & manipulation\n\nProvides cross-platform path inspection, resolution, and joining.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-d\u001b[0m, \u001b[33m--dirname <path>\u001b[0m: Extract parent directory.\n\u001b[36m•\u001b[0m \u001b[33m-b\u001b[0m, \u001b[33m--basename <path>\u001b[0m: Extract last path component.\n\u001b[36m•\u001b[0m \u001b[33m-e\u001b[0m, \u001b[33m--ext <path>\u001b[0m: Extract extension without dot.\n\u001b[36m•\u001b[0m \u001b[33m-s\u001b[0m, \u001b[33m--stem <path>\u001b[0m: Extract filename without extension.\n\u001b[36m•\u001b[0m \u001b[33m-a\u001b[0m, \u001b[33m--abs <path>\u001b[0m: Resolve absolute canonical path.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m--rel <target> [base]\u001b[0m: Compute relative path from base (default: \u001b[33m$PWD\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-j\u001b[0m, \u001b[33m--join <parts...>\u001b[0m: Join path components with platform separator.\n\u001b[36m•\u001b[0m \u001b[33m--exists <path>\u001b[0m: Test if path exists (exit 0/1).\n\u001b[36m•\u001b[0m \u001b[33m--is-dir <path>\u001b[0m: Test if path is a directory (exit 0/1).\n\u001b[36m•\u001b[0m \u001b[33m--is-file <path>\u001b[0m: Test if path is a regular file (exit 0/1).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Operation succeeded / Condition True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Operation failed / Condition False."
+      "hover_markdown": "```esh\npath [-d|-b|-e|-s|-a|-r|-j|--exists|--is-dir|--is-file] [operands...]\n```\n\n**path** (`path`): Multi-functional path inspection & manipulation\n\nProvides cross-platform path inspection, resolution, and joining.\n\n### Options\n\n* `-d`, `--dirname <path>`: Extract parent directory.\n* `-b`, `--basename <path>`: Extract last path component.\n* `-e`, `--ext <path>`: Extract extension without dot.\n* `-s`, `--stem <path>`: Extract filename without extension.\n* `-a`, `--abs <path>`: Resolve absolute canonical path.\n* `-r`, `--rel <target> [base]`: Compute relative path from base (default: `$PWD`).\n* `-j`, `--join <parts...>`: Join path components with platform separator.\n* `--exists <path>`: Test if path exists (exit 0/1).\n* `--is-dir <path>`: Test if path is a directory (exit 0/1).\n* `--is-file <path>`: Test if path is a regular file (exit 0/1).\n\n### Exit Status\n\n* `0`: Operation succeeded / Condition True.\n* `1`: Operation failed / Condition False.",
+      "hover_plaintext": "path [-d|-b|-e|-s|-a|-r|-j|--exists|--is-dir|--is-file] [operands...]\n\npath (path): Multi-functional path inspection & manipulation\n\nProvides cross-platform path inspection, resolution, and joining.\n\nOptions\n\n- -d, --dirname <path>: Extract parent directory.\n- -b, --basename <path>: Extract last path component.\n- -e, --ext <path>: Extract extension without dot.\n- -s, --stem <path>: Extract filename without extension.\n- -a, --abs <path>: Resolve absolute canonical path.\n- -r, --rel <target> [base]: Compute relative path from base (default: $PWD).\n- -j, --join <parts...>: Join path components with platform separator.\n- --exists <path>: Test if path exists (exit 0/1).\n- --is-dir <path>: Test if path is a directory (exit 0/1).\n- --is-file <path>: Test if path is a regular file (exit 0/1).\n\nExit Status\n\n- 0: Operation succeeded / Condition True.\n- 1: Operation failed / Condition False.",
+      "terminal_ansi": "\u001b[1;36mpath [-d|-b|-e|-s|-a|-r|-j|--exists|--is-dir|--is-file] [operands...]\u001b[0m\n\n\u001b[1mpath\u001b[0m (path): Multi-functional path inspection & manipulation\n\nProvides cross-platform path inspection, resolution, and joining.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-d\u001b[0m, \u001b[33m--dirname <path>\u001b[0m: Extract parent directory.\n\u001b[36m•\u001b[0m \u001b[33m-b\u001b[0m, \u001b[33m--basename <path>\u001b[0m: Extract last path component.\n\u001b[36m•\u001b[0m \u001b[33m-e\u001b[0m, \u001b[33m--ext <path>\u001b[0m: Extract extension without dot.\n\u001b[36m•\u001b[0m \u001b[33m-s\u001b[0m, \u001b[33m--stem <path>\u001b[0m: Extract filename without extension.\n\u001b[36m•\u001b[0m \u001b[33m-a\u001b[0m, \u001b[33m--abs <path>\u001b[0m: Resolve absolute canonical path.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m--rel <target> [base]\u001b[0m: Compute relative path from base (default: \u001b[33m$PWD\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-j\u001b[0m, \u001b[33m--join <parts...>\u001b[0m: Join path components with platform separator.\n\u001b[36m•\u001b[0m \u001b[33m--exists <path>\u001b[0m: Test if path exists (exit 0/1).\n\u001b[36m•\u001b[0m \u001b[33m--is-dir <path>\u001b[0m: Test if path is a directory (exit 0/1).\n\u001b[36m•\u001b[0m \u001b[33m--is-file <path>\u001b[0m: Test if path is a regular file (exit 0/1).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Operation succeeded / Condition True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Operation failed / Condition False."
     },
     "printf": {
       "name": "printf",
@@ -369,9 +369,9 @@
       "summary": "Format and print data",
       "category": "flow",
       "handler": "builtins::printf",
-      "hover_markdown": "```esh\nprintf <format> [args...]\n```\n\n**printf**: Format and print data\n\nFormats arguments according to a format string.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "printf <format> [args...]\n\nprintf: Format and print data\n\nFormats arguments according to a format string.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mprintf <format> [args...]\u001b[0m\n\n\u001b[1mprintf\u001b[0m: Format and print data\n\nFormats arguments according to a format string.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nprintf <format> [args...]\n```\n\n**printf** (`printf`): Format and print data\n\nFormats arguments according to a format string.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "printf <format> [args...]\n\nprintf (printf): Format and print data\n\nFormats arguments according to a format string.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mprintf <format> [args...]\u001b[0m\n\n\u001b[1mprintf\u001b[0m (printf): Format and print data\n\nFormats arguments according to a format string.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "pwd": {
       "name": "pwd",
@@ -379,9 +379,9 @@
       "summary": "Print current working directory",
       "category": "fs",
       "handler": "builtins::pwd",
-      "hover_markdown": "```esh\npwd\n```\n\n**pwd**: Print current working directory\n\nPrints the absolute canonical path of the current working directory to standard output.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "pwd\n\npwd: Print current working directory\n\nPrints the absolute canonical path of the current working directory to standard output.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mpwd\u001b[0m\n\n\u001b[1mpwd\u001b[0m: Print current working directory\n\nPrints the absolute canonical path of the current working directory to standard output.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\npwd\n```\n\n**pwd** (`pwd`): Print current working directory\n\nPrints the absolute canonical path of the current working directory to standard output.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "pwd\n\npwd (pwd): Print current working directory\n\nPrints the absolute canonical path of the current working directory to standard output.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mpwd\u001b[0m\n\n\u001b[1mpwd\u001b[0m (pwd): Print current working directory\n\nPrints the absolute canonical path of the current working directory to standard output.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "read": {
       "name": "read",
@@ -389,9 +389,9 @@
       "summary": "Interactive input, passwords, confirmations, and menus",
       "category": "flow",
       "handler": "builtins::read",
-      "hover_markdown": "```esh\nread [-r] [-s] [-c] [-p prompt] [-m title options...] [var...]\n```\n\n**read**: Interactive input, passwords, confirmations, and menus\n\nUnified input tool for terminal interaction and script wizards.\n\n### Options\n\n* `-p <prompt>`: Display prompt on standard error before reading.\n* `-s`: Silent / masked password entry.\n* `-c`: Confirmation mode (exits 0 on y/yes, exits 1 on n/no).\n* `-m <title> <options...>`: Interactive single-select menu.\n* `-r`: Do not allow backslashes to escape characters.\n\n### Examples\n\n```esh\nread -p \"Enter username: \" USERNAME\nread -s -p \"Enter password: \" PASSWORD\nread -c -p \"Deploy to production? \" && ./deploy.sh\n```\n\n### Exit Status\n\n* `0`: Input read / Confirmation accepted.\n* `1`: EOF / Confirmation declined / Menu cancelled.",
-      "hover_plaintext": "read [-r] [-s] [-c] [-p prompt] [-m title options...] [var...]\n\nread: Interactive input, passwords, confirmations, and menus\n\nUnified input tool for terminal interaction and script wizards.\n\nOptions\n\n- -p <prompt>: Display prompt on standard error before reading.\n- -s: Silent / masked password entry.\n- -c: Confirmation mode (exits 0 on y/yes, exits 1 on n/no).\n- -m <title> <options...>: Interactive single-select menu.\n- -r: Do not allow backslashes to escape characters.\n\nExamples\n\nread -p \"Enter username: \" USERNAME\nread -s -p \"Enter password: \" PASSWORD\nread -c -p \"Deploy to production? \" && ./deploy.sh\n\nExit Status\n\n- 0: Input read / Confirmation accepted.\n- 1: EOF / Confirmation declined / Menu cancelled.",
-      "terminal_ansi": "\u001b[1;36mread [-r] [-s] [-c] [-p prompt] [-m title options...] [var...]\u001b[0m\n\n\u001b[1mread\u001b[0m: Interactive input, passwords, confirmations, and menus\n\nUnified input tool for terminal interaction and script wizards.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-p <prompt>\u001b[0m: Display prompt on standard error before reading.\n\u001b[36m•\u001b[0m \u001b[33m-s\u001b[0m: Silent / masked password entry.\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m: Confirmation mode (exits 0 on y/yes, exits 1 on n/no).\n\u001b[36m•\u001b[0m \u001b[33m-m <title> <options...>\u001b[0m: Interactive single-select menu.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m: Do not allow backslashes to escape characters.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mread -p \"Enter username: \" USERNAME\u001b[0m\n\u001b[90m  │ \u001b[32mread -s -p \"Enter password: \" PASSWORD\u001b[0m\n\u001b[90m  │ \u001b[32mread -c -p \"Deploy to production? \" && ./deploy.sh\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Input read / Confirmation accepted.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: EOF / Confirmation declined / Menu cancelled."
+      "hover_markdown": "```esh\nread [-r] [-s] [-c] [-p prompt] [-m title options...] [var...]\n```\n\n**read** (`read`): Interactive input, passwords, confirmations, and menus\n\nUnified input tool for terminal interaction and script wizards.\n\n### Options\n\n* `-p <prompt>`: Display prompt on standard error before reading.\n* `-s`: Silent / masked password entry.\n* `-c`: Confirmation mode (exits 0 on y/yes, exits 1 on n/no).\n* `-m <title> <options...>`: Interactive single-select menu.\n* `-r`: Do not allow backslashes to escape characters.\n\n### Examples\n\n```esh\nread -p \"Enter username: \" USERNAME\nread -s -p \"Enter password: \" PASSWORD\nread -c -p \"Deploy to production? \" && ./deploy.sh\n```\n\n### Exit Status\n\n* `0`: Input read / Confirmation accepted.\n* `1`: EOF / Confirmation declined / Menu cancelled.",
+      "hover_plaintext": "read [-r] [-s] [-c] [-p prompt] [-m title options...] [var...]\n\nread (read): Interactive input, passwords, confirmations, and menus\n\nUnified input tool for terminal interaction and script wizards.\n\nOptions\n\n- -p <prompt>: Display prompt on standard error before reading.\n- -s: Silent / masked password entry.\n- -c: Confirmation mode (exits 0 on y/yes, exits 1 on n/no).\n- -m <title> <options...>: Interactive single-select menu.\n- -r: Do not allow backslashes to escape characters.\n\nExamples\n\nread -p \"Enter username: \" USERNAME\nread -s -p \"Enter password: \" PASSWORD\nread -c -p \"Deploy to production? \" && ./deploy.sh\n\nExit Status\n\n- 0: Input read / Confirmation accepted.\n- 1: EOF / Confirmation declined / Menu cancelled.",
+      "terminal_ansi": "\u001b[1;36mread [-r] [-s] [-c] [-p prompt] [-m title options...] [var...]\u001b[0m\n\n\u001b[1mread\u001b[0m (read): Interactive input, passwords, confirmations, and menus\n\nUnified input tool for terminal interaction and script wizards.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-p <prompt>\u001b[0m: Display prompt on standard error before reading.\n\u001b[36m•\u001b[0m \u001b[33m-s\u001b[0m: Silent / masked password entry.\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m: Confirmation mode (exits 0 on y/yes, exits 1 on n/no).\n\u001b[36m•\u001b[0m \u001b[33m-m <title> <options...>\u001b[0m: Interactive single-select menu.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m: Do not allow backslashes to escape characters.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mread -p \"Enter username: \" USERNAME\u001b[0m\n\u001b[90m  │ \u001b[32mread -s -p \"Enter password: \" PASSWORD\u001b[0m\n\u001b[90m  │ \u001b[32mread -c -p \"Deploy to production? \" && ./deploy.sh\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Input read / Confirmation accepted.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: EOF / Confirmation declined / Menu cancelled."
     },
     "realpath": {
       "name": "realpath",
@@ -399,9 +399,9 @@
       "summary": "Resolve absolute canonical path",
       "category": "fs",
       "handler": "builtins::realpath",
-      "hover_markdown": "```esh\nrealpath <path...>\n```\n\n**realpath**: Resolve absolute canonical path\n\nResolves all symlinks, relative segments (`.`, `..`), and returns canonical absolute path.\n\n### Exit Status\n\n* `0`: All paths resolved.\n* `1`: Target path does not exist.",
-      "hover_plaintext": "realpath <path...>\n\nrealpath: Resolve absolute canonical path\n\nResolves all symlinks, relative segments (., ..), and returns canonical absolute path.\n\nExit Status\n\n- 0: All paths resolved.\n- 1: Target path does not exist.",
-      "terminal_ansi": "\u001b[1;36mrealpath <path...>\u001b[0m\n\n\u001b[1mrealpath\u001b[0m: Resolve absolute canonical path\n\nResolves all symlinks, relative segments (\u001b[33m.\u001b[0m, \u001b[33m..\u001b[0m), and returns canonical absolute path.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All paths resolved.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Target path does not exist."
+      "hover_markdown": "```esh\nrealpath <path...>\n```\n\n**realpath** (`realpath`): Resolve absolute canonical path\n\nResolves all symlinks, relative segments (`.`, `..`), and returns canonical absolute path.\n\n### Exit Status\n\n* `0`: All paths resolved.\n* `1`: Target path does not exist.",
+      "hover_plaintext": "realpath <path...>\n\nrealpath (realpath): Resolve absolute canonical path\n\nResolves all symlinks, relative segments (., ..), and returns canonical absolute path.\n\nExit Status\n\n- 0: All paths resolved.\n- 1: Target path does not exist.",
+      "terminal_ansi": "\u001b[1;36mrealpath <path...>\u001b[0m\n\n\u001b[1mrealpath\u001b[0m (realpath): Resolve absolute canonical path\n\nResolves all symlinks, relative segments (\u001b[33m.\u001b[0m, \u001b[33m..\u001b[0m), and returns canonical absolute path.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All paths resolved.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Target path does not exist."
     },
     "retry": {
       "name": "retry",
@@ -409,9 +409,9 @@
       "summary": "Retry command until success or attempt limit",
       "category": "flow",
       "handler": "builtins::retry",
-      "hover_markdown": "```esh\nretry [-n attempts] [-d delay] <command...>\n```\n\n**retry**: Retry command until success or attempt limit\n\nRepeatedly executes a command until it returns exit code 0 or reaches max attempts.\n\n### Exit Status\n\n* `0`: Command succeeded within attempt limit.\n* `1`: All retry attempts failed.",
-      "hover_plaintext": "retry [-n attempts] [-d delay] <command...>\n\nretry: Retry command until success or attempt limit\n\nRepeatedly executes a command until it returns exit code 0 or reaches max attempts.\n\nExit Status\n\n- 0: Command succeeded within attempt limit.\n- 1: All retry attempts failed.",
-      "terminal_ansi": "\u001b[1;36mretry [-n attempts] [-d delay] <command...>\u001b[0m\n\n\u001b[1mretry\u001b[0m: Retry command until success or attempt limit\n\nRepeatedly executes a command until it returns exit code 0 or reaches max attempts.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Command succeeded within attempt limit.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: All retry attempts failed."
+      "hover_markdown": "```esh\nretry [-n attempts] [-d delay] <command...>\n```\n\n**retry** (`retry`): Retry command until success or attempt limit\n\nRepeatedly executes a command until it returns exit code 0 or reaches max attempts.\n\n### Exit Status\n\n* `0`: Command succeeded within attempt limit.\n* `1`: All retry attempts failed.",
+      "hover_plaintext": "retry [-n attempts] [-d delay] <command...>\n\nretry (retry): Retry command until success or attempt limit\n\nRepeatedly executes a command until it returns exit code 0 or reaches max attempts.\n\nExit Status\n\n- 0: Command succeeded within attempt limit.\n- 1: All retry attempts failed.",
+      "terminal_ansi": "\u001b[1;36mretry [-n attempts] [-d delay] <command...>\u001b[0m\n\n\u001b[1mretry\u001b[0m (retry): Retry command until success or attempt limit\n\nRepeatedly executes a command until it returns exit code 0 or reaches max attempts.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Command succeeded within attempt limit.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: All retry attempts failed."
     },
     "return": {
       "name": "return",
@@ -419,9 +419,9 @@
       "summary": "Return from function",
       "category": "flow",
       "handler": "builtins::r#return",
-      "hover_markdown": "```esh\nreturn [status]\n```\n\n**return**: Return from function\n\nReturns from the currently executing function with specified exit status.",
-      "hover_plaintext": "return [status]\n\nreturn: Return from function\n\nReturns from the currently executing function with specified exit status.",
-      "terminal_ansi": "\u001b[1;36mreturn [status]\u001b[0m\n\n\u001b[1mreturn\u001b[0m: Return from function\n\nReturns from the currently executing function with specified exit status."
+      "hover_markdown": "```esh\nreturn [status]\n```\n\n**return** (`return`): Return from function\n\nReturns from the currently executing function with specified exit status.",
+      "hover_plaintext": "return [status]\n\nreturn (return): Return from function\n\nReturns from the currently executing function with specified exit status.",
+      "terminal_ansi": "\u001b[1;36mreturn [status]\u001b[0m\n\n\u001b[1mreturn\u001b[0m (return): Return from function\n\nReturns from the currently executing function with specified exit status."
     },
     "rm": {
       "name": "rm",
@@ -429,9 +429,9 @@
       "summary": "Remove files or directories",
       "category": "fs",
       "handler": "builtins::rm",
-      "hover_markdown": "```esh\nrm [-r] [-f] <path...>\n```\n\n**rm**: Remove files or directories\n\nRemoves files or directories from the filesystem.\n\n### Options\n\n* `-r`, `-R`: Recursively remove directory trees.\n* `-f`: Force removal; ignore non-existent files and never prompt.\n\n### Examples\n\n```esh\nrm -rf ./target/tmp\n```\n\n### Exit Status\n\n* `0`: Success.\n* `1`: File not found (without `-f`) or permission error.",
-      "hover_plaintext": "rm [-r] [-f] <path...>\n\nrm: Remove files or directories\n\nRemoves files or directories from the filesystem.\n\nOptions\n\n- -r, -R: Recursively remove directory trees.\n- -f: Force removal; ignore non-existent files and never prompt.\n\nExamples\n\nrm -rf ./target/tmp\n\nExit Status\n\n- 0: Success.\n- 1: File not found (without -f) or permission error.",
-      "terminal_ansi": "\u001b[1;36mrm [-r] [-f] <path...>\u001b[0m\n\n\u001b[1mrm\u001b[0m: Remove files or directories\n\nRemoves files or directories from the filesystem.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-R\u001b[0m: Recursively remove directory trees.\n\u001b[36m•\u001b[0m \u001b[33m-f\u001b[0m: Force removal; ignore non-existent files and never prompt.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mrm -rf ./target/tmp\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: File not found (without \u001b[33m-f\u001b[0m) or permission error."
+      "hover_markdown": "```esh\nrm [-r] [-f] <path...>\n```\n\n**rm** (`rm`): Remove files or directories\n\nRemoves files or directories from the filesystem.\n\n### Options\n\n* `-r`, `-R`: Recursively remove directory trees.\n* `-f`: Force removal; ignore non-existent files and never prompt.\n\n### Examples\n\n```esh\nrm -rf ./target/tmp\n```\n\n### Exit Status\n\n* `0`: Success.\n* `1`: File not found (without `-f`) or permission error.",
+      "hover_plaintext": "rm [-r] [-f] <path...>\n\nrm (rm): Remove files or directories\n\nRemoves files or directories from the filesystem.\n\nOptions\n\n- -r, -R: Recursively remove directory trees.\n- -f: Force removal; ignore non-existent files and never prompt.\n\nExamples\n\nrm -rf ./target/tmp\n\nExit Status\n\n- 0: Success.\n- 1: File not found (without -f) or permission error.",
+      "terminal_ansi": "\u001b[1;36mrm [-r] [-f] <path...>\u001b[0m\n\n\u001b[1mrm\u001b[0m (rm): Remove files or directories\n\nRemoves files or directories from the filesystem.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-R\u001b[0m: Recursively remove directory trees.\n\u001b[36m•\u001b[0m \u001b[33m-f\u001b[0m: Force removal; ignore non-existent files and never prompt.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mrm -rf ./target/tmp\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: File not found (without \u001b[33m-f\u001b[0m) or permission error."
     },
     "semver": {
       "name": "semver",
@@ -439,9 +439,9 @@
       "summary": "Semantic versioning manipulation and comparison",
       "category": "sys",
       "handler": "builtins::semver",
-      "hover_markdown": "```esh\nsemver [-v ver|-c v1 op v2|-b part ver|-g part ver]\n```\n\n**semver**: Semantic versioning manipulation and comparison\n\nValidates, compares, and bumps semantic version strings (e.g. 1.2.3-beta.1).\n\n### Options\n\n* `-v`, `--validate <version>`: Validate semantic version format.\n* `-c`, `--compare <v1> <op> <v2>`: Compare two versions with operator (`<`, `<=`, `>`, `>=`, `=`, `!=`).\n* `-b`, `--bump <major|minor|patch> <version>`: Bump semantic version component.\n* `-g`, `--get <major|minor|patch|pre|build> <version>`: Extract version component.\n\n### Exit Status\n\n* `0`: Valid version / Comparison True.\n* `1`: Invalid version / Comparison False.",
-      "hover_plaintext": "semver [-v ver|-c v1 op v2|-b part ver|-g part ver]\n\nsemver: Semantic versioning manipulation and comparison\n\nValidates, compares, and bumps semantic version strings (e.g. 1.2.3-beta.1).\n\nOptions\n\n- -v, --validate <version>: Validate semantic version format.\n- -c, --compare <v1> <op> <v2>: Compare two versions with operator (<, <=, >, >=, =, !=).\n- -b, --bump <major|minor|patch> <version>: Bump semantic version component.\n- -g, --get <major|minor|patch|pre|build> <version>: Extract version component.\n\nExit Status\n\n- 0: Valid version / Comparison True.\n- 1: Invalid version / Comparison False.",
-      "terminal_ansi": "\u001b[1;36msemver [-v ver|-c v1 op v2|-b part ver|-g part ver]\u001b[0m\n\n\u001b[1msemver\u001b[0m: Semantic versioning manipulation and comparison\n\nValidates, compares, and bumps semantic version strings (e.g. 1.2.3-beta.1).\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m, \u001b[33m--validate <version>\u001b[0m: Validate semantic version format.\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m, \u001b[33m--compare <v1> <op> <v2>\u001b[0m: Compare two versions with operator (\u001b[33m<\u001b[0m, \u001b[33m<=\u001b[0m, \u001b[33m>\u001b[0m, \u001b[33m>=\u001b[0m, \u001b[33m=\u001b[0m, \u001b[33m!=\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-b\u001b[0m, \u001b[33m--bump <major|minor|patch> <version>\u001b[0m: Bump semantic version component.\n\u001b[36m•\u001b[0m \u001b[33m-g\u001b[0m, \u001b[33m--get <major|minor|patch|pre|build> <version>\u001b[0m: Extract version component.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Valid version / Comparison True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Invalid version / Comparison False."
+      "hover_markdown": "```esh\nsemver [-v ver|-c v1 op v2|-b part ver|-g part ver]\n```\n\n**semver** (`semver`): Semantic versioning manipulation and comparison\n\nValidates, compares, and bumps semantic version strings (e.g. 1.2.3-beta.1).\n\n### Options\n\n* `-v`, `--validate <version>`: Validate semantic version format.\n* `-c`, `--compare <v1> <op> <v2>`: Compare two versions with operator (`<`, `<=`, `>`, `>=`, `=`, `!=`).\n* `-b`, `--bump <major|minor|patch> <version>`: Bump semantic version component.\n* `-g`, `--get <major|minor|patch|pre|build> <version>`: Extract version component.\n\n### Exit Status\n\n* `0`: Valid version / Comparison True.\n* `1`: Invalid version / Comparison False.",
+      "hover_plaintext": "semver [-v ver|-c v1 op v2|-b part ver|-g part ver]\n\nsemver (semver): Semantic versioning manipulation and comparison\n\nValidates, compares, and bumps semantic version strings (e.g. 1.2.3-beta.1).\n\nOptions\n\n- -v, --validate <version>: Validate semantic version format.\n- -c, --compare <v1> <op> <v2>: Compare two versions with operator (<, <=, >, >=, =, !=).\n- -b, --bump <major|minor|patch> <version>: Bump semantic version component.\n- -g, --get <major|minor|patch|pre|build> <version>: Extract version component.\n\nExit Status\n\n- 0: Valid version / Comparison True.\n- 1: Invalid version / Comparison False.",
+      "terminal_ansi": "\u001b[1;36msemver [-v ver|-c v1 op v2|-b part ver|-g part ver]\u001b[0m\n\n\u001b[1msemver\u001b[0m (semver): Semantic versioning manipulation and comparison\n\nValidates, compares, and bumps semantic version strings (e.g. 1.2.3-beta.1).\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m, \u001b[33m--validate <version>\u001b[0m: Validate semantic version format.\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m, \u001b[33m--compare <v1> <op> <v2>\u001b[0m: Compare two versions with operator (\u001b[33m<\u001b[0m, \u001b[33m<=\u001b[0m, \u001b[33m>\u001b[0m, \u001b[33m>=\u001b[0m, \u001b[33m=\u001b[0m, \u001b[33m!=\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-b\u001b[0m, \u001b[33m--bump <major|minor|patch> <version>\u001b[0m: Bump semantic version component.\n\u001b[36m•\u001b[0m \u001b[33m-g\u001b[0m, \u001b[33m--get <major|minor|patch|pre|build> <version>\u001b[0m: Extract version component.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Valid version / Comparison True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Invalid version / Comparison False."
     },
     "set": {
       "name": "set",
@@ -449,9 +449,9 @@
       "summary": "Set or inspect shell option flags",
       "category": "flow",
       "handler": "builtins::set",
-      "hover_markdown": "```esh\nset [-e|-o errexit] [-u|-o nounset] [-o pipefail] [-x|-o xtrace]\n```\n\n**set**: Set or inspect shell option flags\n\nModifies runtime behavior flags: errexit (-e), nounset (-u), pipefail, xtrace (-x).",
-      "hover_plaintext": "set [-e|-o errexit] [-u|-o nounset] [-o pipefail] [-x|-o xtrace]\n\nset: Set or inspect shell option flags\n\nModifies runtime behavior flags: errexit (-e), nounset (-u), pipefail, xtrace (-x).",
-      "terminal_ansi": "\u001b[1;36mset [-e|-o errexit] [-u|-o nounset] [-o pipefail] [-x|-o xtrace]\u001b[0m\n\n\u001b[1mset\u001b[0m: Set or inspect shell option flags\n\nModifies runtime behavior flags: errexit (-e), nounset (-u), pipefail, xtrace (-x)."
+      "hover_markdown": "```esh\nset [-e|-o errexit] [-u|-o nounset] [-o pipefail] [-x|-o xtrace]\n```\n\n**set** (`set`): Set or inspect shell option flags\n\nModifies runtime behavior flags: errexit (-e), nounset (-u), pipefail, xtrace (-x).",
+      "hover_plaintext": "set [-e|-o errexit] [-u|-o nounset] [-o pipefail] [-x|-o xtrace]\n\nset (set): Set or inspect shell option flags\n\nModifies runtime behavior flags: errexit (-e), nounset (-u), pipefail, xtrace (-x).",
+      "terminal_ansi": "\u001b[1;36mset [-e|-o errexit] [-u|-o nounset] [-o pipefail] [-x|-o xtrace]\u001b[0m\n\n\u001b[1mset\u001b[0m (set): Set or inspect shell option flags\n\nModifies runtime behavior flags: errexit (-e), nounset (-u), pipefail, xtrace (-x)."
     },
     "sha256sum": {
       "name": "sha256sum",
@@ -459,9 +459,9 @@
       "summary": "Compute and check SHA-256 digests",
       "category": "crypto",
       "handler": "builtins::sha256sum",
-      "hover_markdown": "```esh\nsha256sum [-c checksums.txt] [file...]\n```\n\n**sha256sum**: Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n### Exit Status\n\n* `0`: Success / Match.\n* `1`: Checksum mismatch.",
-      "hover_plaintext": "sha256sum [-c checksums.txt] [file...]\n\nsha256sum: Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\nExit Status\n\n- 0: Success / Match.\n- 1: Checksum mismatch.",
-      "terminal_ansi": "\u001b[1;36msha256sum [-c checksums.txt] [file...]\u001b[0m\n\n\u001b[1msha256sum\u001b[0m: Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success / Match.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Checksum mismatch."
+      "hover_markdown": "```esh\nsha256sum [-c checksums.txt] [file...]\n```\n\n**sha256sum** (`sha256sum`): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n### Exit Status\n\n* `0`: Success / Match.\n* `1`: Checksum mismatch.",
+      "hover_plaintext": "sha256sum [-c checksums.txt] [file...]\n\nsha256sum (sha256sum): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\nExit Status\n\n- 0: Success / Match.\n- 1: Checksum mismatch.",
+      "terminal_ansi": "\u001b[1;36msha256sum [-c checksums.txt] [file...]\u001b[0m\n\n\u001b[1msha256sum\u001b[0m (sha256sum): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success / Match.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Checksum mismatch."
     },
     "shift": {
       "name": "shift",
@@ -469,9 +469,9 @@
       "summary": "Shift positional parameters",
       "category": "flow",
       "handler": "builtins::shift",
-      "hover_markdown": "```esh\nshift [n]\n```\n\n**shift**: Shift positional parameters\n\nShifts positional parameters ($1, $2, ...) to the left by N positions (default: 1).",
-      "hover_plaintext": "shift [n]\n\nshift: Shift positional parameters\n\nShifts positional parameters ($1, $2, ...) to the left by N positions (default: 1).",
-      "terminal_ansi": "\u001b[1;36mshift [n]\u001b[0m\n\n\u001b[1mshift\u001b[0m: Shift positional parameters\n\nShifts positional parameters ($1, $2, ...) to the left by N positions (default: 1)."
+      "hover_markdown": "```esh\nshift [n]\n```\n\n**shift** (`shift`): Shift positional parameters\n\nShifts positional parameters ($1, $2, ...) to the left by N positions (default: 1).",
+      "hover_plaintext": "shift [n]\n\nshift (shift): Shift positional parameters\n\nShifts positional parameters ($1, $2, ...) to the left by N positions (default: 1).",
+      "terminal_ansi": "\u001b[1;36mshift [n]\u001b[0m\n\n\u001b[1mshift\u001b[0m (shift): Shift positional parameters\n\nShifts positional parameters ($1, $2, ...) to the left by N positions (default: 1)."
     },
     "sleep": {
       "name": "sleep",
@@ -479,9 +479,9 @@
       "summary": "Delay execution for specified duration",
       "category": "sys",
       "handler": "builtins::sleep",
-      "hover_markdown": "```esh\nsleep <duration>\n```\n\n**sleep**: Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\n### Exit Status\n\n* `0`: Duration elapsed.",
-      "hover_plaintext": "sleep <duration>\n\nsleep: Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\nExit Status\n\n- 0: Duration elapsed.",
-      "terminal_ansi": "\u001b[1;36msleep <duration>\u001b[0m\n\n\u001b[1msleep\u001b[0m: Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Duration elapsed."
+      "hover_markdown": "```esh\nsleep <duration>\n```\n\n**sleep** (`sleep`): Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\n### Exit Status\n\n* `0`: Duration elapsed.",
+      "hover_plaintext": "sleep <duration>\n\nsleep (sleep): Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\nExit Status\n\n- 0: Duration elapsed.",
+      "terminal_ansi": "\u001b[1;36msleep <duration>\u001b[0m\n\n\u001b[1msleep\u001b[0m (sleep): Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Duration elapsed."
     },
     "stat": {
       "name": "stat",
@@ -489,9 +489,9 @@
       "summary": "Display file status and metadata",
       "category": "fs",
       "handler": "builtins::stat",
-      "hover_markdown": "```esh\nstat [-f format] <path>\n```\n\n**stat**: Display file status and metadata\n\nQueries filesystem metadata for the specified path, including size, permissions,\nfile type, and timestamps.\n\n### Exit Status\n\n* `0`: Metadata retrieved successfully.\n* `1`: Target does not exist.",
-      "hover_plaintext": "stat [-f format] <path>\n\nstat: Display file status and metadata\n\nQueries filesystem metadata for the specified path, including size, permissions,\nfile type, and timestamps.\n\nExit Status\n\n- 0: Metadata retrieved successfully.\n- 1: Target does not exist.",
-      "terminal_ansi": "\u001b[1;36mstat [-f format] <path>\u001b[0m\n\n\u001b[1mstat\u001b[0m: Display file status and metadata\n\nQueries filesystem metadata for the specified path, including size, permissions,\nfile type, and timestamps.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Metadata retrieved successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Target does not exist."
+      "hover_markdown": "```esh\nstat [-f format] <path>\n```\n\n**stat** (`stat`): Display file status and metadata\n\nQueries filesystem metadata for the specified path, including size, permissions,\nfile type, and timestamps.\n\n### Exit Status\n\n* `0`: Metadata retrieved successfully.\n* `1`: Target does not exist.",
+      "hover_plaintext": "stat [-f format] <path>\n\nstat (stat): Display file status and metadata\n\nQueries filesystem metadata for the specified path, including size, permissions,\nfile type, and timestamps.\n\nExit Status\n\n- 0: Metadata retrieved successfully.\n- 1: Target does not exist.",
+      "terminal_ansi": "\u001b[1;36mstat [-f format] <path>\u001b[0m\n\n\u001b[1mstat\u001b[0m (stat): Display file status and metadata\n\nQueries filesystem metadata for the specified path, including size, permissions,\nfile type, and timestamps.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Metadata retrieved successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Target does not exist."
     },
     "str": {
       "name": "str",
@@ -499,9 +499,9 @@
       "summary": "String inspection, manipulation, and predicates",
       "category": "text",
       "handler": "builtins::str",
-      "hover_markdown": "```esh\nstr [-t|-u|-l|-r|-s|-c|--starts-with|--ends-with|--len] [string|-]\n```\n\n**str**: String inspection, manipulation, and predicates\n\nProvides string transformation and inspection operations. Reads from standard input if trailing string argument is omitted.\n\n### Options\n\n* `-t`, `--trim`: Strip leading and trailing whitespace.\n* `-u`, `--upper`: Convert string to uppercase.\n* `-l`, `--lower`: Convert string to lowercase.\n* `-r`, `--replace <from> <to>`: Replace occurrences in string.\n* `-s`, `--split <delim>`: Split string into lines by delimiter.\n* `-c`, `--contains <needle>`: Exit code 0 if needle is found, 1 otherwise.\n* `--starts-with <prefix>`: Exit code 0 if string starts with prefix.\n* `--ends-with <suffix>`: Exit code 0 if string ends with suffix.\n* `--len`: Output character length of string.\n\n### Exit Status\n\n* `0`: Success / Predicate True.\n* `1`: Predicate False.",
-      "hover_plaintext": "str [-t|-u|-l|-r|-s|-c|--starts-with|--ends-with|--len] [string|-]\n\nstr: String inspection, manipulation, and predicates\n\nProvides string transformation and inspection operations. Reads from standard input if trailing string argument is omitted.\n\nOptions\n\n- -t, --trim: Strip leading and trailing whitespace.\n- -u, --upper: Convert string to uppercase.\n- -l, --lower: Convert string to lowercase.\n- -r, --replace <from> <to>: Replace occurrences in string.\n- -s, --split <delim>: Split string into lines by delimiter.\n- -c, --contains <needle>: Exit code 0 if needle is found, 1 otherwise.\n- --starts-with <prefix>: Exit code 0 if string starts with prefix.\n- --ends-with <suffix>: Exit code 0 if string ends with suffix.\n- --len: Output character length of string.\n\nExit Status\n\n- 0: Success / Predicate True.\n- 1: Predicate False.",
-      "terminal_ansi": "\u001b[1;36mstr [-t|-u|-l|-r|-s|-c|--starts-with|--ends-with|--len] [string|-]\u001b[0m\n\n\u001b[1mstr\u001b[0m: String inspection, manipulation, and predicates\n\nProvides string transformation and inspection operations. Reads from standard input if trailing string argument is omitted.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-t\u001b[0m, \u001b[33m--trim\u001b[0m: Strip leading and trailing whitespace.\n\u001b[36m•\u001b[0m \u001b[33m-u\u001b[0m, \u001b[33m--upper\u001b[0m: Convert string to uppercase.\n\u001b[36m•\u001b[0m \u001b[33m-l\u001b[0m, \u001b[33m--lower\u001b[0m: Convert string to lowercase.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m--replace <from> <to>\u001b[0m: Replace occurrences in string.\n\u001b[36m•\u001b[0m \u001b[33m-s\u001b[0m, \u001b[33m--split <delim>\u001b[0m: Split string into lines by delimiter.\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m, \u001b[33m--contains <needle>\u001b[0m: Exit code 0 if needle is found, 1 otherwise.\n\u001b[36m•\u001b[0m \u001b[33m--starts-with <prefix>\u001b[0m: Exit code 0 if string starts with prefix.\n\u001b[36m•\u001b[0m \u001b[33m--ends-with <suffix>\u001b[0m: Exit code 0 if string ends with suffix.\n\u001b[36m•\u001b[0m \u001b[33m--len\u001b[0m: Output character length of string.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success / Predicate True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Predicate False."
+      "hover_markdown": "```esh\nstr [-t|-u|-l|-r|-s|-c|--starts-with|--ends-with|--len] [string|-]\n```\n\n**str** (`str`): String inspection, manipulation, and predicates\n\nProvides string transformation and inspection operations. Reads from standard input if trailing string argument is omitted.\n\n### Options\n\n* `-t`, `--trim`: Strip leading and trailing whitespace.\n* `-u`, `--upper`: Convert string to uppercase.\n* `-l`, `--lower`: Convert string to lowercase.\n* `-r`, `--replace <from> <to>`: Replace occurrences in string.\n* `-s`, `--split <delim>`: Split string into lines by delimiter.\n* `-c`, `--contains <needle>`: Exit code 0 if needle is found, 1 otherwise.\n* `--starts-with <prefix>`: Exit code 0 if string starts with prefix.\n* `--ends-with <suffix>`: Exit code 0 if string ends with suffix.\n* `--len`: Output character length of string.\n\n### Exit Status\n\n* `0`: Success / Predicate True.\n* `1`: Predicate False.",
+      "hover_plaintext": "str [-t|-u|-l|-r|-s|-c|--starts-with|--ends-with|--len] [string|-]\n\nstr (str): String inspection, manipulation, and predicates\n\nProvides string transformation and inspection operations. Reads from standard input if trailing string argument is omitted.\n\nOptions\n\n- -t, --trim: Strip leading and trailing whitespace.\n- -u, --upper: Convert string to uppercase.\n- -l, --lower: Convert string to lowercase.\n- -r, --replace <from> <to>: Replace occurrences in string.\n- -s, --split <delim>: Split string into lines by delimiter.\n- -c, --contains <needle>: Exit code 0 if needle is found, 1 otherwise.\n- --starts-with <prefix>: Exit code 0 if string starts with prefix.\n- --ends-with <suffix>: Exit code 0 if string ends with suffix.\n- --len: Output character length of string.\n\nExit Status\n\n- 0: Success / Predicate True.\n- 1: Predicate False.",
+      "terminal_ansi": "\u001b[1;36mstr [-t|-u|-l|-r|-s|-c|--starts-with|--ends-with|--len] [string|-]\u001b[0m\n\n\u001b[1mstr\u001b[0m (str): String inspection, manipulation, and predicates\n\nProvides string transformation and inspection operations. Reads from standard input if trailing string argument is omitted.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-t\u001b[0m, \u001b[33m--trim\u001b[0m: Strip leading and trailing whitespace.\n\u001b[36m•\u001b[0m \u001b[33m-u\u001b[0m, \u001b[33m--upper\u001b[0m: Convert string to uppercase.\n\u001b[36m•\u001b[0m \u001b[33m-l\u001b[0m, \u001b[33m--lower\u001b[0m: Convert string to lowercase.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m--replace <from> <to>\u001b[0m: Replace occurrences in string.\n\u001b[36m•\u001b[0m \u001b[33m-s\u001b[0m, \u001b[33m--split <delim>\u001b[0m: Split string into lines by delimiter.\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m, \u001b[33m--contains <needle>\u001b[0m: Exit code 0 if needle is found, 1 otherwise.\n\u001b[36m•\u001b[0m \u001b[33m--starts-with <prefix>\u001b[0m: Exit code 0 if string starts with prefix.\n\u001b[36m•\u001b[0m \u001b[33m--ends-with <suffix>\u001b[0m: Exit code 0 if string ends with suffix.\n\u001b[36m•\u001b[0m \u001b[33m--len\u001b[0m: Output character length of string.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success / Predicate True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Predicate False."
     },
     "table": {
       "name": "table",
@@ -509,9 +509,9 @@
       "summary": "Render aligned terminal tables from columnar data",
       "category": "data",
       "handler": "builtins::table",
-      "hover_markdown": "```esh\ntable [--header] [file...]\n```\n\n**table**: Render aligned terminal tables from columnar data\n\nFormats columnar input into aligned, readable terminal tables with borders.\n\n### Exit Status\n\n* `0`: Success.\n\n---",
-      "hover_plaintext": "table [--header] [file...]\n\ntable: Render aligned terminal tables from columnar data\n\nFormats columnar input into aligned, readable terminal tables with borders.\n\nExit Status\n\n- 0: Success.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mtable [--header] [file...]\u001b[0m\n\n\u001b[1mtable\u001b[0m: Render aligned terminal tables from columnar data\n\nFormats columnar input into aligned, readable terminal tables with borders.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\ntable [--header] [file...]\n```\n\n**table** (`table`): Render aligned terminal tables from columnar data\n\nFormats columnar input into aligned, readable terminal tables with borders.\n\n### Exit Status\n\n* `0`: Success.\n\n---",
+      "hover_plaintext": "table [--header] [file...]\n\ntable (table): Render aligned terminal tables from columnar data\n\nFormats columnar input into aligned, readable terminal tables with borders.\n\nExit Status\n\n- 0: Success.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mtable [--header] [file...]\u001b[0m\n\n\u001b[1mtable\u001b[0m (table): Render aligned terminal tables from columnar data\n\nFormats columnar input into aligned, readable terminal tables with borders.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "tail": {
       "name": "tail",
@@ -519,9 +519,9 @@
       "summary": "Output last part of files",
       "category": "text",
       "handler": "builtins::tail",
-      "hover_markdown": "```esh\ntail [-n lines] [-c bytes] [file...]\n```\n\n**tail**: Output last part of files\n\nOutputs the last N lines (default: 10) or bytes of input.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "tail [-n lines] [-c bytes] [file...]\n\ntail: Output last part of files\n\nOutputs the last N lines (default: 10) or bytes of input.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mtail [-n lines] [-c bytes] [file...]\u001b[0m\n\n\u001b[1mtail\u001b[0m: Output last part of files\n\nOutputs the last N lines (default: 10) or bytes of input.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\ntail [-n lines] [-c bytes] [file...]\n```\n\n**tail** (`tail`): Output last part of files\n\nOutputs the last N lines (default: 10) or bytes of input.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "tail [-n lines] [-c bytes] [file...]\n\ntail (tail): Output last part of files\n\nOutputs the last N lines (default: 10) or bytes of input.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mtail [-n lines] [-c bytes] [file...]\u001b[0m\n\n\u001b[1mtail\u001b[0m (tail): Output last part of files\n\nOutputs the last N lines (default: 10) or bytes of input.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "tar": {
       "name": "tar",
@@ -529,9 +529,9 @@
       "summary": "Read and write tarball archives",
       "category": "archive",
       "handler": "builtins::tar",
-      "hover_markdown": "```esh\ntar <-c|-x> [-z] [-f archive] [files...]\n```\n\n**tar**: Read and write tarball archives\n\nCreates or extracts standard tarball archives.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "tar <-c|-x> [-z] [-f archive] [files...]\n\ntar: Read and write tarball archives\n\nCreates or extracts standard tarball archives.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mtar <-c|-x> [-z] [-f archive] [files...]\u001b[0m\n\n\u001b[1mtar\u001b[0m: Read and write tarball archives\n\nCreates or extracts standard tarball archives.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\ntar <-c|-x> [-z] [-f archive] [files...]\n```\n\n**tar** (`tar`): Read and write tarball archives\n\nCreates or extracts standard tarball archives.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "tar <-c|-x> [-z] [-f archive] [files...]\n\ntar (tar): Read and write tarball archives\n\nCreates or extracts standard tarball archives.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mtar <-c|-x> [-z] [-f archive] [files...]\u001b[0m\n\n\u001b[1mtar\u001b[0m (tar): Read and write tarball archives\n\nCreates or extracts standard tarball archives.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "test": {
       "name": "test",
@@ -539,9 +539,9 @@
       "summary": "Evaluate conditional expressions",
       "category": "flow",
       "handler": "builtins::test",
-      "hover_markdown": "```esh\ntest <expression>\n```\n\n**test**: Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n### File Predicates\n\n* `-f <file>`: True if regular file exists.\n* `-d <dir>`: True if directory exists.\n* `-e <path>`: True if path exists.\n* `-s <file>`: True if file exists and has size > 0.\n* `-r`, `-w`, `-x`: True if readable, writable, executable.\n\n### String Predicates\n\n* `-z <str>`: True if string length is 0.\n* `-n <str>`: True if string length is non-zero.\n* `<s1> = <s2>`: True if strings are equal.\n* `<s1> != <s2>`: True if strings differ.\n\n### Integer Predicates\n\n* `-eq`, `-ne`, `-lt`, `-le`, `-gt`, `-ge`.\n\n### Exit Status\n\n* `0`: Expression is True.\n* `1`: Expression is False.\n\n---",
-      "hover_plaintext": "test <expression>\n\ntest: Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\nFile Predicates\n\n- -f <file>: True if regular file exists.\n- -d <dir>: True if directory exists.\n- -e <path>: True if path exists.\n- -s <file>: True if file exists and has size > 0.\n- -r, -w, -x: True if readable, writable, executable.\n\nString Predicates\n\n- -z <str>: True if string length is 0.\n- -n <str>: True if string length is non-zero.\n- <s1> = <s2>: True if strings are equal.\n- <s1> != <s2>: True if strings differ.\n\nInteger Predicates\n\n- -eq, -ne, -lt, -le, -gt, -ge.\n\nExit Status\n\n- 0: Expression is True.\n- 1: Expression is False.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mtest <expression>\u001b[0m\n\n\u001b[1mtest\u001b[0m: Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n\u001b[1;33mFile Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-f <file>\u001b[0m: True if regular file exists.\n\u001b[36m•\u001b[0m \u001b[33m-d <dir>\u001b[0m: True if directory exists.\n\u001b[36m•\u001b[0m \u001b[33m-e <path>\u001b[0m: True if path exists.\n\u001b[36m•\u001b[0m \u001b[33m-s <file>\u001b[0m: True if file exists and has size > 0.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-w\u001b[0m, \u001b[33m-x\u001b[0m: True if readable, writable, executable.\n\n\u001b[1;33mString Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-z <str>\u001b[0m: True if string length is 0.\n\u001b[36m•\u001b[0m \u001b[33m-n <str>\u001b[0m: True if string length is non-zero.\n\u001b[36m•\u001b[0m \u001b[33m<s1> = <s2>\u001b[0m: True if strings are equal.\n\u001b[36m•\u001b[0m \u001b[33m<s1> != <s2>\u001b[0m: True if strings differ.\n\n\u001b[1;33mInteger Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-eq\u001b[0m, \u001b[33m-ne\u001b[0m, \u001b[33m-lt\u001b[0m, \u001b[33m-le\u001b[0m, \u001b[33m-gt\u001b[0m, \u001b[33m-ge\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Expression is True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Expression is False.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\ntest <expression>\n```\n\n**test** (`test`): Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n### File Predicates\n\n* `-f <file>`: True if regular file exists.\n* `-d <dir>`: True if directory exists.\n* `-e <path>`: True if path exists.\n* `-s <file>`: True if file exists and has size > 0.\n* `-r`, `-w`, `-x`: True if readable, writable, executable.\n\n### String Predicates\n\n* `-z <str>`: True if string length is 0.\n* `-n <str>`: True if string length is non-zero.\n* `<s1> = <s2>`: True if strings are equal.\n* `<s1> != <s2>`: True if strings differ.\n\n### Integer Predicates\n\n* `-eq`, `-ne`, `-lt`, `-le`, `-gt`, `-ge`.\n\n### Exit Status\n\n* `0`: Expression is True.\n* `1`: Expression is False.\n\n---",
+      "hover_plaintext": "test <expression>\n\ntest (test): Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\nFile Predicates\n\n- -f <file>: True if regular file exists.\n- -d <dir>: True if directory exists.\n- -e <path>: True if path exists.\n- -s <file>: True if file exists and has size > 0.\n- -r, -w, -x: True if readable, writable, executable.\n\nString Predicates\n\n- -z <str>: True if string length is 0.\n- -n <str>: True if string length is non-zero.\n- <s1> = <s2>: True if strings are equal.\n- <s1> != <s2>: True if strings differ.\n\nInteger Predicates\n\n- -eq, -ne, -lt, -le, -gt, -ge.\n\nExit Status\n\n- 0: Expression is True.\n- 1: Expression is False.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mtest <expression>\u001b[0m\n\n\u001b[1mtest\u001b[0m (test): Evaluate conditional expressions\n\nEvaluates condition expressions in-process without spawning subshells.\n\n\u001b[1;33mFile Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-f <file>\u001b[0m: True if regular file exists.\n\u001b[36m•\u001b[0m \u001b[33m-d <dir>\u001b[0m: True if directory exists.\n\u001b[36m•\u001b[0m \u001b[33m-e <path>\u001b[0m: True if path exists.\n\u001b[36m•\u001b[0m \u001b[33m-s <file>\u001b[0m: True if file exists and has size > 0.\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-w\u001b[0m, \u001b[33m-x\u001b[0m: True if readable, writable, executable.\n\n\u001b[1;33mString Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-z <str>\u001b[0m: True if string length is 0.\n\u001b[36m•\u001b[0m \u001b[33m-n <str>\u001b[0m: True if string length is non-zero.\n\u001b[36m•\u001b[0m \u001b[33m<s1> = <s2>\u001b[0m: True if strings are equal.\n\u001b[36m•\u001b[0m \u001b[33m<s1> != <s2>\u001b[0m: True if strings differ.\n\n\u001b[1;33mInteger Predicates\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-eq\u001b[0m, \u001b[33m-ne\u001b[0m, \u001b[33m-lt\u001b[0m, \u001b[33m-le\u001b[0m, \u001b[33m-gt\u001b[0m, \u001b[33m-ge\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Expression is True.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Expression is False.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "time": {
       "name": "time",
@@ -549,9 +549,9 @@
       "summary": "Measure execution time of a command",
       "category": "sys",
       "handler": "builtins::time",
-      "hover_markdown": "```esh\ntime <command...>\n```\n\n**time**: Measure execution time of a command\n\nExecutes a command and prints real, user, and system time elapsed.\n\n### Exit Status\n\n* Evaluates to the exit code of the executed command.",
-      "hover_plaintext": "time <command...>\n\ntime: Measure execution time of a command\n\nExecutes a command and prints real, user, and system time elapsed.\n\nExit Status\n\n- Evaluates to the exit code of the executed command.",
-      "terminal_ansi": "\u001b[1;36mtime <command...>\u001b[0m\n\n\u001b[1mtime\u001b[0m: Measure execution time of a command\n\nExecutes a command and prints real, user, and system time elapsed.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m Evaluates to the exit code of the executed command."
+      "hover_markdown": "```esh\ntime <command...>\n```\n\n**time** (`time`): Measure execution time of a command\n\nExecutes a command and prints real, user, and system time elapsed.\n\n### Exit Status\n\n* Evaluates to the exit code of the executed command.",
+      "hover_plaintext": "time <command...>\n\ntime (time): Measure execution time of a command\n\nExecutes a command and prints real, user, and system time elapsed.\n\nExit Status\n\n- Evaluates to the exit code of the executed command.",
+      "terminal_ansi": "\u001b[1;36mtime <command...>\u001b[0m\n\n\u001b[1mtime\u001b[0m (time): Measure execution time of a command\n\nExecutes a command and prints real, user, and system time elapsed.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m Evaluates to the exit code of the executed command."
     },
     "timeout": {
       "name": "timeout",
@@ -559,9 +559,9 @@
       "summary": "Enforce execution deadline on command",
       "category": "sys",
       "handler": "builtins::timeout",
-      "hover_markdown": "```esh\ntimeout <duration> <command...>\n```\n\n**timeout**: Enforce execution deadline on command\n\nExecutes a command, forcibly terminating it if it exceeds duration.\n\n### Exit Status\n\n* Command exit status if within deadline.\n* `124`: Terminated due to timeout.\n\n---",
-      "hover_plaintext": "timeout <duration> <command...>\n\ntimeout: Enforce execution deadline on command\n\nExecutes a command, forcibly terminating it if it exceeds duration.\n\nExit Status\n\n- Command exit status if within deadline.\n- 124: Terminated due to timeout.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mtimeout <duration> <command...>\u001b[0m\n\n\u001b[1mtimeout\u001b[0m: Enforce execution deadline on command\n\nExecutes a command, forcibly terminating it if it exceeds duration.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m Command exit status if within deadline.\n\u001b[36m•\u001b[0m \u001b[33m124\u001b[0m: Terminated due to timeout.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\ntimeout <duration> <command...>\n```\n\n**timeout** (`timeout`): Enforce execution deadline on command\n\nExecutes a command, forcibly terminating it if it exceeds duration.\n\n### Exit Status\n\n* Command exit status if within deadline.\n* `124`: Terminated due to timeout.\n\n---",
+      "hover_plaintext": "timeout <duration> <command...>\n\ntimeout (timeout): Enforce execution deadline on command\n\nExecutes a command, forcibly terminating it if it exceeds duration.\n\nExit Status\n\n- Command exit status if within deadline.\n- 124: Terminated due to timeout.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mtimeout <duration> <command...>\u001b[0m\n\n\u001b[1mtimeout\u001b[0m (timeout): Enforce execution deadline on command\n\nExecutes a command, forcibly terminating it if it exceeds duration.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m Command exit status if within deadline.\n\u001b[36m•\u001b[0m \u001b[33m124\u001b[0m: Terminated due to timeout.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "touch": {
       "name": "touch",
@@ -569,9 +569,9 @@
       "summary": "Update timestamps or create empty files",
       "category": "fs",
       "handler": "builtins::touch",
-      "hover_markdown": "```esh\ntouch <path...>\n```\n\n**touch**: Update timestamps or create empty files\n\nUpdates the access and modification timestamps of files. If a file does not\nexist, creates an empty regular file.\n\n### Exit Status\n\n* `0`: Success.\n* `1`: Creation failed.",
-      "hover_plaintext": "touch <path...>\n\ntouch: Update timestamps or create empty files\n\nUpdates the access and modification timestamps of files. If a file does not\nexist, creates an empty regular file.\n\nExit Status\n\n- 0: Success.\n- 1: Creation failed.",
-      "terminal_ansi": "\u001b[1;36mtouch <path...>\u001b[0m\n\n\u001b[1mtouch\u001b[0m: Update timestamps or create empty files\n\nUpdates the access and modification timestamps of files. If a file does not\nexist, creates an empty regular file.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Creation failed."
+      "hover_markdown": "```esh\ntouch <path...>\n```\n\n**touch** (`touch`): Update timestamps or create empty files\n\nUpdates the access and modification timestamps of files. If a file does not\nexist, creates an empty regular file.\n\n### Exit Status\n\n* `0`: Success.\n* `1`: Creation failed.",
+      "hover_plaintext": "touch <path...>\n\ntouch (touch): Update timestamps or create empty files\n\nUpdates the access and modification timestamps of files. If a file does not\nexist, creates an empty regular file.\n\nExit Status\n\n- 0: Success.\n- 1: Creation failed.",
+      "terminal_ansi": "\u001b[1;36mtouch <path...>\u001b[0m\n\n\u001b[1mtouch\u001b[0m (touch): Update timestamps or create empty files\n\nUpdates the access and modification timestamps of files. If a file does not\nexist, creates an empty regular file.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Creation failed."
     },
     "tr": {
       "name": "tr",
@@ -579,9 +579,9 @@
       "summary": "Translate or delete characters",
       "category": "text",
       "handler": "builtins::tr",
-      "hover_markdown": "```esh\ntr [-d] [-s] <set1> [set2]\n```\n\n**tr**: Translate or delete characters\n\nTranslates characters from set1 to set2, or deletes characters in set1 with `-d`.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "tr [-d] [-s] <set1> [set2]\n\ntr: Translate or delete characters\n\nTranslates characters from set1 to set2, or deletes characters in set1 with -d.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mtr [-d] [-s] <set1> [set2]\u001b[0m\n\n\u001b[1mtr\u001b[0m: Translate or delete characters\n\nTranslates characters from set1 to set2, or deletes characters in set1 with \u001b[33m-d\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\ntr [-d] [-s] <set1> [set2]\n```\n\n**tr** (`tr`): Translate or delete characters\n\nTranslates characters from set1 to set2, or deletes characters in set1 with `-d`.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "tr [-d] [-s] <set1> [set2]\n\ntr (tr): Translate or delete characters\n\nTranslates characters from set1 to set2, or deletes characters in set1 with -d.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mtr [-d] [-s] <set1> [set2]\u001b[0m\n\n\u001b[1mtr\u001b[0m (tr): Translate or delete characters\n\nTranslates characters from set1 to set2, or deletes characters in set1 with \u001b[33m-d\u001b[0m.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "trap": {
       "name": "trap",
@@ -589,9 +589,9 @@
       "summary": "Register signal and lifecycle handlers",
       "category": "flow",
       "handler": "builtins::trap",
-      "hover_markdown": "```esh\ntrap <command> <SIGNAL...>\n```\n\n**trap**: Register signal and lifecycle handlers\n\nRegisters action handler strings for lifecycle events (EXIT, ERR, INT).",
-      "hover_plaintext": "trap <command> <SIGNAL...>\n\ntrap: Register signal and lifecycle handlers\n\nRegisters action handler strings for lifecycle events (EXIT, ERR, INT).",
-      "terminal_ansi": "\u001b[1;36mtrap <command> <SIGNAL...>\u001b[0m\n\n\u001b[1mtrap\u001b[0m: Register signal and lifecycle handlers\n\nRegisters action handler strings for lifecycle events (EXIT, ERR, INT)."
+      "hover_markdown": "```esh\ntrap <command> <SIGNAL...>\n```\n\n**trap** (`trap`): Register signal and lifecycle handlers\n\nRegisters action handler strings for lifecycle events (EXIT, ERR, INT).",
+      "hover_plaintext": "trap <command> <SIGNAL...>\n\ntrap (trap): Register signal and lifecycle handlers\n\nRegisters action handler strings for lifecycle events (EXIT, ERR, INT).",
+      "terminal_ansi": "\u001b[1;36mtrap <command> <SIGNAL...>\u001b[0m\n\n\u001b[1mtrap\u001b[0m (trap): Register signal and lifecycle handlers\n\nRegisters action handler strings for lifecycle events (EXIT, ERR, INT)."
     },
     "typeset": {
       "name": "typeset",
@@ -599,9 +599,9 @@
       "summary": "Declare variables with attributes (alias of declare)",
       "category": "flow",
       "handler": "builtins::declare",
-      "hover_markdown": "```esh\ntypeset [-a] [-A] [-r] [-i] [name[=value]...]\n```\n\n**typeset**: Declare variables with attributes (alias of declare)\n\nAlias of declare. Defines variables and arrays with attributes.",
-      "hover_plaintext": "typeset [-a] [-A] [-r] [-i] [name[=value]...]\n\ntypeset: Declare variables with attributes (alias of declare)\n\nAlias of declare. Defines variables and arrays with attributes.",
-      "terminal_ansi": "\u001b[1;36mtypeset [-a] [-A] [-r] [-i] [name[=value]...]\u001b[0m\n\n\u001b[1mtypeset\u001b[0m: Declare variables with attributes (alias of declare)\n\nAlias of declare. Defines variables and arrays with attributes."
+      "hover_markdown": "```esh\ntypeset [-a] [-A] [-r] [-i] [name[=value]...]\n```\n\n**typeset** (`typeset`): Declare variables with attributes (alias of declare)\n\nAlias of declare. Defines variables and arrays with attributes.",
+      "hover_plaintext": "typeset [-a] [-A] [-r] [-i] [name[=value]...]\n\ntypeset (typeset): Declare variables with attributes (alias of declare)\n\nAlias of declare. Defines variables and arrays with attributes.",
+      "terminal_ansi": "\u001b[1;36mtypeset [-a] [-A] [-r] [-i] [name[=value]...]\u001b[0m\n\n\u001b[1mtypeset\u001b[0m (typeset): Declare variables with attributes (alias of declare)\n\nAlias of declare. Defines variables and arrays with attributes."
     },
     "uname": {
       "name": "uname",
@@ -609,9 +609,9 @@
       "summary": "Print system information",
       "category": "sys",
       "handler": "builtins::uname",
-      "hover_markdown": "```esh\nuname [-s] [-m] [-r] [-a]\n```\n\n**uname**: Print system information\n\nPrints operating system name, machine architecture, and kernel release.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "uname [-s] [-m] [-r] [-a]\n\nuname: Print system information\n\nPrints operating system name, machine architecture, and kernel release.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36muname [-s] [-m] [-r] [-a]\u001b[0m\n\n\u001b[1muname\u001b[0m: Print system information\n\nPrints operating system name, machine architecture, and kernel release.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nuname [-s] [-m] [-r] [-a]\n```\n\n**uname** (`uname`): Print system information\n\nPrints operating system name, machine architecture, and kernel release.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "uname [-s] [-m] [-r] [-a]\n\nuname (uname): Print system information\n\nPrints operating system name, machine architecture, and kernel release.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36muname [-s] [-m] [-r] [-a]\u001b[0m\n\n\u001b[1muname\u001b[0m (uname): Print system information\n\nPrints operating system name, machine architecture, and kernel release.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "unarchive": {
       "name": "unarchive",
@@ -619,9 +619,9 @@
       "summary": "Format-agnostic archive extractor",
       "category": "archive",
       "handler": "builtins::unarchive",
-      "hover_markdown": "```esh\nunarchive <archive_file> [destination]\n```\n\n**unarchive**: Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\n### Exit Status\n\n* `0`: Extraction successful.",
-      "hover_plaintext": "unarchive <archive_file> [destination]\n\nunarchive: Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\nExit Status\n\n- 0: Extraction successful.",
-      "terminal_ansi": "\u001b[1;36munarchive <archive_file> [destination]\u001b[0m\n\n\u001b[1munarchive\u001b[0m: Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Extraction successful."
+      "hover_markdown": "```esh\nunarchive <archive_file> [destination]\n```\n\n**unarchive** (`unarchive`): Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\n### Exit Status\n\n* `0`: Extraction successful.",
+      "hover_plaintext": "unarchive <archive_file> [destination]\n\nunarchive (unarchive): Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\nExit Status\n\n- 0: Extraction successful.",
+      "terminal_ansi": "\u001b[1;36munarchive <archive_file> [destination]\u001b[0m\n\n\u001b[1munarchive\u001b[0m (unarchive): Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Extraction successful."
     },
     "unzip": {
       "name": "unzip",
@@ -629,9 +629,9 @@
       "summary": "Extract ZIP archives",
       "category": "archive",
       "handler": "builtins::unzip",
-      "hover_markdown": "```esh\nunzip <archive.zip> [-d destination]\n```\n\n**unzip**: Extract ZIP archives\n\nExtracts entries from a ZIP archive to disk.\n\n### Exit Status\n\n* `0`: Success.\n\n---",
-      "hover_plaintext": "unzip <archive.zip> [-d destination]\n\nunzip: Extract ZIP archives\n\nExtracts entries from a ZIP archive to disk.\n\nExit Status\n\n- 0: Success.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36munzip <archive.zip> [-d destination]\u001b[0m\n\n\u001b[1munzip\u001b[0m: Extract ZIP archives\n\nExtracts entries from a ZIP archive to disk.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\nunzip <archive.zip> [-d destination]\n```\n\n**unzip** (`unzip`): Extract ZIP archives\n\nExtracts entries from a ZIP archive to disk.\n\n### Exit Status\n\n* `0`: Success.\n\n---",
+      "hover_plaintext": "unzip <archive.zip> [-d destination]\n\nunzip (unzip): Extract ZIP archives\n\nExtracts entries from a ZIP archive to disk.\n\nExit Status\n\n- 0: Success.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36munzip <archive.zip> [-d destination]\u001b[0m\n\n\u001b[1munzip\u001b[0m (unzip): Extract ZIP archives\n\nExtracts entries from a ZIP archive to disk.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "wait": {
       "name": "wait",
@@ -639,9 +639,9 @@
       "summary": "Wait for background processes to complete",
       "category": "flow",
       "handler": "builtins::wait",
-      "hover_markdown": "```esh\nwait [pid...]\n```\n\n**wait**: Wait for background processes to complete\n\nBlocks execution until specified background jobs or parallel pipelines complete.",
-      "hover_plaintext": "wait [pid...]\n\nwait: Wait for background processes to complete\n\nBlocks execution until specified background jobs or parallel pipelines complete.",
-      "terminal_ansi": "\u001b[1;36mwait [pid...]\u001b[0m\n\n\u001b[1mwait\u001b[0m: Wait for background processes to complete\n\nBlocks execution until specified background jobs or parallel pipelines complete."
+      "hover_markdown": "```esh\nwait [pid...]\n```\n\n**wait** (`wait`): Wait for background processes to complete\n\nBlocks execution until specified background jobs or parallel pipelines complete.",
+      "hover_plaintext": "wait [pid...]\n\nwait (wait): Wait for background processes to complete\n\nBlocks execution until specified background jobs or parallel pipelines complete.",
+      "terminal_ansi": "\u001b[1;36mwait [pid...]\u001b[0m\n\n\u001b[1mwait\u001b[0m (wait): Wait for background processes to complete\n\nBlocks execution until specified background jobs or parallel pipelines complete."
     },
     "wait_port": {
       "name": "wait_port",
@@ -649,9 +649,9 @@
       "summary": "Poll TCP port until socket is open",
       "category": "net",
       "handler": "builtins::wait_port",
-      "hover_markdown": "```esh\nwait_port <host:port | port> [timeout]\n```\n\n**wait_port**: Poll TCP port until socket is open\n\nBlocks execution until the specified TCP port is accepting connections or timeout reached.\n\n### Examples\n\n```esh\nwait_port 127.0.0.1:8080 15s\n```\n\n### Exit Status\n\n* `0`: Port is open.\n* `1`: Timeout reached.\n\n---",
-      "hover_plaintext": "wait_port <host:port | port> [timeout]\n\nwait_port: Poll TCP port until socket is open\n\nBlocks execution until the specified TCP port is accepting connections or timeout reached.\n\nExamples\n\nwait_port 127.0.0.1:8080 15s\n\nExit Status\n\n- 0: Port is open.\n- 1: Timeout reached.\n\n----------------------------------------",
-      "terminal_ansi": "\u001b[1;36mwait_port <host:port | port> [timeout]\u001b[0m\n\n\u001b[1mwait_port\u001b[0m: Poll TCP port until socket is open\n\nBlocks execution until the specified TCP port is accepting connections or timeout reached.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mwait_port 127.0.0.1:8080 15s\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Port is open.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Timeout reached.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
+      "hover_markdown": "```esh\nwait_port <host:port | port> [timeout]\n```\n\n**wait_port** (`wait_port`): Poll TCP port until socket is open\n\nBlocks execution until the specified TCP port is accepting connections or timeout reached.\n\n### Examples\n\n```esh\nwait_port 127.0.0.1:8080 15s\n```\n\n### Exit Status\n\n* `0`: Port is open.\n* `1`: Timeout reached.\n\n---",
+      "hover_plaintext": "wait_port <host:port | port> [timeout]\n\nwait_port (wait_port): Poll TCP port until socket is open\n\nBlocks execution until the specified TCP port is accepting connections or timeout reached.\n\nExamples\n\nwait_port 127.0.0.1:8080 15s\n\nExit Status\n\n- 0: Port is open.\n- 1: Timeout reached.\n\n----------------------------------------",
+      "terminal_ansi": "\u001b[1;36mwait_port <host:port | port> [timeout]\u001b[0m\n\n\u001b[1mwait_port\u001b[0m (wait_port): Poll TCP port until socket is open\n\nBlocks execution until the specified TCP port is accepting connections or timeout reached.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mwait_port 127.0.0.1:8080 15s\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Port is open.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Timeout reached.\n\n\u001b[90m────────────────────────────────────────\u001b[0m"
     },
     "wc": {
       "name": "wc",
@@ -659,9 +659,9 @@
       "summary": "Count lines, words, and bytes",
       "category": "text",
       "handler": "builtins::wc",
-      "hover_markdown": "```esh\nwc [-l] [-w] [-c] [-m] [file...]\n```\n\n**wc**: Count lines, words, and bytes\n\nCounts newline characters, words, and byte counts.\n\n### Exit Status\n\n* `0`: Success.",
-      "hover_plaintext": "wc [-l] [-w] [-c] [-m] [file...]\n\nwc: Count lines, words, and bytes\n\nCounts newline characters, words, and byte counts.\n\nExit Status\n\n- 0: Success.",
-      "terminal_ansi": "\u001b[1;36mwc [-l] [-w] [-c] [-m] [file...]\u001b[0m\n\n\u001b[1mwc\u001b[0m: Count lines, words, and bytes\n\nCounts newline characters, words, and byte counts.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
+      "hover_markdown": "```esh\nwc [-l] [-w] [-c] [-m] [file...]\n```\n\n**wc** (`wc`): Count lines, words, and bytes\n\nCounts newline characters, words, and byte counts.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "wc [-l] [-w] [-c] [-m] [file...]\n\nwc (wc): Count lines, words, and bytes\n\nCounts newline characters, words, and byte counts.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36mwc [-l] [-w] [-c] [-m] [file...]\u001b[0m\n\n\u001b[1mwc\u001b[0m (wc): Count lines, words, and bytes\n\nCounts newline characters, words, and byte counts.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "which": {
       "name": "which",
@@ -669,9 +669,9 @@
       "summary": "Locate executable in PATH",
       "category": "sys",
       "handler": "builtins::which",
-      "hover_markdown": "```esh\nwhich <command...>\n```\n\n**which**: Locate executable in PATH\n\nResolves the full filesystem path of external executable binaries.\n\n### Exit Status\n\n* `0`: All commands located.\n* `1`: One or more commands not found in PATH.",
-      "hover_plaintext": "which <command...>\n\nwhich: Locate executable in PATH\n\nResolves the full filesystem path of external executable binaries.\n\nExit Status\n\n- 0: All commands located.\n- 1: One or more commands not found in PATH.",
-      "terminal_ansi": "\u001b[1;36mwhich <command...>\u001b[0m\n\n\u001b[1mwhich\u001b[0m: Locate executable in PATH\n\nResolves the full filesystem path of external executable binaries.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All commands located.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: One or more commands not found in PATH."
+      "hover_markdown": "```esh\nwhich <command...>\n```\n\n**which** (`which`): Locate executable in PATH\n\nResolves the full filesystem path of external executable binaries.\n\n### Exit Status\n\n* `0`: All commands located.\n* `1`: One or more commands not found in PATH.",
+      "hover_plaintext": "which <command...>\n\nwhich (which): Locate executable in PATH\n\nResolves the full filesystem path of external executable binaries.\n\nExit Status\n\n- 0: All commands located.\n- 1: One or more commands not found in PATH.",
+      "terminal_ansi": "\u001b[1;36mwhich <command...>\u001b[0m\n\n\u001b[1mwhich\u001b[0m (which): Locate executable in PATH\n\nResolves the full filesystem path of external executable binaries.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: All commands located.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: One or more commands not found in PATH."
     },
     "yaml": {
       "name": "yaml",
@@ -679,9 +679,9 @@
       "summary": "In-process YAML parser and query engine",
       "category": "data",
       "handler": "builtins::yaml",
-      "hover_markdown": "```esh\nyaml [-g key_path|-j|-v|-k] [file|-]\n```\n\n**yaml**: In-process YAML parser and query engine\n\nQuery and convert YAML documents directly in-process without external tools. Reads from standard input when file is omitted or `-`.\n\n### Options\n\n* `-g`, `--get <key_path>`: Extract value by dot path (e.g. `yaml -g app.name config.yaml`).\n* `-j`, `--to-json`: Convert YAML document into JSON format.\n* `-v`, `--valid`: Validate YAML syntax.\n* `-k`, `--keys`: List top-level mapping keys.\n\n### Exit Status\n\n* `0`: Success.\n* `1`: Key not found or invalid YAML.",
-      "hover_plaintext": "yaml [-g key_path|-j|-v|-k] [file|-]\n\nyaml: In-process YAML parser and query engine\n\nQuery and convert YAML documents directly in-process without external tools. Reads from standard input when file is omitted or -.\n\nOptions\n\n- -g, --get <key_path>: Extract value by dot path (e.g. yaml -g app.name config.yaml).\n- -j, --to-json: Convert YAML document into JSON format.\n- -v, --valid: Validate YAML syntax.\n- -k, --keys: List top-level mapping keys.\n\nExit Status\n\n- 0: Success.\n- 1: Key not found or invalid YAML.",
-      "terminal_ansi": "\u001b[1;36myaml [-g key_path|-j|-v|-k] [file|-]\u001b[0m\n\n\u001b[1myaml\u001b[0m: In-process YAML parser and query engine\n\nQuery and convert YAML documents directly in-process without external tools. Reads from standard input when file is omitted or \u001b[33m-\u001b[0m.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-g\u001b[0m, \u001b[33m--get <key_path>\u001b[0m: Extract value by dot path (e.g. \u001b[33myaml -g app.name config.yaml\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-j\u001b[0m, \u001b[33m--to-json\u001b[0m: Convert YAML document into JSON format.\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m, \u001b[33m--valid\u001b[0m: Validate YAML syntax.\n\u001b[36m•\u001b[0m \u001b[33m-k\u001b[0m, \u001b[33m--keys\u001b[0m: List top-level mapping keys.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Key not found or invalid YAML."
+      "hover_markdown": "```esh\nyaml [-g key_path|-j|-v|-k] [file|-]\n```\n\n**yaml** (`yaml`): In-process YAML parser and query engine\n\nQuery and convert YAML documents directly in-process without external tools. Reads from standard input when file is omitted or `-`.\n\n### Options\n\n* `-g`, `--get <key_path>`: Extract value by dot path (e.g. `yaml -g app.name config.yaml`).\n* `-j`, `--to-json`: Convert YAML document into JSON format.\n* `-v`, `--valid`: Validate YAML syntax.\n* `-k`, `--keys`: List top-level mapping keys.\n\n### Exit Status\n\n* `0`: Success.\n* `1`: Key not found or invalid YAML.",
+      "hover_plaintext": "yaml [-g key_path|-j|-v|-k] [file|-]\n\nyaml (yaml): In-process YAML parser and query engine\n\nQuery and convert YAML documents directly in-process without external tools. Reads from standard input when file is omitted or -.\n\nOptions\n\n- -g, --get <key_path>: Extract value by dot path (e.g. yaml -g app.name config.yaml).\n- -j, --to-json: Convert YAML document into JSON format.\n- -v, --valid: Validate YAML syntax.\n- -k, --keys: List top-level mapping keys.\n\nExit Status\n\n- 0: Success.\n- 1: Key not found or invalid YAML.",
+      "terminal_ansi": "\u001b[1;36myaml [-g key_path|-j|-v|-k] [file|-]\u001b[0m\n\n\u001b[1myaml\u001b[0m (yaml): In-process YAML parser and query engine\n\nQuery and convert YAML documents directly in-process without external tools. Reads from standard input when file is omitted or \u001b[33m-\u001b[0m.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-g\u001b[0m, \u001b[33m--get <key_path>\u001b[0m: Extract value by dot path (e.g. \u001b[33myaml -g app.name config.yaml\u001b[0m).\n\u001b[36m•\u001b[0m \u001b[33m-j\u001b[0m, \u001b[33m--to-json\u001b[0m: Convert YAML document into JSON format.\n\u001b[36m•\u001b[0m \u001b[33m-v\u001b[0m, \u001b[33m--valid\u001b[0m: Validate YAML syntax.\n\u001b[36m•\u001b[0m \u001b[33m-k\u001b[0m, \u001b[33m--keys\u001b[0m: List top-level mapping keys.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Key not found or invalid YAML."
     },
     "zip": {
       "name": "zip",
@@ -689,9 +689,9 @@
       "summary": "Create ZIP archives",
       "category": "archive",
       "handler": "builtins::zip",
-      "hover_markdown": "```esh\nzip <archive.zip> <sources...>\n```\n\n**zip**: Create ZIP archives\n\nCompresses files and directories into a standard ZIP container.\n\n### Exit Status\n\n* `0`: Archive created.",
-      "hover_plaintext": "zip <archive.zip> <sources...>\n\nzip: Create ZIP archives\n\nCompresses files and directories into a standard ZIP container.\n\nExit Status\n\n- 0: Archive created.",
-      "terminal_ansi": "\u001b[1;36mzip <archive.zip> <sources...>\u001b[0m\n\n\u001b[1mzip\u001b[0m: Create ZIP archives\n\nCompresses files and directories into a standard ZIP container.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Archive created."
+      "hover_markdown": "```esh\nzip <archive.zip> <sources...>\n```\n\n**zip** (`zip`): Create ZIP archives\n\nCompresses files and directories into a standard ZIP container.\n\n### Exit Status\n\n* `0`: Archive created.",
+      "hover_plaintext": "zip <archive.zip> <sources...>\n\nzip (zip): Create ZIP archives\n\nCompresses files and directories into a standard ZIP container.\n\nExit Status\n\n- 0: Archive created.",
+      "terminal_ansi": "\u001b[1;36mzip <archive.zip> <sources...>\u001b[0m\n\n\u001b[1mzip\u001b[0m (zip): Create ZIP archives\n\nCompresses files and directories into a standard ZIP container.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Archive created."
     }
   },
   "keywords": {
@@ -701,9 +701,9 @@
       "summary": "Multi-way pattern matching branch",
       "category": "keyword",
       "handler": "builtins::case",
-      "hover_markdown": "```esh\ncase <word> in <pattern>) <statements>;; esac\n```\n\n**case**: Multi-way pattern matching branch\n\nMatches word against glob patterns, executing the branch of the first matching pattern.",
-      "hover_plaintext": "case <word> in <pattern>) <statements>;; esac\n\ncase: Multi-way pattern matching branch\n\nMatches word against glob patterns, executing the branch of the first matching pattern.",
-      "terminal_ansi": "\u001b[1;36mcase <word> in <pattern>) <statements>;; esac\u001b[0m\n\n\u001b[1mcase\u001b[0m: Multi-way pattern matching branch\n\nMatches word against glob patterns, executing the branch of the first matching pattern."
+      "hover_markdown": "```esh\ncase <word> in <pattern>) <statements>;; esac\n```\n\n**case** (`case`): Multi-way pattern matching branch\n\nMatches word against glob patterns, executing the branch of the first matching pattern.",
+      "hover_plaintext": "case <word> in <pattern>) <statements>;; esac\n\ncase (case): Multi-way pattern matching branch\n\nMatches word against glob patterns, executing the branch of the first matching pattern.",
+      "terminal_ansi": "\u001b[1;36mcase <word> in <pattern>) <statements>;; esac\u001b[0m\n\n\u001b[1mcase\u001b[0m (case): Multi-way pattern matching branch\n\nMatches word against glob patterns, executing the branch of the first matching pattern."
     },
     "do": {
       "name": "do",
@@ -711,9 +711,9 @@
       "summary": "Start body of for, while, until, or select loop",
       "category": "keyword",
       "handler": "builtins::do",
-      "hover_markdown": "```esh\ndo <statements>\n```\n\n**do**: Start body of for, while, until, or select loop\n\nBegins the loop body statements.",
-      "hover_plaintext": "do <statements>\n\ndo: Start body of for, while, until, or select loop\n\nBegins the loop body statements.",
-      "terminal_ansi": "\u001b[1;36mdo <statements>\u001b[0m\n\n\u001b[1mdo\u001b[0m: Start body of for, while, until, or select loop\n\nBegins the loop body statements."
+      "hover_markdown": "```esh\ndo <statements>\n```\n\n**do** (`do`): Start body of for, while, until, or select loop\n\nBegins the loop body statements.",
+      "hover_plaintext": "do <statements>\n\ndo (do): Start body of for, while, until, or select loop\n\nBegins the loop body statements.",
+      "terminal_ansi": "\u001b[1;36mdo <statements>\u001b[0m\n\n\u001b[1mdo\u001b[0m (do): Start body of for, while, until, or select loop\n\nBegins the loop body statements."
     },
     "done": {
       "name": "done",
@@ -721,9 +721,9 @@
       "summary": "Close a for, while, until, or select loop",
       "category": "keyword",
       "handler": "builtins::done",
-      "hover_markdown": "```esh\ndone\n```\n\n**done**: Close a for, while, until, or select loop\n\nCloses a loop block.",
-      "hover_plaintext": "done\n\ndone: Close a for, while, until, or select loop\n\nCloses a loop block.",
-      "terminal_ansi": "\u001b[1;36mdone\u001b[0m\n\n\u001b[1mdone\u001b[0m: Close a for, while, until, or select loop\n\nCloses a loop block."
+      "hover_markdown": "```esh\ndone\n```\n\n**done** (`done`): Close a for, while, until, or select loop\n\nCloses a loop block.",
+      "hover_plaintext": "done\n\ndone (done): Close a for, while, until, or select loop\n\nCloses a loop block.",
+      "terminal_ansi": "\u001b[1;36mdone\u001b[0m\n\n\u001b[1mdone\u001b[0m (done): Close a for, while, until, or select loop\n\nCloses a loop block."
     },
     "elif": {
       "name": "elif",
@@ -731,9 +731,9 @@
       "summary": "Alternative condition branch",
       "category": "keyword",
       "handler": "builtins::elif",
-      "hover_markdown": "```esh\nelif <condition>; then <statements>\n```\n\n**elif**: Alternative condition branch\n\nEvaluates an alternative condition if the preceding if or elif condition failed.",
-      "hover_plaintext": "elif <condition>; then <statements>\n\nelif: Alternative condition branch\n\nEvaluates an alternative condition if the preceding if or elif condition failed.",
-      "terminal_ansi": "\u001b[1;36melif <condition>; then <statements>\u001b[0m\n\n\u001b[1melif\u001b[0m: Alternative condition branch\n\nEvaluates an alternative condition if the preceding if or elif condition failed."
+      "hover_markdown": "```esh\nelif <condition>; then <statements>\n```\n\n**elif** (`elif`): Alternative condition branch\n\nEvaluates an alternative condition if the preceding if or elif condition failed.",
+      "hover_plaintext": "elif <condition>; then <statements>\n\nelif (elif): Alternative condition branch\n\nEvaluates an alternative condition if the preceding if or elif condition failed.",
+      "terminal_ansi": "\u001b[1;36melif <condition>; then <statements>\u001b[0m\n\n\u001b[1melif\u001b[0m (elif): Alternative condition branch\n\nEvaluates an alternative condition if the preceding if or elif condition failed."
     },
     "else": {
       "name": "else",
@@ -741,9 +741,9 @@
       "summary": "Default fallback branch",
       "category": "keyword",
       "handler": "builtins::else",
-      "hover_markdown": "```esh\nelse <statements>\n```\n\n**else**: Default fallback branch\n\nExecutes statements when all preceding if and elif conditions fail.",
-      "hover_plaintext": "else <statements>\n\nelse: Default fallback branch\n\nExecutes statements when all preceding if and elif conditions fail.",
-      "terminal_ansi": "\u001b[1;36melse <statements>\u001b[0m\n\n\u001b[1melse\u001b[0m: Default fallback branch\n\nExecutes statements when all preceding if and elif conditions fail."
+      "hover_markdown": "```esh\nelse <statements>\n```\n\n**else** (`else`): Default fallback branch\n\nExecutes statements when all preceding if and elif conditions fail.",
+      "hover_plaintext": "else <statements>\n\nelse (else): Default fallback branch\n\nExecutes statements when all preceding if and elif conditions fail.",
+      "terminal_ansi": "\u001b[1;36melse <statements>\u001b[0m\n\n\u001b[1melse\u001b[0m (else): Default fallback branch\n\nExecutes statements when all preceding if and elif conditions fail."
     },
     "esac": {
       "name": "esac",
@@ -751,9 +751,9 @@
       "summary": "Close a case pattern matching block",
       "category": "keyword",
       "handler": "builtins::esac",
-      "hover_markdown": "```esh\nesac\n```\n\n**esac**: Close a case pattern matching block\n\nCloses a case statement block.",
-      "hover_plaintext": "esac\n\nesac: Close a case pattern matching block\n\nCloses a case statement block.",
-      "terminal_ansi": "\u001b[1;36mesac\u001b[0m\n\n\u001b[1mesac\u001b[0m: Close a case pattern matching block\n\nCloses a case statement block."
+      "hover_markdown": "```esh\nesac\n```\n\n**esac** (`esac`): Close a case pattern matching block\n\nCloses a case statement block.",
+      "hover_plaintext": "esac\n\nesac (esac): Close a case pattern matching block\n\nCloses a case statement block.",
+      "terminal_ansi": "\u001b[1;36mesac\u001b[0m\n\n\u001b[1mesac\u001b[0m (esac): Close a case pattern matching block\n\nCloses a case statement block."
     },
     "fi": {
       "name": "fi",
@@ -761,9 +761,9 @@
       "summary": "Close an if conditional block",
       "category": "keyword",
       "handler": "builtins::fi",
-      "hover_markdown": "```esh\nfi\n```\n\n**fi**: Close an if conditional block\n\nCloses an if/then/elif/else block.",
-      "hover_plaintext": "fi\n\nfi: Close an if conditional block\n\nCloses an if/then/elif/else block.",
-      "terminal_ansi": "\u001b[1;36mfi\u001b[0m\n\n\u001b[1mfi\u001b[0m: Close an if conditional block\n\nCloses an if/then/elif/else block."
+      "hover_markdown": "```esh\nfi\n```\n\n**fi** (`fi`): Close an if conditional block\n\nCloses an if/then/elif/else block.",
+      "hover_plaintext": "fi\n\nfi (fi): Close an if conditional block\n\nCloses an if/then/elif/else block.",
+      "terminal_ansi": "\u001b[1;36mfi\u001b[0m\n\n\u001b[1mfi\u001b[0m (fi): Close an if conditional block\n\nCloses an if/then/elif/else block."
     },
     "for": {
       "name": "for",
@@ -771,9 +771,9 @@
       "summary": "Iterate over a list of items",
       "category": "keyword",
       "handler": "builtins::for",
-      "hover_markdown": "```esh\nfor <var> in <words...>; do <statements>; done\n```\n\n**for**: Iterate over a list of items\n\nIterates over a sequence of words, binding each word to the variable.\n\n### Examples\n\n```esh\nfor item in alpha beta gamma; do\n    echo \"Processing $item\"\ndone\n```",
-      "hover_plaintext": "for <var> in <words...>; do <statements>; done\n\nfor: Iterate over a list of items\n\nIterates over a sequence of words, binding each word to the variable.\n\nExamples\n\nfor item in alpha beta gamma; do\n    echo \"Processing $item\"\ndone",
-      "terminal_ansi": "\u001b[1;36mfor <var> in <words...>; do <statements>; done\u001b[0m\n\n\u001b[1mfor\u001b[0m: Iterate over a list of items\n\nIterates over a sequence of words, binding each word to the variable.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mfor item in alpha beta gamma; do\u001b[0m\n\u001b[90m  │ \u001b[32m    echo \"Processing $item\"\u001b[0m\n\u001b[90m  │ \u001b[32mdone\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m"
+      "hover_markdown": "```esh\nfor <var> in <words...>; do <statements>; done\n```\n\n**for** (`for`): Iterate over a list of items\n\nIterates over a sequence of words, binding each word to the variable.\n\n### Examples\n\n```esh\nfor item in alpha beta gamma; do\n    echo \"Processing $item\"\ndone\n```",
+      "hover_plaintext": "for <var> in <words...>; do <statements>; done\n\nfor (for): Iterate over a list of items\n\nIterates over a sequence of words, binding each word to the variable.\n\nExamples\n\nfor item in alpha beta gamma; do\n    echo \"Processing $item\"\ndone",
+      "terminal_ansi": "\u001b[1;36mfor <var> in <words...>; do <statements>; done\u001b[0m\n\n\u001b[1mfor\u001b[0m (for): Iterate over a list of items\n\nIterates over a sequence of words, binding each word to the variable.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mfor item in alpha beta gamma; do\u001b[0m\n\u001b[90m  │ \u001b[32m    echo \"Processing $item\"\u001b[0m\n\u001b[90m  │ \u001b[32mdone\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m"
     },
     "function": {
       "name": "function",
@@ -781,9 +781,9 @@
       "summary": "Define named shell function",
       "category": "keyword",
       "handler": "builtins::function",
-      "hover_markdown": "```esh\nfunction <name>() { <statements>; }\n```\n\n**function**: Define named shell function\n\nDeclares a named function with isolated parameter scoping.",
-      "hover_plaintext": "function <name>() { <statements>; }\n\nfunction: Define named shell function\n\nDeclares a named function with isolated parameter scoping.",
-      "terminal_ansi": "\u001b[1;36mfunction <name>() { <statements>; }\u001b[0m\n\n\u001b[1mfunction\u001b[0m: Define named shell function\n\nDeclares a named function with isolated parameter scoping."
+      "hover_markdown": "```esh\nfunction <name>() { <statements>; }\n```\n\n**function** (`function`): Define named shell function\n\nDeclares a named function with isolated parameter scoping.",
+      "hover_plaintext": "function <name>() { <statements>; }\n\nfunction (function): Define named shell function\n\nDeclares a named function with isolated parameter scoping.",
+      "terminal_ansi": "\u001b[1;36mfunction <name>() { <statements>; }\u001b[0m\n\n\u001b[1mfunction\u001b[0m (function): Define named shell function\n\nDeclares a named function with isolated parameter scoping."
     },
     "if": {
       "name": "if",
@@ -791,9 +791,9 @@
       "summary": "Conditional execution",
       "category": "keyword",
       "handler": "builtins::if",
-      "hover_markdown": "```esh\nif <condition>; then <statements>; [elif <condition>; then <statements>;] [else <statements>;] fi\n```\n\n**if**: Conditional execution\n\nEvaluates a condition command or expression. If the exit status is 0, executes the then branch.\n\n### Examples\n\n```esh\nif test -f ./config.yaml; then\n    echo \"Config found\"\nfi\n```",
-      "hover_plaintext": "if <condition>; then <statements>; [elif <condition>; then <statements>;] [else <statements>;] fi\n\nif: Conditional execution\n\nEvaluates a condition command or expression. If the exit status is 0, executes the then branch.\n\nExamples\n\nif test -f ./config.yaml; then\n    echo \"Config found\"\nfi",
-      "terminal_ansi": "\u001b[1;36mif <condition>; then <statements>; [elif <condition>; then <statements>;] [else <statements>;] fi\u001b[0m\n\n\u001b[1mif\u001b[0m: Conditional execution\n\nEvaluates a condition command or expression. If the exit status is 0, executes the then branch.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mif test -f ./config.yaml; then\u001b[0m\n\u001b[90m  │ \u001b[32m    echo \"Config found\"\u001b[0m\n\u001b[90m  │ \u001b[32mfi\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m"
+      "hover_markdown": "```esh\nif <condition>; then <statements>; [elif <condition>; then <statements>;] [else <statements>;] fi\n```\n\n**if** (`if`): Conditional execution\n\nEvaluates a condition command or expression. If the exit status is 0, executes the then branch.\n\n### Examples\n\n```esh\nif test -f ./config.yaml; then\n    echo \"Config found\"\nfi\n```",
+      "hover_plaintext": "if <condition>; then <statements>; [elif <condition>; then <statements>;] [else <statements>;] fi\n\nif (if): Conditional execution\n\nEvaluates a condition command or expression. If the exit status is 0, executes the then branch.\n\nExamples\n\nif test -f ./config.yaml; then\n    echo \"Config found\"\nfi",
+      "terminal_ansi": "\u001b[1;36mif <condition>; then <statements>; [elif <condition>; then <statements>;] [else <statements>;] fi\u001b[0m\n\n\u001b[1mif\u001b[0m (if): Conditional execution\n\nEvaluates a condition command or expression. If the exit status is 0, executes the then branch.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mif test -f ./config.yaml; then\u001b[0m\n\u001b[90m  │ \u001b[32m    echo \"Config found\"\u001b[0m\n\u001b[90m  │ \u001b[32mfi\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m"
     },
     "in": {
       "name": "in",
@@ -801,9 +801,9 @@
       "summary": "Specify item list in for, case, and select blocks",
       "category": "keyword",
       "handler": "builtins::in",
-      "hover_markdown": "```esh\nin <items...>\n```\n\n**in**: Specify item list in for, case, and select blocks\n\nSeparates loop variable or case target from candidates.",
-      "hover_plaintext": "in <items...>\n\nin: Specify item list in for, case, and select blocks\n\nSeparates loop variable or case target from candidates.",
-      "terminal_ansi": "\u001b[1;36min <items...>\u001b[0m\n\n\u001b[1min\u001b[0m: Specify item list in for, case, and select blocks\n\nSeparates loop variable or case target from candidates."
+      "hover_markdown": "```esh\nin <items...>\n```\n\n**in** (`in`): Specify item list in for, case, and select blocks\n\nSeparates loop variable or case target from candidates.",
+      "hover_plaintext": "in <items...>\n\nin (in): Specify item list in for, case, and select blocks\n\nSeparates loop variable or case target from candidates.",
+      "terminal_ansi": "\u001b[1;36min <items...>\u001b[0m\n\n\u001b[1min\u001b[0m (in): Specify item list in for, case, and select blocks\n\nSeparates loop variable or case target from candidates."
     },
     "select": {
       "name": "select",
@@ -811,9 +811,9 @@
       "summary": "Generate interactive terminal menu loop",
       "category": "keyword",
       "handler": "builtins::select",
-      "hover_markdown": "```esh\nselect <var> in <words...>; do <statements>; done\n```\n\n**select**: Generate interactive terminal menu loop\n\nPresents a numbered menu of items on standard error and reads the user selection into variable.",
-      "hover_plaintext": "select <var> in <words...>; do <statements>; done\n\nselect: Generate interactive terminal menu loop\n\nPresents a numbered menu of items on standard error and reads the user selection into variable.",
-      "terminal_ansi": "\u001b[1;36mselect <var> in <words...>; do <statements>; done\u001b[0m\n\n\u001b[1mselect\u001b[0m: Generate interactive terminal menu loop\n\nPresents a numbered menu of items on standard error and reads the user selection into variable."
+      "hover_markdown": "```esh\nselect <var> in <words...>; do <statements>; done\n```\n\n**select** (`select`): Generate interactive terminal menu loop\n\nPresents a numbered menu of items on standard error and reads the user selection into variable.",
+      "hover_plaintext": "select <var> in <words...>; do <statements>; done\n\nselect (select): Generate interactive terminal menu loop\n\nPresents a numbered menu of items on standard error and reads the user selection into variable.",
+      "terminal_ansi": "\u001b[1;36mselect <var> in <words...>; do <statements>; done\u001b[0m\n\n\u001b[1mselect\u001b[0m (select): Generate interactive terminal menu loop\n\nPresents a numbered menu of items on standard error and reads the user selection into variable."
     },
     "then": {
       "name": "then",
@@ -821,9 +821,9 @@
       "summary": "Consequent branch of an if/elif conditional",
       "category": "keyword",
       "handler": "builtins::then",
-      "hover_markdown": "```esh\nthen <statements>\n```\n\n**then**: Consequent branch of an if/elif conditional\n\nMarks the beginning of the consequent statements in an if or elif block.",
-      "hover_plaintext": "then <statements>\n\nthen: Consequent branch of an if/elif conditional\n\nMarks the beginning of the consequent statements in an if or elif block.",
-      "terminal_ansi": "\u001b[1;36mthen <statements>\u001b[0m\n\n\u001b[1mthen\u001b[0m: Consequent branch of an if/elif conditional\n\nMarks the beginning of the consequent statements in an if or elif block."
+      "hover_markdown": "```esh\nthen <statements>\n```\n\n**then** (`then`): Consequent branch of an if/elif conditional\n\nMarks the beginning of the consequent statements in an if or elif block.",
+      "hover_plaintext": "then <statements>\n\nthen (then): Consequent branch of an if/elif conditional\n\nMarks the beginning of the consequent statements in an if or elif block.",
+      "terminal_ansi": "\u001b[1;36mthen <statements>\u001b[0m\n\n\u001b[1mthen\u001b[0m (then): Consequent branch of an if/elif conditional\n\nMarks the beginning of the consequent statements in an if or elif block."
     },
     "until": {
       "name": "until",
@@ -831,9 +831,9 @@
       "summary": "Loop until condition is true",
       "category": "keyword",
       "handler": "builtins::until",
-      "hover_markdown": "```esh\nuntil <condition>; do <statements>; done\n```\n\n**until**: Loop until condition is true\n\nExecutes the body statements repeatedly until the condition returns exit status 0.",
-      "hover_plaintext": "until <condition>; do <statements>; done\n\nuntil: Loop until condition is true\n\nExecutes the body statements repeatedly until the condition returns exit status 0.",
-      "terminal_ansi": "\u001b[1;36muntil <condition>; do <statements>; done\u001b[0m\n\n\u001b[1muntil\u001b[0m: Loop until condition is true\n\nExecutes the body statements repeatedly until the condition returns exit status 0."
+      "hover_markdown": "```esh\nuntil <condition>; do <statements>; done\n```\n\n**until** (`until`): Loop until condition is true\n\nExecutes the body statements repeatedly until the condition returns exit status 0.",
+      "hover_plaintext": "until <condition>; do <statements>; done\n\nuntil (until): Loop until condition is true\n\nExecutes the body statements repeatedly until the condition returns exit status 0.",
+      "terminal_ansi": "\u001b[1;36muntil <condition>; do <statements>; done\u001b[0m\n\n\u001b[1muntil\u001b[0m (until): Loop until condition is true\n\nExecutes the body statements repeatedly until the condition returns exit status 0."
     },
     "while": {
       "name": "while",
@@ -841,9 +841,9 @@
       "summary": "Loop while condition is true",
       "category": "keyword",
       "handler": "builtins::while",
-      "hover_markdown": "```esh\nwhile <condition>; do <statements>; done\n```\n\n**while**: Loop while condition is true\n\nExecutes the body statements repeatedly as long as the condition evaluates to exit status 0.\n\n### Examples\n\n```esh\nwhile test -f ./lock.pid; do\n    sleep 500ms\ndone\n```",
-      "hover_plaintext": "while <condition>; do <statements>; done\n\nwhile: Loop while condition is true\n\nExecutes the body statements repeatedly as long as the condition evaluates to exit status 0.\n\nExamples\n\nwhile test -f ./lock.pid; do\n    sleep 500ms\ndone",
-      "terminal_ansi": "\u001b[1;36mwhile <condition>; do <statements>; done\u001b[0m\n\n\u001b[1mwhile\u001b[0m: Loop while condition is true\n\nExecutes the body statements repeatedly as long as the condition evaluates to exit status 0.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mwhile test -f ./lock.pid; do\u001b[0m\n\u001b[90m  │ \u001b[32m    sleep 500ms\u001b[0m\n\u001b[90m  │ \u001b[32mdone\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m"
+      "hover_markdown": "```esh\nwhile <condition>; do <statements>; done\n```\n\n**while** (`while`): Loop while condition is true\n\nExecutes the body statements repeatedly as long as the condition evaluates to exit status 0.\n\n### Examples\n\n```esh\nwhile test -f ./lock.pid; do\n    sleep 500ms\ndone\n```",
+      "hover_plaintext": "while <condition>; do <statements>; done\n\nwhile (while): Loop while condition is true\n\nExecutes the body statements repeatedly as long as the condition evaluates to exit status 0.\n\nExamples\n\nwhile test -f ./lock.pid; do\n    sleep 500ms\ndone",
+      "terminal_ansi": "\u001b[1;36mwhile <condition>; do <statements>; done\u001b[0m\n\n\u001b[1mwhile\u001b[0m (while): Loop while condition is true\n\nExecutes the body statements repeatedly as long as the condition evaluates to exit status 0.\n\n\u001b[1;33mExamples\u001b[0m\n\n\u001b[90m  │ \u001b[32mwhile test -f ./lock.pid; do\u001b[0m\n\u001b[90m  │ \u001b[32m    sleep 500ms\u001b[0m\n\u001b[90m  │ \u001b[32mdone\u001b[0m\n\u001b[90m  │ \u001b[32m\u001b[0m"
     }
   }
 }
