@@ -33,10 +33,11 @@ tasks:
 
   e2e:
     stage: Test
-    description: "Run EVIN binary-level integration tests"
+    description: "Run EVIN CLI and renderer tests on the current platform"
     presets: [rust]
     steps:
       - run: cargo test -p evin --test cli_e2e --locked
+      - run: cargo test -p evin-ui --locked
 
   verify:
     stage: Test

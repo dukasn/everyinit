@@ -61,7 +61,10 @@ fn init_supports_a_destination_with_spaces() {
 #[test]
 fn discovery_commands_emit_valid_file_uris() {
     let temp = tempdir().unwrap();
-    let workspace = temp.path().join("workspace with spaces");
+    let workspace = temp
+        .path()
+        .join("cross-platform-renderer-path-segment-long-enough-to-exceed-terminal-width")
+        .join("workspace with spaces");
     write_workspace(
         &workspace,
         "  inspect:\n    stage: Test\n    cwd: nested directory\n    run: pwd\n",
@@ -75,6 +78,11 @@ fn discovery_commands_emit_valid_file_uris() {
     let cwd = workspace.join("nested directory").canonicalize().unwrap();
     let manifest_uri = url::Url::from_file_path(manifest).unwrap().to_string();
     let cwd_uri = url::Url::from_file_path(cwd).unwrap().to_string();
+    assert!(
+        manifest_uri.len() > 80,
+        "fixture URI must exceed fallback width"
+    );
+    assert!(cwd_uri.len() > 80, "fixture URI must exceed fallback width");
 
     for args in [&["list"][..], &["explain", "inspect"], &["check"]] {
         let output = evin().current_dir(&workspace).args(args).output().unwrap();
@@ -83,17 +91,14 @@ fn discovery_commands_emit_valid_file_uris() {
         assert!(rendered.contains("file:///"), "{rendered}");
         assert!(!rendered.contains("file://file://"), "{rendered}");
         assert_uri_has_no_backslashes(&rendered);
-        // Terminal tables may wrap long paths at slash boundaries. Whitespace
-        // is presentation here; the URI itself must remain intact.
-        let compact = rendered
-            .chars()
-            .filter(|character| !character.is_whitespace())
-            .collect::<String>();
-        if args[0] == "explain" {
-            assert!(compact.contains(&cwd_uri), "{rendered}");
+        // File URIs are copyable tokens. Require them to remain contiguous in
+        // captured output, regardless of runner OS or terminal width.
+        let expected_uri = if args[0] == "explain" {
+            &cwd_uri
         } else {
-            assert!(compact.contains(&manifest_uri), "{rendered}");
-        }
+            &manifest_uri
+        };
+        assert!(rendered.contains(expected_uri), "{rendered}");
     }
 }
 

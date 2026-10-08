@@ -59,9 +59,23 @@ impl Layout {
     }
 
     pub fn wrap_with_margin(&self, text: &str, margin: usize) -> Vec<String> {
+        self.wrap_with_margin_options(text, margin, true)
+    }
+
+    /// Wraps between words while keeping long tokens, such as file URIs, intact.
+    pub fn wrap_with_margin_preserving_words(&self, text: &str, margin: usize) -> Vec<String> {
+        self.wrap_with_margin_options(text, margin, false)
+    }
+
+    fn wrap_with_margin_options(
+        &self,
+        text: &str,
+        margin: usize,
+        break_words: bool,
+    ) -> Vec<String> {
         let width = self.inner_width().saturating_sub(margin);
         let options = Options::new(width)
-            .break_words(true)
+            .break_words(break_words)
             .word_separator(textwrap::WordSeparator::AsciiSpace)
             .word_splitter(textwrap::WordSplitter::NoHyphenation)
             .subsequent_indent("");

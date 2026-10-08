@@ -536,7 +536,7 @@ fn severity_title(
     severity: Severity,
     title: &str,
 ) {
-    let wrapped = layout.wrap_with_margin(title, 3);
+    let wrapped = wrap_discovery_title(layout, title, 3);
     for (index, line) in wrapped.iter().enumerate() {
         if index == 0 {
             lines.push(format!(
@@ -651,8 +651,16 @@ fn success_section(lines: &mut Vec<String>, title: &str) {
     bar(lines);
 }
 
+fn wrap_discovery_title(layout: &Layout, title: &str, margin: usize) -> Vec<String> {
+    if title.contains("file://") {
+        layout.wrap_with_margin_preserving_words(title, margin)
+    } else {
+        layout.wrap_with_margin(title, margin)
+    }
+}
+
 fn check_manifest_section(lines: &mut Vec<String>, layout: &Layout, title: &str) {
-    let wrapped = layout.wrap_with_margin(title, 3);
+    let wrapped = wrap_discovery_title(layout, title, 3);
     for (index, line) in wrapped.iter().enumerate() {
         if index == 0 {
             lines.push(format!(
@@ -1027,6 +1035,41 @@ mod tests {
         assert!(output.contains("5 tasks, 2 stages, 0 modules, 0 namespaces"));
         assert!(output.contains("5 nodes, 3 edges, 0 cycles detected"));
         assert!(output.contains("╰  Finished!"));
+    }
+
+    #[test]
+    fn narrow_check_keeps_manifest_uri_intact() {
+        let uri =
+            "file:///private/var/folders/temporary/workspace%20with%20spaces/.evin/workspace.flow";
+        let output = render_check(
+            &CheckReportView {
+                workspace: workspace(),
+                checked_files: vec![CheckedManifest {
+                    path: uri.into(),
+                    task_count: 1,
+                    kind: ManifestKind::Workspace,
+                    issues: vec![CheckIssueView {
+                        diagnostic: Diagnostic::new(
+                            "Validation failed",
+                            IssueCode::new("issue-test-invalid"),
+                        ),
+                        message: "The workspace manifest is invalid".into(),
+                    }],
+                }],
+                total_tasks: 1,
+                total_stages: 1,
+                total_modules: 0,
+                total_namespaces: 0,
+                graph_nodes: 1,
+                graph_edges: 0,
+                graph_cycles: 0,
+                issues: Vec::new(),
+            },
+            36,
+            None,
+        );
+        let output = console::strip_ansi_codes(&output);
+        assert!(output.contains(uri), "{output}");
     }
 
     #[test]
