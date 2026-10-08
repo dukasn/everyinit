@@ -83,10 +83,16 @@ fn discovery_commands_emit_valid_file_uris() {
         assert!(rendered.contains("file:///"), "{rendered}");
         assert!(!rendered.contains("file://file://"), "{rendered}");
         assert_uri_has_no_backslashes(&rendered);
+        // Terminal tables may wrap long paths at slash boundaries. Whitespace
+        // is presentation here; the URI itself must remain intact.
+        let compact = rendered
+            .chars()
+            .filter(|character| !character.is_whitespace())
+            .collect::<String>();
         if args[0] == "explain" {
-            assert!(rendered.contains(&cwd_uri), "{rendered}");
+            assert!(compact.contains(&cwd_uri), "{rendered}");
         } else {
-            assert!(rendered.contains(&manifest_uri), "{rendered}");
+            assert!(compact.contains(&manifest_uri), "{rendered}");
         }
     }
 }
