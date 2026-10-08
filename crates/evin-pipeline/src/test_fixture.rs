@@ -20,7 +20,7 @@ use evin_config::models::TaskObject;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 
-/// Ergonomic test harness for pipeline integration tests.
+/// Ergonomic test harness for pipeline tests.
 ///
 /// Reduces engine setup from ~30 lines to a simple builder chain:
 /// ```ignore
@@ -30,14 +30,14 @@ use tokio::sync::mpsc;
 /// let (report, _logs) = fixture.run().await;
 /// assert!(report.error.is_none());
 /// ```
-pub struct PipelineFixture {
+struct PipelineFixture {
     engine: PipelineEngine,
     resolver: DagResolver,
 }
 
 impl PipelineFixture {
     /// Create a new fixture with a default no-CI, Normal mode engine.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             engine: PipelineEngine::new(
                 false,
@@ -51,7 +51,7 @@ impl PipelineFixture {
     }
 
     /// Add a shell script task to the pipeline under test.
-    pub fn with_task(mut self, name: &str, needs: Option<Vec<&str>>, script: &str) -> Self {
+    fn with_task(mut self, name: &str, needs: Option<Vec<&str>>, script: &str) -> Self {
         self.resolver.add_task(TaskObject {
             name: name.to_string(),
             needs: needs.map(|v| v.into_iter().map(str::to_string).collect()),
@@ -61,14 +61,8 @@ impl PipelineFixture {
         self
     }
 
-    /// Register a native action implementation for use in `steps:` tasks.
-    pub fn with_action(mut self, name: &str, action: Box<dyn evin_action_sdk::Action>) -> Self {
-        self.engine.register_action(name, action);
-        self
-    }
-
     /// Execute the pipeline and collect all log messages.
-    pub async fn run(self) -> (crate::engine::PipelineReport, Vec<LogMessage>) {
+    async fn run(self) -> (crate::engine::PipelineReport, Vec<LogMessage>) {
         let (log_tx, mut log_rx) = mpsc::unbounded_channel::<LogMessage>();
         let report = self.engine.execute(self.resolver, log_tx).await;
         let mut logs = Vec::new();

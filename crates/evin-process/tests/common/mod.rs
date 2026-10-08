@@ -12,12 +12,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::models::GitRulesRoot;
+use std::ffi::OsString;
 
-/// Returns a `GitRulesRoot` pre-configured with standard conventional commit rules
-/// (feat → Minor, fix/chore/refactor/perf → Patch, breaking → Major).
-///
-/// Use this in unit tests to avoid repeating construction boilerplate.
-pub fn conventional_rules() -> GitRulesRoot {
-    GitRulesRoot::default()
+pub fn fixture_binary() -> OsString {
+    std::env::var_os("CARGO_BIN_EXE_process_fixture")
+        .expect("Cargo did not provide the process fixture binary")
 }

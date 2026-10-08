@@ -22,6 +22,9 @@ use std::time::Duration;
 use tokio::io::unix::AsyncFd;
 use tokio::process::{Child, Command};
 
+mod common;
+use common::fixture_binary;
+
 struct OwnedFd(RawFd);
 
 impl AsRawFd for OwnedFd {
@@ -163,11 +166,6 @@ fn duplicate_stdio(fd: RawFd) -> Stdio {
     let duplicate = unsafe { libc::dup(fd) };
     assert_ne!(duplicate, -1, "dup failed: {}", io::Error::last_os_error());
     unsafe { Stdio::from_raw_fd(duplicate) }
-}
-
-fn fixture_binary() -> std::ffi::OsString {
-    std::env::var_os("CARGO_BIN_EXE_process_fixture")
-        .expect("Cargo did not provide the process fixture binary")
 }
 
 #[tokio::test]

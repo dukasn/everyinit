@@ -17,4 +17,5 @@ include!("token_facts.rs");
 include!("document_index.rs");
 include!("reference_validation.rs");
 include!("completion.rs");
-include!("tests.rs");
+#[cfg(test)]
+mod tests;

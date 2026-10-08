@@ -17,6 +17,9 @@ use std::time::Duration;
 use evin_process::{ProcessHandle, ProcessMode, ProcessSpec, ProcessTermination};
 use tokio_util::sync::CancellationToken;
 
+mod common;
+use common::fixture_binary;
+
 #[tokio::test]
 #[ignore = "scheduled process-supervision soak suite"]
 async fn repeated_spawn_output_and_cancellation() {
@@ -27,8 +30,7 @@ async fn repeated_spawn_output_and_cancellation() {
             vec!["sleep".to_string(), "30000".to_string()]
         };
         let spec = ProcessSpec::new(
-            std::env::var_os("CARGO_BIN_EXE_process_fixture")
-                .expect("Cargo did not provide the process fixture binary"),
+            fixture_binary(),
             std::env::current_dir().unwrap(),
             ProcessMode::SupervisedAutomation,
         )

@@ -15,6 +15,8 @@
 use std::ffi::OsString;
 use std::time::{Duration, Instant};
 
+mod common;
+use common::fixture_binary;
 use evin_process::{
     EnvironmentPolicy, OutputChunk, OutputPolicy, ProcessHandle, ProcessMode, ProcessSpec,
     ProcessTermination, StdinPolicy,
@@ -31,11 +33,6 @@ fn fixture_spec(mode: &str, args: &[&str]) -> ProcessSpec {
         ProcessMode::SupervisedAutomation,
     )
     .args(all_args)
-}
-
-fn fixture_binary() -> OsString {
-    std::env::var_os("CARGO_BIN_EXE_process_fixture")
-        .expect("Cargo did not provide the process fixture binary")
 }
 
 #[tokio::test]

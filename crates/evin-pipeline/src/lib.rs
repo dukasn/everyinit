@@ -20,6 +20,7 @@ pub mod dag;
 pub mod env;
 pub mod preflight;
 pub mod runner;
-pub mod test_fixture;
+#[cfg(test)]
+mod test_fixture;
 
 pub use context::PipelineContext;
