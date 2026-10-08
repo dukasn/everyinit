@@ -16,7 +16,7 @@ use include_dir::{Dir, DirEntry, include_dir};
 
 // The complete locale tree is embedded so SDK protocol audits inspect the
 // same fallback resources that production presentation uses.
-static LOCALES_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../locales");
+static LOCALES_DIR: Dir = include_dir!("$EVIN_LOCALES_DIR");
 
 /// Represents a loaded Fluent translation resource file.
 #[derive(Debug, Clone, PartialEq, Eq)]
