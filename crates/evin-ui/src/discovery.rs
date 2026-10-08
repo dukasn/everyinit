@@ -738,12 +738,7 @@ fn metadata(lines: &mut Vec<String>, layout: &Layout, target: &TargetMetadata) {
     if target.kind != TargetKind::Task {
         if target.kind == TargetKind::Stage {
             metadata_bullet(lines, layout, "tasks", &target.resolved_tasks.to_string());
-            metadata_bullet(
-                lines,
-                layout,
-                "cwd",
-                target.cwd.as_deref().unwrap_or("(none)"),
-            );
+            metadata_uri_bullet(lines, "cwd", target.cwd.as_deref().unwrap_or("(none)"));
             metadata_bullet(lines, layout, "modules", &modules_or_none(&target.modules));
             return;
         }
@@ -766,9 +761,8 @@ fn metadata(lines: &mut Vec<String>, layout: &Layout, target: &TargetMetadata) {
         &evin_locales::t!("discovery-stage-label"),
         target.stage.as_deref().unwrap_or("(none)"),
     );
-    metadata_bullet(
+    metadata_uri_bullet(
         lines,
-        layout,
         &evin_locales::t!("discovery-cwd-label"),
         target.cwd.as_deref().unwrap_or("."),
     );
@@ -784,6 +778,16 @@ fn metadata(lines: &mut Vec<String>, layout: &Layout, target: &TargetMetadata) {
         &evin_locales::t!("discovery-environment-label"),
         &joined_or_none(&target.environment),
     );
+}
+
+fn metadata_uri_bullet(lines: &mut Vec<String>, label: &str, uri: &str) {
+    // A file URI is one copyable token. Wrapping it with frame gutters inserts
+    // characters into the URI, so let terminals visually wrap the single line.
+    lines.push(format!(
+        "{}  • {}: {uri}",
+        Theme::frame(SYMBOL_FRAME_BAR),
+        dim(label),
+    ));
 }
 
 fn metadata_bullet(lines: &mut Vec<String>, layout: &Layout, label: &str, value: &str) {
@@ -936,6 +940,34 @@ mod tests {
         assert!(output.contains("(action) ↩"));
         assert!(output.contains("~  Execution Plan"));
         assert!(output.contains("nothing was executed"));
+    }
+
+    #[test]
+    fn narrow_explanation_keeps_cwd_uri_intact() {
+        let uri =
+            "file:///private/var/folders/temporary/workspace%20with%20spaces/nested%20directory";
+        let output = render_explanation(
+            &ExplanationView {
+                workspace: workspace(),
+                target: TargetMetadata {
+                    name: "inspect".into(),
+                    kind: TargetKind::Task,
+                    description: None,
+                    stage: Some("Test".into()),
+                    cwd: Some(uri.into()),
+                    needs: Vec::new(),
+                    environment: Vec::new(),
+                    steps: Vec::new(),
+                    resolved_tasks: 1,
+                    modules: Vec::new(),
+                },
+                execution: Vec::new(),
+                step_count: 0,
+            },
+            36,
+        );
+        let output = console::strip_ansi_codes(&output);
+        assert!(output.contains(uri), "{output}");
     }
 
     #[test]
