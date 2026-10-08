@@ -9,9 +9,7 @@
 !/THIRD_PARTY_NOTICES/
 # Public repository entry point; the root deny-all rule otherwise excludes it.
 !/README.md
-!/EVIN_LSP_COMPLETION_TODO.md
 !/docs/
-!/evin-ui-mockup/
 !/crates/
 !/.cargo/
 !/.evin/
