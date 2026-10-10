@@ -1,7 +1,7 @@
 // Copyright (C) 2026 Eduardo Marques Santos
 //
 // Deterministic, Git-backed package release state shared by native actions and
-// the CLI. The lock file is data; policy remains in gitrules.yaml.
+// the CLI. The lock file is data; policy remains in gitrules.flow.
 
 use evin_gitrules::{PackageReleasePolicy, PackageRevisionScope};
 use glob::Pattern;

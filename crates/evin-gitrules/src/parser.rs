@@ -25,7 +25,7 @@ pub enum ParserError {
     Io(#[from] std::io::Error),
     #[error("JSON Parsing Error: {0}")]
     Json(#[from] JsonError),
-    #[error("Unsupported file format. Must be .flow, .yaml, .yml, or .json")]
+    #[error("Unsupported file format. Must be .flow or .json")]
     UnsupportedFormat,
     #[error(transparent)]
     Diagnostic(#[from] evin_diagnostic::Diagnostic),
@@ -46,7 +46,7 @@ pub fn parse_str(
     path: Option<&Path>,
 ) -> Result<GitRulesRoot, ParserError> {
     match extension {
-        "flow" | "yaml" | "yml" => Ok(<GitRulesRoot as evin_yaml::YamlDocument>::from_str(
+        "flow" => Ok(<GitRulesRoot as evin_yaml::YamlDocument>::from_str(
             content, path,
         )?),
         "json" => Ok(serde_json::from_str(content)?),
@@ -60,13 +60,16 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn yaml_gitrules_accepts_v1_headers_and_rejects_other_evin_headers() {
-        assert!(parse_str("#!evin/v1\nversion: 1\n", "yaml", None).is_ok());
+    fn flow_gitrules_accepts_v1_headers_and_rejects_other_evin_headers() {
         assert!(parse_str("#!evin/v1\nversion: 1\n", "flow", None).is_ok());
+        assert!(matches!(
+            parse_str("#!evin/v1\nversion: 1\n", "yaml", None),
+            Err(ParserError::UnsupportedFormat)
+        ));
         let error = parse_str(
             "#!evin/v2\nversion: 1\n",
-            "yaml",
-            Some(Path::new("rules.yaml")),
+            "flow",
+            Some(Path::new("rules.flow")),
         )
         .unwrap_err();
         assert!(

@@ -61,13 +61,13 @@ mod tests {
     #[test]
     fn open_documents_shadow_and_close_cleanly() {
         let mut documents = DocumentStore::default();
-        documents.open(LspDocument::new("file:///a.yaml".into(), 1, "one".into()));
+        documents.open(LspDocument::new("file:///a.flow".into(), 1, "one".into()));
         documents
-            .get_mut("file:///a.yaml")
+            .get_mut("file:///a.flow")
             .unwrap()
             .update(2, "two".into());
-        assert_eq!(documents.get("file:///a.yaml").unwrap().text, "two");
-        assert!(documents.close("file:///a.yaml").is_some());
-        assert!(documents.get("file:///a.yaml").is_none());
+        assert_eq!(documents.get("file:///a.flow").unwrap().text, "two");
+        assert!(documents.close("file:///a.flow").is_some());
+        assert!(documents.get("file:///a.flow").is_none());
     }
 }

@@ -874,7 +874,7 @@ mod tests {
 
         let snippets = vec![
             "Install the standalone EVIN binary...".to_string(),
-            "Configure a workspace in .evin/workspace.yaml...".to_string(),
+            "Configure a workspace in .evin/workspace.flow...".to_string(),
         ];
 
         let mut index = BTreeMap::new();

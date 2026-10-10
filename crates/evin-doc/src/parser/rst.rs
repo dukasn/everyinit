@@ -2196,7 +2196,7 @@ timeout : duration (e.g. 30s, 5m)
     fn test_parse_rst_field_list() {
         let rst = r#"
 :Action: ``evin/action-docs@v1``
-:Inputs: ``workspace.yaml``, ``docs/``
+:Inputs: ``workspace.flow``, ``docs/``
 :Outputs: ``dist/docs/`` (Static Site)
 "#;
         let res = RstParser::parse(rst);
@@ -2435,7 +2435,7 @@ timeout : duration (e.g. 30s, 5m)
       :status: active
       :badge: 2
 
-      Declare tasks in ``workspace.yaml``.
+      Declare tasks in ``workspace.flow``.
 "#;
         let res = RstParser::parse(rst);
         assert_eq!(res.ast.len(), 1);

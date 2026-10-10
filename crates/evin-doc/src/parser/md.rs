@@ -1753,7 +1753,7 @@ $$
     fn test_parse_markdown_option_definition_and_field_lists() {
         let md = r#"
 :Action: `evin/action-docs@v1`
-:Inputs: `workspace.yaml`, `docs/`
+:Inputs: `workspace.flow`, `docs/`
 :Outputs: `dist/docs/`
 
 -h, --help           Show help message.
@@ -1809,7 +1809,7 @@ max_threads : integer : optional (default: 4)
    ```
 
 2. **Configure Pipeline** [active]
-   Declare tasks in `workspace.yaml`.
+   Declare tasks in `workspace.flow`.
 ````
 "#;
         let res = MarkdownParser::parse(md, false);
@@ -1853,7 +1853,7 @@ max_threads : integer : optional (default: 4)
    ```
 
 2. **Configure Pipeline** [active]
-   Declare tasks in `workspace.yaml`.
+   Declare tasks in `workspace.flow`.
 :::
 "#;
         let container_res = MarkdownParser::parse(container_md, false);

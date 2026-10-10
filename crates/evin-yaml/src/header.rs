@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn validation_exposes_the_header_span_as_a_diagnostic() {
         let diagnostic =
-            validate_evin_header("#!evin/v2\n", Some(Path::new("config.yaml"))).unwrap_err();
+            validate_evin_header("#!evin/v2\n", Some(Path::new("config.flow"))).unwrap_err();
         assert_eq!(diagnostic.code.key, "issue-evin-header-invalid");
         assert!(matches!(
             diagnostic.location,
