@@ -92,10 +92,12 @@ impl Phase for ResolveInitPhase {
 
     async fn execute(
         &self,
-        _ctx: &mut CliContext,
+        ctx: &mut CliContext,
         emitter: &PipelineEmitter,
     ) -> Result<(), Diagnostic> {
-        super::emit_resolving_configuration_debug_logs(emitter).await;
+        if ctx.debug {
+            super::emit_resolving_configuration_debug_logs(emitter).await;
+        }
         Ok(())
     }
 }

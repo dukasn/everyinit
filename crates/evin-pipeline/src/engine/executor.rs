@@ -426,6 +426,17 @@ impl PipelineEngine {
             .cancel_token(Some(engine_ctx.cancel_token.clone()))
             .build();
 
+            let task_cwd = ctx.fs.task_cwd();
+            let workspace_root = ctx.fs.workspace_root();
+            if task_cwd != workspace_root {
+                let path = task_cwd
+                    .strip_prefix(workspace_root)
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|_| task_cwd.display().to_string());
+                ctx.log
+                    .debug_event(evin_action_sdk::debug::TaskWorkingDirectory { path });
+            }
+
             // Pass the globally resolved gitrules down to the action context
             if let Some(r) = gitrules {
                 ctx.gitrules = r;
@@ -442,7 +453,25 @@ impl PipelineEngine {
                     .await
             } else if let Some(step_list) = steps {
                 let mut res = Ok(());
-                for step in step_list {
+                let step_count = step_list.len();
+                for (step_index, step) in step_list.into_iter().enumerate() {
+                    if step_count > 1 {
+                        let footer = step
+                            .run
+                            .as_ref()
+                            .map(|script| format!("(cmd) {}", engine_ctx.secrets.redact(script)))
+                            .or_else(|| step.uses.as_ref().map(|uses| uses.value.clone()));
+                        let _ =
+                            engine_ctx
+                                .log_tx
+                                .send(evin_action_sdk::LogMessage::TaskStepStarted {
+                                    task_name: task_name.clone(),
+                                    step_number: step_index + 1,
+                                    step_count,
+                                    footer,
+                                });
+                    }
+
                     if let Some(script) = step.run {
                         let step_res = engine_ctx
                             .runner

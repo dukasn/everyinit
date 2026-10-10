@@ -294,6 +294,7 @@ macro_rules! define_debug_registry {
 define_debug_registry! {
     pub struct ConfigLoaded { target: String, name: String, bytes: usize, status: String } => (101, context, append);
     pub struct WorkspaceContext { workspace_root: String, current_cwd: String, config_origin: String, write_permissions: String } => (102, context, append);
+    pub struct TaskWorkingDirectory { path: String } => (110, context, append);
     pub struct GitState { git_branch: String, head_commit: String, working_tree: String, hooks_dir: String } => (103, context, append);
     pub struct GitrulesLoaded { target: String, loaded_rules: usize } => (104, context, append);
     pub struct ModuleLoaded { target: String, name: String, tasks: usize } => (105, context, append);

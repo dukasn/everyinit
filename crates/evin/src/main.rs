@@ -221,6 +221,7 @@ async fn main() {
     let mut ctx = crate::engine::CliContext {
         mode: pipeline_mode,
         verbose,
+        debug: debug_enabled,
         ..Default::default()
     };
     let mut run_session = None;
@@ -278,6 +279,7 @@ async fn main() {
                 args: args.clone(),
                 mode: pipeline_mode,
                 verbose,
+                debug: debug_enabled,
                 forced_execution: ctx.forced_execution,
             });
 

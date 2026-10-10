@@ -50,6 +50,12 @@ pub enum PipelineEvent {
         description: Option<String>,
         command: Option<String>,
     },
+    TaskStepStarted {
+        name: String,
+        step_number: usize,
+        step_count: usize,
+        footer: Option<String>,
+    },
     TaskOutputEnded {
         name: String,
         duration: Duration,
@@ -267,6 +273,14 @@ pub async fn run_ui_reporter(
                                     name,
                                     description,
                                     command,
+                                }).await;
+                            }
+                            PipelineEvent::TaskStepStarted { name, step_number, step_count, footer } => {
+                                ui.handle_event(UIEvent::TaskStepStarted {
+                                    name,
+                                    step_number,
+                                    step_count,
+                                    footer,
                                 }).await;
                             }
                             PipelineEvent::Activity { task, record } => {

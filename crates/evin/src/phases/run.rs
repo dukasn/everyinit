@@ -44,7 +44,9 @@ impl Phase for ResolveConfigPhase {
         ctx: &mut CliContext,
         emitter: &PipelineEmitter,
     ) -> Result<(), Diagnostic> {
-        super::emit_resolving_configuration_debug_logs(emitter).await;
+        if ctx.debug {
+            super::emit_resolving_configuration_debug_logs(emitter).await;
+        }
         let config = evin_config::load_workspace_tasks().await?;
 
         let workspace_yaml_path = std::path::PathBuf::from(evin_config::paths::WORKSPACE_MANIFEST);
@@ -334,6 +336,19 @@ impl Phase for ExecuteTasksPhase {
                             name: task_name,
                             description,
                             command,
+                        });
+                    }
+                    evin_action_sdk::LogMessage::TaskStepStarted {
+                        task_name,
+                        step_number,
+                        step_count,
+                        footer,
+                    } => {
+                        emitter_clone.emit(PipelineEvent::TaskStepStarted {
+                            name: task_name,
+                            step_number,
+                            step_count,
+                            footer,
                         });
                     }
                     evin_action_sdk::LogMessage::DependencyUpdate {

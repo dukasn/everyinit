@@ -22,6 +22,7 @@ pub struct Spinner {
     join_handle: Option<JoinHandle<()>>,
     backend: std::sync::Arc<dyn OutputBackend>,
     layout: Layout,
+    output_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 struct SpinnerState {
@@ -57,6 +58,7 @@ impl Spinner {
             join_handle: None,
             backend,
             layout,
+            output_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
@@ -95,6 +97,7 @@ impl Spinner {
 
         let state_clone = self.state.clone();
         let backend_clone = self.backend.clone();
+        let output_lock = self.output_lock.clone();
         let layout = self.layout;
         self.join_handle = Some(tokio::spawn(async move {
             let theme = Theme::default();
@@ -153,13 +156,13 @@ impl Spinner {
                 let reserved_width = 3 + console::measure_text_width(&time_suffix);
                 let msg = layout.fit_single_line(&state_msg, reserved_width);
 
+                let _output_guard = output_lock.lock().await;
                 {
                     let state = state_clone.lock().unwrap();
                     if state.cleared || !state.running {
                         continue;
                     }
                 }
-
                 backend_clone.clear_line().await;
                 backend_clone
                     .write_str(&format!("{}  {}{}", spinner_prefix, msg, time_suffix))
@@ -188,6 +191,7 @@ impl Spinner {
         if let Ok(mut state) = self.state.lock() {
             state.cleared = true;
         }
+        let _output_guard = self.output_lock.lock().await;
         self.backend.clear_line().await;
         self.backend.flush().await;
     }

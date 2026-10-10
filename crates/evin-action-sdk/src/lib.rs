@@ -83,6 +83,12 @@ pub enum LogMessage {
         description: Option<String>,
         command: Option<String>,
     },
+    TaskStepStarted {
+        task_name: String,
+        step_number: usize,
+        step_count: usize,
+        footer: Option<String>,
+    },
     DependencyUpdate {
         task_name: String,
         in_degree: usize,

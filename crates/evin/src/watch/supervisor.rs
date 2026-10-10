@@ -31,6 +31,7 @@ pub struct RunSession {
     pub args: Vec<String>,
     pub mode: evin_action_sdk::PipelineMode,
     pub verbose: bool,
+    pub debug: bool,
     pub forced_execution: Option<evin_config::workspace::ExecutionMode>,
 }
 
@@ -47,6 +48,7 @@ impl RunSession {
             run_payload: self.args.clone(),
             forced_execution: self.forced_execution,
             verbose: self.verbose,
+            debug: self.debug,
             cancel_token,
             watch_session,
             summarize_cancelled_session,

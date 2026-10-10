@@ -68,6 +68,17 @@ pub struct RenderedLine {
     pub enqueued_at: std::time::Instant,
 }
 
+#[derive(Debug, Clone)]
+pub struct TaskStepOutput {
+    pub step_number: usize,
+    pub step_count: usize,
+    pub footer: Option<String>,
+    pub lines: Vec<String>,
+    pub debug_lines: Vec<String>,
+    pub debug_snapshot_indexes: HashMap<String, usize>,
+    pub has_error: bool,
+}
+
 // --- Task Tracker & State ---
 pub struct TaskState {
     pub display_name: String,
@@ -85,6 +96,8 @@ pub struct TaskState {
     pub debug_buffer: Vec<String>,
     pub debug_snapshot_indexes: HashMap<String, usize>,
     pub fenced_buffer: Vec<(String, Vec<String>, bool, Option<String>)>,
+    pub step_outputs: Vec<TaskStepOutput>,
+    pub active_step: Option<usize>,
     pub diagnosed: bool,
     pub was_parallel: bool,
     pub is_daemon: bool,
@@ -104,6 +117,8 @@ impl TaskState {
             debug_buffer: Vec::new(),
             debug_snapshot_indexes: HashMap::new(),
             fenced_buffer: Vec::new(),
+            step_outputs: Vec::new(),
+            active_step: None,
             diagnosed: false,
             was_parallel: false,
             is_daemon: false,
@@ -318,6 +333,28 @@ impl PipelineState {
                 let display_name = description.unwrap_or_else(|| name.clone());
                 self.tracker.add(name, display_name, command);
             }
+            UIEvent::TaskStepStarted {
+                name,
+                step_number,
+                step_count,
+                footer,
+            } => {
+                let task = self
+                    .tracker
+                    .tasks
+                    .entry(name.clone())
+                    .or_insert_with(|| TaskState::new(name, None));
+                task.step_outputs.push(TaskStepOutput {
+                    step_number,
+                    step_count,
+                    footer,
+                    lines: Vec::new(),
+                    debug_lines: Vec::new(),
+                    debug_snapshot_indexes: HashMap::new(),
+                    has_error: false,
+                });
+                task.active_step = Some(task.step_outputs.len() - 1);
+            }
             UIEvent::ItemFinished {
                 name,
                 failed,
@@ -358,6 +395,7 @@ impl PipelineState {
                     _already_diagnosed,
                     was_parallel,
                     command,
+                    step_outputs,
                 ) = if let Some(task) = self.tracker.remove(&name) {
                     (
                         task.display_name,
@@ -369,6 +407,7 @@ impl PipelineState {
                         task.diagnosed,
                         task.was_parallel,
                         task.command,
+                        task.step_outputs,
                     )
                 } else {
                     (
@@ -381,6 +420,7 @@ impl PipelineState {
                         false,
                         false,
                         None,
+                        Vec::new(),
                     )
                 };
 
@@ -388,6 +428,31 @@ impl PipelineState {
                     let duration_str = format_duration(duration.as_secs_f64());
                     let text = format_task_result(&display_name, &duration_str, was_parallel);
                     self.enqueue(PendingLog::Error(text));
+                    if !step_outputs.is_empty() {
+                        let last_step = step_outputs.len() - 1;
+                        for (index, mut step) in step_outputs.into_iter().enumerate() {
+                            if !step.debug_lines.is_empty() {
+                                self.enqueue(PendingLog::Debug(step.debug_lines));
+                            }
+                            if step.lines.is_empty() {
+                                step.lines.push(String::new());
+                            }
+                            let title = format!(
+                                "{}{} · step {}/{}",
+                                crate::render::SYMBOL_FENCED_TASK_PREFIX,
+                                name,
+                                step.step_number,
+                                step.step_count
+                            );
+                            self.enqueue(PendingLog::Fenced(
+                                title,
+                                step.lines,
+                                step.has_error || index == last_step,
+                                step.footer,
+                            ));
+                        }
+                        return;
+                    }
                     if !debug_lines.is_empty() {
                         self.enqueue(PendingLog::Debug(debug_lines));
                     }
@@ -405,6 +470,32 @@ impl PipelineState {
                 } else if unverified {
                     let text = format!("{} was skipped or unverified", display_name);
                     self.enqueue(PendingLog::Warn(text));
+                    if self.verbose && !step_outputs.is_empty() {
+                        for mut step in step_outputs {
+                            if !step.debug_lines.is_empty() {
+                                self.enqueue(PendingLog::Debug(step.debug_lines));
+                            }
+                            if step.lines.is_empty() {
+                                step.lines.push(String::new());
+                            }
+                            let title = format!(
+                                "{}{} · step {}/{}",
+                                crate::render::SYMBOL_FENCED_TASK_PREFIX,
+                                name,
+                                step.step_number,
+                                step.step_count
+                            );
+                            self.enqueue(PendingLog::Fenced(
+                                title,
+                                step.lines,
+                                step.has_error,
+                                step.footer,
+                            ));
+                        }
+                        return;
+                    }
+                    let mut debug_lines = debug_lines;
+                    debug_lines.extend(step_outputs.into_iter().flat_map(|step| step.debug_lines));
                     if !debug_lines.is_empty() {
                         self.enqueue(PendingLog::Debug(debug_lines));
                     }
@@ -415,6 +506,32 @@ impl PipelineState {
                     let duration_str = format_duration(duration.as_secs_f64());
                     let text = format_task_result(&display_name, &duration_str, was_parallel);
                     self.enqueue(PendingLog::Success(text));
+                    if self.verbose && !step_outputs.is_empty() {
+                        for mut step in step_outputs {
+                            if !step.debug_lines.is_empty() {
+                                self.enqueue(PendingLog::Debug(step.debug_lines));
+                            }
+                            if step.lines.is_empty() {
+                                step.lines.push(String::new());
+                            }
+                            let title = format!(
+                                "{}{} · step {}/{}",
+                                crate::render::SYMBOL_FENCED_TASK_PREFIX,
+                                name,
+                                step.step_number,
+                                step.step_count
+                            );
+                            self.enqueue(PendingLog::Fenced(
+                                title,
+                                step.lines,
+                                step.has_error,
+                                step.footer,
+                            ));
+                        }
+                        return;
+                    }
+                    let mut debug_lines = debug_lines;
+                    debug_lines.extend(step_outputs.into_iter().flat_map(|step| step.debug_lines));
                     if !debug_lines.is_empty() {
                         self.enqueue(PendingLog::Debug(debug_lines));
                     }
@@ -458,7 +575,20 @@ impl PipelineState {
                 }
 
                 if let Some(task) = self.tracker.get_mut(&name) {
-                    task.buffer.push(clean_line.clone());
+                    let step_buffered = if let Some(index) = task.active_step
+                        && let Some(step) = task.step_outputs.get_mut(index)
+                    {
+                        step.lines.push(clean_line.clone());
+                        if matches!(level, PipelineLogLevel::Error) {
+                            step.has_error = true;
+                        }
+                        true
+                    } else {
+                        false
+                    };
+                    if !step_buffered {
+                        task.buffer.push(clean_line.clone());
+                    }
                     if matches!(level, PipelineLogLevel::Warn | PipelineLogLevel::Error) {
                         task.important_activity.push(clean_line);
                     }
@@ -481,13 +611,21 @@ impl PipelineState {
                 let clean_line = message.trim_end().to_string();
                 let is_daemon = self.tracker.tasks.get(&name).is_some_and(|t| t.is_daemon);
                 if let Some(task) = self.tracker.get_mut(&name) {
+                    let step_buffered = if let Some(index) = task.active_step
+                        && let Some(step) = task.step_outputs.get_mut(index)
+                    {
+                        step.lines.push(clean_line.clone());
+                        true
+                    } else {
+                        false
+                    };
                     if is_daemon {
                         if self.verbose {
                             task.daemon_output.push(clean_line);
-                        } else {
+                        } else if !step_buffered {
                             task.buffer.push(clean_line);
                         }
-                    } else {
+                    } else if !step_buffered {
                         task.buffer.push(clean_line);
                     }
                 } else if self.verbose {
@@ -582,6 +720,35 @@ impl PipelineState {
                     .entry(name.clone())
                     .or_insert_with(|| TaskState::new(name, None));
                 let clean_line = message.trim_end().to_string();
+                // A command step already prints the complete command in its
+                // `(cmd)` footer. The subprocess-start debug record repeats
+                // that command, so keep the other subprocess diagnostics but
+                // omit this duplicate while a command step is active.
+                let command_is_in_footer = task
+                    .active_step
+                    .and_then(|index| task.step_outputs.get(index))
+                    .and_then(|step| step.footer.as_deref())
+                    .or(task.command.as_deref())
+                    .is_some_and(|footer| footer.starts_with("(cmd) "));
+                if command_is_in_footer && clean_line.starts_with("[E_601]") {
+                    return;
+                }
+                if let Some(index) = task.active_step
+                    && let Some(step) = task.step_outputs.get_mut(index)
+                {
+                    if let Some(key) = snapshot_key {
+                        if let Some(index) = step.debug_snapshot_indexes.get(&key).copied() {
+                            step.debug_lines[index] = clean_line;
+                        } else {
+                            let index = step.debug_lines.len();
+                            step.debug_lines.push(clean_line);
+                            step.debug_snapshot_indexes.insert(key, index);
+                        }
+                    } else {
+                        step.debug_lines.push(clean_line);
+                    }
+                    return;
+                }
                 if let Some(key) = snapshot_key {
                     if let Some(index) = task.debug_snapshot_indexes.get(&key).copied() {
                         task.debug_buffer[index] = clean_line;
@@ -642,6 +809,13 @@ impl PipelineState {
                         task.daemon_output.push(fenced_title);
                         task.daemon_output.extend(lines);
                     } else {
+                        if let Some(index) = task.active_step
+                            && let Some(step) = task.step_outputs.get_mut(index)
+                        {
+                            step.lines.push(fenced_title.clone());
+                            step.lines.extend(lines.iter().cloned());
+                            step.has_error = true;
+                        }
                         task.fenced_buffer.push((
                             fenced_title,
                             lines,
@@ -684,7 +858,27 @@ impl PipelineState {
                             if !task.debug_buffer.is_empty() {
                                 self.enqueue(PendingLog::Debug(task.debug_buffer));
                             }
-                            if !task.buffer.is_empty() {
+                            if !task.step_outputs.is_empty() {
+                                let last_step = task.step_outputs.len() - 1;
+                                for (index, mut step) in task.step_outputs.into_iter().enumerate() {
+                                    if step.lines.is_empty() {
+                                        step.lines.push(String::new());
+                                    }
+                                    let title = format!(
+                                        "{}{} · step {}/{}",
+                                        crate::render::SYMBOL_FENCED_TASK_PREFIX,
+                                        name,
+                                        step.step_number,
+                                        step.step_count
+                                    );
+                                    self.enqueue(PendingLog::Fenced(
+                                        title,
+                                        step.lines,
+                                        step.has_error || index == last_step,
+                                        step.footer,
+                                    ));
+                                }
+                            } else if !task.buffer.is_empty() {
                                 let title = format!("{}{}", SYMBOL_FENCED_TASK_PREFIX, name);
                                 self.enqueue(PendingLog::Fenced(
                                     title,
@@ -843,6 +1037,12 @@ impl PipelineState {
                 footer_label,
             } => {
                 if let Some(task) = self.tracker.get_latest_running_task_mut() {
+                    if let Some(index) = task.active_step
+                        && let Some(step) = task.step_outputs.get_mut(index)
+                    {
+                        step.lines.push(title.clone());
+                        step.lines.extend(lines.iter().cloned());
+                    }
                     task.fenced_buffer.push((title, lines, false, footer_label));
                 } else {
                     self.enqueue(PendingLog::Fenced(title, lines, false, footer_label));

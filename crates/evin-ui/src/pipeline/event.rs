@@ -75,6 +75,12 @@ pub enum UIEvent {
         description: Option<String>,
         command: Option<String>,
     },
+    TaskStepStarted {
+        name: String,
+        step_number: usize,
+        step_count: usize,
+        footer: Option<String>,
+    },
     ItemFinished {
         name: String,
         failed: bool,
