@@ -151,8 +151,8 @@ test('topbar is a 44px shell announcement and remembers dismissal', async ({ pag
 
   const topbar = page.locator('.docs-topbar');
   await expect(topbar).toHaveAttribute('data-topbar-variant', 'holo');
-  await expect(topbar).toHaveAttribute('data-topbar-id', 'first-public-canary');
-  await expect(topbar.locator('.topbar-action')).toHaveAttribute('href', 'https://github.com/dukasn/evin/releases');
+  await expect(topbar).toHaveAttribute('data-topbar-id', 'everyinit-release-updates');
+  await expect(topbar.locator('.topbar-action')).toHaveAttribute('href', 'https://github.com/dukasn/everyinit/releases');
   const layout = await page.evaluate(() => {
     const bar = document.querySelector('.docs-topbar').getBoundingClientRect();
     const app = document.querySelector('#appLayout').getBoundingClientRect();

@@ -3,8 +3,8 @@ module:
   name: docs
 
 values:
-  site_title: "EVIN Workflow Engine"
-  site_url: "https://dukasn.github.io/evin/"
+  site_title: "Everyinit — Evin & ESH"
+  site_url: "https://everyinit.dev/"
 
 tasks:
   evin-catalog:

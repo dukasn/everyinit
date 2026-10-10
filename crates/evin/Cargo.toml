@@ -6,10 +6,10 @@ publish = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 description = "The workflow engine for software repositories"
-readme = "../../README.md"
-repository = "https://github.com/dukasn/evin"
-homepage = "https://github.com/dukasn/evin"
-documentation = "https://dukasn.github.io/evin/"
+readme = "README.md"
+repository = "https://github.com/dukasn/everyinit"
+homepage = "https://everyinit.dev"
+documentation = "https://everyinit.dev"
 keywords = ["workflow", "automation", "git-hooks", "task-runner"]
 categories = ["command-line-utilities", "development-tools::build-utils"]
 

@@ -7,6 +7,9 @@ publish.workspace = true
 license.workspace = true
 description = "A portable, deterministic shell for project automation"
 readme = "README.md"
+repository = "https://github.com/dukasn/everyinit"
+homepage = "https://everyinit.dev"
+documentation = "https://everyinit.dev"
 keywords = ["shell", "scripting", "evin"]
 categories = ["command-line-utilities", "parser-implementations"]
 

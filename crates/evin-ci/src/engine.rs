@@ -712,10 +712,10 @@ mod tests {
     #[test]
     fn test_schema_json_roundtrip_spec_conformance() {
         let raw_spec_remote = r#"{
-          "$schema": "https://evin.pages.dev/schemas/v1/ci-remote-state.json",
+          "$schema": "https://everyinit.dev/schemas/v1/ci-remote-state.json",
           "v": 1,
           "platform": "github",
-          "repository": "dukasn/evin",
+          "repository": "dukasn/everyinit",
           "releases": [
             {
               "tag": "v1.0.0-canary.5",
@@ -747,7 +747,7 @@ mod tests {
         );
 
         let raw_spec_plan = r#"{
-          "$schema": "https://evin.dev/schemas/v1/ci-plan.json",
+          "$schema": "https://everyinit.dev/schemas/v1/ci-plan.json",
           "v": 1,
           "status": 200,
           "reconciled": true,

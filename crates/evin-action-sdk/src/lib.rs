@@ -867,7 +867,7 @@ pub trait Action: Send + Sync {
 
     /// Executes the native action.
     /// `ctx`: Provides access to the environment, logger, and the hook payload.
-    /// `with`: The optional YAML arguments parsed from the `.evin/module.yaml` file.
+    /// `with`: The optional configuration arguments parsed from the `.evin/module.flow` file.
     async fn execute(
         &self,
         ctx: &RunnerContext,

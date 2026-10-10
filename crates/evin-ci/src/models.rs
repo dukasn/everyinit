@@ -14,8 +14,8 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA_REMOTE_STATE_V1: &str = "https://evin.pages.dev/schemas/v1/ci-remote-state.json";
-pub const SCHEMA_PLAN_V1: &str = "https://evin.dev/schemas/v1/ci-plan.json";
+pub const SCHEMA_REMOTE_STATE_V1: &str = "https://everyinit.dev/schemas/v1/ci-remote-state.json";
+pub const SCHEMA_PLAN_V1: &str = "https://everyinit.dev/schemas/v1/ci-plan.json";
 
 /// ECP-1 Normalized Ingestion State (`remote-state.v1.json`)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

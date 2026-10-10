@@ -36,7 +36,7 @@ async fn test_ci_action_reconciles_and_emits_plan_in_actions_folder() {
         .unwrap();
 
     std::process::Command::new("git")
-        .args(["config", "user.email", "test@evin.dev"])
+        .args(["config", "user.email", "test@everyinit.dev"])
         .current_dir(root)
         .output()
         .unwrap();
@@ -93,10 +93,10 @@ async fn test_ci_action_reconciles_and_emits_plan_in_actions_folder() {
     let ci_dir = root.join(".evin/actions/ci");
     std::fs::create_dir_all(&ci_dir).unwrap();
     let remote_state_json = r#"{
-      "$schema": "https://evin.pages.dev/schemas/v1/ci-remote-state.json",
+      "$schema": "https://everyinit.dev/schemas/v1/ci-remote-state.json",
       "v": 1,
       "platform": "github",
-      "repository": "dukasn/evin",
+      "repository": "dukasn/everyinit",
       "releases": []
     }"#;
     std::fs::write(ci_dir.join("remote-state.v1.json"), remote_state_json).unwrap();
