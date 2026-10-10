@@ -18,6 +18,8 @@ pub mod dsl;
 pub mod screen;
 pub mod svg;
 
-pub use dsl::{TapeCommand, TapeConfig, TapeRuntime, TapeScript, parse_tape_fence_info};
+pub use dsl::{
+    TapeCommand, TapeConfig, TapeRuntime, TapeScript, expand_alias, parse_tape_fence_info,
+};
 pub use screen::{CellAttributes, TerminalCell, TerminalColor, TerminalFrame, VirtualScreen};
 pub use svg::{IBM_PLEX_MONO_METRICS, TerminalMetrics, render_svg};

@@ -23,7 +23,7 @@ use esh::syntax::{TokenKind, scan_tokens};
 use esh::{Engine, ExecutionContext};
 use evin_doc::tape::{
     TapeCommand, TapeConfig, TapeRuntime, TapeScript, TerminalColor, TerminalFrame, VirtualScreen,
-    render_svg,
+    expand_alias, render_svg,
 };
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 use std::collections::VecDeque;
@@ -112,6 +112,7 @@ impl IncrementalPathPresentation {
             .pending
             .len()
             .saturating_sub(self.presentation.max_workspace_path_len.saturating_add(1));
+        let safe_limit = avoid_partial_csi(&self.pending, safe_limit);
         if safe_limit == 0 {
             return String::new();
         }
@@ -138,6 +139,39 @@ impl IncrementalPathPresentation {
         self.presentation
             .present(&std::mem::take(&mut self.pending))
     }
+}
+
+/// Keep CSI sequences intact when streaming text to the virtual terminal.
+/// Splitting one across PTY reads makes the screen parser treat the remainder
+/// as visible text instead of terminal styling or cursor control.
+fn avoid_partial_csi(text: &str, safe_limit: usize) -> usize {
+    let bytes = text.as_bytes();
+    let mut safe_limit = safe_limit.min(bytes.len());
+    let mut cursor = 0;
+
+    while cursor < safe_limit {
+        if bytes[cursor] != 0x1b {
+            cursor += 1;
+            continue;
+        }
+        let escape = cursor;
+        if bytes.get(escape + 1) != Some(&b'[') {
+            cursor = escape + 1;
+            continue;
+        }
+
+        let mut end = escape + 2;
+        while end < bytes.len() && !(0x40..=0x7e).contains(&bytes[end]) {
+            end += 1;
+        }
+        if end == bytes.len() || end + 1 > safe_limit {
+            safe_limit = escape;
+            break;
+        }
+        cursor = end + 1;
+    }
+
+    safe_limit
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -314,6 +348,7 @@ struct EshRecording {
     engine: Engine,
     context: ExecutionContext,
     input: String,
+    aliases: Vec<(String, String)>,
     last_output: String,
     captured_stdout_bytes: usize,
     captured_stderr_bytes: usize,
@@ -351,6 +386,7 @@ impl EshRecording {
             engine: Engine::new(),
             context,
             input: String::new(),
+            aliases: Vec::new(),
             last_output: String::new(),
             captured_stdout_bytes: 0,
             captured_stderr_bytes: 0,
@@ -367,12 +403,31 @@ impl EshRecording {
     }
 
     async fn run(mut self, script: &TapeScript) -> Result<String, String> {
+        let setup_commands = script
+            .commands
+            .iter()
+            .take_while(|command| matches!(command, TapeCommand::Setup(_)))
+            .collect::<Vec<_>>();
+        for command in &setup_commands {
+            let TapeCommand::Setup(command) = command else {
+                unreachable!();
+            };
+            self.run_setup(command).await?;
+        }
+        if !setup_commands.is_empty() {
+            self.reset_recording();
+        }
         let mut needs_wait = false;
         for command in &script.commands {
             match command {
+                TapeCommand::Setup(_) => continue,
                 TapeCommand::Type(value) => {
                     self.type_text(value);
                     needs_wait = true;
+                }
+                TapeCommand::Alias { name, replacement } => {
+                    self.aliases.retain(|(existing, _)| existing != name);
+                    self.aliases.push((name.clone(), replacement.clone()));
                 }
                 TapeCommand::Backspace(count) => {
                     for _ in 0..*count {
@@ -426,6 +481,42 @@ impl EshRecording {
         ))
     }
 
+    async fn run_setup(&mut self, command: &str) -> Result<(), String> {
+        let timeout = Duration::from_millis(self.config.timeout_ms);
+        let cancellation = self.context.token().clone();
+        let result = tokio::select! {
+            result = self.engine.eval_str(command, &mut self.context) => result
+                .map_err(|error| format!("ESH tape setup evaluation failed: {error}"))?,
+            _ = tokio::time::sleep(timeout) => {
+                cancellation.cancel();
+                return Err("ESH tape setup command timed out and was cancelled".to_string());
+            }
+        };
+        if result != 0 {
+            return Err(format!(
+                "ESH tape setup command exited with status {result}"
+            ));
+        }
+        let stdout = self.context.get_captured_stdout().unwrap_or_default();
+        let stderr = self.context.get_captured_stderr().unwrap_or_default();
+        self.captured_stdout_bytes = stdout.len();
+        self.captured_stderr_bytes = stderr.len();
+        Ok(())
+    }
+
+    fn reset_recording(&mut self) {
+        self.last_output.clear();
+        self.transcript.clear();
+        self.output_bytes = 0;
+        self.pending_status = None;
+        self.frames.clear();
+        self.frame_overflow = false;
+        self.clock_ms = 0;
+        self.screen = VirtualScreen::new(self.config.rows, self.config.cols);
+        self.screen.write_str("$ ");
+        self.capture();
+    }
+
     fn type_text(&mut self, value: &str) {
         self.input.push_str(value);
         for (character, color) in semantic_characters(value) {
@@ -441,7 +532,7 @@ impl EshRecording {
         {
             return Err(self.failure_with_tail(&format!("command exited with status {status}")));
         }
-        let input = std::mem::take(&mut self.input);
+        let input = expand_alias(&std::mem::take(&mut self.input), &self.aliases);
         let timeout = Duration::from_millis(self.config.timeout_ms);
         let cancellation = self.context.token().clone();
         let result = tokio::select! {
@@ -540,6 +631,9 @@ struct Recording {
     pending: Vec<u8>,
     text_pending: Vec<u8>,
     echoed: VecDeque<u8>,
+    capturing: bool,
+    input: String,
+    aliases: Vec<(String, String)>,
     transcript: VecDeque<u8>,
     output_bytes: usize,
     ready_status: Option<i32>,
@@ -604,6 +698,9 @@ impl Recording {
             pending: Vec::new(),
             text_pending: Vec::new(),
             echoed: VecDeque::new(),
+            capturing: true,
+            input: String::new(),
+            aliases: Vec::new(),
             transcript: VecDeque::new(),
             output_bytes: 0,
             ready_status: None,
@@ -621,18 +718,43 @@ impl Recording {
     }
 
     fn run(mut self, script: &TapeScript) -> Result<String, String> {
+        let setup_commands = script
+            .commands
+            .iter()
+            .take_while(|command| matches!(command, TapeCommand::Setup(_)))
+            .collect::<Vec<_>>();
+        if !setup_commands.is_empty() {
+            self.capturing = false;
+            for command in &setup_commands {
+                let TapeCommand::Setup(command) = command else {
+                    unreachable!();
+                };
+                self.write_raw(command.as_bytes())?;
+                self.write_raw(b"\r")?;
+                let status = self.wait_for_ready()?;
+                if status != 0 {
+                    return Err(format!("tape setup command exited with status {status}"));
+                }
+            }
+            self.reset_recording();
+        }
         let mut needs_wait = false;
         for command in &script.commands {
             match command {
+                TapeCommand::Setup(_) => continue,
                 TapeCommand::Type(value) => {
                     self.type_text(value)?;
                     needs_wait = true;
                 }
+                TapeCommand::Alias { name, replacement } => {
+                    self.aliases.retain(|(existing, _)| existing != name);
+                    self.aliases.push((name.clone(), replacement.clone()));
+                }
                 TapeCommand::Backspace(count) => {
                     for _ in 0..*count {
-                        self.write_raw(b"\x08")?;
-                        self.echoed.push_back(0x08);
-                        self.screen.write_str("\x08");
+                        if self.input.pop().is_some() {
+                            self.screen.write_str("\x08");
+                        }
                         self.clock_ms = self.clock_ms.saturating_add(self.config.speed_ms);
                         self.capture();
                     }
@@ -641,12 +763,19 @@ impl Recording {
                 TapeCommand::Ctrl(letter) => {
                     let control = letter.to_ascii_uppercase() as u8 - b'@';
                     self.write_raw(&[control])?;
-                    self.echoed.push_back(control);
+                    if *letter == 'C' {
+                        self.input.clear();
+                    } else {
+                        self.echoed.push_back(control);
+                    }
                     self.clock_ms = self.clock_ms.saturating_add(self.config.speed_ms);
                     self.capture();
                     needs_wait = true;
                 }
                 TapeCommand::Enter => {
+                    let command = expand_alias(&std::mem::take(&mut self.input), &self.aliases);
+                    self.write_raw(command.as_bytes())?;
+                    self.echoed.extend(command.bytes());
                     self.write_raw(b"\r")?;
                     self.echoed.extend(*b"\r\n");
                     self.screen.write_str("\r\n");
@@ -697,8 +826,7 @@ impl Recording {
     }
 
     fn type_text(&mut self, value: &str) -> Result<(), String> {
-        self.write_raw(value.as_bytes())?;
-        self.echoed.extend(value.bytes());
+        self.input.push_str(value);
         for (character, color) in semantic_characters(value) {
             self.screen.write_styled_char(character, color);
             self.clock_ms = self.clock_ms.saturating_add(self.config.speed_ms);
@@ -791,6 +919,9 @@ impl Recording {
     }
 
     fn feed_visible(&mut self, bytes: &[u8]) -> Result<(), String> {
+        if !self.capturing {
+            return Ok(());
+        }
         self.output_bytes = self.output_bytes.saturating_add(bytes.len());
         if self.output_bytes > self.config.max_output_bytes {
             return Err(self.failure_with_tail("terminal output exceeded max-output"));
@@ -835,6 +966,23 @@ impl Recording {
             }
         }
         Ok(())
+    }
+
+    fn reset_recording(&mut self) {
+        self.capturing = true;
+        self.pending.clear();
+        self.text_pending.clear();
+        self.echoed.clear();
+        self.transcript.clear();
+        self.output_bytes = 0;
+        self.ready_status = None;
+        self.path_filter.pending.clear();
+        self.screen = VirtualScreen::new(self.config.rows, self.config.cols);
+        self.screen.write_str("$ ");
+        self.frames.clear();
+        self.frame_overflow = false;
+        self.clock_ms = 0;
+        self.capture();
     }
 
     fn flush_path_filter(&mut self) {
@@ -999,6 +1147,24 @@ fn token_color(kind: TokenKind) -> TerminalColor {
 mod tests {
     use super::*;
 
+    fn svg_text_content(svg: &str) -> String {
+        let mut in_tag = false;
+        svg.chars()
+            .filter_map(|character| match character {
+                '<' => {
+                    in_tag = true;
+                    None
+                }
+                '>' => {
+                    in_tag = false;
+                    None
+                }
+                _ if in_tag => None,
+                character => Some(character),
+            })
+            .collect()
+    }
+
     #[test]
     fn records_a_persistent_system_shell_command() {
         let script = TapeScript::parse("type \"cd /tmp\"\nenter\nwait\ntype \"pwd\"\nenter\nwait")
@@ -1010,9 +1176,9 @@ mod tests {
         let recording = Recording::start(&config, Path::new(".")).expect("supported shell and PTY");
         let svg = recording.run(&script).expect("successful tape recording");
         let final_frame = svg.rsplit("<g class=\"tape-frame").next().unwrap();
-        assert!(svg.contains("/tmp"));
+        assert!(svg_text_content(&svg).contains("/tmp"));
         assert!(svg.contains("term-command"));
-        assert_eq!(final_frame.matches(">cd</tspan>").count(), 1);
+        assert_eq!(svg_text_content(final_frame).matches("cd /tmp").count(), 1);
         assert!(svg.contains("data-tape-duration-ms"));
     }
 
@@ -1030,7 +1196,7 @@ mod tests {
             .unwrap();
         let workspace = Path::new(".").canonicalize().unwrap().display().to_string();
 
-        assert!(svg.contains("/docs"));
+        assert!(svg_text_content(&svg).contains("/docs"));
         assert!(!svg.contains(&workspace));
     }
 
@@ -1066,7 +1232,7 @@ mod tests {
             .expect("successful ESH tape recording");
         let workspace = Path::new(".").canonicalize().unwrap().display().to_string();
 
-        assert!(svg.contains("/workspace"));
+        assert!(svg_text_content(&svg).contains("/workspace"));
         assert!(!svg.contains(&workspace));
         assert!(svg.contains("term-builtin"));
         assert!(svg.contains("data-tape-duration-ms"));
@@ -1099,7 +1265,7 @@ mod tests {
             ..TapeConfig::default()
         };
         let svg = run_esh_tape(&config, Path::new("."), &script).unwrap();
-        assert!(svg.contains("/docs"));
+        assert!(svg_text_content(&svg).contains("/docs"));
         assert!(!svg.contains("/workspace"));
     }
 

@@ -31,10 +31,13 @@ pub struct TerminalMetrics {
 }
 
 pub const IBM_PLEX_MONO_METRICS: TerminalMetrics = TerminalMetrics {
-    font_size: 14,
-    cell_width: 9,
-    row_height: 20,
-    baseline: 15,
+    // IBM Plex Mono uses a 0.6em advance. Its vertical box-drawing glyph
+    // spans 1.3em (-0.35em to +0.95em), so matching both dimensions lets
+    // adjacent connector cells meet without spilling into neighboring rows.
+    font_size: 20,
+    cell_width: 12,
+    row_height: 26,
+    baseline: 19,
     inset: 16,
 };
 
@@ -179,7 +182,7 @@ fn is_blank_default(cell: &super::screen::TerminalCell) -> bool {
 fn write_row(output: &mut String, cells: &[super::screen::TerminalCell], metrics: TerminalMetrics) {
     let end_col = cells
         .iter()
-        .rposition(|c| !is_blank_default(c))
+        .rposition(|c| c.continuation || !is_blank_default(c))
         .map(|idx| idx + 1)
         .unwrap_or(0);
     if end_col == 0 {
@@ -187,43 +190,29 @@ fn write_row(output: &mut String, cells: &[super::screen::TerminalCell], metrics
     }
     let cells = &cells[..end_col];
 
-    let mut column = 0;
-    while column < cells.len() {
-        if cells[column].continuation {
-            column += 1;
+    for (column, cell) in cells.iter().enumerate() {
+        if cell.continuation {
             continue;
         }
-
-        let attributes = &cells[column].attributes;
-        let mut positions = String::new();
-        let mut content = String::new();
-        while column < cells.len() {
-            let cell = &cells[column];
-            if cell.continuation {
-                column += 1;
-                continue;
-            }
-            if &cell.attributes != attributes {
-                break;
-            }
-
-            if !positions.is_empty() {
-                positions.push(' ');
-            }
-            positions.push_str(
-                &(metrics.inset + u32::try_from(column).unwrap_or(u32::MAX) * metrics.cell_width)
-                    .to_string(),
-            );
-            if cell.attributes.hidden {
-                content.push(' ');
-            } else {
-                content.push_str(&escape_char(cell.ch));
-            }
-            column += 1;
-        }
+        let width = if cells.get(column + 1).is_some_and(|next| next.continuation) {
+            2
+        } else {
+            1
+        };
+        let x = metrics.inset + u32::try_from(column).unwrap_or(u32::MAX) * metrics.cell_width;
+        let advance = width * metrics.cell_width;
+        let character = if cell.attributes.hidden {
+            " ".to_owned()
+        } else {
+            escape_char(cell.ch)
+        };
+        // Terminal cells have fixed advances, while fallback fonts can give
+        // individual Unicode glyphs proportional advances. Constrain every
+        // glyph to its display-cell width so fallback metrics cannot overlap
+        // neighboring cells; wide characters occupy both of their cells.
         output.push_str(&format!(
-            "<tspan x=\"{positions}\" {}>{content}</tspan>",
-            style(attributes)
+            "<tspan x=\"{x}\" textLength=\"{advance}\" lengthAdjust=\"spacingAndGlyphs\" {}>{character}</tspan>",
+            style(&cell.attributes)
         ));
     }
 }
@@ -703,7 +692,7 @@ mod tests {
         screen.write_str("\x1b[30;48;5;120mTask\x1b[0m");
         let svg = render_svg(&TapeConfig::default(), &[screen.capture(40)], "title bar");
 
-        assert!(svg.contains("<rect x=\"16\" y=\"16\" width=\"36\" height=\"20\""));
+        assert!(svg.contains("<rect x=\"16\" y=\"16\" width=\"48\" height=\"26\""));
         assert!(svg.contains("fill=\"rgb(135 255 135)\""));
         assert!(svg.contains("term-ansi-0"));
     }
@@ -723,7 +712,7 @@ mod tests {
 
         // Two occupied rows retain the three-row minimum, rather than the
         // eight-row bounded capture screen.
-        assert!(svg.contains("viewBox=\"0 0 104 92\""));
+        assert!(svg.contains("viewBox=\"0 0 128 110\""));
     }
 
     #[test]
@@ -739,12 +728,11 @@ mod tests {
 
         assert!(svg.contains("'IBM Plex Mono','Cascadia Mono','Cascadia Code','Fira Code'"));
         assert!(svg.contains("data-tape-duration-ms=\"1040\""));
-        assert!(svg.contains("<text x=\"16\" y=\"31\">"));
+        assert!(svg.contains("<text x=\"16\" y=\"35\">"));
         assert!(svg.contains("<tspan x=\"16\""));
-        assert!(!svg.contains("textLength="));
-        assert!(!svg.contains("lengthAdjust="));
-        assert!(svg.contains("y=\"31\""));
-        assert!(svg.contains("class=\"term-cursor\" x=\"34\" y=\"16\" width=\"2\" height=\"20\""));
+        assert!(svg.contains("textLength=\"24\" lengthAdjust=\"spacingAndGlyphs\""));
+        assert!(svg.contains("y=\"35\""));
+        assert!(svg.contains("class=\"term-cursor\" x=\"40\" y=\"16\" width=\"2\" height=\"26\""));
     }
 
     #[test]
@@ -757,8 +745,10 @@ mod tests {
             ..TapeConfig::default()
         };
         let svg = render_svg(&config, &[screen.capture(40)], "grid");
-        assert!(svg.contains("<tspan x=\"16 25 34\""));
-        assert!(!svg.contains("43 52 61 70 79"));
+        assert!(svg.contains("<tspan x=\"16\""));
+        assert!(svg.contains("<tspan x=\"28\""));
+        assert!(svg.contains("<tspan x=\"40\""));
+        assert!(!svg.contains("<tspan x=\"52\""));
     }
 
     #[test]
@@ -835,7 +825,7 @@ mod tests {
         assert!(svg.contains("font-weight=\"700\""));
         assert!(svg.contains("text-decoration=\"underline\""));
         // Geometric underline rect has a single valid class attribute
-        assert!(svg.contains("<rect class=\"term-underline term-ansi-2\" x=\"16\" y=\"33\" width=\"90\" height=\"1\"/>"));
+        assert!(svg.contains("<rect class=\"term-underline term-ansi-2\" x=\"16\" y=\"37\" width=\"120\" height=\"1\"/>"));
     }
 
     #[test]
@@ -845,7 +835,7 @@ mod tests {
         let svg = render_svg(&TapeConfig::default(), &[screen.capture(40)], "clap-help");
 
         assert!(svg.contains("class=\"term-default term-bold term-underline\""));
-        assert!(svg.contains("<rect class=\"term-underline term-default\" x=\"16\" y=\"33\" width=\"54\" height=\"1\"/>"));
+        assert!(svg.contains("<rect class=\"term-underline term-default\" x=\"16\" y=\"37\" width=\"72\" height=\"1\"/>"));
     }
 
     #[test]
@@ -881,7 +871,7 @@ mod tests {
         assert!(svg.contains(".term-strikethrough{text-decoration:line-through}"));
         assert!(svg.contains(".term-overline{text-decoration:overline}"));
         assert!(svg.contains("class=\"term-invert-fg term-strikethrough term-overline\""));
-        assert!(svg.contains("<rect class=\"term-invert-bg\" x=\"16\" y=\"16\" width=\"162\" height=\"20\" fill=\"var(--term-fg)\"/>"));
+        assert!(svg.contains("<rect class=\"term-invert-bg\" x=\"16\" y=\"16\" width=\"216\" height=\"26\" fill=\"var(--term-fg)\"/>"));
         assert!(svg.contains("<rect class=\"term-strikethrough term-default\""));
         assert!(svg.contains("<rect class=\"term-overline term-default\""));
     }
@@ -911,7 +901,7 @@ mod tests {
             &[screen_double.capture(40)],
             "double-underline",
         );
-        assert!(svg_double.contains("y=\"32\" width=\"54\" height=\"1\""));
-        assert!(svg_double.contains("y=\"34\" width=\"54\" height=\"1\""));
+        assert!(svg_double.contains("y=\"36\" width=\"72\" height=\"1\""));
+        assert!(svg_double.contains("y=\"38\" width=\"72\" height=\"1\""));
     }
 }

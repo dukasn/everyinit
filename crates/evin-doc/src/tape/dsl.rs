@@ -169,6 +169,7 @@ pub struct TapeScript {
 impl TapeScript {
     pub fn parse(script: &str) -> Result<Self, String> {
         let mut commands = Vec::new();
+        let mut setup_ended = false;
         for (index, raw_line) in script.lines().enumerate() {
             let line = raw_line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -179,7 +180,43 @@ impl TapeScript {
                 .map(|(name, arg)| (name, arg.trim()))
                 .unwrap_or((line, ""));
             let command = match name {
+                "setup" => {
+                    if setup_ended {
+                        return Err(format!(
+                            "tape line {}: setup commands must appear before recording commands",
+                            index + 1
+                        ));
+                    }
+                    let command = parse_json_string(argument, index + 1)?;
+                    if command.trim().is_empty() {
+                        return Err(format!(
+                            "tape line {}: setup command must not be empty",
+                            index + 1
+                        ));
+                    }
+                    TapeCommand::Setup(command)
+                }
                 "type" => TapeCommand::Type(parse_json_string(argument, index + 1)?),
+                "alias" => {
+                    let (name, replacement) = argument
+                        .split_once(char::is_whitespace)
+                        .map(|(name, replacement)| (name, replacement.trim()))
+                        .ok_or_else(|| {
+                            format!("tape line {}: alias requires two JSON strings", index + 1)
+                        })?;
+                    let name = parse_json_string(name, index + 1)?;
+                    let replacement = parse_json_string(replacement, index + 1)?;
+                    if name.is_empty()
+                        || name.chars().any(char::is_whitespace)
+                        || replacement.is_empty()
+                    {
+                        return Err(format!(
+                            "tape line {}: alias name and replacement must be non-empty; name must be one command word",
+                            index + 1
+                        ));
+                    }
+                    TapeCommand::Alias { name, replacement }
+                }
                 "sleep" => TapeCommand::Sleep(parse_duration(argument)? as u32),
                 "enter" if argument.is_empty() => TapeCommand::Enter,
                 "wait" if argument.is_empty() => TapeCommand::Wait,
@@ -212,6 +249,9 @@ impl TapeScript {
                     ));
                 }
             };
+            if !matches!(command, TapeCommand::Setup(_)) {
+                setup_ended = true;
+            }
             commands.push(command);
         }
         Ok(Self { commands })
@@ -223,8 +263,13 @@ impl TapeScript {
         let mut script = String::new();
         let mut input = String::new();
         let mut interrupted = false;
+        let mut aliases = Vec::new();
         for command in &self.commands {
             match command {
+                TapeCommand::Alias { name, replacement } => {
+                    aliases.retain(|(existing, _): &(String, String)| existing != name);
+                    aliases.push((name.clone(), replacement.clone()));
+                }
                 TapeCommand::Type(value) => {
                     input.push_str(value);
                     interrupted = false;
@@ -241,13 +286,14 @@ impl TapeScript {
                 }
                 TapeCommand::Enter => {
                     if !interrupted {
-                        script.push_str(&input);
+                        script.push_str(&expand_alias(&input, &aliases));
                         script.push('\n');
                     }
                     input.clear();
                     interrupted = false;
                 }
                 TapeCommand::Sleep(_)
+                | TapeCommand::Setup(_)
                 | TapeCommand::Wait
                 | TapeCommand::Expect(_)
                 | TapeCommand::Ctrl(_) => {}
@@ -257,9 +303,25 @@ impl TapeScript {
     }
 }
 
+/// Expand only an exact first command word, preserving the user's displayed
+/// input while producing a directly runnable command for execution and copy.
+pub fn expand_alias(input: &str, aliases: &[(String, String)]) -> String {
+    if input.is_empty() {
+        return input.to_string();
+    }
+    let end = input.find(char::is_whitespace).unwrap_or(input.len());
+    let command = &input[..end];
+    let Some((_, replacement)) = aliases.iter().rev().find(|(name, _)| name == command) else {
+        return input.to_string();
+    };
+    format!("{replacement}{}", &input[end..])
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TapeCommand {
+    Setup(String),
     Type(String),
+    Alias { name: String, replacement: String },
     Sleep(u32),
     Enter,
     Wait,

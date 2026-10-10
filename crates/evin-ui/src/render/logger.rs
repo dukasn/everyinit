@@ -30,8 +30,12 @@ impl Logger {
         }
     }
 
+    fn preserves_ansi(&self) -> bool {
+        self.backend.is_terminal() || std::env::var_os("EVIN_TAPE").is_some()
+    }
+
     async fn write_line(&self, text: &str) {
-        if self.backend.is_terminal() {
+        if self.preserves_ansi() {
             self.backend.write_line(text).await;
         } else {
             self.backend
@@ -41,7 +45,7 @@ impl Logger {
     }
 
     async fn write_str(&self, text: &str) {
-        if self.backend.is_terminal() {
+        if self.preserves_ansi() {
             self.backend.write_str(text).await;
         } else {
             self.backend
