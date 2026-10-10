@@ -18,6 +18,7 @@ activity-docs-reloaded = Browser reload requested
 activity-docs-rebuild-failed = Documentation rebuild failed: { $reason }
 activity-docs-serve-ready = Documentation site ready at { $url }
 activity-archive-compressing = Compressing { $files } files into { $path }...
+activity-archive-created = Created { $format } archive at '{ $path }' from { $input_files } input files ({ $input_size }); output { $output_size }
 
 status-docs-server-running = Documentation server running at { $url }
 status-docs-watching = Watching documentation files

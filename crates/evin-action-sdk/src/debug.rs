@@ -312,7 +312,8 @@ define_debug_registry! {
     pub struct ChangelogAnalysis { commits_scanned: usize } => (511, builtin, append);
     pub struct ChangelogOutput { target: String, sections_generated: usize } => (512, builtin, append);
     pub struct GitRelease { tag: String, provider: String, draft: bool } => (521, builtin, append);
-    pub struct ArchiveOutput { format: String, size_bytes: u64, files: usize } => (531, builtin, append);
+    pub struct ArchiveOutput { format: String, path: String, size_bytes: u64, input_bytes: u64, files: usize, compression_level: Option<u32> } => (531, builtin, append);
+    pub struct ArchiveInputs { paths: String } => (532, builtin, append);
     pub struct VersionDiscovery { previous: String, next: String, impact: String } => (541, builtin, append);
     pub struct VersionOutput { count: usize } => (542, builtin, append);
     pub struct DocsScan { scans: usize, pages: usize, rst: usize, markdown: usize, references: usize, read_failures: usize } => (551, builtin, snapshot(DocsScan = "docs.scan"));

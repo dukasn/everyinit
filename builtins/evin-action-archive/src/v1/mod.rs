@@ -40,6 +40,21 @@ struct PackageBuild {
     scripts: Vec<(String, Vec<u8>)>,
 }
 
+struct ArchiveInputReport {
+    path: String,
+}
+
+#[derive(Default)]
+struct ArchivePathNode {
+    terminal: bool,
+    children: BTreeMap<String, ArchivePathNode>,
+}
+
+struct ArchiveReport {
+    inputs: Vec<ArchiveInputReport>,
+    input_bytes: u64,
+}
+
 struct PackageEncoder {
     format: PackageFormat,
     write: fn(&mut dyn Write, &PackageBuild) -> Result<(), packaging::PackagingError>,
@@ -266,7 +281,6 @@ pub async fn execute(
         }
     );
     let epoch = resolve_epoch(ctx).await?;
-    let files_len = source_entries.len();
     let build = if let Some((package, arch, revision, version)) = package_build {
         let context = PackageContext::prepare(epoch, source_entries.clone())
             .map_err(|error| diagnostic(error.to_string()))?;
@@ -283,10 +297,14 @@ pub async fn execute(
     } else {
         None
     };
+    let format_name = config.format.clone();
+    let compression_level = config.compression_level;
     let write_path = output_path.clone();
-    tokio::task::spawn_blocking(move || {
+    let report = tokio::task::spawn_blocking(move || {
+        let mut report = None;
         packaging::write_atomically(&write_path, |output| {
             if let Some(build) = build {
+                report = Some(archive_input_report(&build.context));
                 let encoder = PACKAGE_ENCODERS
                     .iter()
                     .find(|encoder| encoder.format == build.format)
@@ -294,13 +312,14 @@ pub async fn execute(
                 (encoder.write)(output, &build)
             } else {
                 let context = PackageContext::prepare(epoch, source_entries)?;
-                TarGzArchiver {
-                    compression_level: config.compression_level,
-                }
-                .write_archive(output, &context)
+                report = Some(archive_input_report(&context));
+                TarGzArchiver { compression_level }.write_archive(output, &context)
             }
         })
-        .map_err(|error| diagnostic(error.to_string()))
+        .map_err(|error| diagnostic(error.to_string()))?;
+        Ok::<_, evin_diagnostic::Diagnostic>(
+            report.expect("archive report is prepared before writing"),
+        )
     })
     .await
     .map_err(|e| {
@@ -312,15 +331,145 @@ pub async fn execute(
 
     ctx.state.set_output("path", archive_path);
     if let Ok(metadata) = tokio::fs::metadata(&output_path).await {
-        ctx.state.set_output("size", &metadata.len().to_string());
+        let output_bytes = metadata.len();
+        ctx.state.set_output("size", &output_bytes.to_string());
+        ctx.log.debug_event(evin_action_sdk::debug::ArchiveInputs {
+            paths: compact_archive_paths(&report.inputs),
+        });
+        ctx.log.activity(evin_action_sdk::activity::ArchiveCreated {
+            format: format_name.clone(),
+            path: archive_path.to_string(),
+            input_files: report.inputs.len(),
+            input_size: format_byte_size(report.input_bytes),
+            output_size: format_byte_size(output_bytes),
+        });
         ctx.log.debug_event(evin_action_sdk::debug::ArchiveOutput {
-            format: config.format.clone(),
-            size_bytes: metadata.len(),
-            files: files_len,
+            format: format_name,
+            path: archive_path.to_string(),
+            size_bytes: output_bytes,
+            input_bytes: report.input_bytes,
+            files: report.inputs.len(),
+            compression_level,
         });
     }
 
     Ok(())
+}
+
+fn archive_input_report(context: &PackageContext) -> ArchiveReport {
+    let inputs = context
+        .entries
+        .iter()
+        .filter(|entry| entry.kind == evin_action_sdk::packaging::PreparedEntryKind::File)
+        .map(|entry| ArchiveInputReport {
+            path: entry.path.clone(),
+        })
+        .collect::<Vec<_>>();
+    let input_bytes = context
+        .entries
+        .iter()
+        .filter(|entry| entry.kind == evin_action_sdk::packaging::PreparedEntryKind::File)
+        .map(|entry| entry.data.len() as u64)
+        .sum();
+    ArchiveReport {
+        inputs,
+        input_bytes,
+    }
+}
+
+fn compact_archive_paths(inputs: &[ArchiveInputReport]) -> String {
+    let mut root = ArchivePathNode::default();
+    for input in inputs {
+        let mut node = &mut root;
+        for component in input.path.split('/') {
+            node = node.children.entry(component.to_string()).or_default();
+        }
+        node.terminal = true;
+    }
+    render_archive_paths(&root)
+}
+
+fn render_archive_paths(node: &ArchivePathNode) -> String {
+    if node.children.is_empty() {
+        return String::new();
+    }
+
+    let extension = node
+        .children
+        .iter()
+        .all(|(_, child)| child.terminal && child.children.is_empty())
+        .then(|| {
+            node.children
+                .keys()
+                .next()
+                .and_then(|name| name.rsplit_once('.'))
+                .and_then(|(stem, extension)| {
+                    (!stem.is_empty() && !extension.is_empty()).then_some(extension)
+                })
+        })
+        .flatten()
+        .filter(|extension| {
+            node.children.keys().all(|name| {
+                name.rsplit_once('.')
+                    .is_some_and(|(stem, candidate)| !stem.is_empty() && candidate == *extension)
+            })
+        });
+
+    if node.children.len() > 1
+        && let Some(extension) = extension
+    {
+        return format!("*.{extension}({})", node.children.len());
+    }
+
+    let mut branches = node
+        .children
+        .iter()
+        .map(|(component, child)| {
+            let component = escape_archive_path_component(component);
+            let suffix = render_archive_paths(child);
+            if suffix.is_empty() {
+                component
+            } else {
+                format!("{component}/{suffix}")
+            }
+        })
+        .collect::<Vec<_>>();
+    if node.terminal {
+        branches.insert(0, String::new());
+    }
+    if branches.len() == 1 {
+        branches.pop().unwrap_or_default()
+    } else {
+        format!("{{{}}}", branches.join(","))
+    }
+}
+
+fn escape_archive_path_component(component: &str) -> String {
+    component
+        .chars()
+        .map(|character| {
+            if "\\,{}*?[]".contains(character) {
+                format!("\\{character}")
+            } else {
+                character.to_string()
+            }
+        })
+        .collect()
+}
+
+fn format_byte_size(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KiB", "MiB", "GiB", "TiB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{bytes} B")
+    } else {
+        format!("{value:.1} {}", UNITS[unit])
+    }
 }
 
 fn validate_format_keys(

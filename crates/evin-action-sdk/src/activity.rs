@@ -225,6 +225,7 @@ define_activity_events! {
     pub struct DocsRebuildFailed { reason: String } => (Error, Rebuild, "activity-docs-rebuild-failed");
     pub struct DocsServeReady { url: String } => (Info, Ready, "activity-docs-serve-ready");
     pub struct ArchiveCompressing { files: usize, path: String } => (Info, Package, "activity-archive-compressing");
+    pub struct ArchiveCreated { format: String, path: String, input_files: usize, input_size: String, output_size: String } => (Info, Package, "activity-archive-created");
 }
 
 define_localized_messages! {
@@ -263,6 +264,10 @@ pub const ACTIVITY_LOCALE_KEYS: &[(&str, &[&str])] = &[
     ("activity-docs-rebuild-failed", &["reason"]),
     ("activity-docs-serve-ready", &["url"]),
     ("activity-archive-compressing", &["files", "path"]),
+    (
+        "activity-archive-created",
+        &["format", "path", "input_files", "input_size", "output_size"],
+    ),
     ("status-docs-server-running", &["url"]),
     ("status-docs-watching", &[]),
     ("status-docs-rebuilding", &[]),
