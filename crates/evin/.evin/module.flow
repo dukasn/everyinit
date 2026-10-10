@@ -1,6 +1,7 @@
 #!evin/v1
 module:
   name: evin
+  include: [.evin/package.flow]
 
 tasks:
   build:

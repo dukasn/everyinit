@@ -48,6 +48,7 @@ pub struct CustomFileConfig {
 pub struct GitConfig {
     pub commit: bool,
     pub tag: bool,
+    pub defer: bool,
     pub message: Option<String>,
     pub include: Vec<String>,
 }
@@ -57,6 +58,8 @@ pub struct GitConfig {
 pub struct VersionBumperConfig {
     pub files: Vec<FileConfig>,
     pub git: GitConfig,
+    pub read_only: bool,
+    pub fixed_version: Option<String>,
     pub initial_version: String,
     pub stable: bool,
     pub prerelease: Option<String>,
@@ -69,6 +72,8 @@ impl Default for VersionBumperConfig {
         Self {
             files: Vec::new(),
             git: GitConfig::default(),
+            read_only: false,
+            fixed_version: None,
             initial_version: "0.1.0".to_string(),
             stable: false,
             prerelease: None,
@@ -124,6 +129,35 @@ impl VersionBumperConfig {
             return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
                 "git-tag-requires-git-commit",
             )));
+        }
+        if self.git.defer && (!self.git.commit || !self.git.tag) {
+            return Err("git.defer requires both git.commit and git.tag to be true"
+                .to_string()
+                .into());
+        }
+        if self.read_only
+            && (!self.files.is_empty()
+                || self.git.commit
+                || self.git.tag
+                || self.git.defer
+                || !self.git.include.is_empty())
+        {
+            return Err(
+                "read_only cannot be combined with file updates or Git mutation"
+                    .to_string()
+                    .into(),
+            );
+        }
+        if let Some(version) = &self.fixed_version {
+            if !version.contains("${") {
+                Version::parse(version)
+                    .map_err(|error| format!("fixed_version must be valid SemVer: {error}"))?;
+            }
+            if !self.read_only {
+                return Err("fixed_version is only valid with read_only: true"
+                    .to_string()
+                    .into());
+            }
         }
         if let Some(msg) = &self.git.message {
             if msg.trim().is_empty() {
@@ -366,9 +400,16 @@ pub async fn execute(
     ctx: &RunnerContext,
     with: Option<evin_yaml::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let config: VersionBumperConfig = ctx
+    let mut config: VersionBumperConfig = ctx
         .load_config(with.as_ref())
         .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string())))?;
+    if let Some(fixed_version) = &config.fixed_version {
+        let resolved = resolve_local_template(fixed_version, ctx, &HashMap::new())
+            .map_err(|error| error.to_string())?;
+        Version::parse(&resolved)
+            .map_err(|error| format!("fixed_version must resolve to valid SemVer: {error}"))?;
+        config.fixed_version = Some(resolved);
+    }
     config
         .validate()
         .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string())))?;
@@ -379,14 +420,18 @@ pub async fn execute(
         .map(|release| release.packages.clone())
         .unwrap_or_default();
     evin_action_sdk::release::validate_policies(&package_policies).map_err(|e| e.to_string())?;
-    if !package_policies.is_empty() && (!config.git.commit || !config.git.tag) {
+    if !package_policies.is_empty() && !config.read_only && (!config.git.commit || !config.git.tag)
+    {
         return Err(
             "package-managed releases require git.commit and git.tag to be true"
                 .to_string()
                 .into(),
         );
     }
-    if !package_policies.is_empty() && ctx.mode != evin_action_sdk::PipelineMode::DryRun {
+    if !package_policies.is_empty()
+        && !config.read_only
+        && ctx.mode != evin_action_sdk::PipelineMode::DryRun
+    {
         if ctx
             .git()
             .has_staged_changes()
@@ -463,7 +508,7 @@ pub async fn execute(
     };
 
     let mut semantic_change = !found_tag;
-    let version = if !found_tag {
+    let mut version = if !found_tag {
         let v = Version::parse(&config.initial_version).unwrap();
         v.to_string()
     } else {
@@ -497,6 +542,13 @@ pub async fn execute(
         }
     };
 
+    if config.read_only
+        && let Some(fixed_version) = &config.fixed_version
+    {
+        semantic_change = false;
+        version.clone_from(fixed_version);
+    }
+
     if !found_tag {
         previous_version = "0.0.0".to_string();
     }
@@ -518,7 +570,7 @@ pub async fn execute(
         ));
     }
 
-    if config.git.commit {
+    if config.git.commit && !config.git.defer {
         ctx.git()
             .verify_identity()
             .await
@@ -535,7 +587,7 @@ pub async fn execute(
         count: config.files.len(),
     });
     let mut modified_files = Vec::new();
-    for file in if semantic_change {
+    for file in if semantic_change && !config.read_only {
         config.files.as_slice()
     } else {
         &[]
@@ -589,7 +641,7 @@ pub async fn execute(
     let mut lock_changed = false;
     let mut release_json = None;
     if !package_policies.is_empty() {
-        if ctx.mode != evin_action_sdk::PipelineMode::DryRun {
+        if !config.read_only && ctx.mode != evin_action_sdk::PipelineMode::DryRun {
             let mut planned = modified_files.clone();
             if semantic_change {
                 planned.extend(config.git.include.clone());
@@ -626,7 +678,7 @@ pub async fn execute(
             )
             .map_err(|e| e.to_string())?,
         );
-        if lock_changed && ctx.mode != evin_action_sdk::PipelineMode::DryRun {
+        if lock_changed && !config.read_only && ctx.mode != evin_action_sdk::PipelineMode::DryRun {
             evin_action_sdk::release::write_lock(ctx.fs.workspace_root(), &lock)
                 .map_err(|e| e.to_string())?;
             ctx.git()
@@ -712,28 +764,29 @@ pub async fn execute(
             ));
         }
 
-        let require_signatures = ctx.require_signatures();
+        if !config.git.defer {
+            let require_signatures = ctx.require_signatures();
+            ctx.git()
+                .commit(&commit_message, require_signatures)
+                .await
+                .map_err(|e| e.to_string())?;
 
-        ctx.git()
-            .commit(&commit_message, require_signatures)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        if config.git.tag && semantic_change {
-            let result = ctx.git().create_tag(&version_with_v, &commit_message).await;
-            if let Err(e) = result {
-                let commit_id = ctx
-                    .git()
-                    .get_last_commit_id()
-                    .await
-                    .unwrap_or_else(|_| "HEAD".to_string());
-                return Err(evin_diagnostic::Diagnostic::new(
-                    "Action Failed",
-                    evin_diagnostic::IssueCode::new("tag-recovery-failed")
-                        .arg("commit_id", commit_id)
-                        .arg("tag", &version_with_v)
-                        .arg("error", e.to_string()),
-                ));
+            if config.git.tag && semantic_change {
+                let result = ctx.git().create_tag(&version_with_v, &commit_message).await;
+                if let Err(e) = result {
+                    let commit_id = ctx
+                        .git()
+                        .get_last_commit_id()
+                        .await
+                        .unwrap_or_else(|_| "HEAD".to_string());
+                    return Err(evin_diagnostic::Diagnostic::new(
+                        "Action Failed",
+                        evin_diagnostic::IssueCode::new("tag-recovery-failed")
+                            .arg("commit_id", commit_id)
+                            .arg("tag", &version_with_v)
+                            .arg("error", e.to_string()),
+                    ));
+                }
             }
         }
     }

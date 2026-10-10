@@ -94,6 +94,13 @@ const BUMPER_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
+            path: "git.defer",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Stage release changes for a later commit and tag.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
             path: "git.message",
             kind: ActionFieldKind::String,
             required: false,
@@ -113,6 +120,20 @@ const BUMPER_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             required: false,
             description: "Force a stable release.",
             condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "read_only",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Calculate release state without changing the checkout.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "fixed_version",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Pin the version used for read-only package state.",
+            condition: Some("read_only=true"),
         },
         ActionFieldDescriptor {
             path: "prerelease",

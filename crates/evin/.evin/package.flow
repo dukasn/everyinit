@@ -1,0 +1,146 @@
+#!evin/v1
+namespace:
+  name: package
+  description: "Evin binary packaging and distribution tasks"
+
+tasks:
+  stage:
+    stage: Publish
+    description: "Build, verify, and stage the EVIN release binary"
+    cwd: .
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    steps:
+      - run: cargo build --release --locked --target "$RELEASE_TARGET" -p evin
+      - run: cargo run --locked -p esh -- scripts/release/verify-binary.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/stage.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
+
+  cloudflare:
+    stage: Publish
+    description: "Create Evin's Cloudflare tar.gz artifact"
+    cwd: dist/release-stage
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs: [stage]
+    steps:
+      - uses: evin/archive@v1
+        with:
+          path: "../evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}.tar.gz"
+          include: ["evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"]
+          layout: relative
+          compression_level: 9
+
+  cloudflare-verify:
+    stage: Publish
+    description: "Verify Evin's Cloudflare tar.gz artifact"
+    cwd: .
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs: [cloudflare]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
+
+  native:
+    stage: Publish
+    description: "Create Evin's DEB, APK, and Arch package artifacts"
+    cwd: .
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs: [stage, release:package-state]
+    steps:
+      - run: rm -f "dist/evin_${RELEASE_VERSION}-"*_amd64.deb "dist/evin-${RELEASE_VERSION}-r"*.apk "dist/evin-${RELEASE_VERSION}-"*-x86_64.pkg.tar.zst
+      - uses: evin/archive@v1
+        with:
+          format: deb
+          output_dir: dist
+          architecture: x86_64
+          release: "${release:package-state.release}"
+          package:
+            name: evin
+            summary: Evin workflow engine
+            maintainer: Everyinit contributors
+            license: GPL-3.0-only
+            homepage: https://everyinit.dev
+            payload:
+              - source: "dist/release-stage/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/evin"
+                strip_prefix: "dist/release-stage/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: /usr/bin
+                mode: 493
+              - source: LICENSE
+                strip_prefix: .
+                destination: /usr/share/licenses/evin
+              - source: "THIRD_PARTY_NOTICES/**/*"
+                strip_prefix: THIRD_PARTY_NOTICES
+                destination: /usr/share/doc/evin/THIRD_PARTY_NOTICES
+            targets:
+              deb: {}
+      - uses: evin/archive@v1
+        with:
+          format: apk
+          output_dir: dist
+          architecture: x86_64
+          release: "${release:package-state.release}"
+          package:
+            name: evin
+            summary: Evin workflow engine
+            maintainer: Everyinit contributors
+            license: GPL-3.0-only
+            homepage: https://everyinit.dev
+            payload:
+              - source: "dist/release-stage/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/evin"
+                strip_prefix: "dist/release-stage/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: /usr/bin
+                mode: 493
+              - source: LICENSE
+                strip_prefix: .
+                destination: /usr/share/licenses/evin
+              - source: "THIRD_PARTY_NOTICES/**/*"
+                strip_prefix: THIRD_PARTY_NOTICES
+                destination: /usr/share/doc/evin/THIRD_PARTY_NOTICES
+            targets:
+              apk: {}
+      - uses: evin/archive@v1
+        with:
+          format: arch
+          output_dir: dist
+          architecture: x86_64
+          release: "${release:package-state.release}"
+          package:
+            name: evin
+            summary: Evin workflow engine
+            maintainer: Everyinit contributors
+            license: GPL-3.0-only
+            homepage: https://everyinit.dev
+            payload:
+              - source: "dist/release-stage/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/evin"
+                strip_prefix: "dist/release-stage/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: /usr/bin
+                mode: 493
+              - source: LICENSE
+                strip_prefix: .
+                destination: /usr/share/licenses/evin
+              - source: "THIRD_PARTY_NOTICES/**/*"
+                strip_prefix: THIRD_PARTY_NOTICES
+                destination: /usr/share/doc/evin/THIRD_PARTY_NOTICES
+            targets:
+              arch: {}
+
+  native-verify:
+    stage: Publish
+    description: "Verify Evin's DEB, APK, and Arch package artifacts"
+    cwd: .
+    env: [RELEASE_VERSION]
+    needs: [native]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/verify-native-artifacts.esh evin "$RELEASE_VERSION"
+
+  github:
+    stage: Publish
+    description: "Create every Evin artifact format for GitHub Releases"
+    needs: [cloudflare, native]
+
+  github-verify:
+    stage: Publish
+    description: "Verify every Evin artifact format for GitHub Releases"
+    needs: [github, cloudflare-verify, native-verify]
+
+  verify:
+    stage: Publish
+    description: "Verify all Evin release package formats"
+    needs: [github-verify]

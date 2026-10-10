@@ -41,6 +41,10 @@ tasks:
             - path: ".evin/workspace.flow"
               match: 'version:\s*"${previous_version}"'
               write: 'version: "${version}"'
+          git:
+            commit: true
+            tag: true
+            defer: true
       - run: cargo check --workspace --locked
 
   changelog:
@@ -60,7 +64,7 @@ tasks:
     needs:
       - release:changelog
     steps:
-      - run: git add Cargo.toml Cargo.lock .evin/workspace.flow CHANGELOG.md
+      - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.yaml CHANGELOG.md
       - uses: evin/git-release@v1
         with:
           stage: existing
@@ -76,54 +80,56 @@ tasks:
     steps:
       - run: cargo run --locked -p esh -- scripts/release/verify-tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
 
-  build:
+  package-state:
     stage: Publish
-    description: "Build the static release binaries"
-    env: [RELEASE_TARGET]
-    needs:
-      - release:tag-verify
+    description: "Resolve package revisions without changing the checkout"
+    env: [RELEASE_TAG, RELEASE_VERSION]
     steps:
-      - run: cargo build --release --locked --target "$RELEASE_TARGET" -p evin -p esh
-
-  binaries-verify:
-    stage: Publish
-    description: "Verify static linkage, permissions, and binary versions"
-    env: [RELEASE_TARGET, RELEASE_VERSION]
-    needs:
-      - release:build
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-binaries.esh "$RELEASE_TARGET" "$RELEASE_VERSION"
-
-  stage:
-    stage: Publish
-    description: "Stage the canonical release tree"
-    env: [RELEASE_TARGET, RELEASE_VERSION]
-    needs:
-      - release:binaries-verify
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/stage.esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/verify-tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
+      - uses: evin/version-bumper@v1
+        with:
+          initial_version: "1.0.0-canary.100"
+          read_only: true
+          fixed_version: "${env.RELEASE_VERSION}"
 
   package:
     stage: Publish
-    description: "Create the canonical Linux musl release archive"
-    cwd: dist/release-stage
-    env: [RELEASE_TARGET, RELEASE_VERSION]
+    description: "Build all GitHub release formats for Evin and ESH"
     needs:
-      - release:stage
-    steps:
-      - uses: evin/archive@v1
-        with:
-          path: "../evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}.tar.gz"
-          include:
-            - "evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"
-          layout: relative
-          compression_level: 9
+      - release:tag-verify
+      - evin:package:github
+      - esh:package:github
+
+  package-cloudflare:
+    stage: Publish
+    description: "Build only the tar.gz artifacts used by the Cloudflare mirror"
+    needs:
+      - release:tag-verify
+      - evin:package:cloudflare
+      - esh:package:cloudflare
+
+  package-cloudflare-verify:
+    stage: Publish
+    description: "Verify the tar.gz artifacts used by the Cloudflare mirror"
+    needs:
+      - release:package-cloudflare
+      - evin:package:cloudflare-verify
+      - esh:package:cloudflare-verify
 
   package-verify:
     stage: Publish
-    description: "Verify the canonical release archive"
-    env: [RELEASE_TARGET, RELEASE_VERSION]
+    description: "Verify both release archives"
     needs:
       - release:package
+      - evin:package:github-verify
+      - esh:package:github-verify
+
+  metadata:
+    stage: Publish
+    description: "Generate signed mirror manifests for both release archives"
+    env: [RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
+    needs:
+      - release:package-cloudflare-verify
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET"
+      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET"

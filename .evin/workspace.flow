@@ -11,6 +11,7 @@ workspace:
     - docs/
     - crates/evin/
     - crates/esh/
+    - infra/
   include:
     - .evin/release.flow
 
@@ -72,12 +73,13 @@ tasks:
 
   quality:
     stage: Check
-    description: "Run static Rust and browser documentation quality checks"
+    description: "Run Rust, browser documentation, and Cloudflare infra quality checks"
     needs:
       - check
       - fmt
       - lint
       - docs:verify
+      - infra:verify
 
   verify:
     stage: Test

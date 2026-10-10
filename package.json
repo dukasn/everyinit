@@ -1,14 +1,50 @@
 {
-  "name": "evin-development",
+  "name": "everyinit-development",
   "private": true,
   "type": "module",
+  "packageManager": "npm@10.9.9",
+  "engines": {
+    "node": "22.23.3",
+    "npm": "10.9.9"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "22.23.3",
+      "onFail": "error"
+    },
+    "packageManager": {
+      "name": "npm",
+      "version": "10.9.9",
+      "onFail": "error"
+    }
+  },
   "scripts": {
     "build": "./.evin/cloudflare-build",
     "docs:build": "cargo evin-dev run docs:build",
+    "pages:dev": "cargo evin-dev run infra:pages-dev",
+    "installer:dev": "cargo evin-dev run infra:installer-dev",
+    "mirror:dev": "cargo evin-dev run infra:mirror-dev",
+    "mirror:seed": "cargo evin-dev run infra:mirror-seed",
+    "infra:types": "cargo evin-dev run infra:types",
+    "infra:fmt": "cargo evin-dev run infra:fmt",
+    "infra:lint": "cargo evin-dev run infra:lint",
+    "infra:typecheck": "cargo evin-dev run infra:typecheck",
+    "infra:build": "cargo evin-dev run infra:build",
+    "infra:verify": "cargo evin-dev run infra:verify",
     "test:docs-responsive": "cargo evin-dev run docs:test-responsive",
     "verify": "cargo evin-dev run verify"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0"
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^26.6.5",
+    "oxfmt": "^0.72.0",
+    "oxlint": "^1.87.0",
+    "typescript": "^7.0.2",
+    "wrangler": "4.149.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "workerd@1.20261006.1": true
   }
 }

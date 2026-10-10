@@ -1,0 +1,93 @@
+#!evin/v1
+module:
+  name: infra
+
+tasks:
+  types:
+    stage: Build
+    description: "Generate Worker runtime and binding types from Wrangler config"
+    cwd: .
+    steps:
+      - run: npx wrangler types infra/get/worker-configuration.d.ts --config infra/get/wrangler.toml
+      - run: npx wrangler types infra/mirror/worker-configuration.d.ts --config infra/mirror/wrangler.toml
+
+  fmt:
+    stage: Check
+    description: "Check infra TypeScript and configuration formatting"
+    cwd: .
+    steps:
+      - run: npx oxfmt --check package.json infra/.oxlintrc.json infra/get/tsconfig.json infra/mirror/tsconfig.json infra/get/src/index.ts infra/mirror/src/index.ts
+
+  lint:
+    stage: Check
+    description: "Lint Cloudflare Worker TypeScript with Oxlint"
+    cwd: .
+    steps:
+      - run: npx oxlint --config infra/.oxlintrc.json --deny-warnings infra/get/src/index.ts infra/mirror/src/index.ts
+
+  typecheck:
+    stage: Check
+    description: "Check generated Worker types and TypeScript sources"
+    cwd: .
+    steps:
+      - run: npx wrangler types infra/get/worker-configuration.d.ts --config infra/get/wrangler.toml --check
+      - run: npx wrangler types infra/mirror/worker-configuration.d.ts --config infra/mirror/wrangler.toml --check
+      - run: npx tsc --project infra/get/tsconfig.json
+      - run: npx tsc --project infra/mirror/tsconfig.json
+
+  build:
+    stage: Build
+    description: "Build both Cloudflare Workers with Wrangler"
+    cwd: .
+    needs: [infra:fmt, infra:lint, infra:typecheck]
+    steps:
+      - run: npx wrangler deploy --dry-run --outdir ../../dist/infra/get --config infra/get/wrangler.toml
+      - run: npx wrangler deploy --dry-run --outdir ../../dist/infra/mirror --config infra/mirror/wrangler.toml
+
+  verify:
+    stage: Check
+    description: "Run infra formatting, lint, type, and Worker build checks"
+    needs: [infra:build]
+
+  pages-dev:
+    stage: Docs
+    description: "Build and serve the documentation site with Cloudflare Pages"
+    cwd: .
+    needs: [docs:build]
+    steps:
+      - run: npx wrangler pages dev dist/docs --port 8788
+
+  installer-dev:
+    stage: Build
+    description: "Serve the installer Worker locally"
+    cwd: .
+    steps:
+      - run: npx wrangler dev --config infra/get/wrangler.toml --port 8789
+
+  mirror-dev:
+    stage: Build
+    description: "Serve the release mirror Worker locally"
+    cwd: .
+    steps:
+      - run: npx wrangler dev --config infra/mirror/wrangler.toml --port 8787
+
+  mirror-metadata:
+    stage: Publish
+    description: "Build and sign both local mirror release manifests"
+    cwd: .
+    env: [RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
+    needs:
+      - evin:package:cloudflare-verify
+      - esh:package:cloudflare-verify
+    steps:
+      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET"
+      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET"
+
+  mirror-seed:
+    stage: Publish
+    description: "Prepare release metadata and seed the local R2 mirror"
+    cwd: .
+    env: [RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
+    needs: [infra:mirror-metadata]
+    steps:
+      - run: node scripts/release/seed-local-mirror.mjs

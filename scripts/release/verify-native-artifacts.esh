@@ -1,0 +1,39 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -eq 2 ] "usage: verify-native-artifacts.esh <evin|esh> <version>"
+PACKAGE="$1"
+VERSION="$2"
+if test "$PACKAGE" != "evin"; then
+  if test "$PACKAGE" != "esh"; then
+    echo "unsupported release package: $PACKAGE" >&2
+    exit 1
+  fi
+fi
+assert [ -n "$VERSION" ] "release version must not be empty"
+
+DEB=$(glob "dist/${PACKAGE}_${VERSION}-*_amd64.deb")
+APK=$(glob "dist/${PACKAGE}-${VERSION}-r*.apk")
+ARCH=$(glob "dist/${PACKAGE}-${VERSION}-*-x86_64.pkg.tar.zst")
+assert [ "$(printf '%s\n' "$DEB" | wc -l)" -eq 1 ] "expected one ${PACKAGE} DEB artifact for $VERSION"
+assert [ "$(printf '%s\n' "$APK" | wc -l)" -eq 1 ] "expected one ${PACKAGE} APK artifact for $VERSION"
+assert [ "$(printf '%s\n' "$ARCH" | wc -l)" -eq 1 ] "expected one ${PACKAGE} Arch artifact for $VERSION"
+assert [ -s "$DEB" ] "${PACKAGE} DEB artifact is empty"
+assert [ -s "$APK" ] "${PACKAGE} APK artifact is empty"
+assert [ -s "$ARCH" ] "${PACKAGE} Arch artifact is empty"
+
+echo "Verified ${PACKAGE} DEB, APK, and Arch artifacts for $VERSION"

@@ -59,6 +59,35 @@ releases:
   prerelease:
     channels:
       canary: "canary.{n}"
+  packages:
+    evin:
+      watch:
+        - Cargo.lock
+        - crates/**
+        - builtins/**
+        - locales/**
+        - scripts/release/**
+        - .evin/gitrules.flow
+        - .evin/release.flow
+        - LICENSE
+        - THIRD_PARTY_NOTICES/**
+      targets: [deb, apk, arch]
+      revision:
+        scope: target
+    esh:
+      watch:
+        - Cargo.lock
+        - crates/**
+        - builtins/**
+        - locales/**
+        - scripts/release/**
+        - .evin/gitrules.flow
+        - .evin/release.flow
+        - LICENSE
+        - THIRD_PARTY_NOTICES/**
+      targets: [deb, apk, arch]
+      revision:
+        scope: target
 
 branches:
   # The format required for branch names.

@@ -223,6 +223,26 @@
       "hover_plaintext": "uses: evin/version-bumper@v1\n\nVersion bumper action (action.evin/version-bumper@v1): Resolve and write the next release version.\n\nConfigure version sources and release behavior through with:.",
       "terminal_ansi": "\u001b[1;36muses: evin/version-bumper@v1\u001b[0m\n\n\u001b[1mVersion bumper action\u001b[0m (action.evin/version-bumper@v1): Resolve and write the next release version.\n\nConfigure version sources and release behavior through \u001b[33mwith:\u001b[0m."
     },
+    "action.evin/version-bumper@v1.with.git.defer": {
+      "name": "action.evin/version-bumper@v1.with.git.defer",
+      "synopsis": "git: { defer: true }",
+      "summary": "Stage calculated release changes for a later commit and tag task.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\ngit: { defer: true }\n```\n\n**Defer commit and tag** (`action.evin/version-bumper@v1.with.git.defer`): Stage calculated release changes for a later commit and tag task.\n\nRequires `git.commit: true` and `git.tag: true`. Use it when another task\nneeds to add generated files, such as a changelog, before the release commit.",
+      "hover_plaintext": "git: { defer: true }\n\nDefer commit and tag (action.evin/version-bumper@v1.with.git.defer): Stage calculated release changes for a later commit and tag task.\n\nRequires git.commit: true and git.tag: true. Use it when another task\nneeds to add generated files, such as a changelog, before the release commit.",
+      "terminal_ansi": "\u001b[1;36mgit: { defer: true }\u001b[0m\n\n\u001b[1mDefer commit and tag\u001b[0m (action.evin/version-bumper@v1.with.git.defer): Stage calculated release changes for a later commit and tag task.\n\nRequires \u001b[33mgit.commit: true\u001b[0m and \u001b[33mgit.tag: true\u001b[0m. Use it when another task\nneeds to add generated files, such as a changelog, before the release commit."
+    },
+    "action.evin/version-bumper@v1.with.read_only": {
+      "name": "action.evin/version-bumper@v1.with.read_only",
+      "synopsis": "read_only: true",
+      "summary": "Calculate package release state without changing the checkout.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nread_only: true\n```\n\n**Read-only release state** (`action.evin/version-bumper@v1.with.read_only`): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\n`release` output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave `files` empty and Git mutation\noptions disabled.",
+      "hover_plaintext": "read_only: true\n\nRead-only release state (action.evin/version-bumper@v1.with.read_only): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\nrelease output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave files empty and Git mutation\noptions disabled.",
+      "terminal_ansi": "\u001b[1;36mread_only: true\u001b[0m\n\n\u001b[1mRead-only release state\u001b[0m (action.evin/version-bumper@v1.with.read_only): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\n\u001b[33mrelease\u001b[0m output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave \u001b[33mfiles\u001b[0m empty and Git mutation\noptions disabled."
+    },
     "environment": {
       "name": "environment",
       "synopsis": "#!evin/v1\nversion: 1\n\npresets:\n  web: [LOG_LEVEL, PORT, DATABASE_URL]\n\nenvironments:\n  LOG_LEVEL:\n    type: string\n    default: info\n    description: \"Application log level\"\n    scopes: [Internal, Process]\n    stages: [Build, Test]\n\n  DATABASE_URL:\n    type: secret\n    required: true\n    scopes: [Process]",

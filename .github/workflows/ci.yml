@@ -55,12 +55,12 @@ jobs:
           components: clippy, rustfmt
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .node-version
           cache: npm
-      - name: Install browser test dependencies
-        run: npm ci
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Bootstrap locked workspace dependencies
+        run: cargo evin-dev run bootstrap
+      - name: Install Chromium system dependencies
+        run: npx playwright install-deps chromium
       - name: Run canonical quality gate
         run: cargo evin-dev run quality
 

@@ -1,6 +1,7 @@
 #!evin/v1
 module:
   name: esh
+  include: [.evin/package.flow]
 
 tasks:
   build:

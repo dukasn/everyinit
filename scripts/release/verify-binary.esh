@@ -1,0 +1,34 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -eq 3 ] "usage: verify-binary.esh <evin|esh> <target-triple> <version>"
+PACKAGE="$1"
+TARGET="$2"
+VERSION="$3"
+if test "$PACKAGE" != "evin"; then
+  if test "$PACKAGE" != "esh"; then
+    echo "unsupported release binary: $PACKAGE" >&2
+    exit 1
+  fi
+fi
+assert [ "$TARGET" = "x86_64-unknown-linux-musl" ] "unsupported release target: $TARGET"
+assert [ -n "$VERSION" ] "release version must not be empty"
+BIN="target/$TARGET/release/$PACKAGE"
+
+assert [ -x "$BIN" ] "missing executable release binary: $BIN"
+assert "! readelf -l $BIN | grep -Fq 'Requesting program interpreter'" -- "$PACKAGE binary must be statically linked"
+assert "$BIN --version | grep -Fq '$VERSION'" -- "$PACKAGE binary version does not match $VERSION"

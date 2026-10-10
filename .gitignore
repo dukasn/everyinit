@@ -6,6 +6,7 @@
 !/Cargo.toml
 !/Cargo.lock
 !/rust-toolchain.toml
+!/.node-version
 !/THIRD_PARTY_NOTICES/
 # Public repository entry point; the root deny-all rule otherwise excludes it.
 !/README.md
@@ -15,6 +16,7 @@
 !/.evin/
 !/.github/
 !/builtins/
+!/infra/
 !/locales/
 !/CHANGELOG.md
 !/LICENSE
@@ -38,5 +40,6 @@ __pycache__/
 **/*~
 **/*.swp
 **/.DS_Store
+**/.wrangler/
 **/.evin/trace.json
 **/.evin/build/
