@@ -1,6 +1,7 @@
 # UI locale messages
 
 phase-resolving-configuration = Resolving configuration
+phase-checking-workspace = Checking workspace
 phase-evaluating-git-environment = Verifying git repository
 phase-workspace-synchronized = Finished!
 phase-executing-tasks = Executing pipeline tasks
@@ -113,6 +114,7 @@ dry-run-completed-successfully = Dry run completed successfully
 dry-run-completed-with-warnings = Dry run completed with warnings
 dry-run-outcome-summary = { $planned } planned, { $unverified } unverified, { $failed } failed
 pipeline-rejected = Execution aborted
+pipeline-failed = Execution failed
 watch-session-failed = Execution failed; watching for the next change
 watching-for-changes = watching for file changes...
 verifying-policy = Verifying workspace policies

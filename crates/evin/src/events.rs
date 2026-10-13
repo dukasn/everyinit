@@ -33,6 +33,10 @@ pub enum PipelineEvent {
         arch: String,
         shell: String,
     },
+    WorkspaceHeader {
+        version: String,
+        workspace: String,
+    },
     Footer {
         command: String,
         flags: Vec<String>,
@@ -43,7 +47,7 @@ pub enum PipelineEvent {
     },
     PhaseStarted(String),
     PhaseCompleted(String, Duration),
-    PhaseFailed(String, Duration),
+    PhaseFailed(String, Duration, Vec<Diagnostic>),
     DebugLog(Option<String>, DebugRecord),
     TaskOutputStarted {
         name: String,
@@ -92,7 +96,6 @@ pub enum PipelineEvent {
     SyncSummary {
         details: Vec<String>,
     },
-    ExecutionError(Diagnostic),
     PipelineCancelled,
     /// The current watch session ended intentionally so the reporter can
     /// flush it without terminating the long-lived supervisor UI.
@@ -177,6 +180,7 @@ pub async fn run_ui_reporter(
 
     let mut ticker = tokio::time::interval(std::time::Duration::from_millis(50));
     let mut active_task = String::new();
+    let mut phase_failed = false;
     let mut shutting_down = false;
     let mut exit_code = true;
 
@@ -201,6 +205,9 @@ pub async fn run_ui_reporter(
                         match event {
                             PipelineEvent::Header { version, mode, os, arch, shell } => {
                                 ui.handle_event(UIEvent::Header { version, mode, os, arch, shell }).await;
+                            }
+                            PipelineEvent::WorkspaceHeader { version, workspace } => {
+                                ui.handle_event(UIEvent::WorkspaceHeader { version, workspace }).await;
                             }
                             PipelineEvent::Footer { command, flags } => {
                                 ui.handle_event(UIEvent::Footer { command, flags }).await;
@@ -235,11 +242,29 @@ pub async fn run_ui_reporter(
                                     duration,
                                 }).await;
                             }
-                            PipelineEvent::PhaseFailed(locale_key, duration) => {
+                            PipelineEvent::PhaseFailed(locale_key, duration, diagnostics) => {
+                                phase_failed = true;
                                 if locale_key == "ui.phase.executing_tasks" {
+                                    for diagnostic in diagnostics {
+                                        let rendered = evin_locales::render_issue(&diagnostic.code);
+                                        ui.handle_event(UIEvent::Diagnostic {
+                                            item_name: "Pipeline".into(),
+                                            diagnostic,
+                                            message: rendered,
+                                        }).await;
+                                    }
+                                    ui.handle_event(UIEvent::PipelineState { success: false }).await;
                                     continue;
                                 }
                                 let display_name = evin_ui::pipeline::presenter::resolve_phase_display_name(&locale_key);
+                                for diagnostic in diagnostics {
+                                    let rendered = evin_locales::render_issue(&diagnostic.code);
+                                    ui.handle_event(UIEvent::PhaseDiagnostic {
+                                        phase_name: display_name.clone(),
+                                        diagnostic,
+                                        message: rendered,
+                                    }).await;
+                                }
                                 ui.handle_event(UIEvent::ItemFinished {
                                     name: display_name,
                                     failed: true,
@@ -247,6 +272,7 @@ pub async fn run_ui_reporter(
                                     cancelled: false,
                                     duration,
                                 }).await;
+                                ui.handle_event(UIEvent::PipelineState { success: false }).await;
                             }
                             PipelineEvent::DebugLog(task, record) => {
                                 // Structural telemetry is intentionally absent outside
@@ -388,18 +414,13 @@ pub async fn run_ui_reporter(
                                 shutting_down = !watch_mode;
                                 exit_code = true;
                             }
-                            PipelineEvent::ExecutionError(diagnostic) => {
-                                let rendered = evin_locales::render_issue(&diagnostic.code);
-                                ui.handle_event(UIEvent::Diagnostic {
-                                    item_name: "Pipeline".into(),
-                                    diagnostic,
-                                    message: rendered.clone(),
-                                }).await;
-                                ui.handle_event(UIEvent::PipelineState { success: false }).await;
-                                // We wait for PipelineCancelled event to shut down
-                            }
                             PipelineEvent::PipelineCancelled => {
-                                ui.finalize_cancelled(evin_locales::t!("pipeline-rejected")).await;
+                                let message = if phase_failed {
+                                    evin_locales::t!("pipeline-failed")
+                                } else {
+                                    evin_locales::t!("pipeline-rejected")
+                                };
+                                ui.finalize_cancelled(message).await;
                                 shutting_down = true;
                                 exit_code = false;
                             }
@@ -407,6 +428,7 @@ pub async fn run_ui_reporter(
                                 ui.tick(true).await;
                             }
                             PipelineEvent::WatchSessionFailed => {
+                                phase_failed = false;
                                 ui.handle_event(UIEvent::Error {
                                     message: evin_locales::t!("watch-session-failed"),
                                 }).await;
@@ -419,6 +441,7 @@ pub async fn run_ui_reporter(
                                 ui.handle_event(UIEvent::WatchEvent { line }).await;
                             }
                             PipelineEvent::Restarting { display_name, duration } => {
+                                phase_failed = false;
                                 // Commit every pending line from the old session before
                                 // resetting transient task/spinner state. Scrollback stays intact.
                                 ui.tick(true).await;

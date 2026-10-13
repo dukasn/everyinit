@@ -39,6 +39,9 @@ impl PipelineEmitter {
 
 pub struct CliContext {
     pub config: Option<EverInitConfig>,
+    /// A phase may provide several diagnostics when its failure came from a
+    /// semantic analysis pass rather than the single-error config loader.
+    pub phase_failure_diagnostics: Vec<Diagnostic>,
     pub mode: evin_action_sdk::PipelineMode,
     pub targets: Vec<String>,
     pub run_payload: Vec<String>,
@@ -66,6 +69,7 @@ impl Default for CliContext {
     fn default() -> Self {
         Self {
             config: None,
+            phase_failure_diagnostics: Vec::new(),
             mode: evin_action_sdk::PipelineMode::Normal,
             targets: vec![],
             run_payload: vec![],
@@ -128,6 +132,7 @@ impl PipelineEngine {
 
         for phase in phases {
             let locale_key = phase.locale_key();
+            ctx.phase_failure_diagnostics.clear();
             self.emitter
                 .emit(PipelineEvent::PhaseStarted(locale_key.clone()));
 
@@ -153,9 +158,16 @@ impl PipelineEngine {
             ));
 
             if let Err(diag) = result {
-                self.emitter
-                    .emit(PipelineEvent::PhaseFailed(locale_key, duration));
-                self.emitter.emit(PipelineEvent::ExecutionError(diag));
+                let diagnostics = if ctx.phase_failure_diagnostics.is_empty() {
+                    vec![diag]
+                } else {
+                    std::mem::take(&mut ctx.phase_failure_diagnostics)
+                };
+                self.emitter.emit(PipelineEvent::PhaseFailed(
+                    locale_key,
+                    duration,
+                    diagnostics,
+                ));
                 if ctx.watch_session {
                     self.emitter.emit(PipelineEvent::WatchSessionFailed);
                 } else {
@@ -361,16 +373,15 @@ mod tests {
             .position(|event| {
                 matches!(
                     event,
-                    PipelineEvent::PhaseFailed(key, _)
+                    PipelineEvent::PhaseFailed(key, _, _)
                         if key == "ui.phase.resolving_configuration"
                 )
             })
             .unwrap();
-        let diagnostic = events
-            .iter()
-            .position(|event| matches!(event, PipelineEvent::ExecutionError(_)))
-            .unwrap();
-        assert!(failed < diagnostic);
+        assert!(matches!(
+            &events[failed],
+            PipelineEvent::PhaseFailed(_, _, diagnostics) if diagnostics.len() == 1
+        ));
         assert!(
             !events
                 .iter()

@@ -89,6 +89,12 @@ fn discovery_commands_emit_valid_file_uris() {
         assert!(output.status.success(), "{}", output_text(&output));
         let rendered = output_text(&output);
         assert!(rendered.contains("file:///"), "{rendered}");
+        assert!(
+            rendered
+                .lines()
+                .any(|line| line.starts_with("✓  Resolving configuration  →")),
+            "{rendered}"
+        );
         assert!(!rendered.contains("file://file://"), "{rendered}");
         assert_uri_has_no_backslashes(&rendered);
         // File URIs are copyable tokens. Require them to remain contiguous in
@@ -99,6 +105,47 @@ fn discovery_commands_emit_valid_file_uris() {
             &manifest_uri
         };
         assert!(rendered.contains(expected_uri), "{rendered}");
+    }
+}
+
+#[test]
+fn terminal_commands_fence_configuration_failures_in_the_resolution_phase() {
+    let temp = tempdir().unwrap();
+    fs::create_dir_all(temp.path().join(".evin")).unwrap();
+    fs::write(
+        temp.path().join(".evin/workspace.flow"),
+        "#!evin/v1\nworkspae:\n  name: broken-workspace\n  version: \"1.0.0\"\n",
+    )
+    .unwrap();
+
+    for args in [
+        &["list"][..],
+        &["explain", "lint"][..],
+        &["check"][..],
+        &["run", "lint"][..],
+        &["sync"][..],
+        &["list", "--debug"][..],
+    ] {
+        let output = evin().current_dir(temp.path()).args(args).output().unwrap();
+        let rendered = output_text(&output);
+        assert_eq!(output.status.code(), Some(1), "{rendered}");
+        assert!(rendered.contains("Resolving configuration"), "{rendered}");
+        assert!(rendered.contains("workspace.flow:2:1"), "{rendered}");
+        assert!(rendered.contains("workspae:"), "{rendered}");
+        assert!(
+            !rendered.contains("✓  Resolving configuration  →"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("Execution failed"), "{rendered}");
+        if args[0] == "check" {
+            assert!(rendered.matches("workspae:").count() >= 2, "{rendered}");
+        } else {
+            assert_eq!(rendered.matches("workspae:").count(), 1, "{rendered}");
+        }
+        if args.contains(&"--debug") {
+            assert!(rendered.contains("execution:"), "{rendered}");
+            assert!(rendered.contains("debug=true"), "{rendered}");
+        }
     }
 }
 

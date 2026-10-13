@@ -26,6 +26,10 @@ pub enum PendingLog {
         arch: String,
         shell: String,
     },
+    WorkspaceHeader {
+        version: String,
+        workspace: String,
+    },
     Footer {
         command: String,
         flags: Vec<String>,
@@ -241,12 +245,7 @@ fn format_task_result(display_name: &str, duration_str: &str, was_parallel: bool
     } else {
         crate::render::SYMBOL_SEQUENTIAL
     };
-    format!(
-        "{}  {}  {}",
-        display_name,
-        crate::render::dim(symbol),
-        crate::render::dim(duration_str)
-    )
+    crate::render::format_success_result(display_name, symbol, duration_str)
 }
 
 fn is_timestamped_event(message: &str) -> bool {
@@ -834,6 +833,42 @@ impl PipelineState {
                     self.tracker.mark_diagnosed(&item_name);
                 }
             }
+            UIEvent::PhaseDiagnostic {
+                phase_name,
+                diagnostic,
+                message,
+            } => {
+                let mut lines = Vec::new();
+                for line in message.lines() {
+                    if !line.is_empty() {
+                        lines.push(line.to_string());
+                    }
+                }
+                if let Some(hint) = &diagnostic.hint {
+                    lines.push(String::new());
+                    lines.extend(hint.lines().map(str::to_owned));
+                }
+                if diagnostic.location.is_some()
+                    && let Some(snippet) = crate::diagnostics::snippet::SnippetRenderer::new()
+                        .render(&diagnostic, &message)
+                {
+                    lines.push(String::new());
+                    lines.extend(snippet);
+                }
+                if let Some(phase) = self.tracker.get_mut(&phase_name) {
+                    phase.buffer.extend(lines);
+                    phase.activity_had_error = true;
+                    phase.diagnosed = true;
+                } else {
+                    self.enqueue(PendingLog::Fenced(
+                        format!("{}{}", SYMBOL_FENCED_ERROR_PREFIX, phase_name),
+                        lines,
+                        true,
+                        Some("aborted".into()),
+                    ));
+                    self.tracker.mark_diagnosed(&phase_name);
+                }
+            }
             UIEvent::PlannedOperation { message } => {
                 let text = self.mode.accent_style().apply_to(&message).to_string();
                 self.enqueue(PendingLog::Info(text));
@@ -1006,6 +1041,9 @@ impl PipelineState {
                     arch,
                     shell,
                 });
+            }
+            UIEvent::WorkspaceHeader { version, workspace } => {
+                self.enqueue(PendingLog::WorkspaceHeader { version, workspace });
             }
             UIEvent::Footer { command, flags } => {
                 self.enqueue(PendingLog::Footer { command, flags });

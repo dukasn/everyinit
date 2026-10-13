@@ -31,6 +31,10 @@ pub enum UIEvent {
         arch: String,
         shell: String,
     },
+    WorkspaceHeader {
+        version: String,
+        workspace: String,
+    },
     Footer {
         command: String,
         flags: Vec<String>,
@@ -111,6 +115,11 @@ pub enum UIEvent {
     },
     Diagnostic {
         item_name: String,
+        diagnostic: evin_diagnostic::Diagnostic,
+        message: String,
+    },
+    PhaseDiagnostic {
+        phase_name: String,
         diagnostic: evin_diagnostic::Diagnostic,
         message: String,
     },

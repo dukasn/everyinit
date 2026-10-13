@@ -333,6 +333,10 @@ pub fn dim(value: impl ToString) -> String {
         .to_string()
 }
 
+pub fn format_success_result(name: &str, symbol: &str, duration: &str) -> String {
+    format!("{}  {}  {}", name, dim(symbol), dim(duration))
+}
+
 pub fn highlight(value: impl ToString) -> String {
     console::style(value.to_string()).cyan().to_string()
 }

@@ -141,28 +141,6 @@ async fn main() {
         }
         return;
     }
-    let discovery_result: Option<Result<bool, evin_diagnostic::Diagnostic>> = match &cli.command {
-        Commands::List => Some(crate::commands::discovery::list().await.map(|_| true)),
-        Commands::Explain { target } => Some(crate::commands::discovery::explain(target).await),
-        Commands::Check {
-            workspace,
-            module,
-            target,
-        } => Some(
-            crate::commands::check::check(*workspace, module.as_deref(), target.as_deref()).await,
-        ),
-        _ => None,
-    };
-    if let Some(result) = discovery_result {
-        match result {
-            Ok(true) => return,
-            Ok(false) => std::process::exit(1),
-            Err(error) => {
-                evin_ui::diagnostics::print_standalone_diagnostic(&error, &error.to_string(), None);
-                std::process::exit(1);
-            }
-        }
-    }
     let dry_run = cli.dry_run;
     let verbose = cli.verbose;
     let debug_enabled = cli.debug || std::env::var("EVIN_LOG").as_deref() == Ok("debug");
@@ -172,6 +150,24 @@ async fn main() {
     } else {
         evin_action_sdk::PipelineMode::Normal
     };
+
+    if matches!(
+        &cli.command,
+        Commands::List | Commands::Explain { .. } | Commands::Check { .. }
+    ) {
+        if !run_config_command_pipeline(
+            &cli,
+            pipeline_mode,
+            presentation_mode,
+            verbose,
+            debug_enabled,
+        )
+        .await
+        {
+            std::process::exit(1);
+        }
+        return;
+    }
 
     // Watch activation is configuration-driven. Failure to pre-resolve is
     // intentionally left to the normal run pipeline, which can render the
@@ -328,6 +324,164 @@ async fn main() {
     if !success {
         std::process::exit(1);
     }
+}
+
+async fn run_config_command_pipeline(
+    cli: &Cli,
+    pipeline_mode: evin_action_sdk::PipelineMode,
+    presentation_mode: evin_ui::mode::Mode,
+    verbose: bool,
+    debug_enabled: bool,
+) -> bool {
+    use crate::engine::{CliContext, Phase, PipelineCompletion, PipelineEngine};
+    use std::sync::{Arc, Mutex};
+
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let discovery_output = Arc::new(Mutex::new(None));
+    let check_output = Arc::new(Mutex::new(None));
+    let check_analysis = Arc::new(Mutex::new(None));
+    let context = CliContext {
+        mode: pipeline_mode,
+        verbose,
+        debug: debug_enabled,
+        skip_default_summary: true,
+        ..Default::default()
+    };
+    let (intro, phases): (String, Vec<Box<dyn Phase>>) = match &cli.command {
+        Commands::List => (
+            "Workspace › Catalog".into(),
+            vec![
+                Box::new(crate::phases::run::ResolveConfigPhase),
+                Box::new(crate::commands::discovery::RenderDiscoveryPhase {
+                    command: crate::commands::discovery::DiscoveryCommand::List,
+                    result: discovery_output.clone(),
+                }),
+            ],
+        ),
+        Commands::Explain { target } => (
+            "Workspace › Explain".into(),
+            vec![
+                Box::new(crate::phases::run::ResolveConfigPhase),
+                Box::new(crate::commands::discovery::RenderDiscoveryPhase {
+                    command: crate::commands::discovery::DiscoveryCommand::Explain(target.clone()),
+                    result: discovery_output.clone(),
+                }),
+            ],
+        ),
+        Commands::Check {
+            workspace,
+            module,
+            target,
+        } => (
+            "Workspace › Check".into(),
+            vec![
+                Box::new(crate::commands::check::CheckResolutionPhase {
+                    analysis: check_analysis.clone(),
+                }),
+                Box::new(crate::commands::check::CheckPhase {
+                    workspace_only: *workspace,
+                    module_filter: module.clone(),
+                    target_filter: target.clone(),
+                    analysis: check_analysis.clone(),
+                    result: check_output.clone(),
+                }),
+            ],
+        ),
+        _ => unreachable!("only discovery commands use this runner"),
+    };
+
+    let completion = PipelineEngine::new(sender.clone())
+        .execute_pipeline(phases, context)
+        .await;
+    let events = std::iter::from_fn(|| receiver.try_recv().ok()).collect::<Vec<_>>();
+    let resolution_duration = events.iter().find_map(|event| match event {
+        crate::events::PipelineEvent::PhaseCompleted(key, duration)
+            if key == "ui.phase.resolving_configuration" =>
+        {
+            Some(*duration)
+        }
+        _ => None,
+    });
+
+    if completion == PipelineCompletion::Success {
+        match &cli.command {
+            Commands::List | Commands::Explain { .. } => {
+                let Some(output) = discovery_output.lock().unwrap().take() else {
+                    return false;
+                };
+                let rendered = match resolution_duration {
+                    Some(duration) => {
+                        evin_ui::discovery::with_resolution_phase(output.rendered, duration)
+                    }
+                    None => output.rendered,
+                };
+                crate::commands::discovery::emit(rendered);
+                return output.success;
+            }
+            Commands::Check { .. } => {
+                let Some(result) = check_output.lock().unwrap().take() else {
+                    return false;
+                };
+                match result {
+                    crate::commands::check::CheckCommandResult::Report { rendered, success } => {
+                        let rendered = match resolution_duration {
+                            Some(duration) => {
+                                evin_ui::discovery::with_resolution_phase(rendered, duration)
+                            }
+                            None => rendered,
+                        };
+                        crate::commands::check::emit_report(rendered, success);
+                        return success;
+                    }
+                    crate::commands::check::CheckCommandResult::ResolutionFailed(_) => {
+                        return false;
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    let (ui_sender, ui_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let ui_handle = tokio::spawn(crate::events::run_ui_reporter(
+        ui_receiver,
+        presentation_mode,
+        verbose,
+        false,
+    ));
+    if debug_enabled {
+        let _ = ui_sender.send(crate::events::PipelineEvent::Header {
+            version: env!("CARGO_PKG_VERSION").into(),
+            mode: "debug".into(),
+            os: std::env::consts::OS.into(),
+            arch: std::env::consts::ARCH.into(),
+            shell: std::env::var("SHELL").unwrap_or_else(|_| "unknown".into()),
+        });
+    }
+    let _ = ui_sender.send(crate::events::PipelineEvent::WorkspaceHeader {
+        version: env!("CARGO_PKG_VERSION").into(),
+        workspace: evin_locales::t!("check-workspace-unresolved"),
+    });
+    let _ = ui_sender.send(crate::events::PipelineEvent::Intro {
+        text: intro,
+        mode: presentation_mode,
+    });
+    for event in events {
+        let _ = ui_sender.send(event);
+    }
+    if debug_enabled {
+        let _ = ui_sender.send(crate::events::PipelineEvent::Footer {
+            command: std::env::args().collect::<Vec<_>>().join(" "),
+            flags: vec![
+                "debug=true".into(),
+                format!("dry_run={}", cli.dry_run),
+                format!("verbose={}", cli.verbose),
+            ],
+        });
+    }
+    drop(ui_sender);
+    let _ = ui_handle.await;
+    false
 }
 
 #[cfg(test)]

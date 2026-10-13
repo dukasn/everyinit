@@ -94,6 +94,20 @@ impl Logger {
         self.backend.flush().await;
     }
 
+    pub async fn workspace_header(&self, version: &str, workspace: &str) {
+        let dim = console::Style::new().color256(244);
+        self.write_line(&format!(
+            "{} {} · {} {}",
+            dim.apply_to("evin:"),
+            version,
+            dim.apply_to("workspace:"),
+            workspace
+        ))
+        .await;
+        self.write_line("").await;
+        self.backend.flush().await;
+    }
+
     pub async fn footer(&self, command: &str, flags: &[String]) {
         let dim = console::Style::new().color256(244);
         self.write_line("").await;

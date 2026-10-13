@@ -4,6 +4,7 @@
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, version 3.
 
+use async_trait::async_trait;
 use evin_config::models::{EnvDeclaration, TaskObject};
 use evin_config::parser::EverInitConfig;
 use evin_diagnostic::Diagnostic;
@@ -14,41 +15,87 @@ use evin_ui::discovery::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::IsTerminal;
+use std::sync::{Arc, Mutex};
 
-pub async fn list() -> Result<(), Diagnostic> {
-    let config = evin_config::load_workspace_tasks().await?;
-    emit(evin_ui::discovery::render_catalog(
-        &catalog_view(&config)?,
-        terminal_width(),
-    ));
-    Ok(())
+use crate::engine::{CliContext, Phase, PipelineEmitter};
+
+pub enum DiscoveryCommand {
+    List,
+    Explain(String),
 }
 
-pub async fn explain(target: &str) -> Result<bool, Diagnostic> {
-    let config = evin_config::load_workspace_tasks().await?;
-    match explanation_view(&config, target) {
-        Ok(view) => {
-            emit(evin_ui::discovery::render_explanation(
-                &view,
-                terminal_width(),
-            ));
-            Ok(true)
-        }
-        Err(error) => {
-            emit(evin_ui::discovery::render_failed_explanation(
+pub struct DiscoveryOutput {
+    pub rendered: String,
+    pub success: bool,
+}
+
+pub struct RenderDiscoveryPhase {
+    pub command: DiscoveryCommand,
+    pub result: Arc<Mutex<Option<DiscoveryOutput>>>,
+}
+
+#[async_trait]
+impl Phase for RenderDiscoveryPhase {
+    fn locale_key(&self) -> String {
+        "ui.phase.rendering_discovery".into()
+    }
+
+    async fn execute(
+        &self,
+        ctx: &mut CliContext,
+        _emitter: &PipelineEmitter,
+    ) -> Result<(), Diagnostic> {
+        let config = ctx.config.as_ref().ok_or_else(|| {
+            evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(
+                "workspace configuration was not resolved before discovery rendering",
+            ))
+        })?;
+        let output = match &self.command {
+            DiscoveryCommand::List => DiscoveryOutput {
+                rendered: render_list(config)?,
+                success: true,
+            },
+            DiscoveryCommand::Explain(target) => {
+                let (success, rendered) = render_explanation_for_target(config, target)?;
+                DiscoveryOutput { rendered, success }
+            }
+        };
+        *self.result.lock().unwrap() = Some(output);
+        Ok(())
+    }
+}
+
+pub fn render_list(config: &EverInitConfig) -> Result<String, Diagnostic> {
+    Ok(evin_ui::discovery::render_catalog(
+        &catalog_view(config)?,
+        terminal_width(),
+    ))
+}
+
+pub fn render_explanation_for_target(
+    config: &EverInitConfig,
+    target: &str,
+) -> Result<(bool, String), Diagnostic> {
+    match explanation_view(config, target) {
+        Ok(view) => Ok((
+            true,
+            evin_ui::discovery::render_explanation(&view, terminal_width()),
+        )),
+        Err(error) => Ok((
+            false,
+            evin_ui::discovery::render_failed_explanation(
                 &FailedExplanationView {
-                    workspace: identity(&config),
+                    workspace: identity(config),
                     target: target.to_string(),
                     hint: error.hint,
                 },
                 terminal_width(),
-            ));
-            Ok(false)
-        }
+            ),
+        )),
     }
 }
 
-fn emit(rendered: String) {
+pub fn emit(rendered: String) {
     let tape = std::env::var_os("EVIN_TAPE").is_some();
     match output_destination(std::io::stdout().is_terminal(), tape) {
         OutputDestination::StyledStderr => eprint!("{rendered}"),

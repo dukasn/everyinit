@@ -240,13 +240,11 @@ impl Phase for ResolveConfigPhase {
                         .enforce(target, rules, &workspace_root, &ctx.run_payload)
                         .await
                 {
-                    for diag in evin_policy::reporter::violations_to_diagnostics(&violations) {
-                        emitter.emit(PipelineEvent::Diagnostic {
-                            task: target.clone(),
-                            diagnostic: diag,
-                        });
-                    }
-                    return Err(Diagnostic::new("", evin_diagnostic::IssueCode::custom("")));
+                    let diagnostics = evin_policy::reporter::violations_to_diagnostics(&violations);
+                    ctx.phase_failure_diagnostics = diagnostics.clone();
+                    return Err(diagnostics.into_iter().next().unwrap_or_else(|| {
+                        Diagnostic::new("", evin_diagnostic::IssueCode::custom(""))
+                    }));
                 }
             }
         }

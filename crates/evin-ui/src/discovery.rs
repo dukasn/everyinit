@@ -6,7 +6,7 @@
 
 use crate::render::{
     Layout, Mode, SYMBOL_DISCOVERY_TARGET, SYMBOL_ERROR, SYMBOL_FRAME_BAR, SYMBOL_INTRO,
-    SYMBOL_OUTRO, SYMBOL_STEP, SYMBOL_SUCCESS, SYMBOL_WARN, Theme,
+    SYMBOL_OUTRO, SYMBOL_SEQUENTIAL, SYMBOL_STEP, SYMBOL_SUCCESS, SYMBOL_WARN, Theme,
 };
 use console::{Style, style};
 use evin_diagnostic::{Diagnostic, Severity};
@@ -137,6 +137,40 @@ pub struct CheckSelectionFailureView {
     pub target: String,
     pub kind: String,
     pub detail: String,
+}
+
+/// Adds the successful configuration phase to a discovery command's existing
+/// frame after its intro bar.
+pub fn with_resolution_phase(rendered: String, duration: std::time::Duration) -> String {
+    let Some(title_start) = rendered.find("Workspace ›") else {
+        return rendered;
+    };
+    let Some(title_end) = rendered[title_start..]
+        .find('\n')
+        .map(|offset| title_start + offset)
+    else {
+        return rendered;
+    };
+    let Some(bar_end) = rendered[title_end + 1..]
+        .find('\n')
+        .map(|offset| title_end + 1 + offset)
+    else {
+        return rendered;
+    };
+
+    let phase = format!(
+        "{}  {}\n{}\n",
+        Style::new().green().apply_to(SYMBOL_SUCCESS),
+        crate::render::format_success_result(
+            &evin_locales::t!("phase-resolving-configuration"),
+            SYMBOL_SEQUENTIAL,
+            &crate::render::format_duration(duration.as_secs_f64()),
+        ),
+        Theme::frame(SYMBOL_FRAME_BAR),
+    );
+    let mut output = rendered;
+    output.insert_str(bar_end + 1, &phase);
+    output
 }
 
 impl CheckReportView {

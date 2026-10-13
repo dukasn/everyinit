@@ -112,6 +112,9 @@ impl TerminalPresenter {
                 } => {
                     self.logger.header(version, mode, os, arch, shell).await;
                 }
+                PendingLog::WorkspaceHeader { version, workspace } => {
+                    self.logger.workspace_header(version, workspace).await;
+                }
                 PendingLog::Footer { command, flags } => {
                     self.logger.footer(command, flags).await;
                 }
@@ -704,6 +707,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn phase_failure_diagnostic_is_fenced_under_its_phase() {
+        let backend = Arc::new(RecordingBackend::new(false));
+        let mut ui = PipelineUI::with_backend(Mode::Normal, false, false, false, backend.clone());
+        emit(
+            &mut ui,
+            UIEvent::Intro {
+                title: "Workspace › Catalog".into(),
+            },
+        )
+        .await;
+        emit(
+            &mut ui,
+            UIEvent::ItemStarted {
+                name: "Resolving configuration".into(),
+                description: None,
+                command: None,
+            },
+        )
+        .await;
+        emit(
+            &mut ui,
+            UIEvent::PhaseDiagnostic {
+                phase_name: "Resolving configuration".into(),
+                diagnostic: evin_diagnostic::Diagnostic::new(
+                    "Parse Error",
+                    evin_diagnostic::IssueCode::custom("issue-yaml-parse-failed"),
+                ),
+                message: "Parse Error".into(),
+            },
+        )
+        .await;
+        emit(
+            &mut ui,
+            UIEvent::ItemFinished {
+                name: "Resolving configuration".into(),
+                failed: true,
+                unverified: false,
+                cancelled: false,
+                duration: std::time::Duration::from_millis(2),
+            },
+        )
+        .await;
+        emit(&mut ui, UIEvent::PipelineState { success: false }).await;
+        emit(
+            &mut ui,
+            UIEvent::OutroCancel {
+                message: "Execution failed".into(),
+            },
+        )
+        .await;
+
+        let lines = backend.lines.lock().unwrap();
+        assert!(
+            lines
+                .iter()
+                .any(|line| line.contains("Workspace › Catalog"))
+        );
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("╭─(task) ↩ Resolving configuration"))
+                .count(),
+            1
+        );
+        assert!(lines.iter().any(|line| line.contains("Parse Error")));
+        assert!(!lines.iter().any(|line| line.contains("╭─(error) ↩")));
+        assert!(lines.iter().any(|line| line.contains("Execution failed")));
+    }
+
+    #[tokio::test]
     async fn watch_abort_renders_error_step_and_preserves_gutter_to_reload() {
         let backend = Arc::new(RecordingBackend::new(false));
         let mut ui = PipelineUI::with_backend(Mode::Normal, false, false, true, backend.clone());
@@ -916,6 +989,9 @@ impl PipelineUI {
     pub async fn handle_event(&mut self, event: UIEvent) -> bool {
         let is_running = match &event {
             UIEvent::Diagnostic { item_name, .. } => self.state.tracker.is_running(item_name),
+            UIEvent::PhaseDiagnostic { phase_name, .. } => {
+                self.state.tracker.is_running(phase_name)
+            }
             _ => true,
         };
 

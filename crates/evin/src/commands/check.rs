@@ -12,6 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use async_trait::async_trait;
 use evin_config::parser::EverInitConfig;
 use evin_diagnostic::{Diagnostic, IssueCode, Severity};
 use evin_pipeline::dag::DagResolver;
@@ -22,17 +23,104 @@ use evin_ui::discovery::{
 use std::collections::{BTreeMap, HashSet};
 use std::io::IsTerminal;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 
-pub async fn check(
+use crate::engine::{CliContext, Phase, PipelineEmitter};
+
+pub struct CheckResolutionPhase {
+    pub analysis: Arc<Mutex<Option<evin_config::WorkspaceSemanticAnalysis>>>,
+}
+
+#[async_trait]
+impl Phase for CheckResolutionPhase {
+    fn locale_key(&self) -> String {
+        "ui.phase.resolving_configuration".into()
+    }
+
+    async fn execute(
+        &self,
+        ctx: &mut CliContext,
+        _emitter: &PipelineEmitter,
+    ) -> Result<(), Diagnostic> {
+        let actions = crate::commands::builtin_actions();
+        let analysis = evin_config::WorkspaceSemanticAnalysis::build(
+            evin_config::WorkspaceSnapshot::load(&evin_config::source::FilesystemSource).await,
+            &actions,
+        );
+        if analysis.config.is_none() {
+            let mut diagnostics = analysis.index.diagnostics.clone();
+            if diagnostics.is_empty() {
+                diagnostics.push(evin_locales::diagnostic(IssueCode::custom(
+                    "workspace configuration could not be loaded",
+                )));
+            }
+            ctx.phase_failure_diagnostics = diagnostics.clone();
+            return Err(diagnostics.into_iter().next().unwrap());
+        }
+        *self.analysis.lock().unwrap() = Some(analysis);
+        Ok(())
+    }
+}
+
+pub struct CheckPhase {
+    pub workspace_only: bool,
+    pub module_filter: Option<String>,
+    pub target_filter: Option<String>,
+    pub analysis: Arc<Mutex<Option<evin_config::WorkspaceSemanticAnalysis>>>,
+    pub result: Arc<Mutex<Option<CheckCommandResult>>>,
+}
+
+#[async_trait]
+impl Phase for CheckPhase {
+    fn locale_key(&self) -> String {
+        "ui.phase.checking_workspace".into()
+    }
+
+    async fn execute(
+        &self,
+        ctx: &mut CliContext,
+        _emitter: &PipelineEmitter,
+    ) -> Result<(), Diagnostic> {
+        let analysis = self.analysis.lock().unwrap().take().ok_or_else(|| {
+            evin_locales::diagnostic(IssueCode::custom(
+                "workspace configuration was not resolved before checking",
+            ))
+        })?;
+        let result = evaluate(
+            analysis,
+            self.workspace_only,
+            self.module_filter.as_deref(),
+            self.target_filter.as_deref(),
+        )
+        .await?;
+        match result {
+            CheckCommandResult::ResolutionFailed(diagnostics) => {
+                ctx.phase_failure_diagnostics = diagnostics.clone();
+                Err(diagnostics.into_iter().next().unwrap_or_else(|| {
+                    evin_locales::diagnostic(IssueCode::custom(
+                        "workspace configuration could not be loaded",
+                    ))
+                }))
+            }
+            result @ CheckCommandResult::Report { .. } => {
+                *self.result.lock().unwrap() = Some(result);
+                Ok(())
+            }
+        }
+    }
+}
+
+pub enum CheckCommandResult {
+    ResolutionFailed(Vec<Diagnostic>),
+    Report { rendered: String, success: bool },
+}
+
+pub async fn evaluate(
+    semantic: evin_config::WorkspaceSemanticAnalysis,
     workspace_only: bool,
     module_filter: Option<&str>,
     target_filter: Option<&str>,
-) -> Result<bool, Diagnostic> {
-    let actions = crate::commands::builtin_actions();
-    let semantic = evin_config::WorkspaceSemanticAnalysis::build(
-        evin_config::WorkspaceSnapshot::load(&evin_config::source::FilesystemSource).await,
-        &actions,
-    );
+) -> Result<CheckCommandResult, Diagnostic> {
     let config = match semantic.config.as_ref() {
         Some(config) => config,
         None => {
@@ -42,9 +130,7 @@ pub async fn check(
                     "workspace configuration could not be loaded",
                 )));
             }
-            let view = failed_report_many(unresolved_identity(), diagnostics);
-            emit(render_check(&view, terminal_width(), None), false);
-            return Ok(false);
+            return Ok(CheckCommandResult::ResolutionFailed(diagnostics));
         }
     };
     match check_view_with_findings(
@@ -61,8 +147,10 @@ pub async fn check(
                 view.issues.extend(release_lock_issues(config).await);
             }
             let valid = view.is_valid();
-            emit(render_check(&view, terminal_width(), None), valid);
-            Ok(valid)
+            Ok(CheckCommandResult::Report {
+                rendered: render_check(&view, terminal_width(), None),
+                success: valid,
+            })
         }
         Err(diagnostic)
             if is_selection_error(&diagnostic) && semantic.index.diagnostics.is_empty() =>
@@ -77,8 +165,8 @@ pub async fn check(
                 .hint
                 .clone()
                 .unwrap_or_else(|| evin_locales::render_issue(&diagnostic.code));
-            emit(
-                render_check_selection_failure(
+            Ok(CheckCommandResult::Report {
+                rendered: render_check_selection_failure(
                     &CheckSelectionFailureView {
                         workspace: identity(config),
                         target: selected.to_string(),
@@ -87,9 +175,8 @@ pub async fn check(
                     },
                     terminal_width(),
                 ),
-                false,
-            );
-            Ok(false)
+                success: false,
+            })
         }
         Err(diagnostic) => {
             let mut diagnostics = semantic.index.diagnostics.clone();
@@ -120,8 +207,10 @@ pub async fn check(
                 diagnostics.push(diagnostic);
             }
             let view = failed_report_many(identity(config), diagnostics);
-            emit(render_check(&view, terminal_width(), None), false);
-            Ok(false)
+            Ok(CheckCommandResult::Report {
+                rendered: render_check(&view, terminal_width(), None),
+                success: false,
+            })
         }
     }
 }
@@ -519,13 +608,6 @@ fn identity(config: &EverInitConfig) -> WorkspaceIdentity {
     }
 }
 
-fn unresolved_identity() -> WorkspaceIdentity {
-    WorkspaceIdentity {
-        name: evin_locales::t!("check-workspace-unresolved"),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-    }
-}
-
 fn issue_view(diagnostic: Diagnostic) -> CheckIssueView {
     let message = evin_locales::render_issue(&diagnostic.code);
     CheckIssueView {
@@ -576,7 +658,7 @@ fn is_selection_error(diagnostic: &Diagnostic) -> bool {
     )
 }
 
-fn emit(rendered: String, success: bool) {
+pub fn emit_report(rendered: String, success: bool) {
     let tape = std::env::var_os("EVIN_TAPE").is_some();
     match output_destination(std::io::stdout().is_terminal(), tape, success) {
         OutputDestination::StyledStderr => eprint!("{rendered}"),
