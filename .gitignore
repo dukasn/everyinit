@@ -10,6 +10,8 @@
 !/THIRD_PARTY_NOTICES/
 # Public repository entry point; the root deny-all rule otherwise excludes it.
 !/README.md
+!/CI.md
+!/BANNER.webp
 !/docs/
 !/crates/
 !/.cargo/

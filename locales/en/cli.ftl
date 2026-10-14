@@ -1,6 +1,6 @@
 # CLI locale messages
 
-app-description = Evin — The Workflow Engine
+app-description = Evin — Development, orchestrated.
 init-command-help = Initialize .evin configuration for this repository
 init-workspace-help = Generate a default .evin/workspace.flow
 init-gitrules-help = Generate a default .evin/gitrules.flow

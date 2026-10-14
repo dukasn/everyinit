@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn test_t_macro() {
-        assert_eq!(t!("app-description"), "Evin — The Workflow Engine");
+        assert_eq!(t!("app-description"), "Evin — Development, orchestrated.");
         assert_eq!(
             t!("suggestion-hint", suggestion = "sync"),
             "Did you mean 'sync'?"
