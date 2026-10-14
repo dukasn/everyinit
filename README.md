@@ -15,4 +15,16 @@ Everyinit brings repository commands, dependencies, Git hooks, and delivery step
 
 [Explore Everyinit](https://everyinit.dev)
 
-Everyinit is free software under the [GNU GPLv3](LICENSE).
+---
+
+## Licensing
+
+<p align="center">
+  <a href="LICENSE">
+    <img src="gplv3.webp" alt="GNU GPLv3 — Free as in Freedom" width="136" height="68">
+  </a>
+  <br>
+  <sub>Evin and ESH: <a href="LICENSE">GPL-3.0-only</a> ·
+  <a href="docs/contributing/30.licensing.md">Documentation and artwork licenses</a> ·
+  <a href="TRADEMARKS.md">Everyinit brand guidelines</a></sub>
+</p>
