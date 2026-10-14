@@ -23,6 +23,13 @@ const CI_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
     summary: "Reconcile remote CI release state.",
     fields: &[
         ActionFieldDescriptor {
+            path: "tag",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Limit reconciliation to this local Git tag.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
             path: "plan_out",
             kind: ActionFieldKind::String,
             required: false,

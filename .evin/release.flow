@@ -131,5 +131,35 @@ tasks:
     needs:
       - release:package-cloudflare-verify
     steps:
-      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET"
-      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET"
+      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET" crates/evin/dist/mirror crates/evin/dist/github
+      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET" crates/esh/dist/mirror crates/esh/dist/github
+
+  github-publish:
+    stage: Publish
+    description: "Reconcile and publish the release through Evin CI actions"
+    env: [RELEASE_TAG, RELEASE_VERSION]
+    needs:
+      - release:package-verify
+      - release:metadata
+    steps:
+      - run: node scripts/release/github-ci.mjs snapshot "$RELEASE_TAG"
+      - uses: evin/ci@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          state: .evin/actions/ci/remote-state.v1.json
+          plan_out: .evin/actions/ci/evin-plan.v1.json
+          notes_dir: .evin/actions/ci/notes/evin
+          artifacts_dir: crates/evin/dist/github
+          changelog: CHANGELOG.md
+      - run: node scripts/release/github-ci.mjs apply .evin/actions/ci/evin-plan.v1.json
+      - run: node scripts/release/github-ci.mjs snapshot "$RELEASE_TAG"
+      - uses: evin/ci@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          state: .evin/actions/ci/remote-state.v1.json
+          plan_out: .evin/actions/ci/esh-plan.v1.json
+          notes_dir: .evin/actions/ci/notes/esh
+          artifacts_dir: crates/esh/dist/github
+          changelog: CHANGELOG.md
+      - run: node scripts/release/github-ci.mjs apply .evin/actions/ci/esh-plan.v1.json
+      - run: node scripts/release/github-ci.mjs summary "$RELEASE_TAG"

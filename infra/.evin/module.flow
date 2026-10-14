@@ -13,17 +13,17 @@ tasks:
 
   fmt:
     stage: Check
-    description: "Check infra TypeScript and configuration formatting"
+    description: "Check JavaScript and infrastructure configuration formatting"
     cwd: .
     steps:
-      - run: npx oxfmt --check package.json infra/.oxlintrc.json infra/get/tsconfig.json infra/mirror/tsconfig.json infra/get/src/index.ts infra/mirror/src/index.ts
+      - run: npx oxfmt --check package.json infra/.oxlintrc.json infra/get/tsconfig.json infra/mirror/tsconfig.json infra/get/src/index.ts infra/mirror/src/index.ts scripts/release/metadata.mjs scripts/release/seed-local-mirror.mjs scripts/release/github-ci.mjs
 
   lint:
     stage: Check
-    description: "Lint Cloudflare Worker TypeScript with Oxlint"
+    description: "Lint Cloudflare Workers and release JavaScript with Oxlint"
     cwd: .
     steps:
-      - run: npx oxlint --config infra/.oxlintrc.json --deny-warnings infra/get/src/index.ts infra/mirror/src/index.ts
+      - run: npx oxlint --config infra/.oxlintrc.json --deny-warnings infra/get/src/index.ts infra/mirror/src/index.ts scripts/release/metadata.mjs scripts/release/seed-local-mirror.mjs scripts/release/github-ci.mjs
 
   typecheck:
     stage: Check
@@ -80,8 +80,8 @@ tasks:
       - evin:package:cloudflare-verify
       - esh:package:cloudflare-verify
     steps:
-      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET"
-      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET"
+      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET" crates/evin/dist/mirror crates/evin/dist/github
+      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET" crates/esh/dist/mirror crates/esh/dist/github
 
   mirror-seed:
     stage: Publish
@@ -90,4 +90,4 @@ tasks:
     env: [RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
     needs: [infra:mirror-metadata]
     steps:
-      - run: node scripts/release/seed-local-mirror.mjs
+      - run: node scripts/release/seed-local-mirror.mjs crates/evin/dist/mirror crates/esh/dist/mirror

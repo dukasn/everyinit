@@ -39,6 +39,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           targets: x86_64-unknown-linux-musl
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
       - name: Install musl toolchain
         run: sudo apt-get update && sudo apt-get install --yes musl-tools
       - name: Resolve release version
@@ -47,42 +50,17 @@ jobs:
             v?*) echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV" ;;
             *) echo "Expected a v-prefixed release tag, got '$RELEASE_TAG'" >&2; exit 1 ;;
           esac
-      - name: Build and verify every supported GitHub package format with EVIN
+      - name: Build and verify every supported package format with EVIN
         run: cargo evin-dev run release:package-verify
-      - name: Generate signed distribution metadata
-        if: github.event_name == 'push' || inputs.publish == true
+      - name: Reconcile and publish the GitHub prerelease through EVIN
+        if: github.event_name == 'workflow_dispatch' && inputs.publish == true
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           test -n "$RELEASE_SIGNING_KEY" || { echo "EVERYINIT_RELEASE_SIGNING_KEY secret is required to publish" >&2; exit 1; }
           key_file="$RUNNER_TEMP/everyinit-release-signing-key.pem"
           umask 077
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key_file"
           echo "RELEASE_SIGNING_KEY_FILE=$key_file" >> "$GITHUB_ENV"
-          cargo evin-dev run release:metadata
-      - name: Publish GitHub prerelease
-        if: github.event_name == 'push' || inputs.publish == true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          evin_archive="dist/evin-v$RELEASE_VERSION-$RELEASE_TARGET.tar.gz"
-          esh_archive="dist/esh-v$RELEASE_VERSION-$RELEASE_TARGET.tar.gz"
-          evin_meta="dist/mirror/evin/v$RELEASE_VERSION"
-          esh_meta="dist/mirror/esh/v$RELEASE_VERSION"
-          assets=("$evin_archive" "$esh_archive" "$evin_meta/release.json" "$evin_meta/SHA256SUMS" "$evin_meta/SHA256SUMS.sig" "$esh_meta/release.json" "$esh_meta/SHA256SUMS" "$esh_meta/SHA256SUMS.sig" "infra/get/release-key.pub")
-          for binary in evin esh; do
-            mapfile -t native_assets < <(find dist -maxdepth 1 -type f \
-              \( -name "${binary}_${RELEASE_VERSION}-*_amd64.deb" \
-              -o -name "${binary}-${RELEASE_VERSION}-r*.apk" \
-              -o -name "${binary}-${RELEASE_VERSION}-*-x86_64.pkg.tar.zst" \) -print | sort)
-            if [ "${#native_assets[@]}" -ne 3 ]; then
-              echo "Expected DEB, APK, and Arch artifacts for $binary $RELEASE_VERSION" >&2
-              exit 1
-            fi
-            assets+=("${native_assets[@]}")
-          done
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-          else
-            gh release create "$RELEASE_TAG" "${assets[@]}" --prerelease --title "$RELEASE_TAG" --generate-notes
-          fi
+          cargo evin-dev run release:github-publish

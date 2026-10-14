@@ -2,23 +2,6 @@
   "name": "everyinit-development",
   "private": true,
   "type": "module",
-  "packageManager": "npm@10.9.9",
-  "engines": {
-    "node": "22.23.3",
-    "npm": "10.9.9"
-  },
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "22.23.3",
-      "onFail": "error"
-    },
-    "packageManager": {
-      "name": "npm",
-      "version": "10.9.9",
-      "onFail": "error"
-    }
-  },
   "scripts": {
     "build": "./.evin/cloudflare-build",
     "docs:build": "cargo evin-dev run docs:build",
@@ -43,6 +26,23 @@
     "typescript": "^7.0.2",
     "wrangler": "4.149.0"
   },
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "10.9.9",
+      "onFail": "error"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "22.23.3",
+      "onFail": "error"
+    }
+  },
+  "engines": {
+    "node": "22.23.3",
+    "npm": "10.9.9"
+  },
+  "packageManager": "npm@10.9.9",
   "allowScripts": {
     "esbuild@0.28.2": true,
     "workerd@1.20261006.1": true

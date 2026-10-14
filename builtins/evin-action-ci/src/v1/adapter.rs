@@ -19,6 +19,8 @@ use evin_ci::{
     LocalTagInfo, NoteSlice, NotesExtractor, PlanSink, PolicyEvaluator, ProtocolError,
     RemoteRelease, RemoteStateSource,
 };
+use sha2::{Digest, Sha256};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 pub struct FsRemoteStateSource<'a> {
@@ -69,6 +71,7 @@ impl NotesExtractor for FsNotesExtractor {
 
 pub struct CommandGitStateProvider<'a> {
     pub workspace_root: &'a Path,
+    pub tag: Option<&'a str>,
 }
 
 impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
@@ -129,6 +132,14 @@ impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
             });
         }
 
+        if let Some(tag) = self.tag {
+            tags.retain(|local| local.tag == tag);
+            if tags.is_empty() {
+                return Err(ProtocolError::GitInspection(format!(
+                    "Configured release tag '{tag}' does not exist locally"
+                )));
+            }
+        }
         Ok(tags)
     }
 }
@@ -156,6 +167,20 @@ impl<'a> ArtifactInspector for FsArtifactInspector<'a> {
                 let metadata = entry.metadata().map_err(|e| {
                     ProtocolError::ArtifactInspection(format!("Failed to read metadata: {e}"))
                 })?;
+                let mut file = std::fs::File::open(&path).map_err(|e| {
+                    ProtocolError::ArtifactInspection(format!("Failed to open artifact: {e}"))
+                })?;
+                let mut hasher = Sha256::new();
+                let mut buffer = [0; 64 * 1024];
+                loop {
+                    let read = file.read(&mut buffer).map_err(|e| {
+                        ProtocolError::ArtifactInspection(format!("Failed to hash artifact: {e}"))
+                    })?;
+                    if read == 0 {
+                        break;
+                    }
+                    hasher.update(&buffer[..read]);
+                }
                 let file_name = path
                     .file_name()
                     .and_then(|n| n.to_str())
@@ -171,11 +196,12 @@ impl<'a> ArtifactInspector for FsArtifactInspector<'a> {
                     local_path: relative,
                     destination_name: file_name,
                     size_bytes: metadata.len(),
-                    sha256: None,
+                    sha256: Some(format!("{:x}", hasher.finalize())),
                 });
             }
         }
 
+        artifacts.sort_by(|left, right| left.destination_name.cmp(&right.destination_name));
         Ok(artifacts)
     }
 }

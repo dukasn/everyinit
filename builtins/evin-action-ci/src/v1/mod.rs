@@ -45,6 +45,7 @@ pub async fn execute(
     let notes_extractor = FsNotesExtractor::new(root, &config.changelog);
     let git_provider = CommandGitStateProvider {
         workspace_root: root,
+        tag: config.tag.as_deref(),
     };
     let artifact_inspector = FsArtifactInspector {
         workspace_root: root,

@@ -1,17 +1,18 @@
 #!/usr/bin/env esh
 set -e
 
-assert [ "$#" -eq 3 ] "usage: verify-archive.esh <package> <target-triple> <version>"
+assert [ "$#" -eq 4 ] "usage: verify-archive.esh <package> <target-triple> <version> <archive-root>"
 PACKAGE="$1"
 TARGET="$2"
 VERSION="$3"
+ARCHIVE_ROOT="$4"
 if test "$PACKAGE" != "evin"; then
   if test "$PACKAGE" != "esh"; then
     echo "unsupported release package: $PACKAGE" >&2
     exit 1
   fi
 fi
-ARCHIVE="dist/$PACKAGE-v$VERSION-$TARGET.tar.gz"
+ARCHIVE="$ARCHIVE_ROOT/$PACKAGE-v$VERSION-$TARGET.tar.gz"
 RELEASE_DIR="$PACKAGE-v$VERSION-$TARGET"
 EXTRACT_DIR=$(mktemp -d)
 

@@ -37,6 +37,9 @@ fn default_changelog_path() -> String {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CiConfig {
+    #[serde(default)]
+    pub tag: Option<String>,
+
     #[serde(default = "default_state_path")]
     pub state: String,
 
@@ -62,6 +65,7 @@ pub struct CiConfig {
 impl Default for CiConfig {
     fn default() -> Self {
         Self {
+            tag: None,
             state: default_state_path(),
             plan_out: default_plan_out_path(),
             notes_dir: default_notes_dir(),
@@ -83,6 +87,12 @@ impl CiConfig {
     }
 
     pub fn validate(&self) -> Result<(), evin_yaml::ConfigError> {
+        if self.tag.as_ref().is_some_and(|tag| tag.trim().is_empty()) {
+            return Err(evin_yaml::ConfigError {
+                message: "tag must not be empty when provided".to_string(),
+                span: None,
+            });
+        }
         if self.state.trim().is_empty() {
             return Err(evin_yaml::ConfigError {
                 message: "state file path must not be empty".to_string(),

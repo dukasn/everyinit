@@ -12,19 +12,23 @@ tasks:
     steps:
       - run: cargo build --release --locked --target "$RELEASE_TARGET" -p esh
       - run: cargo run --locked -p esh -- scripts/release/verify-binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
-      - run: cargo run --locked -p esh -- scripts/release/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/staging
 
   cloudflare:
     stage: Publish
     description: "Create ESH's Cloudflare tar.gz artifact"
-    cwd: dist/release-stage
+    cwd: crates/esh/dist/staging
     env: [RELEASE_TARGET, RELEASE_VERSION]
+    values:
+      binary_name: esh
+      artifact_dir: ../github
     needs: [stage]
     steps:
+      - run: rm -f "../github/esh-v${RELEASE_VERSION}-"*.tar.gz
       - uses: evin/archive@v1
         with:
-          path: "../esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}.tar.gz"
-          include: ["esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"]
+          path: "${artifact_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}.tar.gz"
+          include: ["${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"]
           layout: relative
           compression_level: 9
 
@@ -35,89 +39,104 @@ tasks:
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs: [cloudflare]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/github
 
   native:
     stage: Publish
     description: "Create ESH's DEB, APK, and Arch package artifacts"
     cwd: .
     env: [RELEASE_TARGET, RELEASE_VERSION]
+    values:
+      binary_name: esh
+      staging_dir: crates/esh/dist/staging
+      package_output_dir: crates/esh/dist/packages
+      package_summary: ESH portable shell runtime
+      package_maintainer: Everyinit contributors
+      package_license: GPL-3.0-only
+      package_homepage: https://everyinit.dev
+      binary_destination: /usr/bin
+      license_source: LICENSE
+      license_strip_prefix: .
+      license_dir: /usr/share/licenses/esh
+      notices_source: THIRD_PARTY_NOTICES/**/*
+      notices_strip_prefix: THIRD_PARTY_NOTICES
+      notices_dir: /usr/share/doc/esh/THIRD_PARTY_NOTICES
     needs: [stage, release:package-state]
     steps:
-      - run: rm -f "dist/esh_${RELEASE_VERSION}-"*_amd64.deb "dist/esh-${RELEASE_VERSION}-r"*.apk "dist/esh-${RELEASE_VERSION}-"*-x86_64.pkg.tar.zst
+      - run: rm -f "crates/esh/dist/packages/esh_${RELEASE_VERSION}-"*_amd64.deb "crates/esh/dist/packages/esh-${RELEASE_VERSION}-r"*.apk "crates/esh/dist/packages/esh-${RELEASE_VERSION}-"*-x86_64.pkg.tar.zst
       - uses: evin/archive@v1
         with:
           format: deb
-          output_dir: dist
+          output_dir: ${package_output_dir}
           architecture: x86_64
           release: "${release:package-state.release}"
           package:
-            name: esh
-            summary: ESH portable shell runtime
-            maintainer: Everyinit contributors
-            license: GPL-3.0-only
-            homepage: https://everyinit.dev
+            name: ${binary_name}
+            summary: ${package_summary}
+            maintainer: ${package_maintainer}
+            license: ${package_license}
+            homepage: ${package_homepage}
             payload:
-              - source: "dist/release-stage/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/esh"
-                strip_prefix: "dist/release-stage/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
-                destination: /usr/bin
+              - source: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/${binary_name}"
+                strip_prefix: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: ${binary_destination}
                 mode: 493
-              - source: LICENSE
-                strip_prefix: .
-                destination: /usr/share/licenses/esh
-              - source: "THIRD_PARTY_NOTICES/**/*"
-                strip_prefix: THIRD_PARTY_NOTICES
-                destination: /usr/share/doc/esh/THIRD_PARTY_NOTICES
+              - source: ${license_source}
+                strip_prefix: ${license_strip_prefix}
+                destination: ${license_dir}
+              - source: "${notices_source}"
+                strip_prefix: ${notices_strip_prefix}
+                destination: ${notices_dir}
             targets:
               deb: {}
       - uses: evin/archive@v1
         with:
           format: apk
-          output_dir: dist
+          output_dir: ${package_output_dir}
           architecture: x86_64
           release: "${release:package-state.release}"
           package:
-            name: esh
-            summary: ESH portable shell runtime
-            maintainer: Everyinit contributors
-            license: GPL-3.0-only
-            homepage: https://everyinit.dev
+            name: ${binary_name}
+            summary: ${package_summary}
+            maintainer: ${package_maintainer}
+            license: ${package_license}
+            homepage: ${package_homepage}
             payload:
-              - source: "dist/release-stage/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/esh"
-                strip_prefix: "dist/release-stage/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
-                destination: /usr/bin
+              - source: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/${binary_name}"
+                strip_prefix: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: ${binary_destination}
                 mode: 493
-              - source: LICENSE
-                strip_prefix: .
-                destination: /usr/share/licenses/esh
-              - source: "THIRD_PARTY_NOTICES/**/*"
-                strip_prefix: THIRD_PARTY_NOTICES
-                destination: /usr/share/doc/esh/THIRD_PARTY_NOTICES
+              - source: ${license_source}
+                strip_prefix: ${license_strip_prefix}
+                destination: ${license_dir}
+              - source: "${notices_source}"
+                strip_prefix: ${notices_strip_prefix}
+                destination: ${notices_dir}
             targets:
               apk: {}
       - uses: evin/archive@v1
         with:
           format: arch
-          output_dir: dist
+          output_dir: ${package_output_dir}
           architecture: x86_64
           release: "${release:package-state.release}"
           package:
-            name: esh
-            summary: ESH portable shell runtime
-            maintainer: Everyinit contributors
-            license: GPL-3.0-only
-            homepage: https://everyinit.dev
+            name: ${binary_name}
+            summary: ${package_summary}
+            maintainer: ${package_maintainer}
+            license: ${package_license}
+            homepage: ${package_homepage}
             payload:
-              - source: "dist/release-stage/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/esh"
-                strip_prefix: "dist/release-stage/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
-                destination: /usr/bin
+              - source: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/${binary_name}"
+                strip_prefix: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: ${binary_destination}
                 mode: 493
-              - source: LICENSE
-                strip_prefix: .
-                destination: /usr/share/licenses/esh
-              - source: "THIRD_PARTY_NOTICES/**/*"
-                strip_prefix: THIRD_PARTY_NOTICES
-                destination: /usr/share/doc/esh/THIRD_PARTY_NOTICES
+              - source: ${license_source}
+                strip_prefix: ${license_strip_prefix}
+                destination: ${license_dir}
+              - source: "${notices_source}"
+                strip_prefix: ${notices_strip_prefix}
+                destination: ${notices_dir}
             targets:
               arch: {}
 
@@ -128,7 +147,7 @@ tasks:
     env: [RELEASE_VERSION]
     needs: [native]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-native-artifacts.esh esh "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/verify-native-artifacts.esh esh "$RELEASE_VERSION" crates/esh/dist/packages
 
   github:
     stage: Publish

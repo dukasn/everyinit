@@ -15,9 +15,10 @@
 
 set -e
 
-assert [ "$#" -eq 2 ] "usage: verify-native-artifacts.esh <evin|esh> <version>"
+assert [ "$#" -eq 3 ] "usage: verify-native-artifacts.esh <evin|esh> <version> <artifact-root>"
 PACKAGE="$1"
 VERSION="$2"
+ARTIFACT_ROOT="$3"
 if test "$PACKAGE" != "evin"; then
   if test "$PACKAGE" != "esh"; then
     echo "unsupported release package: $PACKAGE" >&2
@@ -26,9 +27,9 @@ if test "$PACKAGE" != "evin"; then
 fi
 assert [ -n "$VERSION" ] "release version must not be empty"
 
-DEB=$(glob "dist/${PACKAGE}_${VERSION}-*_amd64.deb")
-APK=$(glob "dist/${PACKAGE}-${VERSION}-r*.apk")
-ARCH=$(glob "dist/${PACKAGE}-${VERSION}-*-x86_64.pkg.tar.zst")
+DEB=$(glob "$ARTIFACT_ROOT/${PACKAGE}_${VERSION}-*_amd64.deb")
+APK=$(glob "$ARTIFACT_ROOT/${PACKAGE}-${VERSION}-r*.apk")
+ARCH=$(glob "$ARTIFACT_ROOT/${PACKAGE}-${VERSION}-*-x86_64.pkg.tar.zst")
 assert [ "$(printf '%s\n' "$DEB" | wc -l)" -eq 1 ] "expected one ${PACKAGE} DEB artifact for $VERSION"
 assert [ "$(printf '%s\n' "$APK" | wc -l)" -eq 1 ] "expected one ${PACKAGE} APK artifact for $VERSION"
 assert [ "$(printf '%s\n' "$ARCH" | wc -l)" -eq 1 ] "expected one ${PACKAGE} Arch artifact for $VERSION"
