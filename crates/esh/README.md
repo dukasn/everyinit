@@ -1,7 +1,9 @@
 # ESH — Evin Shell
 
-ESH is Everyinit's portable shell for project automation. Use it on its own or
-to run commands in an [Evin workflow](../../README.md).
+ESH is Everyinit's shell language runtime for project automation. Use it on
+its own or to run commands in an [Evin workflow](../../README). Evin is
+currently supported for local development on Linux; see the
+[platform policy](../../CI.md).
 
 ```esh
 #!/usr/bin/env esh

@@ -43,28 +43,24 @@ fn public_esh_examples_compile() {
     let engine = Engine::new();
     let documents = [
         (
-            "ESH guide",
-            include_str!("../../../docs/reference/esh/00.index.md"),
-        ),
-        (
             "writing ESH scripts",
-            include_str!("../../../docs/reference/esh/10.writing-scripts.md"),
+            include_str!("../../../docs/book/esh/10.first-script.md"),
         ),
         (
             "ESH data, files, and HTTP",
-            include_str!("../../../docs/reference/esh/20.data-files-and-http.md"),
+            include_str!("../../../docs/book/esh/20.work-with-project-data.md"),
         ),
         (
             "ESH control flow and failures",
-            include_str!("../../../docs/reference/esh/30.control-flow-and-failures.md"),
+            include_str!("../../../docs/book/esh/30.control-flow-and-failures.md"),
         ),
         (
             "ESH parallel automation",
-            include_str!("../../../docs/reference/esh/40.parallel-automation.md"),
+            include_str!("../../../docs/book/esh/40.parallel-work.md"),
         ),
         (
             "ESH automation recipes",
-            include_str!("../../../docs/reference/esh/50.automation-recipes.md"),
+            include_str!("../../../docs/book/esh/50.automation-recipes.md"),
         ),
         (
             "ESH Language Reference",

@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! `esh` is Evin's deterministic, cross-platform shell language runtime.
+//! `esh` is Evin's deterministic shell language runtime for project automation.
 //!
 //! The language and integration contracts are defined in
 //! [`LANGUAGE_SPECIFICATION.md`](../LANGUAGE_SPECIFICATION.md).
