@@ -1,5 +1,6 @@
 
 [package]
+license.workspace = true
 name = "evin-diagnostic"
 version = { workspace = true }
 edition = "2024"

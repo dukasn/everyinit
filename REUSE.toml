@@ -1,0 +1,69 @@
+version = 1
+
+[[annotations]]
+path = ["Cargo.toml", "crates/**/Cargo.toml", "builtins/**/Cargo.toml"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Eduardo Marques Santos"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = "**/**.rs"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Eduardo Marques Santos"
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = "LICENSE"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2007 Free Software Foundation, Inc."
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = "LICENSES/GPL-3.0-only.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2007 Free Software Foundation, Inc."
+SPDX-License-Identifier = "GPL-3.0-only"
+
+[[annotations]]
+path = ["README.md", "CONTRIBUTING.md", "TRADEMARKS.md", "ACKNOWLEDGMENTS.md", "THIRD_PARTY_NOTICES.md", "crates/**/README.md", "docs/**.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Eduardo Marques Santos"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+SPDX-FileComment = "Reusable Evin, ESH, shell, and configuration code examples in documentation are separately offered under MIT as stated in docs/contributing/30.licensing.md. Third-party material retains its own terms."
+
+[[annotations]]
+path = "docs/contributing/30.licensing.md"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Eduardo Marques Santos"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+[[annotations]]
+path = "LICENSES/CC-BY-4.0.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2007 Creative Commons"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+[[annotations]]
+path = "LICENSES/CC-BY-SA-4.0.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2007 Creative Commons"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+[[annotations]]
+path = ["LICENSES/OFL-1.1.txt", "builtins/evin-action-docs/assets/fonts/*.woff2"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2017 IBM Corp."
+SPDX-License-Identifier = "OFL-1.1"
+
+[[annotations]]
+path = "LICENSES/MIT.txt"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2020-present Paweł Kuna"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "builtins/evin-action-docs/icons/*.svg"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2020-present Paweł Kuna"
+SPDX-License-Identifier = "MIT"
+

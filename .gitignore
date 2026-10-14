@@ -7,7 +7,6 @@
 !/Cargo.lock
 !/rust-toolchain.toml
 !/.node-version
-!/THIRD_PARTY_NOTICES/
 # Public repository entry point; the root deny-all rule otherwise excludes it.
 !/README.md
 !/CI.md
@@ -22,6 +21,13 @@
 !/locales/
 !/CHANGELOG.md
 !/LICENSE
+!/LICENSES/
+!/ACKNOWLEDGMENTS.md
+!/THIRD_PARTY_NOTICES.md
+!/TRADEMARKS.md
+!/CONTRIBUTING.md
+!/DCO.txt
+!/REUSE.toml
 !/package.json
 !/package-lock.json
 !/playwright.config.mjs

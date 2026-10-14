@@ -3,7 +3,7 @@ version = "1.0.0-canary.100"
 edition = "2024"
 authors = ["Du <github.com/dukasn>"]
 publish = false
-license = "GNU GPLv3"
+license = "GPL-3.0-only"
 
 [workspace]
 resolver = "2"

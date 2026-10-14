@@ -70,7 +70,8 @@ releases:
         - .evin/gitrules.flow
         - .evin/release.flow
         - LICENSE
-        - THIRD_PARTY_NOTICES/**
+        - THIRD_PARTY_NOTICES.md
+        - LICENSES/**
       targets: [deb, apk, arch]
       revision:
         scope: target
@@ -84,7 +85,8 @@ releases:
         - .evin/gitrules.flow
         - .evin/release.flow
         - LICENSE
-        - THIRD_PARTY_NOTICES/**
+        - THIRD_PARTY_NOTICES.md
+        - LICENSES/**
       targets: [deb, apk, arch]
       revision:
         scope: target

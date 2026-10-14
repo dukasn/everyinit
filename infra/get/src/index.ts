@@ -109,7 +109,8 @@ install_one() {
   release_root="$TMP_DIR/extract-$binary/$binary-v$version-$target"
   [ -x "$release_root/bin/$binary" ] || { echo "archive is missing executable bin/$binary" >&2; return 1; }
   [ -f "$release_root/LICENSE" ] || { echo "archive is missing LICENSE" >&2; return 1; }
-  [ -d "$release_root/THIRD_PARTY_NOTICES" ] || { echo "archive is missing THIRD_PARTY_NOTICES" >&2; return 1; }
+  [ -f "$release_root/THIRD_PARTY_NOTICES.md" ] || { echo "archive is missing THIRD_PARTY_NOTICES.md" >&2; return 1; }
+  [ -d "$release_root/LICENSES" ] || { echo "archive is missing LICENSES" >&2; return 1; }
   destination="$PREFIX/bin"
   share_dir="$PREFIX/share/everyinit/$binary"
   mkdir -p "$destination" "$share_dir"
@@ -118,10 +119,14 @@ install_one() {
   mv -f "$destination/.$binary.install.$$" "$destination/$binary"
   cp "$release_root/LICENSE" "$share_dir/.LICENSE.install.$$"
   mv -f "$share_dir/.LICENSE.install.$$" "$share_dir/LICENSE"
-  notices_stage="$TMP_DIR/$binary-notices"
-  cp -R "$release_root/THIRD_PARTY_NOTICES" "$notices_stage"
+  notices_stage="$TMP_DIR/$binary-notices.md"
+  cp "$release_root/THIRD_PARTY_NOTICES.md" "$notices_stage"
+  mv -f "$notices_stage" "$share_dir/THIRD_PARTY_NOTICES.md"
+  licenses_stage="$TMP_DIR/$binary-licenses"
+  cp -R "$release_root/LICENSES" "$licenses_stage"
+  rm -rf "$share_dir/LICENSES"
+  mv "$licenses_stage" "$share_dir/LICENSES"
   rm -rf "$share_dir/THIRD_PARTY_NOTICES"
-  mv "$notices_stage" "$share_dir/THIRD_PARTY_NOTICES"
   printf 'Installed %s %s to %s\\n' "$binary" "$version" "$destination/$binary"
 }
 

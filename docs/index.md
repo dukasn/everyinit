@@ -158,12 +158,15 @@ Look up the contracts behind your workflow or extend it with built-in delivery a
 
 ## Footer
 
-Define repository workflows with Evin and run supporting automation scripts with ESH.
+Free software, built with Rust. Made possible by open-source communities.
 
 ### Project
 
 - [Source code](https://github.com/dukasn/everyinit)
-- [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.html)
+- [GPLv3 and documentation licenses](/contributing/licensing)
+- [Everyinit name and logo guidelines](https://github.com/dukasn/everyinit/blob/main/TRADEMARKS.md)
+- [Acknowledgments](https://github.com/dukasn/everyinit/blob/main/ACKNOWLEDGMENTS.md)
+- [Third-party notices](https://github.com/dukasn/everyinit/blob/main/THIRD_PARTY_NOTICES.md)
 
 ### Learn
 

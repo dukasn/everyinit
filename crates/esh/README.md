@@ -27,4 +27,4 @@ esh -c 'echo hello'
 - [Language reference](../../docs/reference/esh/90.language-reference.3000.md)
 - [Runtime reference](../../docs/reference/esh/100.runtime-reference.3010.md)
 
-Licensed under [GNU GPLv3](../../LICENSE).
+Licensed under [GNU GPL version 3 only](../../LICENSE) (`GPL-3.0-only`).

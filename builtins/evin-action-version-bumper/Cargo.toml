@@ -1,4 +1,5 @@
 [package]
+license.workspace = true
 name = "evin-action-version-bumper"
 version.workspace = true
 edition = "2024"

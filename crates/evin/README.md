@@ -24,4 +24,4 @@ evin run <target>
 - [Workspace configuration](../../docs/reference/20.workspace-configuration.4500.md)
 - [Built-in actions](../../docs/reference/actions/00.index.md)
 
-Licensed under [GNU GPLv3](../../LICENSE).
+Licensed under [GNU GPL version 3 only](../../LICENSE) (`GPL-3.0-only`).

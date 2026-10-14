@@ -32,13 +32,15 @@ assert [ "$(basename "$VERSION")" = "$VERSION" ] "release version must be one pa
 BIN="target/$TARGET/release/$PACKAGE"
 PACKAGE_DIR="$OUTPUT_ROOT/$PACKAGE-v$VERSION-$TARGET"
 assert [ -f LICENSE ] "missing LICENSE"
-assert [ -d THIRD_PARTY_NOTICES ] "missing THIRD_PARTY_NOTICES directory"
+assert [ -f THIRD_PARTY_NOTICES.md ] "missing THIRD_PARTY_NOTICES.md"
+assert [ -d LICENSES ] "missing LICENSES directory"
 assert [ -x "$BIN" ] "missing executable release binary: $BIN"
 
 rm -rf "$PACKAGE_DIR"
 mkdir -p "$PACKAGE_DIR/bin"
 cp "$BIN" "$PACKAGE_DIR/bin/$PACKAGE"
 cp LICENSE "$PACKAGE_DIR/LICENSE"
-cp -r THIRD_PARTY_NOTICES "$PACKAGE_DIR/THIRD_PARTY_NOTICES"
+cp THIRD_PARTY_NOTICES.md "$PACKAGE_DIR/THIRD_PARTY_NOTICES.md"
+cp -r LICENSES "$PACKAGE_DIR/LICENSES"
 
 echo "Staged $PACKAGE release at $PACKAGE_DIR"
