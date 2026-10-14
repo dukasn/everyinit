@@ -33,8 +33,9 @@ impl Phase for ReconcileReleaseLockPhase {
         emitter: &PipelineEmitter,
     ) -> Result<(), Diagnostic> {
         let dry_run = ctx.mode == evin_action_sdk::PipelineMode::DryRun;
+        let config = ctx.config.as_ref().unwrap();
         if let crate::sync::release_lock::ReconcileOutcome::Planned(yaml) =
-            crate::sync::release_lock::reconcile(dry_run).await?
+            crate::sync::release_lock::reconcile(dry_run, config).await?
         {
             emitter.emit(PipelineEvent::FencedOutput {
                 title: ".evin/release-lock.yaml".into(),

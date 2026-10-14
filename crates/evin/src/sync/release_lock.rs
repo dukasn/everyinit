@@ -11,7 +11,10 @@ pub enum ReconcileOutcome {
     Staged,
 }
 
-pub async fn reconcile(dry_run: bool) -> Result<ReconcileOutcome, Diagnostic> {
+pub async fn reconcile(
+    dry_run: bool,
+    config: &evin_config::parser::EverInitConfig,
+) -> Result<ReconcileOutcome, Diagnostic> {
     let root = std::env::current_dir().map_err(diagnostic)?;
     let unresolved = git_text(&root, &["diff", "--name-only", "--diff-filter=U"]).await?;
     let paths = unresolved
@@ -29,9 +32,9 @@ pub async fn reconcile(dry_run: bool) -> Result<ReconcileOutcome, Diagnostic> {
         )));
     }
 
-    let config = evin_config::load_workspace_tasks().await?;
     let rules = config
         .gitrules
+        .as_ref()
         .ok_or_else(|| diagnostic("release-lock reconciliation requires .evin/gitrules.flow"))?;
     let policies = rules
         .releases
