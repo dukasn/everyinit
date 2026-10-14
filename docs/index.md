@@ -1,10 +1,10 @@
 ---
 title: Everyinit
-description: Define repository workflows in .flow, run them locally or in CI, and keep shell automation portable with ESH.
+description: Orchestrate repository tasks, Git hooks, ESH scripts, and delivery workflows with Evin.
 search_prompts:
   - How do I define and run a workflow task?
   - How do I connect Evin tasks to Git hooks?
-  - How do I write portable project scripts with ESH?
+  - How do I write project automation scripts with ESH?
   - How do I package a release with Evin?
 topbar:
   id: everyinit-release-updates
@@ -19,7 +19,7 @@ topbar:
 
 # Everyinit
 
-Orchestrated Development Workflows
+Development, orchestrated.
 
 > [!FEATURE]
 >
@@ -28,7 +28,7 @@ Orchestrated Development Workflows
 > Describe tasks, stages, and dependencies in `.evin/workspace.flow`. Evin
 > turns that file into a task graph you can run by task, stage, or Git hook.
 >
-> - [Build your first workspace](/book/first-workspace)
+> - [Run your first workflow](/book/first-workflow)
 > - [Explore workspace configuration](/reference/workspace-configuration)
 >
 > ```flow
@@ -59,7 +59,7 @@ Orchestrated Development Workflows
 > executes the task and its dependencies, then reports the result in the same
 > terminal workflow. The recording runs the `fmt` task shown above.
 >
-> - [Run tasks and Git hooks](/book/pipelines-and-hooks)
+> - [Connect workflows to Git hooks](/book/connect-git-hooks)
 > - [See the CLI reference](/reference/cli-reference)
 >
 > ```tape title="Run the fmt task" runtime=system rows=auto cols=64 speed=45ms
@@ -78,7 +78,7 @@ Orchestrated Development Workflows
 > and file policies in `.evin/gitrules.flow`. Run `evin sync` to install or
 > update the hooks; they select the same tasks you can run yourself.
 >
-> - [Connect tasks to Git hooks](/book/pipelines-and-hooks)
+> - [Connect workflows to Git hooks](/book/connect-git-hooks)
 > - [Configure Git rules](/reference/git-rules-configuration)
 >
 > ```flow
@@ -102,12 +102,12 @@ Orchestrated Development Workflows
 >
 > ## Carry a successful workflow into delivery.
 >
-> Use ESH for portable project scripts and built-in actions for release steps.
+> Use ESH for project scripts and built-in actions for release steps.
 > Evin runs both in the task graph, so a package can depend on the same checks
 > your team already runs locally and from Git hooks.
 >
 > - [Explore built-in actions](/reference/actions)
-> - [Write portable ESH scripts](/reference/esh)
+> - [Learn ESH](/book/esh)
 >
 > ```flow
 > stages: [Test, Release]
@@ -132,21 +132,21 @@ Orchestrated Development Workflows
 
 ## Start building workflows
 
-Follow a short path from your first task to portable scripts and Git hooks.
+Follow a short path from your first task to ESH scripts and Git hooks.
 
-- [The Evin Book](/book) - Create a workspace, compose tasks, and connect checks to Git.
-- [Pipelines and Git hooks](/book/pipelines-and-hooks) - Select tasks by target and run them from repository events.
-- [ESH Shell](/reference/esh) - Write project scripts that behave consistently across platforms.
+- [The Evin Book](/book) - Turn repository commands into workflows, then connect them to Git and CI.
+- [Connect workflows to Git hooks](/book/connect-git-hooks) - Run named tasks from repository events.
+- [Learn ESH](/book/esh) - Write scripts with ESH-defined syntax and built-ins.
 
-> [!SPOTLIGHT] holo | FROM ONE TASK TO THE WHOLE WORKFLOW
+> [!SPOTLIGHT] holo | ZERO ENVIRONMENT DRIFT
 >
-> ## Start with a task. Grow into a workflow.
+> ## One workflow definition. Zero environment drift.
 >
-> Put a command in `.evin/workspace.flow`, then add dependencies, Git hooks,
-> and release steps as your project needs them. Evin runs the same task graph
-> locally and in CI.
+> Run the exact same task graph in your local terminal, through Git hooks, and
+> across CI pipelines. Evin ensures every check, test, and delivery step
+> executes with predictable outcomes everywhere.
 >
-> [Build your first workspace](/book/first-workspace)
+> [Start with The Evin Book](/book)
 
 ## Explore configuration and delivery
 
@@ -158,7 +158,7 @@ Look up the contracts behind your workflow or extend it with built-in delivery a
 
 ## Footer
 
-Everyinit brings repository workflows, portable scripts, and delivery actions together.
+Define repository workflows with Evin and run supporting automation scripts with ESH.
 
 ### Project
 
@@ -168,7 +168,7 @@ Everyinit brings repository workflows, portable scripts, and delivery actions to
 ### Learn
 
 - [The Evin Book](/book)
-- [ESH Shell](/reference/esh)
+- [ESH Reference](/reference/esh)
 - [Workspace configuration](/reference/workspace-configuration)
 
 ### Contribute
