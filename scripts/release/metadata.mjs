@@ -59,7 +59,7 @@ const pinnedPublicKey = (await readFile("infra/get/release-key.pub", "utf8")).tr
 if (signingPublicKey !== pinnedPublicKey) {
   throw new Error("release signing key does not match infra/get/release-key.pub");
 }
-const installerSource = await readFile("infra/get/src/index.ts", "utf8");
+const installerSource = await readFile("infra/get/src/installer.sh", "utf8");
 if (!installerSource.includes(pinnedPublicKey)) {
   throw new Error("installer Worker key does not match infra/get/release-key.pub");
 }
