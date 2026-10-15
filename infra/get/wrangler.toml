@@ -5,7 +5,7 @@ workers_dev = true
 
 [[rules]]
 type = "Text"
-globs = ["src/**/*.sh"]
+globs = ["**/*.sh"]
 fallthrough = true
 
 [[routes]]
