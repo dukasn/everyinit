@@ -86,6 +86,15 @@ jobs:
         with:
           cache-workspace-crates: true
           cache-on-failure: true
+      # Keep release-target artifacts in their own cache. The general cache can
+      # be an exact hit before this target is built and therefore is immutable.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-musl
+          workspaces: . -> target/${{ env.RELEASE_TARGET }}
+          cache-workspace-crates: true
+          cache-on-failure: true
+          cache-bin: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
