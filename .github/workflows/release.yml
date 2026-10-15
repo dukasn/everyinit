@@ -40,6 +40,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
@@ -89,6 +90,8 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: Swatinem/rust-cache@v2
       - id: source
         name: Resolve the immutable source commit
         run: echo "commit=$(git rev-parse "$RELEASE_TAG^{commit}")" >> "$GITHUB_OUTPUT"

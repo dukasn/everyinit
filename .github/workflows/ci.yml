@@ -74,6 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: Swatinem/rust-cache@v2
       - name: Run canonical workspace tests
         run: cargo evin-dev run test
 
@@ -86,6 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: Swatinem/rust-cache@v2
       - name: Run Evin and ESH binary tests
         run: cargo evin-dev run e2e
 
@@ -100,6 +102,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
@@ -127,6 +130,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
@@ -162,6 +166,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: Swatinem/rust-cache@v2
       - name: Run canonical process-supervision soak suite
         run: cargo evin-dev run soak
 
