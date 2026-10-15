@@ -98,9 +98,13 @@ const releaseMetadata = {
     },
   ],
 };
-await writeFile(resolve(outputDirectory, "release.json"), `${JSON.stringify(releaseMetadata, null, 2)}\n`, {
-  mode: 0o644,
-});
+await writeFile(
+  resolve(outputDirectory, "release.json"),
+  `${JSON.stringify(releaseMetadata, null, 2)}\n`,
+  {
+    mode: 0o644,
+  },
+);
 
 const signature = sign(null, Buffer.from(checksums), privateKey);
 if (!verify(null, Buffer.from(checksums), createPublicKey(privateKey), signature)) {
@@ -130,7 +134,8 @@ async function releaseMilestone(releaseVersion) {
   const changelog = await readFile("CHANGELOG.md", "utf8");
   const escapedVersion = releaseVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = new RegExp(`^## \\[v${escapedVersion}\\]\\s+—\\s+(.+?)\\s*$`, "m").exec(changelog);
-  const allowedMilestone = /^(Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|Hotel|India|Juliett|Kilo|Lima|Mike|November|Oscar|Papa|Quebec|Romeo|Sierra|Tango|Uniform|Victor|Whiskey|X-ray|Yankee|Zulu)-\d+$/;
+  const allowedMilestone =
+    /^(Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|Hotel|India|Juliett|Kilo|Lima|Mike|November|Oscar|Papa|Quebec|Romeo|Sierra|Tango|Uniform|Victor|Whiskey|X-ray|Yankee|Zulu)-\d+$/;
   if (releaseVersion.includes("-canary.") && (!match || !allowedMilestone.test(match[1]))) {
     throw new Error(`CHANGELOG.md has no canary milestone label for v${releaseVersion}`);
   }
