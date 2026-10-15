@@ -65,44 +65,27 @@ jobs:
             core.setOutput("distribution", String(distribution));
             core.setOutput("promotion", String(promotion));
 
-  workspace-tests:
-    name: Workspace tests
+  validation:
+    name: Linux validation (quality, tests, E2E, distribution)
     needs: classify
     if: needs.classify.outputs.full == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 120
+    env:
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      RELEASE_TARGET: x86_64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.98.0
-      - uses: Swatinem/rust-cache@v2
-      - name: Run canonical workspace tests
-        run: cargo evin-dev run test
-
-  e2e:
-    name: Binary E2E (Linux)
-    needs: classify
-    if: needs.classify.outputs.full == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.98.0
-      - uses: Swatinem/rust-cache@v2
-      - name: Run Evin and ESH binary tests
-        run: cargo evin-dev run e2e
-
-  quality:
-    name: Formatting, Clippy, and browser checks
-    needs: classify
-    if: needs.classify.outputs.full == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy, rustfmt
+          targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-workspace-crates: true
+          cache-on-failure: true
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
@@ -113,33 +96,67 @@ jobs:
         run: npx playwright install-deps chromium
       - name: Run canonical quality gate
         run: cargo evin-dev run quality
+      - name: Run canonical workspace tests
+        run: cargo evin-dev run test
+      - name: Run Evin and ESH binary tests
+        run: cargo evin-dev run e2e
+      - name: Install release packaging tools
+        if: needs.classify.outputs.distribution == 'true'
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
+      - name: Resolve and verify workspace version
+        if: needs.classify.outputs.distribution == 'true'
+        run: echo "RELEASE_VERSION=$(node scripts/release/workspace-version.mjs)" >> "$GITHUB_ENV"
+      - name: Rehearse changelog and every package format without publishing
+        if: needs.classify.outputs.distribution == 'true'
+        run: cargo evin-dev run release:distribution-rehearsal
+      - name: Run process-supervision soak suite
+        if: github.event_name == 'workflow_dispatch' && inputs.run_soak
+        run: cargo evin-dev run soak
+
+  # Keep the previous status-check names stable for existing branch rulesets.
+  workspace-tests:
+    name: Workspace tests
+    needs: [classify, validation]
+    if: always() && needs.classify.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the shared validation result
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success
+
+  e2e:
+    name: Binary E2E (Linux)
+    needs: [classify, validation]
+    if: always() && needs.classify.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the shared validation result
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success
+
+  quality:
+    name: Formatting, Clippy, and browser checks
+    needs: [classify, validation]
+    if: always() && needs.classify.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report the shared validation result
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success
 
   distribution-rehearsal:
     name: Distribution rehearsal (Evin and ESH)
-    needs: classify
-    if: needs.classify.outputs.distribution == 'true'
+    needs: [classify, validation]
+    if: always() && needs.classify.outputs.distribution == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      CC_x86_64_unknown_linux_musl: musl-gcc
-      RELEASE_TARGET: x86_64-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@1.98.0
-        with:
-          targets: x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - name: Install release packaging tools
-        run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
-      - name: Resolve and verify workspace version
-        run: echo "RELEASE_VERSION=$(node scripts/release/workspace-version.mjs)" >> "$GITHUB_ENV"
-      - name: Rehearse changelog and every package format without publishing
-        run: cargo evin-dev run release:distribution-rehearsal
+      - name: Report the shared validation result
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success
 
   promotion:
     name: Release promotion
@@ -160,7 +177,7 @@ jobs:
 
   process-soak:
     name: Process soak (Linux)
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run_soak)
+    if: github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -173,19 +190,15 @@ jobs:
   ci-gate:
     name: CI gate
     if: always()
-    needs: [classify, workspace-tests, e2e, quality, distribution-rehearsal, promotion]
+    needs: [classify, validation, promotion]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce the selected validation path
         env:
           CLASSIFY_RESULT: ${{ needs.classify.result }}
           FULL: ${{ needs.classify.outputs.full }}
-          DISTRIBUTION: ${{ needs.classify.outputs.distribution }}
           PROMOTION: ${{ needs.classify.outputs.promotion }}
-          TESTS_RESULT: ${{ needs.workspace-tests.result }}
-          E2E_RESULT: ${{ needs.e2e.result }}
-          QUALITY_RESULT: ${{ needs.quality.result }}
-          DISTRIBUTION_RESULT: ${{ needs.distribution-rehearsal.result }}
+          VALIDATION_RESULT: ${{ needs.validation.result }}
           PROMOTION_RESULT: ${{ needs.promotion.result }}
         run: |
           set -eu
@@ -195,10 +208,5 @@ jobs:
             exit 0
           fi
           if [ "$FULL" = true ]; then
-            test "$TESTS_RESULT" = success
-            test "$E2E_RESULT" = success
-            test "$QUALITY_RESULT" = success
-          fi
-          if [ "$DISTRIBUTION" = true ]; then
-            test "$DISTRIBUTION_RESULT" = success
+            test "$VALIDATION_RESULT" = success
           fi
