@@ -9,6 +9,7 @@ tasks:
     description: "Build, verify, and stage the ESH release binary"
     cwd: .
     env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs: [release:rehearsal-start]
     steps:
       - run: cargo build --release --locked --target "$RELEASE_TARGET" -p esh
       - run: cargo run --locked -p esh -- scripts/release/verify-binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
@@ -58,9 +59,12 @@ tasks:
       license_source: LICENSE
       license_strip_prefix: .
       license_dir: /usr/share/licenses/esh
-      notices_source: THIRD_PARTY_NOTICES/**/*
-      notices_strip_prefix: THIRD_PARTY_NOTICES
-      notices_dir: /usr/share/doc/esh/THIRD_PARTY_NOTICES
+      notices_source: THIRD_PARTY_NOTICES.md
+      notices_strip_prefix: .
+      notices_dir: /usr/share/doc/esh
+      licenses_source: LICENSES/**/*
+      licenses_strip_prefix: LICENSES
+      licenses_dir: /usr/share/licenses/esh/LICENSES
     needs: [stage, release:package-state]
     steps:
       - run: rm -f "crates/esh/dist/packages/esh_${RELEASE_VERSION}-"*_amd64.deb "crates/esh/dist/packages/esh-${RELEASE_VERSION}-r"*.apk "crates/esh/dist/packages/esh-${RELEASE_VERSION}-"*-x86_64.pkg.tar.zst
@@ -87,6 +91,9 @@ tasks:
               - source: "${notices_source}"
                 strip_prefix: ${notices_strip_prefix}
                 destination: ${notices_dir}
+              - source: "${licenses_source}"
+                strip_prefix: ${licenses_strip_prefix}
+                destination: ${licenses_dir}
             targets:
               deb: {}
       - uses: evin/archive@v1
@@ -112,6 +119,9 @@ tasks:
               - source: "${notices_source}"
                 strip_prefix: ${notices_strip_prefix}
                 destination: ${notices_dir}
+              - source: "${licenses_source}"
+                strip_prefix: ${licenses_strip_prefix}
+                destination: ${licenses_dir}
             targets:
               apk: {}
       - uses: evin/archive@v1
@@ -137,6 +147,9 @@ tasks:
               - source: "${notices_source}"
                 strip_prefix: ${notices_strip_prefix}
                 destination: ${notices_dir}
+              - source: "${licenses_source}"
+                strip_prefix: ${licenses_strip_prefix}
+                destination: ${licenses_dir}
             targets:
               arch: {}
 
@@ -163,3 +176,12 @@ tasks:
     stage: Publish
     description: "Verify all ESH release package formats"
     needs: [github-verify]
+
+  distribution-verify:
+    stage: Publish
+    description: "Build and verify esh's complete distribution set for rehearsal"
+    cwd: .
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs: [verify]
+    steps:
+      - run: node scripts/release/verify-distribution.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET" crates/esh/dist

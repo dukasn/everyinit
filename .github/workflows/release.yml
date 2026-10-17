@@ -10,23 +10,24 @@ on:
         required: true
         type: string
       publish:
-        description: "Publish or update the GitHub prerelease"
+        description: "Publish the verified GitHub prerelease and signed mirror metadata"
         required: true
         default: false
         type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Build and publish Linux musl release
+  build:
+    name: Build and verify Linux musl release artifacts
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish != true)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CC_x86_64_unknown_linux_musl: musl-gcc
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -39,11 +40,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.98.0
         with:
           targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-musl
+          workspaces: . -> target/${{ env.RELEASE_TARGET }}
+          cache-workspace-crates: true
+          cache-on-failure: true
+          cache-bin: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - name: Install musl toolchain
-        run: sudo apt-get update && sudo apt-get install --yes musl-tools
+      - name: Install package tooling
+        run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
       - name: Resolve release version
         run: |
           case "$RELEASE_TAG" in
@@ -52,8 +61,98 @@ jobs:
           esac
       - name: Build and verify every supported package format with EVIN
         run: cargo evin-dev run release:package-verify
-      - name: Reconcile and publish the GitHub prerelease through EVIN
-        if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+      - name: Preserve verified Evin artifacts for publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: evin-release-artifacts
+          path: |
+            crates/evin/dist/github/**
+            crates/evin/dist/packages/**
+          if-no-files-found: error
+          retention-days: 30
+      - name: Preserve verified ESH artifacts for publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: esh-release-artifacts
+          path: |
+            crates/esh/dist/github/**
+            crates/esh/dist/packages/**
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Sign metadata and publish verified artifacts
+    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      actions: read
+      contents: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_TARGET: x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: Swatinem/rust-cache@v2
+      - id: source
+        name: Resolve the immutable source commit
+        run: echo "commit=$(git rev-parse "$RELEASE_TAG^{commit}")" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - name: Resolve release version
+        run: echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+      - id: build-run
+        name: Find successful verification artifacts for this exact tag commit
+        uses: actions/github-script@v8
+        env:
+          EXPECTED_COMMIT: ${{ steps.source.outputs.commit }}
+        with:
+          script: |
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: "release.yml",
+              head_sha: process.env.EXPECTED_COMMIT,
+              per_page: 100,
+            });
+            const candidates = runs
+              .filter((run) => run.status === "completed" && run.conclusion === "success")
+              .sort((a, b) => b.id - a.id);
+            for (const run of candidates) {
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+                per_page: 100,
+              });
+              const names = new Set(artifacts.filter((artifact) => !artifact.expired).map((artifact) => artifact.name));
+              if (names.has("evin-release-artifacts") && names.has("esh-release-artifacts")) {
+                core.setOutput("run_id", String(run.id));
+                return;
+              }
+            }
+            core.setFailed(`No successful unexpired package build was found for ${process.env.EXPECTED_COMMIT}. Run this workflow once with publish disabled to build and verify the tag.`);
+      - name: Download Evin artifacts built and verified by the build job
+        uses: actions/download-artifact@v4
+        with:
+          name: evin-release-artifacts
+          path: crates/evin/dist
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Download ESH artifacts built and verified by the build job
+        uses: actions/download-artifact@v4
+        with:
+          name: esh-release-artifacts
+          path: crates/esh/dist
+          run-id: ${{ steps.build-run.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Reconcile and publish through EVIN
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -63,4 +162,4 @@ jobs:
           umask 077
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key_file"
           echo "RELEASE_SIGNING_KEY_FILE=$key_file" >> "$GITHUB_ENV"
-          cargo evin-dev run release:github-publish
+          cargo evin-dev run release:github-publish-prebuilt

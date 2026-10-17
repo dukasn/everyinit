@@ -3,6 +3,11 @@ main = "src/index.ts"
 compatibility_date = "2026-10-08"
 workers_dev = true
 
+[[rules]]
+type = "Text"
+globs = ["**/*.sh"]
+fallthrough = true
+
 [[routes]]
 pattern = "get.everyinit.dev/*"
 zone_name = "everyinit.dev"

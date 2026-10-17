@@ -1,3 +1,17 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import { createPrivateKey, createPublicKey, sign, verify, createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -45,7 +59,7 @@ const pinnedPublicKey = (await readFile("infra/get/release-key.pub", "utf8")).tr
 if (signingPublicKey !== pinnedPublicKey) {
   throw new Error("release signing key does not match infra/get/release-key.pub");
 }
-const installerSource = await readFile("infra/get/src/index.ts", "utf8");
+const installerSource = await readFile("infra/get/src/installer.sh", "utf8");
 if (!installerSource.includes(pinnedPublicKey)) {
   throw new Error("installer Worker key does not match infra/get/release-key.pub");
 }
@@ -59,16 +73,18 @@ if (git.status !== 0) {
   throw new Error(`could not resolve release commit: ${git.stderr.trim()}`);
 }
 
+const milestone = await releaseMilestone(version);
 await mkdir(outputDirectory, { recursive: true });
 await copyFile(archivePath, outputArchive);
 const checksums = `${digest}  ${filename}\n`;
 const checksumPath = resolve(outputDirectory, "SHA256SUMS");
 await writeFile(checksumPath, checksums, { mode: 0o644 });
 
-const release = {
+const releaseMetadata = {
   name: binary,
   version,
   channel,
+  ...(milestone ? { milestone } : {}),
   released_at: new Date().toISOString(),
   git_commit: git.stdout.trim(),
   artifacts: [
@@ -82,9 +98,13 @@ const release = {
     },
   ],
 };
-await writeFile(resolve(outputDirectory, "release.json"), `${JSON.stringify(release, null, 2)}\n`, {
-  mode: 0o644,
-});
+await writeFile(
+  resolve(outputDirectory, "release.json"),
+  `${JSON.stringify(releaseMetadata, null, 2)}\n`,
+  {
+    mode: 0o644,
+  },
+);
 
 const signature = sign(null, Buffer.from(checksums), privateKey);
 if (!verify(null, Buffer.from(checksums), createPublicKey(privateKey), signature)) {
@@ -109,3 +129,15 @@ await writeFile(
 );
 
 console.log(`Generated signed ${binary} ${version} metadata in ${outputDirectory}`);
+
+async function releaseMilestone(releaseVersion) {
+  const changelog = await readFile("CHANGELOG.md", "utf8");
+  const escapedVersion = releaseVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^## \\[v${escapedVersion}\\]\\s+—\\s+(.+?)\\s*$`, "m").exec(changelog);
+  const allowedMilestone =
+    /^(Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|Hotel|India|Juliett|Kilo|Lima|Mike|November|Oscar|Papa|Quebec|Romeo|Sierra|Tango|Uniform|Victor|Whiskey|X-ray|Yankee|Zulu)-\d+$/;
+  if (releaseVersion.includes("-canary.") && (!match || !allowedMilestone.test(match[1]))) {
+    throw new Error(`CHANGELOG.md has no canary milestone label for v${releaseVersion}`);
+  }
+  return match?.[1];
+}
