@@ -35,6 +35,28 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const TRANSCRIPT_LIMIT: usize = 4096;
 
+/// Convert errors that may include terminal output into safe diagnostic text.
+/// Tape transcripts are interpreted by a virtual terminal, but errors are
+/// later rendered by the task UI as ordinary text. Keep that boundary
+/// single-line and free of terminal control bytes.
+fn diagnostic_text(text: &str) -> String {
+    let mut safe = String::with_capacity(text.len());
+    for character in text.chars() {
+        match character {
+            '\n' => safe.push_str("\\n"),
+            '\r' => safe.push_str("\\r"),
+            '\t' => safe.push_str("\\t"),
+            '\u{1b}' => safe.push_str("\\x1b"),
+            character if character.is_control() => {
+                use std::fmt::Write as _;
+                let _ = write!(safe, "\\u{{{:x}}}", character as u32);
+            }
+            character => safe.push(character),
+        }
+    }
+    safe
+}
+
 #[derive(Debug, Clone)]
 struct PathPresentation {
     workspace_paths: Vec<String>,
@@ -261,8 +283,9 @@ fn compile_nodes(nodes: &mut [DocNode], workspace_root: &Path, source: &str) -> 
                         .map_err(|error| format!("could not start system tape shell: {error}"))?
                         .run(&parsed),
                 };
-                *rendered_svg =
-                    Some(svg.map_err(|error| format!("{source}: terminal tape failed: {error}"))?);
+                *rendered_svg = Some(svg.map_err(|error| {
+                    diagnostic_text(&format!("{source}: terminal tape failed: {error}"))
+                })?);
             }
             DocNode::Directive { name, args, .. } if name == "tape-error" => {
                 return Err(format!(
