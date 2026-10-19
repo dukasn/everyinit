@@ -64,6 +64,8 @@ struct ChangelogConfig {
     sections: HashMap<String, String>,
     #[serde(default)]
     version: Option<String>,
+    #[serde(default)]
+    label: Option<String>,
 }
 
 impl Default for ChangelogConfig {
@@ -77,6 +79,7 @@ impl Default for ChangelogConfig {
             unreleased_heading: default_unreleased_heading(),
             sections: HashMap::new(),
             version: None,
+            label: None,
         }
     }
 }
@@ -142,6 +145,22 @@ impl ChangelogConfig {
                     span: None,
                 },
             ));
+        }
+        if let Some(label) = &self.label {
+            if label.trim().is_empty() {
+                return Err(ChangelogError::InvalidConfiguration(
+                    evin_yaml::ConfigError {
+                        message: "label must not be empty when provided".to_string(),
+                        span: None,
+                    },
+                ));
+            }
+            validate_template_syntax(label).map_err(|e| {
+                ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+                    message: format!("label contains invalid template syntax: {e}"),
+                    span: None,
+                })
+            })?;
         }
         Ok(())
     }
@@ -309,6 +328,19 @@ async fn generate_changelog(
             evin_yaml::template::format::render(tags_format, &args)
         })
         .unwrap_or_else(|| config.unreleased_heading.clone());
+    let label_suffix = config
+        .label
+        .as_deref()
+        .map(|label| resolve_templates(label, ctx))
+        .transpose()
+        .map_err(|e| {
+            ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+                message: e.to_string(),
+                span: None,
+            })
+        })?
+        .map(|label| format!(" — {label}"))
+        .unwrap_or_default();
 
     for block in &blocks {
         if block.commits.is_empty() {
@@ -316,7 +348,10 @@ async fn generate_changelog(
         }
 
         if block.version == "Unreleased" {
-            final_markdown.push_str(&format!("## [{}]\n\n", final_unreleased_title));
+            final_markdown.push_str(&format!(
+                "## [{}]{}\n\n",
+                final_unreleased_title, label_suffix
+            ));
         } else {
             final_markdown.push_str(&format!("## [{}]\n\n", block.version));
         }

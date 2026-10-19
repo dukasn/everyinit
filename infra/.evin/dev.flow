@@ -1,0 +1,27 @@
+#!evin/v1
+namespace:
+  name: dev
+  description: "Local development servers for Evin's Cloudflare infrastructure"
+
+tasks:
+  pages:
+    stage: Docs
+    description: "Build and serve the documentation site with Cloudflare Pages"
+    cwd: .
+    needs: [docs:build]
+    steps:
+      - run: corepack npm exec -- wrangler pages dev dist/docs --port 8788
+
+  installer:
+    stage: Build
+    description: "Serve the installer Worker locally"
+    cwd: .
+    steps:
+      - run: corepack npm exec -- wrangler dev --config infra/get/wrangler.toml --port 8789
+
+  mirror:
+    stage: Build
+    description: "Serve the release mirror Worker locally"
+    cwd: .
+    steps:
+      - run: corepack npm exec -- wrangler dev --config infra/mirror/wrangler.toml --port 8787

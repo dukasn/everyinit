@@ -30,6 +30,13 @@ const CI_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
+            path: "title",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Explicit title for reconciled GitHub releases; defaults to the annotated tag subject.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
             path: "plan_out",
             kind: ActionFieldKind::String,
             required: false,

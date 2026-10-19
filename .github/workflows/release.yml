@@ -2,164 +2,124 @@ name: Publish release
 
 on:
   push:
-    tags: ["v*"]
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing v-prefixed tag to build"
-        required: true
-        type: string
-      publish:
-        description: "Publish the verified GitHub prerelease and signed mirror metadata"
-        required: true
-        default: false
-        type: boolean
+    branches: [main]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
+  group: release-mirror
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build and verify Linux musl release artifacts
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish != true)
+  discover:
+    name: Find a newly merged release tag
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      CC_x86_64_unknown_linux_musl: musl-gcc
-      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-      RELEASE_TARGET: x86_64-unknown-linux-musl
+    outputs:
+      found: ${{ steps.candidate.outputs.found }}
+      tag: ${{ steps.candidate.outputs.tag }}
+      version: ${{ steps.candidate.outputs.version }}
+      commit: ${{ steps.candidate.outputs.commit }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@1.98.0
-        with:
-          targets: x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@v2
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: release-musl
-          workspaces: . -> target/${{ env.RELEASE_TARGET }}
-          cache-workspace-crates: true
-          cache-on-failure: true
-          cache-bin: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-      - name: Install package tooling
-        run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
-      - name: Resolve release version
-        run: |
-          case "$RELEASE_TAG" in
-            v?*) echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV" ;;
-            *) echo "Expected a v-prefixed release tag, got '$RELEASE_TAG'" >&2; exit 1 ;;
-          esac
-      - name: Build and verify every supported package format with EVIN
-        run: cargo evin-dev run release:package-verify
-      - name: Preserve verified Evin artifacts for publication
-        uses: actions/upload-artifact@v4
-        with:
-          name: evin-release-artifacts
-          path: |
-            crates/evin/dist/github/**
-            crates/evin/dist/packages/**
-          if-no-files-found: error
-          retention-days: 30
-      - name: Preserve verified ESH artifacts for publication
-        uses: actions/upload-artifact@v4
-        with:
-          name: esh-release-artifacts
-          path: |
-            crates/esh/dist/github/**
-            crates/esh/dist/packages/**
-          if-no-files-found: error
-          retention-days: 30
+      - id: candidate
+        name: Find a release tag introduced by this main update
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: node scripts/release/find-merged-candidate.mjs "$PUSH_BEFORE" "$PUSH_AFTER"
 
   publish:
-    name: Sign metadata and publish verified artifacts
-    if: github.event_name == 'workflow_dispatch' && inputs.publish == true
+    name: Promote verified artifacts to canary
+    needs: [discover]
+    if: needs.discover.outputs.found == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     environment: release
     permissions:
       actions: read
+      checks: read
       contents: write
     env:
-      RELEASE_TAG: ${{ inputs.tag }}
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      RELEASE_BASE_SHA: ${{ github.event.before }}
+      RELEASE_COMMIT: ${{ needs.discover.outputs.commit }}
+      RELEASE_TAG: ${{ needs.discover.outputs.tag }}
       RELEASE_TARGET: x86_64-unknown-linux-musl
+      RELEASE_VERSION: ${{ needs.discover.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@1.98.0
-      - uses: Swatinem/rust-cache@v2
-      - id: source
-        name: Resolve the immutable source commit
-        run: echo "commit=$(git rev-parse "$RELEASE_TAG^{commit}")" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         with:
           node-version-file: .node-version
-      - name: Resolve release version
-        run: echo "RELEASE_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
-      - id: build-run
-        name: Find successful verification artifacts for this exact tag commit
+      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate the tag and release label against the merged candidate
+        id: candidate
+        run: node scripts/release/validate-candidate.mjs "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
+      - name: Require the successful pre-merge unstable preview check
         uses: actions/github-script@v8
         env:
-          EXPECTED_COMMIT: ${{ steps.source.outputs.commit }}
+          RELEASE_COMMIT: ${{ needs.discover.outputs.commit }}
         with:
           script: |
-            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+            const checks = await github.paginate(github.rest.checks.listForRef, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: "release.yml",
-              head_sha: process.env.EXPECTED_COMMIT,
+              ref: process.env.RELEASE_COMMIT,
               per_page: 100,
             });
-            const candidates = runs
-              .filter((run) => run.status === "completed" && run.conclusion === "success")
-              .sort((a, b) => b.id - a.id);
-            for (const run of candidates) {
-              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: run.id,
-                per_page: 100,
-              });
-              const names = new Set(artifacts.filter((artifact) => !artifact.expired).map((artifact) => artifact.name));
-              if (names.has("evin-release-artifacts") && names.has("esh-release-artifacts")) {
-                core.setOutput("run_id", String(run.id));
-                return;
-              }
+            const preview = checks
+              .filter((check) => check.name === "Unstable preview" && check.status === "completed")
+              .sort((left, right) => right.id - left.id)[0];
+            if (!preview || preview.conclusion !== "success") {
+              core.setFailed(`No successful Unstable preview check exists for ${process.env.RELEASE_COMMIT}.`);
             }
-            core.setFailed(`No successful unexpired package build was found for ${process.env.EXPECTED_COMMIT}. Run this workflow once with publish disabled to build and verify the tag.`);
-      - name: Download Evin artifacts built and verified by the build job
-        uses: actions/download-artifact@v4
-        with:
-          name: evin-release-artifacts
-          path: crates/evin/dist
-          run-id: ${{ steps.build-run.outputs.run_id }}
-          github-token: ${{ github.token }}
-      - name: Download ESH artifacts built and verified by the build job
-        uses: actions/download-artifact@v4
-        with:
-          name: esh-release-artifacts
-          path: crates/esh/dist
-          run-id: ${{ steps.build-run.outputs.run_id }}
-          github-token: ${{ github.token }}
-      - name: Reconcile and publish through EVIN
+      - name: Fetch and verify the exact unstable artifacts
+        env:
+          RELEASE_CHANNEL: unstable
+          RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
+          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
+          RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
+        run: node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_LABEL"
+      - name: Verify both downloaded tar archives
+        run: |
+          cargo run --locked -p esh -- scripts/release/verify-archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" crates/evin/dist/github
+          cargo run --locked -p esh -- scripts/release/verify-archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/github
+      - name: Install locked Wrangler dependencies
+        run: npm ci
+      - name: Prepare the protected release signing key
         env:
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          test -n "$RELEASE_SIGNING_KEY" || { echo "EVERYINIT_RELEASE_SIGNING_KEY secret is required to publish" >&2; exit 1; }
-          key_file="$RUNNER_TEMP/everyinit-release-signing-key.pem"
+          test -n "$RELEASE_SIGNING_KEY" || { echo "EVERYINIT_RELEASE_SIGNING_KEY is required to publish" >&2; exit 1; }
           umask 077
+          key_file="$RUNNER_TEMP/everyinit-release-signing-key.pem"
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key_file"
           echo "RELEASE_SIGNING_KEY_FILE=$key_file" >> "$GITHUB_ENV"
-          cargo evin-dev run release:github-publish-prebuilt
+      - name: Publish GitHub Releases and promote the same archives to canary
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_CHANNEL: canary
+          RELEASE_COMMIT: ${{ needs.discover.outputs.commit }}
+          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
+          RELEASE_TAG: ${{ needs.discover.outputs.tag }}
+          RELEASE_TARGET: x86_64-unknown-linux-musl
+          RELEASE_VERSION: ${{ needs.discover.outputs.version }}
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$CLOUDFLARE_API_TOKEN" || { echo "Cloudflare R2 credentials are required" >&2; exit 1; }
+          cargo evin-dev run release:publish-prebuilt
+      - name: Confirm the canary pointers resolve to the promoted release
+        env:
+          RELEASE_CHANNEL: canary
+          RELEASE_COMMIT: ${{ needs.discover.outputs.commit }}
+          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
+          RELEASE_VERSION: ${{ needs.discover.outputs.version }}
+        run: node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_LABEL" --check-pointer

@@ -22,6 +22,9 @@ stages:
   - Docs
   - Publish
 
+values:
+  release_label: "Alpha-01"
+
 tasks:
   build:
     stage: Build
@@ -79,7 +82,7 @@ tasks:
       - fmt
       - lint
       - docs:verify
-      - infra:verify
+      - infra:quality:verify
 
   verify:
     stage: Test

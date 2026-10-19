@@ -32,6 +32,7 @@ tasks:
         with:
           path: target/release-rehearsal/CHANGELOG.md
           version: "${env.RELEASE_VERSION}"
+          label: ${release_label}
       - run: node scripts/release/verify-changelog.mjs target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
 
   distribution-rehearsal:
@@ -79,7 +80,6 @@ tasks:
   changelog:
     stage: Publish
     description: "Generate the canonical changelog section"
-    env: [RELEASE_MILESTONE]
     needs:
       - release:bump
     steps:
@@ -87,12 +87,12 @@ tasks:
         with:
           path: CHANGELOG.md
           version: ${release:bump.version}
-      - run: node scripts/release/label-changelog.mjs CHANGELOG.md "${release:bump.version}" "$RELEASE_MILESTONE"
+          label: ${release_label}
+      - run: node scripts/release/verify-changelog.mjs CHANGELOG.md "${release:bump.version}"
 
   prepare:
     stage: Publish
     description: "Commit and tag the prepared source release"
-    env: [RELEASE_MILESTONE]
     needs:
       - release:changelog
     steps:
@@ -103,7 +103,7 @@ tasks:
           message: |-
             chore(release): ${release:bump.version}
 
-            Milestone: ${env.RELEASE_MILESTONE}
+            Release label: ${release_label}
           tag: "${release:bump.tag}"
 
   tag-verify:
@@ -114,6 +114,13 @@ tasks:
       - test
     steps:
       - run: cargo run --locked -p esh -- scripts/release/verify-tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
+
+  candidate-validate:
+    stage: Publish
+    description: "Validate a tagged release candidate before it can merge"
+    env: [RELEASE_BASE_SHA, RELEASE_COMMIT, RELEASE_TAG, RELEASE_VERSION]
+    steps:
+      - run: node scripts/release/validate-candidate.mjs "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
 
   package-state:
     stage: Publish
@@ -158,23 +165,10 @@ tasks:
       - evin:package:github-verify
       - esh:package:github-verify
 
-  metadata:
+  publish-prebuilt:
     stage: Publish
-    description: "Generate signed mirror manifests for both release archives"
-    env: [RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
-    needs:
-      - release:package-cloudflare-verify
-    steps:
-      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET" crates/evin/dist/mirror crates/evin/dist/github
-      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET" crates/esh/dist/mirror crates/esh/dist/github
-
-  metadata-prebuilt:
-    stage: Publish
-    description: "Sign mirror metadata from verified artifacts downloaded from the build job"
-    env: [RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
-    steps:
-      - run: node scripts/release/metadata.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET" crates/evin/dist/mirror crates/evin/dist/github
-      - run: node scripts/release/metadata.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET" crates/esh/dist/mirror crates/esh/dist/github
+    description: "Publish the prebuilt release and move the canary mirror pointers last"
+    needs: [infra:mirror:publish-pointers]
 
   github-publish:
     stage: Publish
@@ -182,12 +176,13 @@ tasks:
     env: [RELEASE_TAG, RELEASE_VERSION]
     needs:
       - release:package-verify
-      - release:metadata
+      - infra:mirror:metadata
     steps:
       - run: node scripts/release/github-ci.mjs snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG} — ${release_label}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/evin-plan.v1.json
           notes_dir: .evin/actions/ci/notes/evin
@@ -198,6 +193,7 @@ tasks:
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG} — ${release_label}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/esh-plan.v1.json
           notes_dir: .evin/actions/ci/notes/esh
@@ -209,14 +205,16 @@ tasks:
   github-publish-prebuilt:
     stage: Publish
     description: "Publish verified downloaded artifacts without rebuilding them"
-    env: [RELEASE_TAG]
+    env: [GITHUB_TOKEN, RELEASE_LABEL, RELEASE_TAG]
     needs:
-      - release:metadata-prebuilt
+      - infra:mirror:metadata-prebuilt
+      - infra:mirror:publish-objects
     steps:
       - run: node scripts/release/github-ci.mjs snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG} — ${env.RELEASE_LABEL}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/evin-plan.v1.json
           notes_dir: .evin/actions/ci/notes/evin
@@ -227,6 +225,7 @@ tasks:
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG} — ${env.RELEASE_LABEL}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/esh-plan.v1.json
           notes_dir: .evin/actions/ci/notes/esh

@@ -23,6 +23,7 @@ DEFAULT_BASE_URL="https://dl.everyinit.dev"
 BASE_URL="${EVIN_DOWNLOAD_BASE:-$DEFAULT_BASE_URL}"
 CHANNEL="canary"
 PACKAGE_SELECTION=""
+VERSION_OVERRIDE=""
 PREFIX="${HOME:-}/.local"
 PREFIX_SET=0
 PACKAGES=""
@@ -30,6 +31,8 @@ TARGET="x86_64-unknown-linux-musl"
 
 TMP_DIR=""
 CURRENT_BINARY=""
+CHANNEL_MANIFEST=""
+CHANNEL_VERSION=""
 
 # -----------------------------------------------------------------------------
 # Release Public Key
@@ -61,14 +64,15 @@ Usage: install.sh --package evin|esh|all [options]
 
 Options:
   --package NAME     Select evin, esh, or all (required)
-  --channel NAME     Select canary or latest (default: canary)
+  --channel NAME     Select unstable or canary (default: canary)
+  --version VERSION  Install a specific version from the selected channel
   --prefix DIR       Install under DIR (default: ~/.local)
   --base-url URL     Use another release mirror
   -h, --help         Show this help
 
 Examples:
   install.sh --package evin
-  install.sh --package all --channel latest
+  install.sh --package all --channel unstable
 USAGE
 }
 
@@ -159,6 +163,15 @@ parse_args() {
         CHANNEL=${1#*=}
         shift
         ;;
+      --version)
+        [ "$#" -ge 2 ] || die "--version needs a value" 2
+        VERSION_OVERRIDE=$2
+        shift 2
+        ;;
+      --version=*)
+        VERSION_OVERRIDE=${1#*=}
+        shift
+        ;;
       --prefix)
         [ "$#" -ge 2 ] || die "--prefix needs a directory" 2
         PREFIX=$2
@@ -221,12 +234,16 @@ validate_config() {
   esac
 
   case "$CHANNEL" in
-    canary|latest)
+    canary|unstable)
       ;;
     *)
       die "unsupported channel: $CHANNEL" 2
       ;;
   esac
+
+  if [ -n "$VERSION_OVERRIDE" ] && ! printf '%s\n' "$VERSION_OVERRIDE" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+    die "invalid requested version: $VERSION_OVERRIDE" 2
+  fi
 
   if [ "$PREFIX_SET" -eq 0 ] && [ -z "${HOME:-}" ]; then
     die "HOME is unset; provide --prefix DIR" 1
@@ -250,20 +267,21 @@ install_package() {
   pkg_name=$1
   CURRENT_BINARY="$pkg_name"
 
-  channel_manifest="$TMP_DIR/$pkg_name-channel.json"
-  curl -fsSL "$BASE_URL/$pkg_name/$CHANNEL.json" -o "$channel_manifest" || {
-    warn "failed to download $pkg_name channel manifest from $BASE_URL/$pkg_name/$CHANNEL.json"
-    return 1
-  }
-
-  version=$(sed -n 's/.*"latest_version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$channel_manifest" | head -n 1)
+  version=$VERSION_OVERRIDE
+  if [ -z "$version" ]; then
+    version=$(sed -n "/\"$pkg_name\"[[:space:]]*:/,/}/s/.*\"version\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$CHANNEL_MANIFEST" | head -n 1)
+  fi
   if [ -z "$version" ] || ! printf '%s\n' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
     warn "invalid $pkg_name version in channel manifest"
     return 1
   fi
+  if [ -n "$CHANNEL_VERSION" ] && [ "$version" != "$CHANNEL_VERSION" ]; then
+    warn "$pkg_name version does not match the shared channel version"
+    return 1
+  fi
 
   archive="$pkg_name-v$version-$TARGET.tar.gz"
-  release_url="$BASE_URL/$pkg_name/v$version"
+  release_url="$BASE_URL/$pkg_name/$CHANNEL/v$version"
   package_dir="$TMP_DIR/$pkg_name"
   extract_dir="$TMP_DIR/extract-$pkg_name"
 
@@ -382,6 +400,18 @@ main() {
   TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/everyinit-installer.XXXXXX")
   KEY_FILE="$TMP_DIR/release-key.pub"
   write_release_key "$KEY_FILE"
+
+  if [ -z "$VERSION_OVERRIDE" ]; then
+    CHANNEL_MANIFEST="$TMP_DIR/$CHANNEL.json"
+    curl -fsSL "$BASE_URL/$CHANNEL.json" -o "$CHANNEL_MANIFEST" || {
+      warn "failed to download $CHANNEL channel manifest from $BASE_URL/$CHANNEL.json"
+      exit 1
+    }
+    CHANNEL_VERSION=$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CHANNEL_MANIFEST" | head -n 1)
+    if [ -z "$CHANNEL_VERSION" ] || ! printf '%s\n' "$CHANNEL_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+      die "invalid shared version in $CHANNEL channel manifest" 1
+    fi
+  fi
 
   for pkg in $PACKAGES; do
     install_package "$pkg" || exit 1

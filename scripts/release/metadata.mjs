@@ -16,34 +16,34 @@ import { createPrivateKey, createPublicKey, sign, verify, createHash } from "nod
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { readReleaseLabel } from "./release-label.mjs";
 
 const [
   binary,
+  channel,
   version,
   target,
   outputRoot = "dist/mirror",
   archiveRoot = process.env.RELEASE_ARCHIVE_ROOT ?? "dist",
+  label,
 ] = process.argv.slice(2);
+const releaseLabel = label ?? (await readReleaseLabel());
 const validBinary = binary === "evin" || binary === "esh";
+const validChannel = channel === "unstable" || channel === "canary";
 const validVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "");
 const validTarget = target === "x86_64-unknown-linux-musl";
 
-if (!validBinary || !validVersion || !validTarget) {
+if (!validBinary || !validChannel || !validVersion || !validTarget || !releaseLabel.trim()) {
   throw new Error(
-    "usage: node scripts/release/metadata.mjs <evin|esh> <version> <target> [output-root] [archive-root]",
+    "usage: node scripts/release/metadata.mjs <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root] [label]",
   );
 }
 
-const channel = version.includes("-") ? "canary" : "latest";
 const filename = `${binary}-v${version}-${target}.tar.gz`;
-const outputDirectory = resolve(outputRoot, binary, `v${version}`);
+const outputDirectory = resolve(outputRoot, binary, channel, `v${version}`);
 const outputArchive = resolve(outputDirectory, filename);
 const archivePath = resolve(archiveRoot, filename);
 const privateKeyFile = process.env.RELEASE_SIGNING_KEY_FILE;
-const releaseBaseUrl = (process.env.RELEASE_BASE_URL ?? "https://dl.everyinit.dev").replace(
-  /\/+$/,
-  "",
-);
 if (!privateKeyFile) {
   throw new Error("RELEASE_SIGNING_KEY_FILE must point to the Ed25519 PKCS#8 private key");
 }
@@ -68,12 +68,13 @@ const archive = await readFile(archivePath).catch(() => {
   throw new Error(`release archive not found: ${archivePath}`);
 });
 const digest = createHash("sha256").update(archive).digest("hex");
-const git = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
-if (git.status !== 0) {
+const git = process.env.RELEASE_COMMIT
+  ? { status: 0, stdout: `${process.env.RELEASE_COMMIT}\n`, stderr: "" }
+  : spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+if (git.status !== 0 || !/^[0-9a-f]{40,64}\n?$/.test(git.stdout)) {
   throw new Error(`could not resolve release commit: ${git.stderr.trim()}`);
 }
 
-const milestone = await releaseMilestone(version);
 await mkdir(outputDirectory, { recursive: true });
 await copyFile(archivePath, outputArchive);
 const checksums = `${digest}  ${filename}\n`;
@@ -84,7 +85,7 @@ const releaseMetadata = {
   name: binary,
   version,
   channel,
-  ...(milestone ? { milestone } : {}),
+  label: releaseLabel,
   released_at: new Date().toISOString(),
   git_commit: git.stdout.trim(),
   artifacts: [
@@ -114,30 +115,4 @@ await writeFile(resolve(outputDirectory, "SHA256SUMS.sig"), `${signature.toStrin
   mode: 0o644,
 });
 
-const versionUrl = `${releaseBaseUrl}/${binary}/v${version}`;
-const channelManifest = {
-  name: binary,
-  channel,
-  latest_version: version,
-  release_url: `${versionUrl}/release.json`,
-};
-await mkdir(resolve(outputRoot, binary), { recursive: true });
-await writeFile(
-  resolve(outputRoot, binary, `${channel}.json`),
-  `${JSON.stringify(channelManifest, null, 2)}\n`,
-  { mode: 0o644 },
-);
-
 console.log(`Generated signed ${binary} ${version} metadata in ${outputDirectory}`);
-
-async function releaseMilestone(releaseVersion) {
-  const changelog = await readFile("CHANGELOG.md", "utf8");
-  const escapedVersion = releaseVersion.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`^## \\[v${escapedVersion}\\]\\s+—\\s+(.+?)\\s*$`, "m").exec(changelog);
-  const allowedMilestone =
-    /^(Alpha|Bravo|Charlie|Delta|Echo|Foxtrot|Golf|Hotel|India|Juliett|Kilo|Lima|Mike|November|Oscar|Papa|Quebec|Romeo|Sierra|Tango|Uniform|Victor|Whiskey|X-ray|Yankee|Zulu)-\d+$/;
-  if (releaseVersion.includes("-canary.") && (!match || !allowedMilestone.test(match[1]))) {
-    throw new Error(`CHANGELOG.md has no canary milestone label for v${releaseVersion}`);
-  }
-  return match?.[1];
-}
