@@ -88,7 +88,7 @@ tasks:
           path: CHANGELOG.md
           version: ${release:bump.version}
           label: ${release_label}
-      - run: node scripts/release/verify-changelog.mjs CHANGELOG.md "${release:bump.version}"
+      - run: node scripts/release/verify-changelog.mjs CHANGELOG.md "$(node scripts/release/workspace-version.mjs)"
 
   prepare:
     stage: Publish
