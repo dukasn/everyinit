@@ -173,7 +173,7 @@ tasks:
   github-publish:
     stage: Publish
     description: "Reconcile and publish the release through Evin CI actions"
-    env: [RELEASE_TAG, RELEASE_VERSION]
+    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_TAG, RELEASE_VERSION]
     needs:
       - release:package-verify
       - infra:mirror:metadata
@@ -205,7 +205,7 @@ tasks:
   github-publish-prebuilt:
     stage: Publish
     description: "Publish verified downloaded artifacts without rebuilding them"
-    env: [GITHUB_TOKEN, RELEASE_LABEL, RELEASE_TAG]
+    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_LABEL, RELEASE_TAG]
     needs:
       - infra:mirror:metadata-prebuilt
       - infra:mirror:publish-objects
