@@ -40,6 +40,9 @@ pub struct CiConfig {
     #[serde(default)]
     pub tag: Option<String>,
 
+    #[serde(default)]
+    pub title: Option<String>,
+
     #[serde(default = "default_state_path")]
     pub state: String,
 
@@ -66,6 +69,7 @@ impl Default for CiConfig {
     fn default() -> Self {
         Self {
             tag: None,
+            title: None,
             state: default_state_path(),
             plan_out: default_plan_out_path(),
             notes_dir: default_notes_dir(),
@@ -90,6 +94,16 @@ impl CiConfig {
         if self.tag.as_ref().is_some_and(|tag| tag.trim().is_empty()) {
             return Err(evin_yaml::ConfigError {
                 message: "tag must not be empty when provided".to_string(),
+                span: None,
+            });
+        }
+        if self
+            .title
+            .as_ref()
+            .is_some_and(|title| title.trim().is_empty())
+        {
+            return Err(evin_yaml::ConfigError {
+                message: "title must not be empty when provided".to_string(),
                 span: None,
             });
         }

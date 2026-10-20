@@ -1,0 +1,52 @@
+#!evin/v1
+namespace:
+  name: quality
+  description: "Infrastructure formatting, linting, type checks, and Worker builds"
+
+tasks:
+  types:
+    stage: Build
+    description: "Generate Worker runtime and binding types from Wrangler config"
+    cwd: .
+    steps:
+      - run: corepack npm exec -- wrangler types infra/get/worker-configuration.d.ts --config infra/get/wrangler.toml
+      - run: corepack npm exec -- wrangler types infra/mirror/worker-configuration.d.ts --config infra/mirror/wrangler.toml
+
+  fmt:
+    stage: Check
+    description: "Check JavaScript and infrastructure configuration formatting"
+    cwd: .
+    steps:
+      - run: corepack npm exec -- oxfmt --check package.json infra/.oxlintrc.json infra/get/tsconfig.json infra/mirror/tsconfig.json infra/get/src/index.ts infra/mirror/src/index.ts scripts/release/metadata.mjs scripts/release/release-label.mjs scripts/release/channel-manifest.mjs scripts/release/publish-mirror.mjs scripts/release/validate-candidate.mjs scripts/release/verify-changelog.mjs scripts/release/verify-mirror-candidate.mjs scripts/release/stage-candidate-artifacts.mjs scripts/release/find-merged-candidate.mjs scripts/release/seed-local-mirror.mjs scripts/release/github-ci.mjs
+
+  lint:
+    stage: Check
+    description: "Lint Cloudflare Workers and release JavaScript with Oxlint"
+    cwd: .
+    steps:
+      - run: corepack npm exec -- oxlint --config infra/.oxlintrc.json --deny-warnings infra/get/src/index.ts infra/mirror/src/index.ts scripts/release/metadata.mjs scripts/release/release-label.mjs scripts/release/channel-manifest.mjs scripts/release/publish-mirror.mjs scripts/release/validate-candidate.mjs scripts/release/verify-changelog.mjs scripts/release/verify-mirror-candidate.mjs scripts/release/stage-candidate-artifacts.mjs scripts/release/find-merged-candidate.mjs scripts/release/seed-local-mirror.mjs scripts/release/github-ci.mjs
+
+  typecheck:
+    stage: Check
+    description: "Check generated Worker types and TypeScript sources"
+    cwd: .
+    steps:
+      - run: corepack npm exec -- wrangler types infra/get/worker-configuration.d.ts --config infra/get/wrangler.toml --check
+      - run: corepack npm exec -- wrangler types infra/mirror/worker-configuration.d.ts --config infra/mirror/wrangler.toml --check
+      - run: corepack npm exec -- tsc --project infra/get/tsconfig.json
+      - run: corepack npm exec -- tsc --project infra/mirror/tsconfig.json
+
+  build:
+    stage: Build
+    description: "Build both Cloudflare Workers with Wrangler"
+    cwd: .
+    needs: [infra:quality:fmt, infra:quality:lint, infra:quality:typecheck]
+    steps:
+      - run: corepack npm exec -- wrangler deploy --dry-run --outdir dist/infra/get --config infra/get/wrangler.toml
+      - run: corepack npm exec -- wrangler deploy --dry-run --outdir dist/infra/mirror --config infra/mirror/wrangler.toml
+
+  verify:
+    stage: Check
+    description: "Run infrastructure formatting, lint, type, and Worker build checks"
+    cwd: .
+    needs: [infra:quality:build]

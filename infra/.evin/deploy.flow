@@ -1,0 +1,29 @@
+#!evin/v1
+namespace:
+  name: deploy
+  description: "Deploy Evin's installer and release mirror Workers"
+
+tasks:
+  installer:
+    stage: Publish
+    description: "Deploy the get.everyinit.dev installer Worker"
+    cwd: .
+    needs: [infra:quality:verify]
+    steps:
+      - run: corepack npm exec -- wrangler deploy --config infra/get/wrangler.toml
+
+  mirror:
+    stage: Publish
+    description: "Deploy the dl.everyinit.dev R2 mirror Worker"
+    cwd: .
+    needs: [infra:quality:verify]
+    steps:
+      - run: corepack npm exec -- wrangler deploy --config infra/mirror/wrangler.toml
+
+  workers:
+    stage: Publish
+    description: "Verify and deploy both public Cloudflare Workers"
+    cwd: .
+    needs:
+      - infra:deploy:installer
+      - infra:deploy:mirror

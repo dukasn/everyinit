@@ -1,3 +1,17 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import { readdir } from "node:fs/promises";
 import { resolve, relative, sep } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -6,7 +20,6 @@ const roots = (process.argv.length > 2 ? process.argv.slice(2) : ["dist/mirror"]
   resolve(path),
 );
 const config = "infra/mirror/wrangler.toml";
-const bucket = "everyinit-artifacts";
 
 async function filesUnder(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -20,6 +33,7 @@ async function filesUnder(directory) {
 }
 
 let count = 0;
+const uploadedBuckets = new Set();
 for (const root of roots) {
   const files = await filesUnder(root).catch((error) => {
     if (error.code === "ENOENT") {
@@ -29,9 +43,17 @@ for (const root of roots) {
   });
   for (const file of files) {
     const key = relative(root, file).split(sep).join("/");
+    const bucket =
+      key.includes("/unstable/") || key === "channels/unstable.json"
+        ? "everyinit-preview-artifacts"
+        : "everyinit-artifacts";
+    uploadedBuckets.add(bucket);
     const result = spawnSync(
-      "npx",
+      "corepack",
       [
+        "npm",
+        "exec",
+        "--",
         "wrangler",
         "r2",
         "object",
@@ -55,4 +77,6 @@ if (count === 0)
   throw new Error(
     "No mirror objects were found; generate release metadata before seeding local R2",
   );
-console.log(`Seeded ${count} objects into local R2 bucket ${bucket}`);
+console.log(
+  `Seeded ${count} objects into local R2 buckets ${[...uploadedBuckets].toSorted().join(", ")}`,
+);

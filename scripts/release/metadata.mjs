@@ -1,35 +1,49 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import { createPrivateKey, createPublicKey, sign, verify, createHash } from "node:crypto";
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { readReleaseLabel } from "./release-label.mjs";
 
 const [
   binary,
+  channel,
   version,
   target,
   outputRoot = "dist/mirror",
   archiveRoot = process.env.RELEASE_ARCHIVE_ROOT ?? "dist",
+  label,
 ] = process.argv.slice(2);
+const releaseLabel = label ?? (await readReleaseLabel());
 const validBinary = binary === "evin" || binary === "esh";
+const validChannel = channel === "unstable" || channel === "canary";
 const validVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "");
 const validTarget = target === "x86_64-unknown-linux-musl";
 
-if (!validBinary || !validVersion || !validTarget) {
+if (!validBinary || !validChannel || !validVersion || !validTarget || !releaseLabel.trim()) {
   throw new Error(
-    "usage: node scripts/release/metadata.mjs <evin|esh> <version> <target> [output-root] [archive-root]",
+    "usage: node scripts/release/metadata.mjs <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root] [label]",
   );
 }
 
-const channel = version.includes("-") ? "canary" : "latest";
 const filename = `${binary}-v${version}-${target}.tar.gz`;
-const outputDirectory = resolve(outputRoot, binary, `v${version}`);
+const outputDirectory = resolve(outputRoot, binary, channel, `v${version}`);
 const outputArchive = resolve(outputDirectory, filename);
 const archivePath = resolve(archiveRoot, filename);
 const privateKeyFile = process.env.RELEASE_SIGNING_KEY_FILE;
-const releaseBaseUrl = (process.env.RELEASE_BASE_URL ?? "https://dl.everyinit.dev").replace(
-  /\/+$/,
-  "",
-);
 if (!privateKeyFile) {
   throw new Error("RELEASE_SIGNING_KEY_FILE must point to the Ed25519 PKCS#8 private key");
 }
@@ -45,7 +59,7 @@ const pinnedPublicKey = (await readFile("infra/get/release-key.pub", "utf8")).tr
 if (signingPublicKey !== pinnedPublicKey) {
   throw new Error("release signing key does not match infra/get/release-key.pub");
 }
-const installerSource = await readFile("infra/get/src/index.ts", "utf8");
+const installerSource = await readFile("infra/get/src/installer.sh", "utf8");
 if (!installerSource.includes(pinnedPublicKey)) {
   throw new Error("installer Worker key does not match infra/get/release-key.pub");
 }
@@ -54,8 +68,10 @@ const archive = await readFile(archivePath).catch(() => {
   throw new Error(`release archive not found: ${archivePath}`);
 });
 const digest = createHash("sha256").update(archive).digest("hex");
-const git = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
-if (git.status !== 0) {
+const git = process.env.RELEASE_COMMIT
+  ? { status: 0, stdout: `${process.env.RELEASE_COMMIT}\n`, stderr: "" }
+  : spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+if (git.status !== 0 || !/^[0-9a-f]{40,64}\n?$/.test(git.stdout)) {
   throw new Error(`could not resolve release commit: ${git.stderr.trim()}`);
 }
 
@@ -65,10 +81,11 @@ const checksums = `${digest}  ${filename}\n`;
 const checksumPath = resolve(outputDirectory, "SHA256SUMS");
 await writeFile(checksumPath, checksums, { mode: 0o644 });
 
-const release = {
+const releaseMetadata = {
   name: binary,
   version,
   channel,
+  label: releaseLabel,
   released_at: new Date().toISOString(),
   git_commit: git.stdout.trim(),
   artifacts: [
@@ -82,9 +99,13 @@ const release = {
     },
   ],
 };
-await writeFile(resolve(outputDirectory, "release.json"), `${JSON.stringify(release, null, 2)}\n`, {
-  mode: 0o644,
-});
+await writeFile(
+  resolve(outputDirectory, "release.json"),
+  `${JSON.stringify(releaseMetadata, null, 2)}\n`,
+  {
+    mode: 0o644,
+  },
+);
 
 const signature = sign(null, Buffer.from(checksums), privateKey);
 if (!verify(null, Buffer.from(checksums), createPublicKey(privateKey), signature)) {
@@ -93,19 +114,5 @@ if (!verify(null, Buffer.from(checksums), createPublicKey(privateKey), signature
 await writeFile(resolve(outputDirectory, "SHA256SUMS.sig"), `${signature.toString("base64")}\n`, {
   mode: 0o644,
 });
-
-const versionUrl = `${releaseBaseUrl}/${binary}/v${version}`;
-const channelManifest = {
-  name: binary,
-  channel,
-  latest_version: version,
-  release_url: `${versionUrl}/release.json`,
-};
-await mkdir(resolve(outputRoot, binary), { recursive: true });
-await writeFile(
-  resolve(outputRoot, binary, `${channel}.json`),
-  `${JSON.stringify(channelManifest, null, 2)}\n`,
-  { mode: 0o644 },
-);
 
 console.log(`Generated signed ${binary} ${version} metadata in ${outputDirectory}`);

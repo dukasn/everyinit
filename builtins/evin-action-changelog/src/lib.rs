@@ -37,6 +37,13 @@ const CHANGELOG_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
+            path: "label",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Optional label appended to the generated pending section heading.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
             path: "include_unreleased",
             kind: ActionFieldKind::Boolean,
             required: false,

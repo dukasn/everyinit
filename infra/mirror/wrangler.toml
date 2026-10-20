@@ -1,12 +1,16 @@
 name = "everyinit-mirror"
 main = "src/index.ts"
 compatibility_date = "2026-10-08"
-workers_dev = true
+workers_dev = false
 
 [[r2_buckets]]
 binding = "ARTIFACTS"
 bucket_name = "everyinit-artifacts"
 
+[[r2_buckets]]
+binding = "PREVIEWS"
+bucket_name = "everyinit-preview-artifacts"
+
 [[routes]]
-pattern = "dl.everyinit.dev/*"
-zone_name = "everyinit.dev"
+pattern = "dl.everyinit.dev"
+custom_domain = true

@@ -1,4 +1,4 @@
-const CHANNELS = new Set(["canary", "latest"]);
+const CHANNELS = new Set(["canary", "unstable"]);
 const VERSION_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const TARGET_PATTERN = /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+$/;
 
@@ -20,23 +20,25 @@ function objectKey(pathname: string): string | null {
   } catch {
     return null;
   }
-  if (parts.length < 2 || parts.length > 3) return null;
-  const [binary, second, artifact] = parts;
+  if (parts.length < 1 || parts.length > 4) return null;
+  if (parts.length === 1 && parts[0].endsWith(".json")) {
+    const channel = parts[0].slice(0, -".json".length);
+    return CHANNELS.has(channel) ? `channels/${channel}.json` : null;
+  }
+  if (parts.length < 2) return null;
+  const [binary, second] = parts;
   if (binary !== "evin" && binary !== "esh") return null;
 
-  if (parts.length === 2 && second.endsWith(".json")) {
-    const channel = second.slice(0, -".json".length);
-    return CHANNELS.has(channel) ? `${binary}/${channel}.json` : null;
-  }
-
-  if (parts.length !== 3 || !VERSION_PATTERN.test(second)) return null;
+  if (parts.length !== 4 || !CHANNELS.has(second) || !VERSION_PATTERN.test(parts[2])) return null;
+  const version = parts[2];
+  const artifact = parts[3];
   if (artifact === "release.json" || artifact === "SHA256SUMS" || artifact === "SHA256SUMS.sig") {
-    return `${binary}/${second}/${artifact}`;
+    return `${binary}/${second}/${version}/${artifact}`;
   }
-  const archivePrefix = `${binary}-${second}-`;
+  const archivePrefix = `${binary}-${version}-`;
   if (!artifact.startsWith(archivePrefix) || !artifact.endsWith(".tar.gz")) return null;
   const target = artifact.slice(archivePrefix.length, -".tar.gz".length);
-  return TARGET_PATTERN.test(target) ? `${binary}/${second}/${artifact}` : null;
+  return TARGET_PATTERN.test(target) ? `${binary}/${second}/${version}/${artifact}` : null;
 }
 
 function contentType(key: string): string {
@@ -63,7 +65,11 @@ export default {
       return new Response("Not found\n", { status: 404, headers: responseHeaders() });
     }
 
-    const object = await env.ARTIFACTS.get(key);
+    const bucket =
+      key.startsWith("channels/unstable.json") || key.includes("/unstable/")
+        ? env.PREVIEWS
+        : env.ARTIFACTS;
+    const object = await bucket.get(key);
     if (object === null) {
       return new Response("Not found\n", { status: 404, headers: responseHeaders() });
     }
