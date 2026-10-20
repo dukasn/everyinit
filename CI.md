@@ -39,7 +39,10 @@ supported.
 - Tagged release builds are verification-only. Publication is a separate
   manual dispatch; it downloads the artifacts from the successful build job.
   Only the protected `release` environment's publish job receives the release
-  signing key and `contents: write` permission.
+  signing key and `contents: write` permission. Merging `release` into `main`
+  does not publish a release. Follow the [canary release procedure](/contributing/development#prepare-a-canary-release)
+  to push a version tag, inspect its build, and dispatch publication for that
+  same tag.
 
 ## Expanding support
 

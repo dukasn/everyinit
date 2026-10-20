@@ -72,6 +72,7 @@ impl NotesExtractor for FsNotesExtractor {
 pub struct CommandGitStateProvider<'a> {
     pub workspace_root: &'a Path,
     pub tag: Option<&'a str>,
+    pub title: Option<&'a str>,
 }
 
 impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
@@ -118,7 +119,9 @@ impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
                 raw_commit
             };
 
-            let title = if !subject.is_empty() {
+            let title = if let Some(title) = self.title {
+                Some(title.to_string())
+            } else if !subject.is_empty() {
                 Some(subject)
             } else {
                 Some(tag_name.clone())

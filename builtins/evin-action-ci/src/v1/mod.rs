@@ -46,6 +46,7 @@ pub async fn execute(
     let git_provider = CommandGitStateProvider {
         workspace_root: root,
         tag: config.tag.as_deref(),
+        title: config.title.as_deref(),
     };
     let artifact_inspector = FsArtifactInspector {
         workspace_root: root,
