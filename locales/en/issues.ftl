@@ -173,3 +173,5 @@ issue-docs-tape-failed-title = Terminal Tape Error
 issue-start-page-invalid-title = Invalid Start Page
 start-page-invalid-title = Invalid Start Page
 issue-watch-config-invalid-title = Watch Configuration Error
+issue-task-output-missing-dependency = Task '{ $task }' reads output '{ $reference }' from '{ $producer }', but that task is not a direct dependency. Add '{ $producer }' to needs:; transitive dependencies do not expose outputs.
+issue-task-output-missing-dependency-title = Missing Output Dependency

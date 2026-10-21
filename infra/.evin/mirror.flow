@@ -8,7 +8,7 @@ tasks:
     stage: Publish
     description: "Build and sign both local mirror release manifests"
     cwd: .
-    env: [RELEASE_CHANNEL, RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
+    env: [RELEASE_CHANNEL, RELEASE_COMMIT, RELEASE_BASE_URL, RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
     needs:
       - evin:package:cloudflare-verify
       - esh:package:cloudflare-verify
@@ -21,7 +21,7 @@ tasks:
     stage: Publish
     description: "Sign mirror metadata from verified artifacts downloaded from the build job"
     cwd: .
-    env: [RELEASE_CHANNEL, RELEASE_COMMIT, RELEASE_LABEL, RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
+    env: [RELEASE_CHANNEL, RELEASE_COMMIT, RELEASE_BASE_URL, RELEASE_LABEL, RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
     steps:
       - run: node scripts/release/metadata.mjs evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github "$RELEASE_LABEL"
       - run: node scripts/release/metadata.mjs esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github "$RELEASE_LABEL"
