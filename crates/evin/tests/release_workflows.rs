@@ -154,3 +154,54 @@ fn repository_run_commands_do_not_use_action_output_or_environment_templates() {
         }
     }
 }
+
+fn output_producers(value: &Value, producers: &mut Vec<String>) {
+    match value {
+        Value::String(text) => {
+            for tail in text.split("${").skip(1) {
+                if let Some((expression, _)) = tail.split_once('}')
+                    && let Some((producer, _)) = expression.rsplit_once('.')
+                    && producer.contains(':')
+                {
+                    producers.push(producer.to_string());
+                }
+            }
+        }
+        Value::Sequence(values) => {
+            for value in values {
+                output_producers(value, producers);
+            }
+        }
+        Value::Mapping(values) => {
+            for value in values.values() {
+                output_producers(value, producers);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn release_action_output_producers_are_direct_dependencies() {
+    for path in [
+        ".evin/release.flow",
+        "crates/evin/.evin/package.flow",
+        "crates/esh/.evin/package.flow",
+        "infra/.evin/mirror.flow",
+    ] {
+        let document = flow(path);
+        for (name, task) in document["tasks"].as_mapping().unwrap() {
+            let mut producers = Vec::new();
+            output_producers(&task["steps"], &mut producers);
+            for producer in producers {
+                assert!(
+                    task["needs"].as_sequence().is_some_and(|needs| {
+                        needs.iter().any(|need| need.as_str() == Some(&producer))
+                    }),
+                    "{path}: task {} reads outputs from {producer}, which must be a direct dependency",
+                    name.as_str().unwrap()
+                );
+            }
+        }
+    }
+}
