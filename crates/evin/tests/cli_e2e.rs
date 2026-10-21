@@ -231,3 +231,38 @@ fn assert_uri_has_no_backslashes(output: &str) {
 
 #[cfg(not(windows))]
 fn assert_uri_has_no_backslashes(_output: &str) {}
+
+#[test]
+fn check_rejects_outputs_from_transitive_dependencies_without_running_tasks() {
+    let temp = tempdir().unwrap();
+    write_workspace(
+        temp.path(),
+        r#"  bump:
+    stage: Test
+    run: echo must-not-run > executed
+  changelog:
+    stage: Test
+    needs: [bump]
+  prepare:
+    stage: Test
+    needs: [changelog]
+    steps:
+      - uses: evin/changelog@v1
+        with:
+          path: CHANGELOG.md
+          version: "${bump.version}"
+"#,
+    );
+    let output = evin()
+        .current_dir(temp.path())
+        .arg("check")
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "{}", output_text(&output));
+    let text = output_text(&output);
+    assert!(text.contains("direct dependency"), "{text}");
+    assert!(text.contains("bump"), "{text}");
+    assert!(text.contains("needs:"), "{text}");
+    assert!(!temp.path().join("executed").exists());
+    assert!(!temp.path().join("CHANGELOG.md").exists());
+}

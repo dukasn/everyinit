@@ -35,6 +35,7 @@ pub fn analyze<'a>(
     actions: &HashMap<String, Arc<dyn Action>>,
 ) -> WorkspaceAnalysis<'a> {
     let mut findings = validate_task_contracts(config.tasks.iter(), actions);
+    findings.extend(task_output_dependency_findings(config, &findings));
     findings.extend(package_policy_findings(config, actions));
     findings.sort_by(|left, right| {
         (&left.source_file, &left.task_name, left.step_index).cmp(&(
@@ -44,6 +45,87 @@ pub fn analyze<'a>(
         ))
     });
     WorkspaceAnalysis { config, findings }
+}
+
+fn task_output_dependency_findings(
+    config: &EverInitConfig,
+    contract_findings: &[AnalysisFinding],
+) -> Vec<AnalysisFinding> {
+    fn references(value: &SpannedValue, result: &mut Vec<(String, String, Span)>) {
+        match value {
+            SpannedValue::String(text, span) => {
+                if let Ok(references) = evin_yaml::template::references(text) {
+                    for reference in references {
+                        if let evin_yaml::template::TemplateReferenceKind::TaskOutput {
+                            task,
+                            key,
+                        } = reference.kind
+                        {
+                            result.push((task, key, *span));
+                        }
+                    }
+                }
+            }
+            SpannedValue::Sequence(values, _) => {
+                for value in values {
+                    references(value, result);
+                }
+            }
+            SpannedValue::Mapping(values, _) => {
+                for (key, value) in values {
+                    references(key, result);
+                    references(value, result);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut findings = Vec::new();
+    for task in &config.tasks {
+        for (step_index, step) in task.steps.iter().flatten().enumerate() {
+            let Some(uses) = &step.uses else { continue };
+            if contract_findings.iter().any(|finding| {
+                finding.task_name == task.name && finding.step_index == Some(step_index)
+            }) {
+                continue;
+            }
+            let mut outputs = Vec::new();
+            if let Some(with) = &step.with {
+                references(with, &mut outputs);
+            }
+            let needs = task.needs.as_deref().unwrap_or_default();
+            for (producer, key, span) in outputs {
+                // Match RunnerContext's exact, namespace, and workspace aliases.
+                let scoped = (!producer.contains(':') && task.name.contains(':'))
+                    .then(|| format!("{}:{producer}", task.name.split(':').next().unwrap()));
+                let root = producer.strip_prefix(&format!("{}:", config.workspace_name));
+                if needs.contains(&producer)
+                    || scoped.as_ref().is_some_and(|name| needs.contains(name))
+                    || root.is_some_and(|name| needs.iter().any(|need| need == name))
+                {
+                    continue;
+                }
+                findings.push(AnalysisFinding {
+                    task_name: task.name.clone(),
+                    source_file: task.source_file.clone(),
+                    step_index: Some(step_index),
+                    action_id: Some(uses.as_str().to_owned()),
+                    diagnostic: with_source_span(
+                        evin_locales::diagnostic(
+                            IssueCode::new("issue-task-output-missing-dependency")
+                                .arg("task", &task.name)
+                                .arg("producer", &producer)
+                                .arg("reference", format!("${{{producer}.{key}}}")),
+                        ),
+                        task.source_file.as_deref(),
+                        span,
+                    ),
+                });
+            }
+        }
+    }
+    findings
 }
 
 pub fn validate_task_contracts<'a>(
@@ -371,5 +453,42 @@ mod tests {
         let findings = analyze(&config("${env.PACKAGE_NAME}"), &actions).findings;
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].diagnostic.severity, Severity::Info);
+    }
+    #[test]
+    fn output_references_require_direct_dependencies_and_allow_runtime_aliases() {
+        let actions = HashMap::from([(
+            "evin/archive@v1".into(),
+            Arc::new(Archive) as Arc<dyn Action>,
+        )]);
+        for (reference, needs, expected) in [
+            ("${build.version}", vec![], 1),
+            ("${build.version}", vec!["middle"], 1),
+            ("${build.version}", vec!["build"], 0),
+            ("${build.version}", vec!["packages:build"], 0),
+            ("${release:bump.version}", vec!["release:changelog"], 1),
+            ("${release:bump.version}", vec!["release:bump"], 0),
+            ("${example:build.version}", vec!["build"], 0),
+            ("${env.VERSION}", vec![], 0),
+            ("${version}", vec![], 0),
+        ] {
+            let mut config = config("app");
+            config.tasks[0].needs = Some(needs.into_iter().map(str::to_owned).collect());
+            config.tasks[0].steps.as_mut().unwrap()[0].with = Some(
+                evin_yaml::parse_yaml(&format!("nested:\n  values: ['{reference}']\n")).unwrap(),
+            );
+            let findings = analyze(&config, &actions).findings;
+            let missing = findings
+                .iter()
+                .filter(|finding| {
+                    finding.diagnostic.code.key == "issue-task-output-missing-dependency"
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(missing.len(), expected, "{reference}");
+            if expected > 0 {
+                assert_eq!(missing[0].diagnostic.severity, Severity::Error);
+                assert!(missing[0].diagnostic.location.is_some());
+                assert_eq!(missing[0].step_index, Some(0));
+            }
+        }
     }
 }

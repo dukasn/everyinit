@@ -1189,3 +1189,55 @@ fn rejects_non_file_workspace_root() {
     server.handle_message(&json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "rootUri": "untitled:workspace" } }).to_string(), &mut output).unwrap();
     assert_eq!(bodies(output)[0]["error"]["code"], -32602);
 }
+
+#[test]
+fn missing_output_dependency_is_published_and_clears_after_adding_needs() {
+    let directory = tempfile::tempdir().unwrap();
+    workspace(directory.path());
+    let mut server = EvinLspServer::default();
+    initialize(&mut server, directory.path(), false);
+    let document_uri = uri(directory.path(), ".evin/workspace.flow");
+    let original = "workspace: { name: app, version: 1.0.0 }\nstages: [Build]\ntasks:\n  bump: { stage: Build }\n  prepare:\n    stage: Build\n    steps:\n      - uses: evin/changelog@v1\n        with: { path: CHANGELOG.md, version: '${bump.version}' }\n";
+    for (version, text, expected) in [
+        (1, original.to_owned(), true),
+        (
+            2,
+            original.replace("    steps:", "    needs: [bump]\n    steps:"),
+            false,
+        ),
+    ] {
+        let mut output = Vec::new();
+        let notification = if version == 1 {
+            json!({ "jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
+                "textDocument": { "uri": document_uri, "version": version, "text": text }
+            }})
+        } else {
+            json!({ "jsonrpc": "2.0", "method": "textDocument/didChange", "params": {
+                "textDocument": { "uri": document_uri, "version": version },
+                "contentChanges": [{ "text": text }]
+            }})
+        };
+        server
+            .handle_message(&notification.to_string(), &mut output)
+            .unwrap();
+        let messages = bodies(output);
+        let published = messages
+            .iter()
+            .find(|message| {
+                message["method"] == "textDocument/publishDiagnostics"
+                    && message["params"]["uri"] == document_uri
+            })
+            .unwrap();
+        let diagnostic = published["params"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|diagnostic| diagnostic["code"] == "issue-task-output-missing-dependency");
+        assert_eq!(diagnostic.is_some(), expected, "{published}");
+        if let Some(diagnostic) = diagnostic {
+            assert_eq!(diagnostic["severity"], 1);
+            assert_eq!(diagnostic["range"]["start"]["line"], 8);
+            assert!(diagnostic["message"].as_str().unwrap().contains("needs:"));
+        }
+    }
+}
