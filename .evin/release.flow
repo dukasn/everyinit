@@ -95,6 +95,7 @@ tasks:
     description: "Commit and tag the prepared source release"
     needs:
       - release:changelog
+      - release:bump
     steps:
       - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.yaml CHANGELOG.md
       - uses: evin/git-release@v1

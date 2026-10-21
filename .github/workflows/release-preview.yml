@@ -67,7 +67,7 @@ jobs:
                 title: isCandidate ? "Publishing the release candidate preview" : "Not a release candidate",
                 summary: isCandidate
                   ? "Building and checking the public unstable mirror entry."
-                  : "This pull request is not labeled release-candidate, so release publication is not required.",
+                  : "No release-candidate label or changed workspace version was detected; no preview is required.",
               },
             });
             core.setOutput("candidate", String(isCandidate));
@@ -181,6 +181,9 @@ jobs:
           SOURCE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         with:
           script: |
+            // Ordinary PRs already received a successful check during discovery.
+            // Their skipped build must not overwrite that result with failure.
+            if (process.env.CANDIDATE !== "true") return;
             const conclusion = process.env.JOB_STATUS === "success" && process.env.SOURCE_CONCLUSION === "success" ? "success"
               : process.env.JOB_STATUS === "cancelled" ? "cancelled" : "failure";
             await github.rest.checks.update({
@@ -191,8 +194,6 @@ jobs:
               conclusion,
               output: {
                 title: conclusion === "success" ? "Unstable preview is reachable and installable" : "Unstable preview validation failed",
-                summary: process.env.CANDIDATE === "true"
-                  ? `Candidate build: ${process.env.SOURCE_CONCLUSION}; preview job: ${process.env.JOB_STATUS}. See this workflow run for details.`
-                  : "No release-candidate label is present; no preview is required.",
+                summary: `Candidate build: ${process.env.SOURCE_CONCLUSION}; preview job: ${process.env.JOB_STATUS}. See this workflow run for details.`,
               },
             });
