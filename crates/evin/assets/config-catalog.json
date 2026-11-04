@@ -183,6 +183,16 @@
       "hover_plaintext": "uses: evin/changelog@v1\n\nChangelog action (action.evin/changelog@v1): Generate a changelog from Git history.\n\nConfigure changelog generation through with:.",
       "terminal_ansi": "\u001b[1;36muses: evin/changelog@v1\u001b[0m\n\n\u001b[1mChangelog action\u001b[0m (action.evin/changelog@v1): Generate a changelog from Git history.\n\nConfigure changelog generation through \u001b[33mwith:\u001b[0m."
     },
+    "action.evin/changelog@v1.with.notes_path": {
+      "name": "action.evin/changelog@v1.with.notes_path",
+      "synopsis": "notes_path: target/release-notes.md",
+      "summary": "Write the pending section body to a separate file.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nnotes_path: target/release-notes.md\n```\n\n**Release notes file** (`action.evin/changelog@v1.with.notes_path`): Write the pending section body to a separate file.\n\nWritten only when an Unreleased block exists and not in dry runs. Use it as a review request body. Publishes a `notes_path` output.",
+      "hover_plaintext": "notes_path: target/release-notes.md\n\nRelease notes file (action.evin/changelog@v1.with.notes_path): Write the pending section body to a separate file.\n\nWritten only when an Unreleased block exists and not in dry runs. Use it as a review request body. Publishes a notes_path output.",
+      "terminal_ansi": "\u001b[1;36mnotes_path: target/release-notes.md\u001b[0m\n\n\u001b[1mRelease notes file\u001b[0m (action.evin/changelog@v1.with.notes_path): Write the pending section body to a separate file.\n\nWritten only when an Unreleased block exists and not in dry runs. Use it as a review request body. Publishes a \u001b[33mnotes_path\u001b[0m output."
+    },
     "action.evin/ci@v1": {
       "name": "action.evin/ci@v1",
       "synopsis": "uses: evin/ci@v1",
@@ -213,6 +223,176 @@
       "hover_plaintext": "uses: evin/git-release@v1\n\nGit release action (action.evin/git-release@v1): Create a policy-aware local release commit.\n\nConfigure release behavior through with:.",
       "terminal_ansi": "\u001b[1;36muses: evin/git-release@v1\u001b[0m\n\n\u001b[1mGit release action\u001b[0m (action.evin/git-release@v1): Create a policy-aware local release commit.\n\nConfigure release behavior through \u001b[33mwith:\u001b[0m."
     },
+    "action.evin/git-release@v1.with.enabled": {
+      "name": "action.evin/git-release@v1.with.enabled",
+      "synopsis": "enabled: ${release:bump.changed}",
+      "summary": "Skip the whole release when false.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nenabled: ${release:bump.changed}\n```\n\n**Conditional release** (`action.evin/git-release@v1.with.enabled`): Skip the whole release when false.\n\nBoolean or a template resolving to `true` or `false`; defaults to `true`. When `false` nothing is staged, committed, tagged, or pushed and `committed` is `false`.",
+      "hover_plaintext": "enabled: ${release:bump.changed}\n\nConditional release (action.evin/git-release@v1.with.enabled): Skip the whole release when false.\n\nBoolean or a template resolving to true or false; defaults to true. When false nothing is staged, committed, tagged, or pushed and committed is false.",
+      "terminal_ansi": "\u001b[1;36menabled: ${release:bump.changed}\u001b[0m\n\n\u001b[1mConditional release\u001b[0m (action.evin/git-release@v1.with.enabled): Skip the whole release when false.\n\nBoolean or a template resolving to \u001b[33mtrue\u001b[0m or \u001b[33mfalse\u001b[0m; defaults to \u001b[33mtrue\u001b[0m. When \u001b[33mfalse\u001b[0m nothing is staged, committed, tagged, or pushed and \u001b[33mcommitted\u001b[0m is \u001b[33mfalse\u001b[0m."
+    },
+    "action.evin/git-release@v1.with.push": {
+      "name": "action.evin/git-release@v1.with.push",
+      "synopsis": "push: { force: true }",
+      "summary": "Push the branch and tag after committing.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\npush: { force: true }\n```\n\n**Publish refs** (`action.evin/git-release@v1.with.push`): Push the branch and tag after committing.\n\nOpt-in. A rejected push keeps the local commit and tag so it can be retried.",
+      "hover_plaintext": "push: { force: true }\n\nPublish refs (action.evin/git-release@v1.with.push): Push the branch and tag after committing.\n\nOpt-in. A rejected push keeps the local commit and tag so it can be retried.",
+      "terminal_ansi": "\u001b[1;36mpush: { force: true }\u001b[0m\n\n\u001b[1mPublish refs\u001b[0m (action.evin/git-release@v1.with.push): Push the branch and tag after committing.\n\nOpt-in. A rejected push keeps the local commit and tag so it can be retried."
+    },
+    "action.evin/git-release@v1.with.push.base": {
+      "name": "action.evin/git-release@v1.with.push.base",
+      "synopsis": "base: main",
+      "summary": "Branch whose remote ref defines which tags are released.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nbase: main\n```\n\n**Pruning base branch** (`action.evin/git-release@v1.with.push.base`): Branch whose remote ref defines which tags are released.\n\nValid only with `prune_stale_tags`. Fetch the remote first so `refs/remotes/<remote>/<base>` exists.",
+      "hover_plaintext": "base: main\n\nPruning base branch (action.evin/git-release@v1.with.push.base): Branch whose remote ref defines which tags are released.\n\nValid only with prune_stale_tags. Fetch the remote first so refs/remotes/<remote>/<base> exists.",
+      "terminal_ansi": "\u001b[1;36mbase: main\u001b[0m\n\n\u001b[1mPruning base branch\u001b[0m (action.evin/git-release@v1.with.push.base): Branch whose remote ref defines which tags are released.\n\nValid only with \u001b[33mprune_stale_tags\u001b[0m. Fetch the remote first so \u001b[33mrefs/remotes/<remote>/<base>\u001b[0m exists."
+    },
+    "action.evin/git-release@v1.with.push.force": {
+      "name": "action.evin/git-release@v1.with.push.force",
+      "synopsis": "force: true",
+      "summary": "Overwrite the remote branch and tag.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nforce: true\n```\n\n**Force push** (`action.evin/git-release@v1.with.push.force`): Overwrite the remote branch and tag.\n\nUses `git push --force`, for bot-maintained branches rebuilt on every run.",
+      "hover_plaintext": "force: true\n\nForce push (action.evin/git-release@v1.with.push.force): Overwrite the remote branch and tag.\n\nUses git push --force, for bot-maintained branches rebuilt on every run.",
+      "terminal_ansi": "\u001b[1;36mforce: true\u001b[0m\n\n\u001b[1mForce push\u001b[0m (action.evin/git-release@v1.with.push.force): Overwrite the remote branch and tag.\n\nUses \u001b[33mgit push --force\u001b[0m, for bot-maintained branches rebuilt on every run."
+    },
+    "action.evin/git-release@v1.with.push.prune_stale_tags": {
+      "name": "action.evin/git-release@v1.with.push.prune_stale_tags",
+      "synopsis": "prune_stale_tags: true",
+      "summary": "Delete unreleased remote tags that match the tag format.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nprune_stale_tags: true\n```\n\n**Prune stale tags** (`action.evin/git-release@v1.with.push.prune_stale_tags`): Delete unreleased remote tags that match the tag format.\n\nRequires `tag` and `push.base`. Tags whose commit is not reachable from `<remote>/<base>` are deleted; tags whose commit is missing locally are left alone.",
+      "hover_plaintext": "prune_stale_tags: true\n\nPrune stale tags (action.evin/git-release@v1.with.push.prune_stale_tags): Delete unreleased remote tags that match the tag format.\n\nRequires tag and push.base. Tags whose commit is not reachable from <remote>/<base> are deleted; tags whose commit is missing locally are left alone.",
+      "terminal_ansi": "\u001b[1;36mprune_stale_tags: true\u001b[0m\n\n\u001b[1mPrune stale tags\u001b[0m (action.evin/git-release@v1.with.push.prune_stale_tags): Delete unreleased remote tags that match the tag format.\n\nRequires \u001b[33mtag\u001b[0m and \u001b[33mpush.base\u001b[0m. Tags whose commit is not reachable from \u001b[33m<remote>/<base>\u001b[0m are deleted; tags whose commit is missing locally are left alone."
+    },
+    "action.evin/review-request@v1": {
+      "name": "action.evin/review-request@v1",
+      "synopsis": "uses: evin/review-request@v1",
+      "summary": "Keep one review request in sync with a branch.",
+      "category": "action",
+      "handler": "",
+      "hover_markdown": "```flow\nuses: evin/review-request@v1\n```\n\n**Review request action** (`action.evin/review-request@v1`): Keep one review request in sync with a branch.\n\nConfigure the request and the shell commands that manage it through `with:`.",
+      "hover_plaintext": "uses: evin/review-request@v1\n\nReview request action (action.evin/review-request@v1): Keep one review request in sync with a branch.\n\nConfigure the request and the shell commands that manage it through with:.",
+      "terminal_ansi": "\u001b[1;36muses: evin/review-request@v1\u001b[0m\n\n\u001b[1mReview request action\u001b[0m (action.evin/review-request@v1): Keep one review request in sync with a branch.\n\nConfigure the request and the shell commands that manage it through \u001b[33mwith:\u001b[0m."
+    },
+    "action.evin/review-request@v1.with.base": {
+      "name": "action.evin/review-request@v1.with.base",
+      "synopsis": "base: main",
+      "summary": "Branch the review request targets.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nbase: main\n```\n\n**Base branch** (`action.evin/review-request@v1.with.base`): Branch the review request targets.\n\nRequired. Exposed to commands as `EVIN_REVIEW_BASE`.",
+      "hover_plaintext": "base: main\n\nBase branch (action.evin/review-request@v1.with.base): Branch the review request targets.\n\nRequired. Exposed to commands as EVIN_REVIEW_BASE.",
+      "terminal_ansi": "\u001b[1;36mbase: main\u001b[0m\n\n\u001b[1mBase branch\u001b[0m (action.evin/review-request@v1.with.base): Branch the review request targets.\n\nRequired. Exposed to commands as \u001b[33mEVIN_REVIEW_BASE\u001b[0m."
+    },
+    "action.evin/review-request@v1.with.body_path": {
+      "name": "action.evin/review-request@v1.with.body_path",
+      "synopsis": "body_path: target/release-notes.md",
+      "summary": "Markdown file used as the request body.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nbody_path: target/release-notes.md\n```\n\n**Request body file** (`action.evin/review-request@v1.with.body_path`): Markdown file used as the request body.\n\nMust stay inside the workspace. Commands receive its absolute path as `EVIN_REVIEW_BODY_FILE`.",
+      "hover_plaintext": "body_path: target/release-notes.md\n\nRequest body file (action.evin/review-request@v1.with.body_path): Markdown file used as the request body.\n\nMust stay inside the workspace. Commands receive its absolute path as EVIN_REVIEW_BODY_FILE.",
+      "terminal_ansi": "\u001b[1;36mbody_path: target/release-notes.md\u001b[0m\n\n\u001b[1mRequest body file\u001b[0m (action.evin/review-request@v1.with.body_path): Markdown file used as the request body.\n\nMust stay inside the workspace. Commands receive its absolute path as \u001b[33mEVIN_REVIEW_BODY_FILE\u001b[0m."
+    },
+    "action.evin/review-request@v1.with.branch": {
+      "name": "action.evin/review-request@v1.with.branch",
+      "synopsis": "branch: automation/release",
+      "summary": "Head branch the review request tracks.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nbranch: automation/release\n```\n\n**Head branch** (`action.evin/review-request@v1.with.branch`): Head branch the review request tracks.\n\nRequired. Accepts pipeline templates. Exposed to commands as `EVIN_REVIEW_BRANCH`.",
+      "hover_plaintext": "branch: automation/release\n\nHead branch (action.evin/review-request@v1.with.branch): Head branch the review request tracks.\n\nRequired. Accepts pipeline templates. Exposed to commands as EVIN_REVIEW_BRANCH.",
+      "terminal_ansi": "\u001b[1;36mbranch: automation/release\u001b[0m\n\n\u001b[1mHead branch\u001b[0m (action.evin/review-request@v1.with.branch): Head branch the review request tracks.\n\nRequired. Accepts pipeline templates. Exposed to commands as \u001b[33mEVIN_REVIEW_BRANCH\u001b[0m."
+    },
+    "action.evin/review-request@v1.with.commands": {
+      "name": "action.evin/review-request@v1.with.commands",
+      "synopsis": "commands: { find: ..., create: ... }",
+      "summary": "Shell commands that talk to the hosting provider.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\ncommands: { find: ..., create: ... }\n```\n\n**Forge commands** (`action.evin/review-request@v1.with.commands`): Shell commands that talk to the hosting provider.\n\nEach command is an ESH string. Values reach commands through environment variables, never string interpolation. `find` is required.",
+      "hover_plaintext": "commands: { find: ..., create: ... }\n\nForge commands (action.evin/review-request@v1.with.commands): Shell commands that talk to the hosting provider.\n\nEach command is an ESH string. Values reach commands through environment variables, never string interpolation. find is required.",
+      "terminal_ansi": "\u001b[1;36mcommands: { find: ..., create: ... }\u001b[0m\n\n\u001b[1mForge commands\u001b[0m (action.evin/review-request@v1.with.commands): Shell commands that talk to the hosting provider.\n\nEach command is an ESH string. Values reach commands through environment variables, never string interpolation. \u001b[33mfind\u001b[0m is required."
+    },
+    "action.evin/review-request@v1.with.commands.close": {
+      "name": "action.evin/review-request@v1.with.commands.close",
+      "synopsis": "close: gh pr close \"$EVIN_REVIEW_ID\"",
+      "summary": "Close the existing review request.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nclose: gh pr close \"$EVIN_REVIEW_ID\"\n```\n\n**Close command** (`action.evin/review-request@v1.with.commands.close`): Close the existing review request.\n\nRuns when a request is not wanted and one exists. The step fails if it is needed but not configured. Branch removal belongs here.",
+      "hover_plaintext": "close: gh pr close \"$EVIN_REVIEW_ID\"\n\nClose command (action.evin/review-request@v1.with.commands.close): Close the existing review request.\n\nRuns when a request is not wanted and one exists. The step fails if it is needed but not configured. Branch removal belongs here.",
+      "terminal_ansi": "\u001b[1;36mclose: gh pr close \"$EVIN_REVIEW_ID\"\u001b[0m\n\n\u001b[1mClose command\u001b[0m (action.evin/review-request@v1.with.commands.close): Close the existing review request.\n\nRuns when a request is not wanted and one exists. The step fails if it is needed but not configured. Branch removal belongs here."
+    },
+    "action.evin/review-request@v1.with.commands.create": {
+      "name": "action.evin/review-request@v1.with.commands.create",
+      "synopsis": "create: gh pr create --head \"$EVIN_REVIEW_BRANCH\" ...",
+      "summary": "Create the review request.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\ncreate: gh pr create --head \"$EVIN_REVIEW_BRANCH\" ...\n```\n\n**Create command** (`action.evin/review-request@v1.with.commands.create`): Create the review request.\n\nRuns when a request is wanted and none exists. The step fails if it is needed but not configured.",
+      "hover_plaintext": "create: gh pr create --head \"$EVIN_REVIEW_BRANCH\" ...\n\nCreate command (action.evin/review-request@v1.with.commands.create): Create the review request.\n\nRuns when a request is wanted and none exists. The step fails if it is needed but not configured.",
+      "terminal_ansi": "\u001b[1;36mcreate: gh pr create --head \"$EVIN_REVIEW_BRANCH\" ...\u001b[0m\n\n\u001b[1mCreate command\u001b[0m (action.evin/review-request@v1.with.commands.create): Create the review request.\n\nRuns when a request is wanted and none exists. The step fails if it is needed but not configured."
+    },
+    "action.evin/review-request@v1.with.commands.find": {
+      "name": "action.evin/review-request@v1.with.commands.find",
+      "synopsis": "find: gh pr list --head \"$EVIN_REVIEW_BRANCH\" --json number --jq '.[0].number // empty'",
+      "summary": "Print the identifier of the open request, or nothing.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nfind: gh pr list --head \"$EVIN_REVIEW_BRANCH\" --json number --jq '.[0].number // empty'\n```\n\n**Find command** (`action.evin/review-request@v1.with.commands.find`): Print the identifier of the open request, or nothing.\n\nRequired. The first non-empty stdout line becomes `EVIN_REVIEW_ID` and the `id` output. Exit non-zero only on failure.",
+      "hover_plaintext": "find: gh pr list --head \"$EVIN_REVIEW_BRANCH\" --json number --jq '.[0].number // empty'\n\nFind command (action.evin/review-request@v1.with.commands.find): Print the identifier of the open request, or nothing.\n\nRequired. The first non-empty stdout line becomes EVIN_REVIEW_ID and the id output. Exit non-zero only on failure.",
+      "terminal_ansi": "\u001b[1;36mfind: gh pr list --head \"$EVIN_REVIEW_BRANCH\" --json number --jq '.[0].number // empty'\u001b[0m\n\n\u001b[1mFind command\u001b[0m (action.evin/review-request@v1.with.commands.find): Print the identifier of the open request, or nothing.\n\nRequired. The first non-empty stdout line becomes \u001b[33mEVIN_REVIEW_ID\u001b[0m and the \u001b[33mid\u001b[0m output. Exit non-zero only on failure."
+    },
+    "action.evin/review-request@v1.with.commands.update": {
+      "name": "action.evin/review-request@v1.with.commands.update",
+      "synopsis": "update: gh pr edit \"$EVIN_REVIEW_ID\" ...",
+      "summary": "Refresh the title and body of the existing request.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nupdate: gh pr edit \"$EVIN_REVIEW_ID\" ...\n```\n\n**Update command** (`action.evin/review-request@v1.with.commands.update`): Refresh the title and body of the existing request.\n\nRuns when a request is wanted and one exists. When absent, existing requests are left as they are.",
+      "hover_plaintext": "update: gh pr edit \"$EVIN_REVIEW_ID\" ...\n\nUpdate command (action.evin/review-request@v1.with.commands.update): Refresh the title and body of the existing request.\n\nRuns when a request is wanted and one exists. When absent, existing requests are left as they are.",
+      "terminal_ansi": "\u001b[1;36mupdate: gh pr edit \"$EVIN_REVIEW_ID\" ...\u001b[0m\n\n\u001b[1mUpdate command\u001b[0m (action.evin/review-request@v1.with.commands.update): Refresh the title and body of the existing request.\n\nRuns when a request is wanted and one exists. When absent, existing requests are left as they are."
+    },
+    "action.evin/review-request@v1.with.context": {
+      "name": "action.evin/review-request@v1.with.context",
+      "synopsis": "context: { version: \"${release:bump.version}\" }",
+      "summary": "Extra values exposed to commands.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\ncontext: { version: \"${release:bump.version}\" }\n```\n\n**Command context** (`action.evin/review-request@v1.with.context`): Extra values exposed to commands.\n\nKeys may contain letters, digits, and underscores and become `EVIN_REVIEW_CONTEXT_<KEY>` variables, upper-cased.",
+      "hover_plaintext": "context: { version: \"${release:bump.version}\" }\n\nCommand context (action.evin/review-request@v1.with.context): Extra values exposed to commands.\n\nKeys may contain letters, digits, and underscores and become EVIN_REVIEW_CONTEXT_<KEY> variables, upper-cased.",
+      "terminal_ansi": "\u001b[1;36mcontext: { version: \"${release:bump.version}\" }\u001b[0m\n\n\u001b[1mCommand context\u001b[0m (action.evin/review-request@v1.with.context): Extra values exposed to commands.\n\nKeys may contain letters, digits, and underscores and become \u001b[33mEVIN_REVIEW_CONTEXT_<KEY>\u001b[0m variables, upper-cased."
+    },
+    "action.evin/review-request@v1.with.title": {
+      "name": "action.evin/review-request@v1.with.title",
+      "synopsis": "title: \"chore(release): ${release:bump.tag}\"",
+      "summary": "Title of the review request.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\ntitle: \"chore(release): ${release:bump.tag}\"\n```\n\n**Request title** (`action.evin/review-request@v1.with.title`): Title of the review request.\n\nRequired when a request is wanted. Exposed to commands as `EVIN_REVIEW_TITLE`.",
+      "hover_plaintext": "title: \"chore(release): ${release:bump.tag}\"\n\nRequest title (action.evin/review-request@v1.with.title): Title of the review request.\n\nRequired when a request is wanted. Exposed to commands as EVIN_REVIEW_TITLE.",
+      "terminal_ansi": "\u001b[1;36mtitle: \"chore(release): ${release:bump.tag}\"\u001b[0m\n\n\u001b[1mRequest title\u001b[0m (action.evin/review-request@v1.with.title): Title of the review request.\n\nRequired when a request is wanted. Exposed to commands as \u001b[33mEVIN_REVIEW_TITLE\u001b[0m."
+    },
+    "action.evin/review-request@v1.with.wanted": {
+      "name": "action.evin/review-request@v1.with.wanted",
+      "synopsis": "wanted: ${release:bump.changed}",
+      "summary": "Whether a review request should exist.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nwanted: ${release:bump.changed}\n```\n\n**Request wanted** (`action.evin/review-request@v1.with.wanted`): Whether a review request should exist.\n\nBoolean or a template resolving to `true` or `false`; defaults to `true`. A wanted request is created or updated, an unwanted one is closed. `title` is required unless `wanted` is literally `false`.",
+      "hover_plaintext": "wanted: ${release:bump.changed}\n\nRequest wanted (action.evin/review-request@v1.with.wanted): Whether a review request should exist.\n\nBoolean or a template resolving to true or false; defaults to true. A wanted request is created or updated, an unwanted one is closed. title is required unless wanted is literally false.",
+      "terminal_ansi": "\u001b[1;36mwanted: ${release:bump.changed}\u001b[0m\n\n\u001b[1mRequest wanted\u001b[0m (action.evin/review-request@v1.with.wanted): Whether a review request should exist.\n\nBoolean or a template resolving to \u001b[33mtrue\u001b[0m or \u001b[33mfalse\u001b[0m; defaults to \u001b[33mtrue\u001b[0m. A wanted request is created or updated, an unwanted one is closed. \u001b[33mtitle\u001b[0m is required unless \u001b[33mwanted\u001b[0m is literally \u001b[33mfalse\u001b[0m."
+    },
     "action.evin/version-bumper@v1": {
       "name": "action.evin/version-bumper@v1",
       "synopsis": "uses: evin/version-bumper@v1",
@@ -222,6 +402,16 @@
       "hover_markdown": "```flow\nuses: evin/version-bumper@v1\n```\n\n**Version bumper action** (`action.evin/version-bumper@v1`): Resolve and write the next release version.\n\nConfigure version sources and release behavior through `with:`.",
       "hover_plaintext": "uses: evin/version-bumper@v1\n\nVersion bumper action (action.evin/version-bumper@v1): Resolve and write the next release version.\n\nConfigure version sources and release behavior through with:.",
       "terminal_ansi": "\u001b[1;36muses: evin/version-bumper@v1\u001b[0m\n\n\u001b[1mVersion bumper action\u001b[0m (action.evin/version-bumper@v1): Resolve and write the next release version.\n\nConfigure version sources and release behavior through \u001b[33mwith:\u001b[0m."
+    },
+    "action.evin/version-bumper@v1.with.fixed_version": {
+      "name": "action.evin/version-bumper@v1.with.fixed_version",
+      "synopsis": "fixed_version: \"${env.RELEASE_VERSION}\"",
+      "summary": "Pin generated package state to an explicit release version.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\nfixed_version: \"${env.RELEASE_VERSION}\"\n```\n\n**Fixed read-only version** (`action.evin/version-bumper@v1.with.fixed_version`): Pin generated package state to an explicit release version.\n\nValid only when `read_only: true`. The value must be a SemVer version; it does\nnot write version files or Git state.",
+      "hover_plaintext": "fixed_version: \"${env.RELEASE_VERSION}\"\n\nFixed read-only version (action.evin/version-bumper@v1.with.fixed_version): Pin generated package state to an explicit release version.\n\nValid only when read_only: true. The value must be a SemVer version; it does\nnot write version files or Git state.",
+      "terminal_ansi": "\u001b[1;36mfixed_version: \"${env.RELEASE_VERSION}\"\u001b[0m\n\n\u001b[1mFixed read-only version\u001b[0m (action.evin/version-bumper@v1.with.fixed_version): Pin generated package state to an explicit release version.\n\nValid only when \u001b[33mread_only: true\u001b[0m. The value must be a SemVer version; it does\nnot write version files or Git state."
     },
     "action.evin/version-bumper@v1.with.git.defer": {
       "name": "action.evin/version-bumper@v1.with.git.defer",
@@ -239,9 +429,9 @@
       "summary": "Calculate package release state without changing the checkout.",
       "category": "action-field",
       "handler": "",
-      "hover_markdown": "```flow\nread_only: true\n```\n\n**Read-only release state** (`action.evin/version-bumper@v1.with.read_only`): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\n`release` output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave `files` empty and Git mutation\noptions disabled.",
-      "hover_plaintext": "read_only: true\n\nRead-only release state (action.evin/version-bumper@v1.with.read_only): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\nrelease output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave files empty and Git mutation\noptions disabled.",
-      "terminal_ansi": "\u001b[1;36mread_only: true\u001b[0m\n\n\u001b[1mRead-only release state\u001b[0m (action.evin/version-bumper@v1.with.read_only): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\n\u001b[33mrelease\u001b[0m output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave \u001b[33mfiles\u001b[0m empty and Git mutation\noptions disabled."
+      "hover_markdown": "```flow\nread_only: true\n```\n\n**Read-only release state** (`action.evin/version-bumper@v1.with.read_only`): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\n`release` output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave `files` empty and Git mutation\noptions disabled. Set `fixed_version` to pin local package metadata to the\nworkspace version instead of calculating a version from Git history.",
+      "hover_plaintext": "read_only: true\n\nRead-only release state (action.evin/version-bumper@v1.with.read_only): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\nrelease output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave files empty and Git mutation\noptions disabled. Set fixed_version to pin local package metadata to the\nworkspace version instead of calculating a version from Git history.",
+      "terminal_ansi": "\u001b[1;36mread_only: true\u001b[0m\n\n\u001b[1mRead-only release state\u001b[0m (action.evin/version-bumper@v1.with.read_only): Calculate package release state without changing the checkout.\n\nUse this mode for local artifact builds that need the version-bumper's\n\u001b[33mrelease\u001b[0m output. It reads the Git index and release lock, but does not write\nversion files, the lock, or Git state. Leave \u001b[33mfiles\u001b[0m empty and Git mutation\noptions disabled. Set \u001b[33mfixed_version\u001b[0m to pin local package metadata to the\nworkspace version instead of calculating a version from Git history."
     },
     "environment": {
       "name": "environment",

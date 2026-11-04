@@ -30,6 +30,7 @@ tasks:
             - actions/40.git-release-action.5130.md
             - actions/50.version-bumper-action.5140.md
             - actions/60.ci-action.5150.md
+            - actions/70.review-request-action.5160.md
           out: crates/evin/assets/config-catalog.json
 
   catalog:

@@ -383,6 +383,76 @@ hr, .m3-divider {
     border-radius: var(--ui-shape-corner-extra-large, 18px);
 }
 
+.docs-lsp-reference {
+    margin-top: var(--ui-ref-space-10, 3rem);
+    padding-top: var(--ui-ref-space-4);
+    border-top: 1px solid var(--ui-color-outline-variant);
+}
+
+.docs-lsp-reference-title {
+    margin: 0 0 var(--ui-ref-space-2) !important;
+    font-size: var(--ui-typescale-label-large-size);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ui-color-on-surface-variant);
+}
+
+.docs-lsp-collapsible {
+    margin: var(--ui-ref-space-3) 0;
+    padding: 0;
+
+    > .docs-lsp-header {
+        margin: 0;
+        padding: var(--ui-ref-space-3) var(--ui-ref-space-5);
+        cursor: pointer;
+        list-style: none;
+
+        &::-webkit-details-marker {
+            display: none;
+        }
+
+        &::after {
+            content: "";
+            flex: none;
+            width: 0.5em;
+            height: 0.5em;
+            border-right: 2px solid var(--ui-color-on-surface-variant);
+            border-bottom: 2px solid var(--ui-color-on-surface-variant);
+            transform: rotate(-45deg);
+            transition: transform 0.15s ease;
+        }
+
+        .docs-lsp-name {
+            flex: 1;
+            font-size: var(--ui-typescale-title-medium-size, 1rem);
+        }
+    }
+
+    &[open] > .docs-lsp-header {
+        border-bottom: 1px solid var(--ui-color-outline-variant);
+        margin-bottom: var(--ui-ref-space-4);
+
+        &::after {
+            transform: rotate(45deg);
+        }
+    }
+
+    // Padding, not margin: the summary's `!important` margin would win.
+    > .docs-lsp-summary,
+    > .docs-lsp-synopsis,
+    > .docs-lsp-body {
+        padding-inline: var(--ui-ref-space-5);
+    }
+
+    > .docs-lsp-body {
+        margin-top: var(--ui-ref-space-3);
+        padding-top: var(--ui-ref-space-5);
+        padding-bottom: var(--ui-ref-space-5);
+        border-top: 0;
+    }
+}
+
 .docs-lsp-header {
     display: flex;
     align-items: center;
