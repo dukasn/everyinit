@@ -24,6 +24,36 @@ enum StageMode {
     Existing,
 }
 
+fn default_remote() -> String {
+    "origin".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum Enabled {
+    Flag(bool),
+    Text(String),
+}
+
+impl Default for Enabled {
+    fn default() -> Self {
+        Self::Flag(true)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PushConfig {
+    #[serde(default = "default_remote")]
+    remote: String,
+    branch: Option<String>,
+    #[serde(default)]
+    force: bool,
+    #[serde(default)]
+    prune_stale_tags: bool,
+    base: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct GitReleaseConfig {
@@ -31,6 +61,9 @@ struct GitReleaseConfig {
     stage: StageMode,
     message: Option<String>,
     tag: Option<String>,
+    #[serde(default)]
+    enabled: Enabled,
+    push: Option<PushConfig>,
 }
 
 impl GitReleaseConfig {
@@ -58,6 +91,27 @@ impl GitReleaseConfig {
             }
             validate_template_syntax(tag).map_err(|e| e.to_string())?;
         }
+        if let Enabled::Text(text) = &self.enabled {
+            validate_template_syntax(text).map_err(|e| e.to_string())?;
+        }
+        if let Some(push) = &self.push {
+            if push.remote.trim().is_empty() {
+                return Err("push.remote must not be empty".to_string());
+            }
+            if push.branch.as_deref().is_some_and(|b| b.trim().is_empty()) {
+                return Err("push.branch must not be empty when provided".to_string());
+            }
+            if push.prune_stale_tags {
+                if self.tag.is_none() {
+                    return Err("push.prune_stale_tags requires tag".to_string());
+                }
+                if push.base.as_deref().is_none_or(|b| b.trim().is_empty()) {
+                    return Err("push.prune_stale_tags requires push.base".to_string());
+                }
+            } else if push.base.is_some() {
+                return Err("push.base is only valid with push.prune_stale_tags".to_string());
+            }
+        }
         Ok(())
     }
 }
@@ -82,6 +136,22 @@ pub async fn execute(
         .validate()
         .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e)))?;
 
+    let enabled = match &config.enabled {
+        Enabled::Flag(flag) => *flag,
+        Enabled::Text(text) => {
+            let resolved = resolve_templates(text, ctx).map_err(|e| e.to_string())?;
+            match resolved.trim().to_ascii_lowercase().as_str() {
+                "true" => true,
+                "false" => false,
+                other => return Err(format!("enabled must be true or false, got '{other}'").into()),
+            }
+        }
+    };
+    if !enabled {
+        ctx.state.set_output("committed", "false");
+        return Ok(());
+    }
+
     let commit_msg_template = if let Some(m) = &config.message {
         m.clone()
     } else if let Some(m) = ctx
@@ -104,26 +174,15 @@ pub async fn execute(
             .stage_files(&["-A".to_string()])
             .await
             .map_err(|e| e.to_string())?;
-
-        if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
-            if !ctx.git().is_dirty().await.unwrap_or(false)
-                && !ctx.git().has_staged_changes().await.unwrap_or(false)
-            {
-                return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
-                    "no-staged-changes",
-                )));
-            }
-        } else if !ctx.git().has_staged_changes().await.unwrap_or(false) {
-            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
-                "no-staged-changes",
-            )));
-        }
-    } else {
-        if !ctx.git().has_staged_changes().await.unwrap_or(false) {
-            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
-                "no-staged-changes",
-            )));
-        }
+    }
+    let has_changes = ctx.git().has_staged_changes().await.unwrap_or(false)
+        || (config.stage == StageMode::All
+            && ctx.mode == evin_action_sdk::PipelineMode::DryRun
+            && ctx.git().is_dirty().await.unwrap_or(false));
+    if !has_changes {
+        return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+            "no-staged-changes",
+        )));
     }
 
     ctx.git()
@@ -154,6 +213,7 @@ pub async fn execute(
         .await
         .map_err(|e| e.to_string())?;
 
+    let mut pushed_tag = None;
     if let Some(tag) = tag_name {
         let result = ctx.git().create_tag(&tag, &commit_msg).await;
         if let Err(e) = result {
@@ -175,8 +235,81 @@ pub async fn execute(
             provider: "git".to_string(),
             draft: false,
         });
+        pushed_tag = Some(tag);
     }
 
+    ctx.state.set_output("committed", "true");
+
+    if let Some(push) = &config.push {
+        publish(ctx, push, pushed_tag.as_deref()).await?;
+    }
+
+    Ok(())
+}
+
+async fn publish(ctx: &RunnerContext, push: &PushConfig, tag: Option<&str>) -> Result<(), String> {
+    let branch = match &push.branch {
+        Some(branch) => branch.clone(),
+        None => ctx
+            .git()
+            .current_branch()
+            .await
+            .map_err(|e| e.to_string())?,
+    };
+    let mut refs = vec![format!("refs/heads/{branch}:refs/heads/{branch}")];
+    if let Some(tag) = tag {
+        refs.push(format!("refs/tags/{tag}:refs/tags/{tag}"));
+    }
+    ctx.git()
+        .push(&push.remote, &refs, push.force)
+        .await
+        .map_err(|e| {
+            format!(
+                "push to '{}' failed; the local commit{} is intact and the push can be retried: {e}",
+                push.remote,
+                tag.map(|t| format!(" and tag {t}")).unwrap_or_default(),
+            )
+        })?;
+
+    if !push.prune_stale_tags {
+        return Ok(());
+    }
+    let (Some(tag), Some(base)) = (tag, push.base.as_deref()) else {
+        return Ok(());
+    };
+    if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
+        ctx.log.plan(evin_action_sdk::activity::GitPruneTagsPlan {
+            remote: push.remote.clone(),
+        });
+        return Ok(());
+    }
+
+    let format = evin_yaml::template::regex::compile_template(ctx.tag_format())
+        .map_err(|e| format!("tag format is not usable for pruning: {e}"))?;
+    let base_ref = format!("refs/remotes/{}/{base}", push.remote);
+    for (stale, commit) in ctx
+        .git()
+        .remote_tags(&push.remote)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        if stale == tag || !format.is_match(&stale) {
+            continue;
+        }
+        // Commits missing from this clone cannot be classified, so their tags
+        // are left alone.
+        let released = ctx
+            .git()
+            .is_ancestor(&commit, &base_ref)
+            .await
+            .map_err(|e| e.to_string())?;
+        if released == Some(false) {
+            ctx.git()
+                .delete_remote_tag(&push.remote, &stale)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+    }
     Ok(())
 }
 
@@ -218,6 +351,19 @@ mod tests {
         let existing = config("stage: existing\nmessage: release\ntag: v1.0.0").unwrap();
         assert_eq!(existing.stage, StageMode::Existing);
         assert_eq!(existing.tag.as_deref(), Some("v1.0.0"));
+    }
+
+    #[tokio::test]
+    async fn disabled_release_does_nothing() {
+        let (_temp, work, _remote) = pushing_repository();
+        let head = run_git(&work, &["rev-parse", "HEAD"]);
+        release_with_push(&work, "enabled: false\nmessage: r\ntag: v9.9.9\n").await;
+        assert_eq!(run_git(&work, &["rev-parse", "HEAD"]), head);
+        assert!(
+            run_git(&work, &["tag", "--list", "v9.9.9"])
+                .trim()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -428,5 +574,148 @@ mod tests {
             std::fs::read_to_string(temp.path().join("version.txt")).unwrap(),
             "1.0.0"
         );
+    }
+
+    fn run_git(root: &std::path::Path, args: &[&str]) -> String {
+        let output = git_cmd().args(args).current_dir(root).output().unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    fn pushing_repository() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let temp = tempfile::TempDir::new().unwrap();
+        let work = temp.path().join("work");
+        let remote = temp.path().join("remote.git");
+        std::fs::create_dir(&work).unwrap();
+        run_git(temp.path(), &["init", "-q", "--bare", "remote.git"]);
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &["config", "user.name", "Test"][..],
+            &["config", "user.email", "test@test.com"][..],
+            &["config", "commit.gpgsign", "false"][..],
+            &["config", "tag.gpgsign", "false"][..],
+        ] {
+            run_git(&work, args);
+        }
+        run_git(
+            &work,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        );
+        std::fs::write(work.join("file"), "one").unwrap();
+        run_git(&work, &["add", "."]);
+        run_git(&work, &["commit", "-qm", "feat: initial"]);
+        run_git(&work, &["tag", "-a", "v1.0.0", "-m", "v1.0.0"]);
+        run_git(&work, &["push", "-q", "origin", "main", "v1.0.0"]);
+        run_git(&work, &["fetch", "-q", "origin"]);
+        (temp, work, remote)
+    }
+
+    fn remote_head(remote: &std::path::Path) -> String {
+        let output = git_cmd()
+            .arg("--git-dir")
+            .arg(remote)
+            .args(["rev-parse", "refs/heads/automation/release"])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    async fn release_with_push(work: &std::path::Path, yaml: &str) {
+        std::fs::write(work.join("file"), "release").unwrap();
+        run_git(work, &["add", "file"]);
+        let with = evin_yaml::parse_yaml(yaml).unwrap();
+        let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default());
+        let ctx = evin_action_sdk::RunnerContext::new(
+            None,
+            "release".to_string(),
+            false,
+            evin_action_sdk::PipelineMode::Normal,
+            log_tx,
+            vec![],
+            None,
+            HashMap::new(),
+            work.to_path_buf(),
+            HashMap::new(),
+            std::sync::Arc::new(evin_action_sdk::git::GitProvider::new(
+                work.to_path_buf(),
+                evin_action_sdk::PipelineMode::Normal,
+                evin_action_sdk::Logger::new(
+                    "release".to_string(),
+                    tokio::sync::mpsc::unbounded_channel().0,
+                    secrets.clone(),
+                ),
+            )),
+            secrets,
+        );
+        super::execute(&ctx, Some(with)).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn push_publishes_the_branch_and_tag_and_prunes_stale_tags() {
+        let (_temp, work, remote) = pushing_repository();
+        run_git(&work, &["switch", "-q", "-c", "stale-source"]);
+        std::fs::write(work.join("file"), "stale").unwrap();
+        run_git(&work, &["commit", "-aqm", "feat: stale"]);
+        run_git(&work, &["tag", "-a", "v1.1.0", "-m", "v1.1.0"]);
+        run_git(&work, &["push", "-q", "origin", "v1.1.0"]);
+        // Pruning works from commits, so the local tag ref is not needed.
+        run_git(&work, &["tag", "-d", "v1.1.0"]);
+        run_git(&work, &["switch", "-q", "main"]);
+        run_git(&work, &["switch", "-q", "-c", "automation/release"]);
+
+        release_with_push(
+            &work,
+            "stage: existing\nmessage: 'chore(release): 1.2.0'\ntag: v1.2.0\npush:\n  force: true\n  prune_stale_tags: true\n  base: main\n",
+        )
+        .await;
+
+        let mut tags = run_git(&work, &["ls-remote", "--tags", "--refs", "origin"])
+            .lines()
+            .filter_map(|line| line.split_once("refs/tags/"))
+            .map(|(_, tag)| tag.to_string())
+            .collect::<Vec<_>>();
+        tags.sort();
+        assert_eq!(tags, ["v1.0.0", "v1.2.0"]);
+        assert_eq!(remote_head(&remote), run_git(&work, &["rev-parse", "HEAD"]));
+    }
+
+    #[tokio::test]
+    async fn force_push_replaces_a_diverged_remote_branch() {
+        let (_temp, work, remote) = pushing_repository();
+        run_git(&work, &["switch", "-q", "-c", "automation/release"]);
+        std::fs::write(work.join("file"), "old").unwrap();
+        run_git(&work, &["commit", "-aqm", "chore: old proposal"]);
+        run_git(&work, &["push", "-q", "origin", "automation/release"]);
+        run_git(&work, &["reset", "-q", "--hard", "main"]);
+
+        release_with_push(
+            &work,
+            "stage: existing\nmessage: 'chore(release): 1.2.0'\ntag: v1.2.0\npush:\n  force: true\n",
+        )
+        .await;
+
+        assert_eq!(remote_head(&remote), run_git(&work, &["rev-parse", "HEAD"]));
+    }
+
+    #[test]
+    fn validates_push_configuration() {
+        assert!(
+            config("message: r\ntag: v1\npush:\n  prune_stale_tags: true\n  base: main").is_ok()
+        );
+        for yaml in [
+            "message: r\npush:\n  remote: ' '",
+            "message: r\ntag: v1\npush:\n  prune_stale_tags: true",
+            "message: r\npush:\n  prune_stale_tags: true\n  base: main",
+            "message: r\npush:\n  base: main",
+            "message: r\npush:\n  unknown: true",
+        ] {
+            assert!(config(yaml).is_err(), "{yaml}");
+        }
     }
 }
