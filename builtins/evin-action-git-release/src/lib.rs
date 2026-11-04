@@ -43,11 +43,66 @@ const GIT_RELEASE_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             description: "Release tag.",
             condition: None,
         },
+        ActionFieldDescriptor {
+            path: "enabled",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Run the release; false skips it and reports committed false.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "push",
+            kind: ActionFieldKind::Object,
+            required: false,
+            description: "Publish the branch and tag after committing.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "push.remote",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Remote that receives the refs.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "push.branch",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Branch to push; defaults to the current branch.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "push.force",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Overwrite the remote branch and tag.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "push.prune_stale_tags",
+            kind: ActionFieldKind::Boolean,
+            required: false,
+            description: "Delete unreleased remote tags that match the tag format.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "push.base",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Branch whose history defines which tags are released.",
+            condition: None,
+        },
     ],
-    outputs: &[ActionOutputDescriptor {
-        name: "tag",
-        description: "Created release tag.",
-    }],
+    outputs: &[
+        ActionOutputDescriptor {
+            name: "tag",
+            description: "Created release tag.",
+        },
+        ActionOutputDescriptor {
+            name: "committed",
+            description: "Whether a release commit was created.",
+        },
+    ],
 };
 
 pub struct GitReleaseAction;
