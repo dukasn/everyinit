@@ -121,14 +121,13 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
           RELEASE_TARGET: x86_64-unknown-linux-musl
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
-          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
         run: |
           test -n "$RELEASE_SIGNING_KEY" || { echo "EVERYINIT_RELEASE_SIGNING_KEY is required to sign preview metadata" >&2; exit 1; }
           umask 077
           printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/everyinit-release-signing-key.pem"
           export RELEASE_SIGNING_KEY_FILE="$RUNNER_TEMP/everyinit-release-signing-key.pem"
-          node scripts/release/metadata.mjs evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github "$RELEASE_LABEL"
-          node scripts/release/metadata.mjs esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github "$RELEASE_LABEL"
+          node scripts/release/metadata.mjs evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github
+          node scripts/release/metadata.mjs esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github
           node scripts/release/channel-manifest.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror
       - name: Install locked Wrangler dependencies
         if: steps.discover.outputs.candidate == 'true' && github.event.workflow_run.conclusion == 'success'
@@ -148,11 +147,10 @@ jobs:
         env:
           RELEASE_CHANNEL: unstable
           RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
-          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
           RELEASE_TARGET: x86_64-unknown-linux-musl
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
         run: |
-          node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_LABEL"
+          node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT"
           cargo run --locked -p esh -- scripts/release/verify-archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" crates/evin/dist/github
           cargo run --locked -p esh -- scripts/release/verify-archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/github
           prefix="$RUNNER_TEMP/unstable-install"
@@ -167,10 +165,9 @@ jobs:
           RELEASE_CHANNEL: unstable
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
           RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
-          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
         run: |
           node scripts/release/publish-mirror.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" pointers dist/mirror
-          node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_LABEL" --check-pointer
+          node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" --check-pointer
       - name: Complete the required unstable preview check
         if: always() && steps.discover.outputs.check_id != ''
         uses: actions/github-script@v8

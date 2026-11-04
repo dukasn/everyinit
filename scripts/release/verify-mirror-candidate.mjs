@@ -16,18 +16,18 @@ import { createHash, createPublicKey, verify } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const [channel, version, commit, label, pointerFlag] = process.argv.slice(2);
+const [channel, version, commit, pointerFlag] = process.argv.slice(2);
 const baseUrl = (process.env.RELEASE_BASE_URL ?? "https://dl.everyinit.dev").replace(/\/+$/, "");
 if (
   !new Set(["unstable", "canary"]).has(channel) ||
   !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "")
 ) {
   throw new Error(
-    "usage: node scripts/release/verify-mirror-candidate.mjs <unstable|canary> <version> <commit> <label> [--check-pointer]",
+    "usage: node scripts/release/verify-mirror-candidate.mjs <unstable|canary> <version> <commit> [--check-pointer]",
   );
 }
-if (!/^[0-9a-f]{40,64}$/.test(commit ?? "") || !label || /[\r\n]/.test(label)) {
-  throw new Error("candidate commit and single-line release label are required");
+if (!/^[0-9a-f]{40,64}$/.test(commit ?? "")) {
+  throw new Error("candidate commit is required");
 }
 
 const publicKey = createPublicKey(await readFile("infra/get/release-key.pub"));
@@ -45,8 +45,8 @@ for (const binary of ["evin", "esh"]) {
   if (release.name !== binary || release.version !== version || release.channel !== channel) {
     throw new Error(`${binary} release metadata does not match candidate identity`);
   }
-  if (release.git_commit !== commit || release.label !== label) {
-    throw new Error(`${binary} release metadata has the wrong source commit or release label`);
+  if (release.git_commit !== commit) {
+    throw new Error(`${binary} release metadata has the wrong source commit`);
   }
   const filename = `${binary}-v${version}-${target}.tar.gz`;
   const checksums = await get(`${rootUrl}/SHA256SUMS`);

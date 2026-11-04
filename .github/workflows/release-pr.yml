@@ -1,0 +1,46 @@
+name: Release PR
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-pr
+  cancel-in-progress: false
+
+jobs:
+  propose:
+    name: Maintain the release pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_BRANCH: automation/release
+      # A personal or app token is required so the pushed branch and labeled
+      # pull request start the candidate workflows; events created with the
+      # default token never trigger other workflows.
+      GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_BOT_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Prepare the release pull request with Evin
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config commit.gpgsign false
+          # Tags from an earlier, unmerged release candidate would make the
+          # version calculation see its own tag as taken.
+          git tag --list 'v*' --no-merged origin/main | xargs -r git tag --delete
+          git switch --force-create "$RELEASE_BRANCH"
+          cargo evin-dev run release:propose

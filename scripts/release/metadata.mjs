@@ -16,7 +16,6 @@ import { createPrivateKey, createPublicKey, sign, verify, createHash } from "nod
 import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { readReleaseLabel } from "./release-label.mjs";
 
 const [
   binary,
@@ -25,17 +24,15 @@ const [
   target,
   outputRoot = "dist/mirror",
   archiveRoot = process.env.RELEASE_ARCHIVE_ROOT ?? "dist",
-  label,
 ] = process.argv.slice(2);
-const releaseLabel = label ?? (await readReleaseLabel());
 const validBinary = binary === "evin" || binary === "esh";
 const validChannel = channel === "unstable" || channel === "canary";
 const validVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version ?? "");
 const validTarget = target === "x86_64-unknown-linux-musl";
 
-if (!validBinary || !validChannel || !validVersion || !validTarget || !releaseLabel.trim()) {
+if (!validBinary || !validChannel || !validVersion || !validTarget) {
   throw new Error(
-    "usage: node scripts/release/metadata.mjs <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root] [label]",
+    "usage: node scripts/release/metadata.mjs <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root]",
   );
 }
 
@@ -85,7 +82,6 @@ const releaseMetadata = {
   name: binary,
   version,
   channel,
-  label: releaseLabel,
   released_at: new Date().toISOString(),
   git_commit: git.stdout.trim(),
   artifacts: [

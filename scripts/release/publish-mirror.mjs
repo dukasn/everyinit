@@ -111,15 +111,6 @@ if (
     `${channel} channel pointer and both binary manifests must identify one source commit`,
   );
 }
-if (
-  !manifest.label ||
-  manifest.label !== releases.evin.label ||
-  releases.evin.label !== releases.esh.label
-) {
-  throw new Error(
-    `${channel} channel pointer and both binary manifests must identify one release label`,
-  );
-}
 for (const binary of ["evin", "esh"]) {
   const expectedUrl = `https://dl.everyinit.dev/${binary}/${channel}/v${version}/release.json`;
   if (

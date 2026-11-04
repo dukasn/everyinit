@@ -32,7 +32,6 @@ const releaseBaseUrl = (process.env.RELEASE_BASE_URL ?? "https://dl.everyinit.de
 );
 const binaries = {};
 let sourceCommit;
-let releaseLabel;
 for (const binary of ["evin", "esh"]) {
   const releasePath = resolve(mirrorRoot, binary, channel, `v${version}`, "release.json");
   const release = JSON.parse(await readFile(releasePath, "utf8"));
@@ -49,23 +48,17 @@ for (const binary of ["evin", "esh"]) {
   if (release.git_commit !== process.env.RELEASE_COMMIT && process.env.RELEASE_COMMIT) {
     throw new Error(`${binary} release metadata has an unexpected source commit`);
   }
-  if (releaseLabel !== undefined && release.label !== releaseLabel) {
-    throw new Error("Evin and ESH release labels must match");
-  }
   if (sourceCommit !== undefined && release.git_commit !== sourceCommit) {
     throw new Error("Evin and ESH metadata must identify the same source commit");
   }
-  releaseLabel = release.label;
   sourceCommit = release.git_commit;
   binaries[binary] = {
     version,
     release_url: `${releaseBaseUrl}/${binary}/${channel}/v${version}/release.json`,
   };
 }
-if (!releaseLabel) throw new Error("release metadata must include a release label");
 
 const manifest = { channel, version, git_commit: sourceCommit, binaries };
-if (releaseLabel) manifest.label = releaseLabel;
 const directory = resolve(mirrorRoot, "channels");
 await mkdir(directory, { recursive: true });
 await writeFile(resolve(directory, `${channel}.json`), `${JSON.stringify(manifest, null, 2)}\n`, {
