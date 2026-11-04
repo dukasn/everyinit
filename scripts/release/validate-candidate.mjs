@@ -14,7 +14,6 @@
 
 import { appendFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import { parseReleaseLabel } from "./release-label.mjs";
 
 const [requestedTag, requestedVersion, expectedCommit, baseCommit, previousTagsBase = baseCommit] =
   process.argv.slice(2);
@@ -109,15 +108,13 @@ if (cargoVersion !== version)
   throw new Error(
     `Cargo workspace version ${cargoVersion ?? "<missing>"} does not match ${version}`,
   );
-const label = parseReleaseLabel(gitTextAt(expectedCommit, ".evin/workspace.flow"));
 const changelog = gitTextAt(expectedCommit, "CHANGELOG.md");
 if (!/^# Changelog\s*$/m.test(changelog)) {
   throw new Error("candidate changelog is missing the root Changelog heading");
 }
 const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-if (!new RegExp(`^## \\[v${escapedVersion}\\] — ${escapedLabel}$`, "m").test(changelog)) {
-  throw new Error(`candidate changelog is missing the heading for v${version} — ${label}`);
+if (!new RegExp(`^## \\[v${escapedVersion}\\]$`, "m").test(changelog)) {
+  throw new Error(`candidate changelog is missing the heading for v${version}`);
 }
 
 const priorTags = git(["tag", "--list", "v*", "--merged", previousTagsBase])
@@ -132,23 +129,13 @@ if (previousTag) {
   if (compareVersions(version, previousTag.slice(1)) <= 0) {
     throw new Error(`${tag} must advance beyond previous release ${previousTag}`);
   }
-  const previousWorkspaceFlow = git(["show", `${previousTag}:.evin/workspace.flow`]);
-  let previousLabel = parseReleaseLabel(previousWorkspaceFlow, { required: false });
-  if (previousLabel === null) {
-    // Earlier releases kept this constant in the release namespace file.
-    const previousReleaseFlow = git(["show", `${previousTag}:.evin/release.flow`]);
-    previousLabel = parseReleaseLabel(previousReleaseFlow, { required: false });
-  }
-  if (previousLabel !== null && label === previousLabel) {
-    throw new Error(`release_label must change from previous release label ${previousLabel}`);
-  }
 }
 
-const result = { tag, version, commit: taggedCommit, label, previous_tag: previousTag ?? null };
+const result = { tag, version, commit: taggedCommit, previous_tag: previousTag ?? null };
 console.log(JSON.stringify(result));
 if (process.env.GITHUB_OUTPUT) {
   await appendFile(
     process.env.GITHUB_OUTPUT,
-    `tag=${tag}\nversion=${version}\ncommit=${taggedCommit}\nlabel=${label}\nprevious_tag=${previousTag ?? ""}\n`,
+    `tag=${tag}\nversion=${version}\ncommit=${taggedCommit}\nprevious_tag=${previousTag ?? ""}\n`,
   );
 }

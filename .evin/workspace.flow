@@ -22,9 +22,6 @@ stages:
   - Docs
   - Publish
 
-values:
-  release_label: "Alpha-01"
-
 tasks:
   build:
     stage: Build

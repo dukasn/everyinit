@@ -59,7 +59,7 @@ jobs:
           node-version-file: .node-version
       - uses: dtolnay/rust-toolchain@1.98.0
       - uses: Swatinem/rust-cache@v2
-      - name: Validate the tag and release label against the merged candidate
+      - name: Validate the tag and release version against the merged candidate
         id: candidate
         run: node scripts/release/validate-candidate.mjs "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
       - name: Require the successful pre-merge unstable preview check
@@ -84,9 +84,8 @@ jobs:
         env:
           RELEASE_CHANNEL: unstable
           RELEASE_COMMIT: ${{ steps.candidate.outputs.commit }}
-          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
           RELEASE_VERSION: ${{ steps.candidate.outputs.version }}
-        run: node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_LABEL"
+        run: node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT"
       - name: Verify both downloaded tar archives
         run: |
           cargo run --locked -p esh -- scripts/release/verify-archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" crates/evin/dist/github
@@ -109,7 +108,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_CHANNEL: canary
           RELEASE_COMMIT: ${{ needs.discover.outputs.commit }}
-          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
           RELEASE_TAG: ${{ needs.discover.outputs.tag }}
           RELEASE_TARGET: x86_64-unknown-linux-musl
           RELEASE_VERSION: ${{ needs.discover.outputs.version }}
@@ -120,6 +118,5 @@ jobs:
         env:
           RELEASE_CHANNEL: canary
           RELEASE_COMMIT: ${{ needs.discover.outputs.commit }}
-          RELEASE_LABEL: ${{ steps.candidate.outputs.label }}
           RELEASE_VERSION: ${{ needs.discover.outputs.version }}
-        run: node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_LABEL" --check-pointer
+        run: node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" --check-pointer

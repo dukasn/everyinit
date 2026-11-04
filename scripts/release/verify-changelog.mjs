@@ -13,28 +13,22 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { readFile } from "node:fs/promises";
-import { readReleaseLabel } from "./release-label.mjs";
 
-const [path, version, configuredLabel] = process.argv.slice(2);
-const label = configuredLabel ?? (await readReleaseLabel());
+const [path, version] = process.argv.slice(2);
 if (!path || !version) {
   throw new Error(
-    "usage: node scripts/release/verify-changelog.mjs <generated-changelog> <version> [label]",
+    "usage: node scripts/release/verify-changelog.mjs <generated-changelog> <version>",
   );
-}
-if (!label.trim()) {
-  throw new Error("release label must not be empty when provided");
 }
 const changelog = await readFile(path, "utf8");
 if (!/^# Changelog\s*$/m.test(changelog)) {
   throw new Error(`${path} is missing the root Changelog heading`);
 }
-const heading = new RegExp(`^## \\[v${escapeRegExp(version)}\\] — ${escapeRegExp(label)}$`, "m");
+const heading = new RegExp(`^## \\[v${escapeRegExp(version)}\\]$`, "m");
 if (!heading.test(changelog)) {
-  const expected = `v${version} — ${label}`;
-  throw new Error(`${path} is missing the generated section for ${expected}`);
+  throw new Error(`${path} is missing the generated section for v${version}`);
 }
-console.log(`Verified generated changelog section for v${version} — ${label}`);
+console.log(`Verified generated changelog section for v${version}`);
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

@@ -41,7 +41,7 @@ jobs:
             if (event === "pull_request") {
               const pr = context.payload.pull_request;
               promotion = pr.base.ref === "main"
-                && pr.head.ref === "release"
+                && ["release", "automation/release"].includes(pr.head.ref)
                 && pr.head.repo?.full_name === context.repo.owner + "/" + context.repo.repo;
               full = !promotion;
               distribution = full;

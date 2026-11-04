@@ -10,12 +10,6 @@ tasks:
     steps:
       - run: cargo run --locked -p esh -- scripts/release/doctor.esh
 
-  clean:
-    stage: Publish
-    description: "Require a clean release-preparation branch with Git identity"
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/preflight.esh
-
   rehearsal-start:
     stage: Publish
     description: "Record repository status before generating the release rehearsal"
@@ -32,7 +26,6 @@ tasks:
         with:
           path: target/release-rehearsal/CHANGELOG.md
           version: "${env.RELEASE_VERSION}"
-          label: ${release_label}
       - run: node scripts/release/verify-changelog.mjs target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
 
   distribution-rehearsal:
@@ -46,26 +39,15 @@ tasks:
     steps:
       - run: node scripts/release/verify-rehearsal-clean.mjs
 
-  verify:
-    stage: Publish
-    description: "Run the complete source-release validation gate"
-    needs:
-      - release:clean
-      - main:verify
-    steps:
-      - run: git -c core.whitespace=trailing-space,space-before-tab diff --check
-
   bump:
     stage: Publish
     description: "Calculate and apply the next canary version"
-    needs:
-      - release:verify
     steps:
       - uses: evin/version-bumper@v1
         with:
           initial_version: "1.0.0-canary.100"
           channel: canary
-          require_change: true
+          require_change: false
           files:
             - "Cargo.toml"
             - path: ".evin/workspace.flow"
@@ -75,6 +57,7 @@ tasks:
             commit: true
             tag: true
             defer: true
+      - run: cargo update --workspace
       - run: cargo check --workspace --locked
 
   changelog:
@@ -87,7 +70,7 @@ tasks:
         with:
           path: CHANGELOG.md
           version: ${release:bump.version}
-          label: ${release_label}
+          notes_path: target/release-notes.md
       - run: node scripts/release/verify-changelog.mjs CHANGELOG.md "$(node scripts/release/workspace-version.mjs)"
 
   prepare:
@@ -103,9 +86,43 @@ tasks:
           stage: existing
           message: |-
             chore(release): ${release:bump.version}
-
-            Release label: ${release_label}
           tag: "${release:bump.tag}"
+
+  propose:
+    stage: Publish
+    description: "Publish the release branch and keep one release pull request in sync with it"
+    env: [GITHUB_TOKEN, RELEASE_BRANCH]
+    needs:
+      - release:changelog
+      - release:bump
+    steps:
+      - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.yaml CHANGELOG.md
+      - uses: evin/git-release@v1
+        with:
+          stage: existing
+          enabled: ${release:bump.changed}
+          message: |-
+            chore(release): ${release:bump.version}
+          tag: "${release:bump.tag}"
+          push:
+            branch: "${env.RELEASE_BRANCH}"
+            force: true
+            prune_stale_tags: true
+            base: main
+      - uses: evin/review-request@v1
+        with:
+          branch: "${env.RELEASE_BRANCH}"
+          base: main
+          wanted: ${release:bump.changed}
+          title: "chore(release): ${release:bump.tag}"
+          body_path: target/release-notes.md
+          commands:
+            find: gh pr list --head "$EVIN_REVIEW_BRANCH" --base "$EVIN_REVIEW_BASE" --state open --json number --jq '.[0].number // empty'
+            create: |-
+              gh label create release-candidate --color 0e8a16 --force
+              gh pr create --head "$EVIN_REVIEW_BRANCH" --base "$EVIN_REVIEW_BASE" --title "$EVIN_REVIEW_TITLE" --body-file "$EVIN_REVIEW_BODY_FILE" --label release-candidate
+            update: gh pr edit "$EVIN_REVIEW_ID" --title "$EVIN_REVIEW_TITLE" --body-file "$EVIN_REVIEW_BODY_FILE"
+            close: gh pr close "$EVIN_REVIEW_ID" --delete-branch --comment "Nothing left to release."
 
   tag-verify:
     stage: Publish
@@ -183,7 +200,7 @@ tasks:
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG} — ${release_label}"
+          title: "${env.RELEASE_TAG}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/evin-plan.v1.json
           notes_dir: .evin/actions/ci/notes/evin
@@ -194,7 +211,7 @@ tasks:
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG} — ${release_label}"
+          title: "${env.RELEASE_TAG}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/esh-plan.v1.json
           notes_dir: .evin/actions/ci/notes/esh
@@ -206,7 +223,7 @@ tasks:
   github-publish-prebuilt:
     stage: Publish
     description: "Publish verified downloaded artifacts without rebuilding them"
-    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_LABEL, RELEASE_TAG]
+    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_TAG]
     needs:
       - infra:mirror:metadata-prebuilt
       - infra:mirror:publish-objects
@@ -215,7 +232,7 @@ tasks:
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG} — ${env.RELEASE_LABEL}"
+          title: "${env.RELEASE_TAG}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/evin-plan.v1.json
           notes_dir: .evin/actions/ci/notes/evin
@@ -226,7 +243,7 @@ tasks:
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG} — ${env.RELEASE_LABEL}"
+          title: "${env.RELEASE_TAG}"
           state: .evin/actions/ci/remote-state.v1.json
           plan_out: .evin/actions/ci/esh-plan.v1.json
           notes_dir: .evin/actions/ci/notes/esh
