@@ -1350,16 +1350,30 @@ impl HtmlRenderer {
             Self::render_start_page(sp, context, registry, &mut used_components)
         } else {
             let mut content_html = String::with_capacity(4096);
-            Self::render_nodes(
-                page.ast.as_slice(),
-                page,
-                context.site,
-                context,
-                registry,
-                highlighter,
-                &mut used_components,
-                &mut content_html,
-            );
+            // Editor-catalog cards are folded and collected at the end of the page.
+            let mut catalog_html = String::new();
+            for node in &page.ast {
+                let target = if is_catalog_card(node) {
+                    &mut catalog_html
+                } else {
+                    &mut content_html
+                };
+                Self::render_nodes(
+                    std::slice::from_ref(node),
+                    page,
+                    context.site,
+                    context,
+                    registry,
+                    highlighter,
+                    &mut used_components,
+                    target,
+                );
+            }
+            if !catalog_html.is_empty() {
+                content_html.push_str(&format!(
+                    "<section class=\"docs-lsp-reference\" aria-label=\"Editor reference\">\n<p class=\"docs-lsp-reference-title\">Editor reference</p>\n{catalog_html}</section>\n"
+                ));
+            }
             if page.reference.is_some() {
                 content_html.push_str(&Self::render_reference_relations(context, page));
             }
@@ -3531,11 +3545,24 @@ impl HtmlRenderer {
                     let display_name = title.as_deref().unwrap_or(&derived_title);
                     let symbol_id =
                         format!("symbol-{}", name.trim().to_lowercase().replace(' ', "-"));
+                    // Action reference cards only feed the editor catalog, so readers
+                    // see them folded away behind their title.
+                    let collapsible = is_catalog_category(category);
+                    let (wrapper, header) = if collapsible {
+                        ("details", "summary")
+                    } else {
+                        ("div", "div")
+                    };
                     out.push_str(&format!(
-                        "<div class=\"docs-lsp-symbol\" id=\"{}\">\n",
+                        "<{wrapper} class=\"docs-lsp-symbol{}\" id=\"{}\">\n",
+                        if collapsible {
+                            " docs-lsp-collapsible"
+                        } else {
+                            ""
+                        },
                         symbol_id
                     ));
-                    out.push_str("  <div class=\"docs-lsp-header\">\n");
+                    out.push_str(&format!("  <{header} class=\"docs-lsp-header\">\n"));
                     out.push_str(&format!(
                         "    <h3 class=\"docs-lsp-name\"><code>{}</code></h3>\n",
                         display_name
@@ -3546,7 +3573,7 @@ impl HtmlRenderer {
                             category
                         ));
                     }
-                    out.push_str("  </div>\n");
+                    out.push_str(&format!("  </{header}>\n"));
 
                     if !summary.is_empty() {
                         out.push_str(&format!(
@@ -3581,7 +3608,7 @@ impl HtmlRenderer {
                         out.push_str("  </div>\n");
                     }
 
-                    out.push_str("</div>\n\n");
+                    out.push_str(&format!("</{wrapper}>\n\n"));
                 }
             }
         }
@@ -3846,3 +3873,11 @@ impl HtmlRenderer {
 
 #[cfg(test)]
 mod tests;
+
+fn is_catalog_category(category: &str) -> bool {
+    matches!(category, "action" | "action-field")
+}
+
+fn is_catalog_card(node: &DocNode) -> bool {
+    matches!(node, DocNode::LspSymbol { category, .. } if is_catalog_category(category))
+}
