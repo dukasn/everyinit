@@ -24,13 +24,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - name: Install musl package tooling
         run: sudo apt-get update && sudo apt-get install --yes musl-tools
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
       - name: Resolve and validate candidate identity
@@ -43,7 +43,7 @@ jobs:
       - name: Build and verify both mirror archives
         run: cargo evin-dev run release:package-cloudflare-verify
       - name: Preserve the exact verified candidate archives
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-candidate-${{ github.event.pull_request.head.sha }}
           path: |

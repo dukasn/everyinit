@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Find the pull request and create its required preview check
         id: discover
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const run = context.payload.workflow_run;
@@ -80,11 +80,11 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.discover.outputs.candidate == 'true' && github.event.workflow_run.conclusion == 'success'
         with:
           node-version-file: .node-version
-      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         if: steps.discover.outputs.candidate == 'true' && github.event.workflow_run.conclusion == 'success'
       - uses: Swatinem/rust-cache@v2
         if: steps.discover.outputs.candidate == 'true' && github.event.workflow_run.conclusion == 'success'
@@ -104,7 +104,7 @@ jobs:
         run: node scripts/release/validate-candidate.mjs auto auto "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
       - name: Download candidate archives from the successful PR build
         if: steps.discover.outputs.candidate == 'true' && github.event.workflow_run.conclusion == 'success'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-candidate-${{ steps.discover.outputs.head_sha }}
           path: ${{ runner.temp }}/release-candidate
@@ -170,7 +170,7 @@ jobs:
           node scripts/release/verify-mirror-candidate.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_COMMIT" --check-pointer
       - name: Complete the required unstable preview check
         if: always() && steps.discover.outputs.check_id != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           CHECK_ID: ${{ steps.discover.outputs.check_id }}
           JOB_STATUS: ${{ job.status }}

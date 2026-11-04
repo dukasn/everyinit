@@ -54,16 +54,16 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
-      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - uses: Swatinem/rust-cache@v2
       - name: Validate the tag and release version against the merged candidate
         id: candidate
         run: node scripts/release/validate-candidate.mjs "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
       - name: Require the successful pre-merge unstable preview check
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           RELEASE_COMMIT: ${{ needs.discover.outputs.commit }}
         with:
