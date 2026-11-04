@@ -1,0 +1,29 @@
+version: 1
+release:
+  version: 1.0.0-canary.100
+  tag: v1.0.0-canary.100
+packages:
+  esh:
+    fingerprint: sha256:fed2e8ec4de7b3f6729bb3bc3bb6692e6097f32e48cf4a01c2ad641e6d343799
+    targets:
+      apk:
+        version: 1.0.0-canary.100
+        revision: 1
+      arch:
+        version: 1.0.0-canary.100
+        revision: 1
+      deb:
+        version: 1.0.0-canary.100
+        revision: 1
+  evin:
+    fingerprint: sha256:fed2e8ec4de7b3f6729bb3bc3bb6692e6097f32e48cf4a01c2ad641e6d343799
+    targets:
+      apk:
+        version: 1.0.0-canary.100
+        revision: 1
+      arch:
+        version: 1.0.0-canary.100
+        revision: 1
+      deb:
+        version: 1.0.0-canary.100
+        revision: 1
