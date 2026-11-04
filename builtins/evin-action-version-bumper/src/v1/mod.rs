@@ -521,6 +521,7 @@ pub async fn execute(
             start_at_one,
         ) {
             Some(version) => {
+                semantic_change = true;
                 let max_impact = impacts
                     .iter()
                     .max()
@@ -691,6 +692,7 @@ pub async fn execute(
     if !semantic_change && !lock_changed {
         ctx.state.set_output("version", &version);
         ctx.state.set_output("tag", &version_with_v);
+        ctx.state.set_output("changed", "false");
         if let Some(release) = release_json {
             ctx.state.set_output("release", &release);
         }
@@ -743,6 +745,8 @@ pub async fn execute(
             ctx.mark_unverified("version bumping and git operations bypassed in dry-run");
             ctx.state.set_output("version", &version);
             ctx.state.set_output("tag", &version_with_v);
+            ctx.state
+                .set_output("changed", &semantic_change.to_string());
             if let Some(release) = release_json {
                 ctx.state.set_output("release", &release);
             }
@@ -793,6 +797,8 @@ pub async fn execute(
 
     ctx.state.set_output("version", &version);
     ctx.state.set_output("tag", &version_with_v);
+    ctx.state
+        .set_output("changed", &semantic_change.to_string());
     if let Some(release) = release_json {
         ctx.state.set_output("release", &release);
     }
@@ -820,6 +826,46 @@ mod tests {
         );
     }
 
+    fn context(root: &Path) -> RunnerContext {
+        let secrets = Arc::new(SecretsProvider::default());
+        let logger = Logger::new(
+            "bump".into(),
+            tokio::sync::mpsc::unbounded_channel().0,
+            secrets.clone(),
+        );
+        let provider = Arc::new(GitProvider::new(
+            root.to_path_buf(),
+            PipelineMode::Normal,
+            logger,
+        ));
+        RunnerContext::new(
+            None,
+            "bump".into(),
+            false,
+            PipelineMode::Normal,
+            tokio::sync::mpsc::unbounded_channel().0,
+            vec![],
+            None,
+            HashMap::new(),
+            root.to_path_buf(),
+            HashMap::new(),
+            provider,
+            secrets,
+        )
+    }
+
+    fn init_repo(root: &Path) {
+        for args in [
+            &["init", "-q"][..],
+            &["config", "user.name", "Test"][..],
+            &["config", "user.email", "test@example.test"][..],
+            &["config", "commit.gpgSign", "false"][..],
+            &["config", "tag.gpgSign", "false"][..],
+        ] {
+            git(root, args);
+        }
+    }
+
     #[tokio::test]
     async fn package_only_release_commits_lock_with_trailer_and_no_tag() {
         let temp = tempfile::TempDir::new().unwrap();
@@ -841,31 +887,7 @@ mod tests {
         git(temp.path(), &["add", "src/app"]);
         git(temp.path(), &["commit", "-qm", "ci: rebuild package"]);
 
-        let secrets = Arc::new(SecretsProvider::default());
-        let logger = Logger::new(
-            "bump".into(),
-            tokio::sync::mpsc::unbounded_channel().0,
-            secrets.clone(),
-        );
-        let provider = Arc::new(GitProvider::new(
-            temp.path().to_path_buf(),
-            PipelineMode::Normal,
-            logger,
-        ));
-        let mut ctx = RunnerContext::new(
-            None,
-            "bump".into(),
-            false,
-            PipelineMode::Normal,
-            tokio::sync::mpsc::unbounded_channel().0,
-            vec![],
-            None,
-            HashMap::new(),
-            temp.path().to_path_buf(),
-            HashMap::new(),
-            provider,
-            secrets,
-        );
+        let mut ctx = context(temp.path());
         let mut rules = evin_gitrules::GitRulesRoot::default();
         rules.releases.as_mut().unwrap().packages = BTreeMap::from([(
             "app".into(),
@@ -901,5 +923,44 @@ mod tests {
                 .exists()
         );
         assert!(ctx.state.outputs.lock().unwrap().contains_key("release"));
+        assert_eq!(ctx.state.outputs.lock().unwrap()["changed"], "false");
+    }
+
+    #[tokio::test]
+    async fn reports_changed_false_without_qualifying_commits() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("file"), "one\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        git(temp.path(), &["tag", "-a", "v1.0.0", "-m", "v1.0.0"]);
+
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml("initial_version: 1.0.0\n").unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        let outputs = ctx.state.outputs.lock().unwrap();
+        assert_eq!(outputs["changed"], "false");
+        assert_eq!(outputs["version"], "1.0.0");
+    }
+
+    #[tokio::test]
+    async fn reports_changed_true_for_a_qualifying_commit() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("file"), "one\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        git(temp.path(), &["tag", "-a", "v1.0.0", "-m", "v1.0.0"]);
+        std::fs::write(temp.path().join("file"), "two\n").unwrap();
+        git(temp.path(), &["commit", "-aqm", "feat: add a capability"]);
+
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml("initial_version: 1.0.0\n").unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        let outputs = ctx.state.outputs.lock().unwrap();
+        assert_eq!(outputs["changed"], "true");
+        assert_eq!(outputs["version"], "1.1.0");
     }
 }

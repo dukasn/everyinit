@@ -153,6 +153,10 @@ const BUMPER_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             description: "Resolved release tag.",
         },
         ActionOutputDescriptor {
+            name: "changed",
+            description: "Whether qualifying commits calculated a new version.",
+        },
+        ActionOutputDescriptor {
             name: "release",
             description: "Structured JSON release artifact.",
         },
