@@ -261,6 +261,13 @@ impl Logger {
         });
     }
 
+    /// Forwards captured subprocess text to the task log, line by line.
+    pub fn process_output(&self, stream: OutputStream, text: &str) {
+        for line in text.lines() {
+            self.raw_output(stream, line);
+        }
+    }
+
     #[doc(hidden)]
     pub fn raw_output(&self, stream: OutputStream, line: &str) {
         let _ = self.tx.send(LogMessage::RawOutput {
@@ -348,6 +355,10 @@ impl Environment {
 
     pub fn get(&self, key: &str) -> Option<&String> {
         self.env.get(key)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
+        self.env.iter()
     }
 }
 

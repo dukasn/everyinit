@@ -246,6 +246,8 @@ define_localized_messages! {
     pub struct StageFilesPlan { files: String } => "plan-stage-files";
     pub struct GitCommitPlan { message: String, signed: bool } => "plan-git-commit";
     pub struct GitTagPlan { tag: String } => "plan-git-tag";
+    pub struct GitPushPlan { remote: String, refs: String, force: bool } => "plan-git-push";
+    pub struct GitPruneTagsPlan { remote: String } => "plan-git-prune-tags";
     pub struct WriteFilePlan { path: String } => "plan-write-file";
 }
 
@@ -284,6 +286,8 @@ pub const ACTIVITY_LOCALE_KEYS: &[(&str, &[&str])] = &[
     ("plan-stage-files", &["files"]),
     ("plan-git-commit", &["message", "signed"]),
     ("plan-git-tag", &["tag"]),
+    ("plan-git-push", &["remote", "refs", "force"]),
+    ("plan-git-prune-tags", &["remote"]),
     ("plan-write-file", &["path"]),
 ];
 

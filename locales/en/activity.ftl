@@ -38,4 +38,6 @@ plan-shell-command = Run shell command: { $script }
 plan-stage-files = Stage files: { $files }
 plan-git-commit = Create Git commit '{ $message }' (signed={ $signed })
 plan-git-tag = Create Git tag { $tag }
+plan-git-push = Push { $refs } to { $remote } (force={ $force })
+plan-git-prune-tags = Delete stale release tags from { $remote }
 plan-write-file = Write file { $path }
