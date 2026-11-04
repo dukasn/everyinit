@@ -59,7 +59,7 @@ grass = "0.13.4"
 syntect = { version = "5.2.0", default-features = false, features = ["parsing", "html", "default-syntaxes", "regex-fancy"] }
 criterion = "0.5"
 crc32fast = "1.4"
-base64 = "0.22"
+base64 = "0.23"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 svgbob = "0.6.7"
 merman = { version = "=0.7.0", features = ["render"] }
