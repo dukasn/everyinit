@@ -66,6 +66,8 @@ struct ChangelogConfig {
     version: Option<String>,
     #[serde(default)]
     label: Option<String>,
+    #[serde(default)]
+    notes_path: Option<String>,
 }
 
 impl Default for ChangelogConfig {
@@ -80,6 +82,7 @@ impl Default for ChangelogConfig {
             sections: HashMap::new(),
             version: None,
             label: None,
+            notes_path: None,
         }
     }
 }
@@ -97,6 +100,18 @@ impl ChangelogConfig {
             return Err(ChangelogError::InvalidConfiguration(
                 evin_yaml::ConfigError {
                     message: evin_locales::t!("changelog-path-must-not-be-empty"),
+                    span: None,
+                },
+            ));
+        }
+        if self
+            .notes_path
+            .as_deref()
+            .is_some_and(|path| path.trim().is_empty())
+        {
+            return Err(ChangelogError::InvalidConfiguration(
+                evin_yaml::ConfigError {
+                    message: "notes_path must not be empty when provided".to_string(),
                     span: None,
                 },
             ));
@@ -342,6 +357,7 @@ async fn generate_changelog(
         .map(|label| format!(" — {label}"))
         .unwrap_or_default();
 
+    let mut pending_notes: Option<String> = None;
     for block in &blocks {
         if block.commits.is_empty() {
             continue;
@@ -379,12 +395,13 @@ async fn generate_changelog(
             }
         }
 
+        let mut body = String::new();
         let mut sorted_headings: Vec<String> = grouped.keys().cloned().collect();
         sorted_headings.sort();
 
         for heading in sorted_headings {
             let commits = grouped.get(&heading).unwrap();
-            final_markdown.push_str(&format!("### {}\n\n", heading));
+            body.push_str(&format!("### {}\n\n", heading));
             for c in commits {
                 let mut entry = String::from("- ");
                 if config.show_scopes
@@ -400,9 +417,13 @@ async fn generate_changelog(
                     entry.push_str(&format!(" ({})", c.hash));
                 }
                 entry.push('\n');
-                final_markdown.push_str(&entry);
+                body.push_str(&entry);
             }
-            final_markdown.push('\n');
+            body.push('\n');
+        }
+        final_markdown.push_str(&body);
+        if block.version == "Unreleased" {
+            pending_notes = Some(body);
         }
     }
 
@@ -453,6 +474,16 @@ async fn generate_changelog(
 
     ctx.state.set_output("path", &config.path);
 
+    if let (Some(notes_path), Some(notes)) = (&config.notes_path, pending_notes) {
+        ctx.fs
+            .write(notes_path, notes.trim_end_matches('\n').to_string() + "\n")
+            .map_err(|e| ChangelogError::WriteFileFailed {
+                path: notes_path.clone(),
+                message: e.to_string(),
+            })?;
+        ctx.state.set_output("notes_path", notes_path);
+    }
+
     Ok(())
 }
 
@@ -491,5 +522,117 @@ fn parse_header(
         })
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use evin_action_sdk::{
+        Logger, PipelineMode, RunnerContext, git::GitProvider, secrets::SecretsProvider,
+    };
+    use std::path::Path;
+    use std::sync::Arc;
+
+    fn git(root: &Path, args: &[&str]) {
+        assert!(
+            std::process::Command::new("git")
+                .args(args)
+                .current_dir(root)
+                .status()
+                .unwrap()
+                .success()
+        );
+    }
+
+    fn context(root: &Path) -> RunnerContext {
+        let secrets = Arc::new(SecretsProvider::default());
+        let logger = Logger::new(
+            "changelog".into(),
+            tokio::sync::mpsc::unbounded_channel().0,
+            secrets.clone(),
+        );
+        let provider = Arc::new(GitProvider::new(
+            root.to_path_buf(),
+            PipelineMode::Normal,
+            logger,
+        ));
+        let mut ctx = RunnerContext::new(
+            None,
+            "changelog".into(),
+            false,
+            PipelineMode::Normal,
+            tokio::sync::mpsc::unbounded_channel().0,
+            vec![],
+            None,
+            HashMap::new(),
+            root.to_path_buf(),
+            HashMap::new(),
+            provider,
+            secrets,
+        );
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        ctx
+    }
+
+    fn repository(with_pending: bool) -> tempfile::TempDir {
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path();
+        for args in [
+            &["init", "-q"][..],
+            &["config", "user.name", "Test"][..],
+            &["config", "user.email", "test@example.test"][..],
+            &["config", "commit.gpgSign", "false"][..],
+            &["config", "tag.gpgSign", "false"][..],
+        ] {
+            git(root, args);
+        }
+        std::fs::write(root.join("file"), "one\n").unwrap();
+        git(root, &["add", "."]);
+        git(root, &["commit", "-qm", "feat: initial"]);
+        git(root, &["tag", "-a", "v1.0.0", "-m", "v1.0.0"]);
+        if with_pending {
+            std::fs::write(root.join("file"), "two\n").unwrap();
+            git(root, &["commit", "-aqm", "fix(core): repair the parser"]);
+        }
+        temp
+    }
+
+    #[tokio::test]
+    async fn notes_path_receives_only_the_pending_section_body() {
+        let temp = repository(true);
+        let ctx = context(temp.path());
+        let with = evin_yaml::parse_yaml(
+            "version: 1.0.1\nshow_hashes: false\nnotes_path: target/notes.md\n",
+        )
+        .unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+
+        let notes = std::fs::read_to_string(temp.path().join("target/notes.md")).unwrap();
+        assert_eq!(notes, "### Bug Fixes\n\n- **core:** repair the parser\n");
+        let changelog = std::fs::read_to_string(temp.path().join("CHANGELOG.md")).unwrap();
+        assert!(changelog.contains("## [v1.0.1]"));
+        assert!(changelog.contains(&notes));
+        assert_eq!(
+            ctx.state.outputs.lock().unwrap()["notes_path"],
+            "target/notes.md"
+        );
+    }
+
+    #[tokio::test]
+    async fn notes_path_is_not_written_without_a_pending_section() {
+        let temp = repository(false);
+        let ctx = context(temp.path());
+        let with = evin_yaml::parse_yaml("notes_path: notes.md\n").unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+
+        assert!(!temp.path().join("notes.md").exists());
+        assert!(!ctx.state.outputs.lock().unwrap().contains_key("notes_path"));
+    }
+
+    #[test]
+    fn rejects_an_empty_notes_path() {
+        let with = evin_yaml::parse_yaml("notes_path: \"  \"\n").unwrap();
+        assert!(validate_config(Some(&with)).is_err());
     }
 }

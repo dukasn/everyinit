@@ -44,6 +44,13 @@ const CHANGELOG_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
+            path: "notes_path",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Optional file receiving only the pending section body.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
             path: "include_unreleased",
             kind: ActionFieldKind::Boolean,
             required: false,
@@ -90,6 +97,10 @@ const CHANGELOG_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
         ActionOutputDescriptor {
             name: "path",
             description: "Updated changelog path.",
+        },
+        ActionOutputDescriptor {
+            name: "notes_path",
+            description: "Pending section notes path, when written.",
         },
         ActionOutputDescriptor {
             name: "version",
