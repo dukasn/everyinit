@@ -18,57 +18,9 @@ permissions:
   contents: read
 
 jobs:
-  classify:
-    name: Classify validation path
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      full: ${{ steps.path.outputs.full }}
-      distribution: ${{ steps.path.outputs.distribution }}
-      promotion: ${{ steps.path.outputs.promotion }}
-    steps:
-      - id: path
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const event = context.eventName;
-            let full = false;
-            let distribution = false;
-            let promotion = false;
-
-            if (event === "pull_request") {
-              const pr = context.payload.pull_request;
-              promotion = pr.base.ref === "main"
-                && ["release", "automation/release"].includes(pr.head.ref)
-                && pr.head.repo?.full_name === context.repo.owner + "/" + context.repo.repo;
-              full = !promotion;
-              distribution = full;
-            } else if (event === "push") {
-              const response = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                commit_sha: context.sha,
-              });
-              const mergedIntoThisBranch = response.data.some((pr) =>
-                pr.merged_at && pr.base.ref === context.ref.replace("refs/heads/", "")
-              );
-              full = !mergedIntoThisBranch;
-              distribution = full;
-            } else if (event === "workflow_dispatch") {
-              full = true;
-              distribution = true;
-            }
-
-            core.setOutput("full", String(full));
-            core.setOutput("distribution", String(distribution));
-            core.setOutput("promotion", String(promotion));
-
   validation:
     name: Linux validation (quality, tests, E2E, distribution)
-    needs: classify
-    if: needs.classify.outputs.full == 'true'
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -110,13 +62,12 @@ jobs:
       - name: Run Evin and ESH binary tests
         run: cargo evin-dev run e2e
       - name: Install release packaging tools
-        if: needs.classify.outputs.distribution == 'true'
         run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
       - name: Resolve and verify workspace version
-        if: needs.classify.outputs.distribution == 'true'
-        run: echo "RELEASE_VERSION=$(node scripts/release/workspace-version.mjs)" >> "$GITHUB_ENV"
+        run: |
+          version=$(node scripts/release/workspace-version.mjs)
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
       - name: Rehearse changelog and every package format without publishing
-        if: needs.classify.outputs.distribution == 'true'
         run: cargo evin-dev run release:distribution-rehearsal
       - name: Run process-supervision soak suite
         if: github.event_name == 'workflow_dispatch' && inputs.run_soak
@@ -125,8 +76,8 @@ jobs:
   # Keep the previous status-check names stable for existing branch rulesets.
   workspace-tests:
     name: Workspace tests
-    needs: [classify, validation]
-    if: always() && needs.classify.outputs.full == 'true'
+    needs: validation
+    if: always() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Report the shared validation result
@@ -136,8 +87,8 @@ jobs:
 
   e2e:
     name: Binary E2E (Linux)
-    needs: [classify, validation]
-    if: always() && needs.classify.outputs.full == 'true'
+    needs: validation
+    if: always() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Report the shared validation result
@@ -147,8 +98,8 @@ jobs:
 
   quality:
     name: Formatting, Clippy, and browser checks
-    needs: [classify, validation]
-    if: always() && needs.classify.outputs.full == 'true'
+    needs: validation
+    if: always() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Report the shared validation result
@@ -158,31 +109,14 @@ jobs:
 
   distribution-rehearsal:
     name: Distribution rehearsal (Evin and ESH)
-    needs: [classify, validation]
-    if: always() && needs.classify.outputs.distribution == 'true'
+    needs: validation
+    if: always() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - name: Report the shared validation result
         env:
           VALIDATION_RESULT: ${{ needs.validation.result }}
         run: test "$VALIDATION_RESULT" = success
-
-  promotion:
-    name: Release promotion
-    needs: classify
-    if: needs.classify.outputs.promotion == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Require the current release tip and synchronized main history
-        env:
-          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git fetch origin main release
-          test "$(git rev-parse origin/release)" = "$EXPECTED_HEAD"
-          git merge-base --is-ancestor origin/main origin/release
 
   process-soak:
     name: Process soak (Linux)
@@ -198,24 +132,11 @@ jobs:
 
   ci-gate:
     name: CI gate
-    if: always()
-    needs: [classify, validation, promotion]
+    if: always() && github.event_name != 'schedule'
+    needs: validation
     runs-on: ubuntu-latest
     steps:
-      - name: Enforce the selected validation path
+      - name: Enforce the validation result
         env:
-          CLASSIFY_RESULT: ${{ needs.classify.result }}
-          FULL: ${{ needs.classify.outputs.full }}
-          PROMOTION: ${{ needs.classify.outputs.promotion }}
           VALIDATION_RESULT: ${{ needs.validation.result }}
-          PROMOTION_RESULT: ${{ needs.promotion.result }}
-        run: |
-          set -eu
-          test "$CLASSIFY_RESULT" = success
-          if [ "$PROMOTION" = true ]; then
-            test "$PROMOTION_RESULT" = success
-            exit 0
-          fi
-          if [ "$FULL" = true ]; then
-            test "$VALIDATION_RESULT" = success
-          fi
+        run: test "$VALIDATION_RESULT" = success

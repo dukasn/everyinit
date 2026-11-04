@@ -12,12 +12,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use evin_config::models::EnvDeclaration;
-use evin_pipeline::env::{EnvironmentProvider, build_task_env};
 use serde_yaml::Value;
-use std::collections::HashMap;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -27,130 +27,547 @@ fn flow(path: &str) -> Value {
     serde_yaml::from_str(&fs::read_to_string(root().join(path)).unwrap()).unwrap()
 }
 
-struct ProvidedEnvironment;
-
-impl EnvironmentProvider for ProvidedEnvironment {
-    fn get_var(&self, key: &str) -> Option<String> {
-        Some(format!("provided-{key}"))
-    }
+fn step(name: &str) -> String {
+    flow(".github/workflows/release.yml")["jobs"]["release"]["steps"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .find(|step| step["name"].as_str() == Some(name))
+        .unwrap()["run"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }
 
-fn assert_forwarded(path: &str, task_name: &str, keys: &[&str]) {
-    let document = flow(path);
-    let task = &document["tasks"][task_name];
-    let declaration: EnvDeclaration = serde_yaml::from_value(task["env"].clone()).unwrap();
-    let schema = serde_yaml::from_value(flow(".evin/environment.flow")).unwrap();
-    let environment = build_task_env(
-        false,
-        &HashMap::new(),
-        &HashMap::new(),
-        Some(&declaration),
-        None,
-        &ProvidedEnvironment,
-        Some(&schema),
-        task["stage"].as_str().unwrap(),
+#[test]
+fn automation_only_publishes_merged_proposals_after_ci() {
+    let workflow = flow(".github/workflows/release.yml");
+    assert!(workflow["on"]["push"].is_null());
+    assert_eq!(
+        workflow["on"]["workflow_run"]["workflows"][0].as_str(),
+        Some("CI")
     );
-    for key in keys {
-        assert_eq!(
-            environment.get(*key),
-            Some(&format!("provided-{key}")),
-            "{path}: {task_name} must forward {key} to its scripts"
-        );
-    }
-    assert!(!environment.contains_key("UNRELATED_SECRET"));
-}
-
-#[test]
-fn github_publish_scripts_receive_their_repository_credentials_and_context() {
-    for task in ["github-publish", "github-publish-prebuilt"] {
-        assert_forwarded(
-            ".evin/release.flow",
-            task,
-            &[
-                "GITHUB_REPOSITORY",
-                "GITHUB_TOKEN",
-                "GITHUB_API_URL",
-                "GITHUB_STEP_SUMMARY",
-                "RELEASE_TAG",
-            ],
-        );
-    }
-}
-
-#[test]
-fn mirror_metadata_scripts_receive_source_identity_and_url_overrides() {
-    for task in ["metadata", "metadata-prebuilt"] {
-        assert_forwarded(
-            "infra/.evin/mirror.flow",
-            task,
-            &[
-                "RELEASE_CHANNEL",
-                "RELEASE_COMMIT",
-                "RELEASE_BASE_URL",
-                "RELEASE_TARGET",
-                "RELEASE_VERSION",
-                "RELEASE_SIGNING_KEY_FILE",
-            ],
-        );
-    }
-}
-
-#[test]
-fn repository_run_commands_do_not_use_action_output_or_environment_templates() {
-    for directory in [
-        ".evin",
-        "crates/evin/.evin",
-        "crates/esh/.evin",
-        "docs/.evin",
-        "infra/.evin",
+    assert!(!workflow["on"]["workflow_dispatch"].is_null());
+    assert_eq!(
+        workflow["concurrency"]["cancel-in-progress"].as_bool(),
+        Some(false)
+    );
+    assert!(workflow["permissions"].as_mapping().unwrap().is_empty());
+    assert_eq!(
+        workflow["jobs"]["release"]["env"]["GH_TOKEN"].as_str(),
+        Some("${{ secrets.RELEASE_BOT_TOKEN }}")
+    );
+    let steps = workflow["jobs"]["release"]["steps"].as_sequence().unwrap();
+    let checkout = steps
+        .iter()
+        .find(|s| s["uses"].as_str() == Some("actions/checkout@v7"))
+        .unwrap();
+    assert_eq!(
+        checkout["with"]["token"].as_str(),
+        Some("${{ secrets.RELEASE_BOT_TOKEN }}")
+    );
+    let pos = |name| {
+        steps
+            .iter()
+            .position(|s| s["name"].as_str() == Some(name))
+            .unwrap()
+    };
+    assert!(pos("Require release bot token") < pos("Require exact successful main push CI"));
+    assert!(pos("Require exact successful main push CI") < pos("Identify merged release proposal"));
+    assert!(
+        pos("Identify merged release proposal")
+            < pos("Build and verify release archives with Evin")
+    );
+    assert!(
+        pos("Build and verify release archives with Evin")
+            < pos("Tag and publish the merged release")
+    );
+    assert!(
+        pos("Tag and publish the merged release")
+            < pos("Require merged releases to be published before proposing")
+    );
+    assert!(
+        pos("Require merged releases to be published before proposing")
+            < pos("Maintain the release pull request")
+    );
+    let publication = &steps[pos("Tag and publish the merged release")];
+    assert_eq!(
+        publication["if"].as_str(),
+        Some("steps.proposal.outputs.merged == '1'")
+    );
+    let identity = step("Identify merged release proposal");
+    for value in [
+        ".merge_commit_sha == env.RELEASE_COMMIT",
+        ".head.repo.full_name == env.GITHUB_REPOSITORY",
+        ".merged_at != null",
     ] {
-        for entry in fs::read_dir(root().join(directory)).unwrap() {
-            let path = entry.unwrap().path();
-            if path.extension().is_none_or(|extension| extension != "flow") {
-                continue;
-            }
-            let document: Value =
-                serde_yaml::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-            let Some(tasks) = document["tasks"].as_mapping() else {
-                continue;
-            };
-            for (name, task) in tasks {
-                let mut commands = Vec::new();
-                if let Some(command) = task["run"].as_str() {
-                    commands.push(command);
-                }
-                if let Some(steps) = task["steps"].as_sequence() {
-                    commands.extend(steps.iter().filter_map(|step| step["run"].as_str()));
-                }
-                for command in commands {
-                    for tail in command.split("${").skip(1) {
-                        let Some((expression, _)) = tail.split_once('}') else {
-                            continue;
-                        };
-                        // Shell default/substring operators are valid; action references
-                        // use env.NAME or task:namespace.output with no shell operator.
-                        let action_reference = expression.starts_with("env.")
-                            || expression.split_once('.').is_some_and(|(task, output)| {
-                                !task.is_empty()
-                                    && !output.is_empty()
-                                    && task
-                                        .chars()
-                                        .all(|c| c.is_ascii_alphanumeric() || "_:-".contains(c))
-                                    && output
-                                        .chars()
-                                        .all(|c| c.is_ascii_alphanumeric() || c == '_')
-                                    && !task.contains(":-")
-                                    && !task.contains(":+")
-                            });
-                        assert!(
-                            !action_reference,
-                            "{}: task {} uses action template ${{{expression}}} in a shell command",
-                            path.display(),
-                            name.as_str().unwrap()
-                        );
-                    }
-                }
-            }
-        }
+        assert!(identity.contains(value));
     }
+    let release = fs::read_to_string(root().join(".evin/release.flow")).unwrap();
+    let tasks = flow(".evin/release.flow");
+    let bump = &tasks["tasks"]["bump"]["steps"][0]["with"];
+    assert_eq!(bump["initial_version"].as_str(), Some("0.1.0"));
+    assert_eq!(bump["cargo_pre_1_0"].as_bool(), Some(true));
+    let propose = &tasks["tasks"]["propose"];
+    let git = &propose["steps"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .find(|s| s["uses"].as_str() == Some("evin/git-release@v1"))
+        .unwrap()["with"];
+    assert!(git["tag"].is_null(), "never tag an unmerged proposal");
+    assert_eq!(git["enabled"].as_str(), Some("${release:bump.changed}"));
+    assert!(release.contains("evin/review-request@v1"));
+    assert!(release.contains("evin/archive@v1"));
+    let yaml = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    assert!(!yaml.contains("github-script"));
+    assert!(!yaml.contains("node "));
+    assert!(!yaml.contains("github.token"));
+    let ci = flow(".github/workflows/ci.yml");
+    assert!(
+        ci["on"]["pull_request"]["branches"]
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .any(|branch| branch.as_str() == Some("main"))
+    );
+    assert_eq!(
+        ci["jobs"]["validation"]["if"].as_str(),
+        Some("github.event_name != 'schedule'")
+    );
+}
+
+static NEXT: AtomicUsize = AtomicUsize::new(0);
+struct Repo {
+    dir: PathBuf,
+    work: PathBuf,
+    sha: String,
+}
+impl Drop for Repo {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.dir);
+    }
+}
+impl Repo {
+    fn git(&self, args: &[&str]) -> String {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(&self.work)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    }
+    fn new() -> Self {
+        let dir = root().join("target").join(format!(
+            "release-workflow-test-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(dir.join("bin")).unwrap();
+        fs::create_dir_all(dir.join("work")).unwrap();
+        let work = dir.join("work");
+        let mut repo = Self {
+            dir,
+            work,
+            sha: String::new(),
+        };
+        repo.git(&["init", "-q"]);
+        repo.git(&["config", "user.name", "Test"]);
+        repo.git(&["config", "user.email", "test@example.invalid"]);
+        fs::write(repo.work.join("file"), "source").unwrap();
+        fs::write(
+            repo.work.join("Cargo.toml"),
+            "[workspace.package]\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        repo.git(&["add", "file", "Cargo.toml"]);
+        repo.git(&["commit", "-qm", "feat: source"]);
+        repo.git(&["branch", "-M", "main"]);
+        repo.sha = repo.git(&["rev-parse", "HEAD"]);
+        let remote = repo.dir.join("remote.git");
+        let out = Command::new("git")
+            .args(["init", "--bare", "-q"])
+            .arg(&remote)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        repo.git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+        repo.git(&["push", "-q", "origin", "HEAD:main"]);
+        let gh = repo.dir.join("bin/gh");
+        fs::write(
+            &gh,
+            r##"#!/bin/sh
+set -eu
+if [ "$1" = api ]; then
+  if [ -f "$GH_TEST_DIR/api-failure" ]; then exit 1; fi
+  case "$*" in
+    *actions/workflows*) cat "$GH_TEST_DIR/runs" ;;
+    *actions/runs*) cat "$GH_TEST_DIR/jobs" ;;
+    *commits*) jq -c '.[]' "$GH_TEST_DIR/pulls" ;;
+    *pulls*) jq -c '.[]' "$GH_TEST_DIR/pulls" ;;
+    *releases*) jq -c '.[]' "$GH_TEST_DIR/releases" ;;
+    *) exit 2 ;;
+  esac
+elif [ "$1 $2" = "pr list" ]; then
+  echo 1
+elif [ "$1 $2" = "pr close" ]; then
+  printf '%s\n' "$*" >> "$GH_TEST_DIR/calls"
+else
+  printf '%s\n' "$*" >> "$GH_TEST_DIR/calls"
+fi
+"##,
+        )
+        .unwrap();
+        fs::set_permissions(gh, fs::Permissions::from_mode(0o755)).unwrap();
+        repo
+    }
+    fn run(&self, script: &str) -> std::process::Output {
+        let path = format!(
+            "{}:{}",
+            self.dir.join("bin").display(),
+            std::env::var("PATH").unwrap()
+        );
+        Command::new("bash")
+            .args(["-e", "-o", "pipefail", "-c", script])
+            .current_dir(&self.work)
+            .env("PATH", path)
+            .env("GH_TEST_DIR", &self.dir)
+            .env("GITHUB_REPOSITORY", "owner/repo")
+            .env("RELEASE_COMMIT", &self.sha)
+            .env("RELEASE_BRANCH", "automation/release")
+            .env("RELEASE_TAG", "v0.1.0")
+            .env("RELEASE_TARGET", "x86_64-unknown-linux-musl")
+            .env("GITHUB_OUTPUT", self.dir.join("output"))
+            .output()
+            .unwrap()
+    }
+}
+
+#[test]
+fn exact_sha_ci_gate_rejects_wrong_and_incomplete_runs() {
+    let repo = Repo::new();
+    let jobs = r#"{"name":"Linux validation (quality, tests, E2E, distribution)","status":"completed","conclusion":"success"}
+{"name":"CI gate","status":"completed","conclusion":"success"}
+"#;
+    fs::write(repo.dir.join("jobs"), jobs).unwrap();
+    let good = format!(
+        r#"{{"id":1,"head_sha":"{}","head_branch":"main","event":"push","status":"completed","conclusion":"success"}}"#,
+        repo.sha
+    );
+    for (name, runs, job_data, expected) in [
+        ("success", good.clone(), jobs.to_owned(), true),
+        ("missing", String::new(), jobs.to_owned(), false),
+        (
+            "wrong-sha",
+            good.replace(&repo.sha, "wrong"),
+            jobs.to_owned(),
+            false,
+        ),
+        (
+            "wrong-branch",
+            good.replace("main", "release"),
+            jobs.to_owned(),
+            false,
+        ),
+        (
+            "wrong-event",
+            good.replace("push", "pull_request"),
+            jobs.to_owned(),
+            false,
+        ),
+        (
+            "pending",
+            good.replace("completed", "in_progress"),
+            jobs.to_owned(),
+            false,
+        ),
+        (
+            "newer-failure",
+            format!(
+                "{good}\n{}",
+                good.replace("\"id\":1", "\"id\":2")
+                    .replace("success", "failure")
+            ),
+            jobs.to_owned(),
+            false,
+        ),
+        (
+            "missing-job",
+            good.clone(),
+            jobs.lines().next().unwrap().to_owned(),
+            false,
+        ),
+        (
+            "failed-job",
+            good.clone(),
+            jobs.replace("success", "failure"),
+            false,
+        ),
+    ] {
+        fs::write(repo.dir.join("runs"), runs).unwrap();
+        fs::write(repo.dir.join("jobs"), job_data).unwrap();
+        let output = repo.run(&step("Require exact successful main push CI"));
+        assert_eq!(
+            output.status.success(),
+            expected,
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    fs::write(repo.dir.join("api-failure"), "").unwrap();
+    assert!(
+        !repo
+            .run(&step("Require exact successful main push CI"))
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn publication_requires_the_actual_same_repository_merge_commit() {
+    let repo = Repo::new();
+    let good = format!(
+        r#"[{{"base":{{"ref":"main"}},"head":{{"ref":"automation/release","repo":{{"full_name":"owner/repo"}}}},"merged_at":"2026-01-01","merge_commit_sha":"{}"}}]"#,
+        repo.sha
+    );
+    for (name, pulls, expected) in [
+        ("merged", good.clone(), "merged=1"),
+        ("ordinary", "[]".to_owned(), "merged=0"),
+        ("fork", good.replace("owner/repo", "fork/repo"), "merged=0"),
+        (
+            "other-head",
+            good.replace("automation/release", "other"),
+            "merged=0",
+        ),
+        (
+            "different-merge",
+            good.replace(&repo.sha, "other"),
+            "merged=0",
+        ),
+        (
+            "not-merged",
+            good.replace("\"2026-01-01\"", "null"),
+            "merged=0",
+        ),
+    ] {
+        fs::write(repo.dir.join("pulls"), pulls).unwrap();
+        fs::write(repo.dir.join("output"), "").unwrap();
+        let output = repo.run(&step("Identify merged release proposal"));
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(repo.dir.join("output")).unwrap().trim(),
+            expected,
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn all_merge_methods_publish_main_sha_after_the_proposal_branch_is_deleted() {
+    for method in ["merge", "squash", "rebase"] {
+        let mut repo = Repo::new();
+        repo.git(&["switch", "-qc", "automation/release"]);
+        fs::write(repo.work.join("file"), "released source").unwrap();
+        repo.git(&["add", "file"]);
+        repo.git(&["commit", "-qm", "chore(release): 0.1.0"]);
+        let proposal = repo.git(&["rev-parse", "HEAD"]);
+        repo.git(&["switch", "-q", "main"]);
+        repo.git(&["commit", "--allow-empty", "-qm", "fix: advance main"]);
+        match method {
+            "merge" => {
+                repo.git(&[
+                    "merge",
+                    "--no-ff",
+                    "-qm",
+                    "merge release",
+                    "automation/release",
+                ]);
+            }
+            "squash" => {
+                repo.git(&["merge", "--squash", "-q", "automation/release"]);
+                repo.git(&["commit", "-qm", "chore(release): 0.1.0"]);
+            }
+            "rebase" => {
+                repo.git(&["switch", "-q", "automation/release"]);
+                repo.git(&["rebase", "-q", "main"]);
+                repo.git(&["switch", "-q", "main"]);
+                repo.git(&["merge", "--ff-only", "-q", "automation/release"]);
+            }
+            _ => unreachable!(),
+        }
+        repo.sha = repo.git(&["rev-parse", "HEAD"]);
+        assert_ne!(repo.sha, proposal, "{method} must publish the main result");
+        repo.git(&["push", "-q", "origin", "HEAD:main"]);
+        repo.git(&["branch", "-D", "automation/release"]);
+        let pull = format!(
+            r#"[{{"base":{{"ref":"main"}},"head":{{"ref":"automation/release","sha":"{proposal}","repo":{{"full_name":"owner/repo"}}}},"merged_at":"2026-01-01","merge_commit_sha":"{}"}}]"#,
+            repo.sha
+        );
+        fs::write(repo.dir.join("pulls"), pull).unwrap();
+        fs::write(repo.dir.join("releases"), "[]").unwrap();
+        let identity = repo.run(&step("Identify merged release proposal"));
+        assert!(
+            identity.status.success(),
+            "{method}: {}",
+            String::from_utf8_lossy(&identity.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(repo.dir.join("output")).unwrap().trim(),
+            "merged=1"
+        );
+        let publication = repo.run(&step("Tag and publish the merged release"));
+        assert!(
+            publication.status.success(),
+            "{method}: {}",
+            String::from_utf8_lossy(&publication.stderr)
+        );
+        assert_eq!(repo.git(&["rev-parse", "v0.1.0^{}"]), repo.sha, "{method}");
+    }
+}
+
+#[test]
+fn proposal_waits_for_merged_release_tag_and_complete_publication() {
+    let mut repo = Repo::new();
+    let script = step("Require merged releases to be published before proposing");
+    let pull = format!(
+        r#"[{{"base":{{"ref":"main"}},"head":{{"ref":"automation/release","repo":{{"full_name":"owner/repo"}}}},"merged_at":"2026-01-01","merge_commit_sha":"{}"}}]"#,
+        repo.sha
+    );
+    fs::write(repo.dir.join("pulls"), "[]").unwrap();
+    fs::write(repo.dir.join("releases"), "[]").unwrap();
+    assert!(
+        repo.run(&script).status.success(),
+        "initial release may be proposed"
+    );
+
+    fs::write(repo.dir.join("pulls"), pull).unwrap();
+    let pending = repo.run(&script);
+    assert!(
+        !pending.status.success(),
+        "untagged merge must block proposals"
+    );
+    assert!(String::from_utf8_lossy(&pending.stderr).contains("not tagged correctly"));
+
+    repo.git(&["tag", "-a", "v0.1.0", "-m", "release"]);
+    repo.git(&["push", "-q", "origin", "refs/tags/v0.1.0"]);
+    let missing_release = repo.run(&script);
+    assert!(
+        !missing_release.status.success(),
+        "tag alone must not unblock proposals"
+    );
+    assert!(String::from_utf8_lossy(&missing_release.stderr).contains("not fully published"));
+    let complete = r#"[{"tag_name":"v0.1.0","draft":false,"assets":[{"name":"evin-v0.1.0-x86_64-unknown-linux-musl.tar.gz"},{"name":"esh-v0.1.0-x86_64-unknown-linux-musl.tar.gz"}]}]"#;
+    fs::write(
+        repo.dir.join("releases"),
+        complete.replace("\"draft\":false", "\"draft\":true"),
+    )
+    .unwrap();
+    assert!(
+        !repo.run(&script).status.success(),
+        "draft release must block proposals"
+    );
+    fs::write(
+        repo.dir.join("releases"),
+        r#"[{"tag_name":"v0.1.0","draft":false,"assets":[{"name":"evin-v0.1.0-x86_64-unknown-linux-musl.tar.gz"}]}]"#,
+    )
+    .unwrap();
+    assert!(
+        !repo.run(&script).status.success(),
+        "partial release must block proposals"
+    );
+    fs::write(repo.dir.join("releases"), complete).unwrap();
+    assert!(
+        repo.run(&script).status.success(),
+        "published merge permits proposals"
+    );
+
+    repo.git(&["commit", "--allow-empty", "-qm", "fix: later"]);
+    repo.git(&["push", "-q", "origin", "HEAD:main"]);
+    fs::write(repo.dir.join("releases"), "[]").unwrap();
+    assert!(
+        repo.run(&script).status.success(),
+        "stale runs skip proposal reconciliation"
+    );
+    repo.sha = repo.git(&["rev-parse", "HEAD"]);
+    assert!(
+        !repo.run(&script).status.success(),
+        "a later main CI must still wait for the merged release"
+    );
+}
+
+#[test]
+fn proposal_is_closed_if_main_advances_during_reconciliation() {
+    let repo = Repo::new();
+    let cargo = repo.dir.join("bin/cargo");
+    fs::write(
+        &cargo,
+        r#"#!/bin/sh
+set -eu
+if [ -f "$GH_TEST_DIR/advance-main" ]; then
+  git commit --allow-empty -qm 'fix: concurrent main push'
+  git push -q origin HEAD:main
+fi
+"#,
+    )
+    .unwrap();
+    fs::set_permissions(cargo, fs::Permissions::from_mode(0o755)).unwrap();
+    let script = step("Maintain the release pull request");
+    assert!(repo.run(&script).status.success());
+    fs::write(repo.dir.join("advance-main"), "").unwrap();
+    let raced = repo.run(&script);
+    assert!(!raced.status.success());
+    assert!(String::from_utf8_lossy(&raced.stderr).contains("Main advanced during proposal"));
+    let calls = fs::read_to_string(repo.dir.join("calls")).unwrap();
+    assert!(calls.contains("pr close 1 --comment"));
+}
+
+#[test]
+fn tag_and_publication_are_idempotent_and_reject_partial_or_conflicting_state() {
+    let repo = Repo::new();
+    let script = step("Tag and publish the merged release");
+    fs::write(repo.dir.join("releases"), "[]").unwrap();
+    let result = repo.run(&script);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(repo.git(&["rev-parse", "v0.1.0^{}"]), repo.sha);
+    let calls = fs::read_to_string(repo.dir.join("calls")).unwrap();
+    assert!(calls.contains("release create v0.1.0 --verify-tag --draft"));
+    assert!(calls.contains("release edit v0.1.0 --draft=false"));
+    fs::write(repo.dir.join("calls"), "").unwrap();
+    let complete = r#"[{"tag_name":"v0.1.0","draft":false,"assets":[{"name":"evin-v0.1.0-x86_64-unknown-linux-musl.tar.gz"},{"name":"esh-v0.1.0-x86_64-unknown-linux-musl.tar.gz"}]}]"#;
+    fs::write(repo.dir.join("releases"), complete).unwrap();
+    assert!(repo.run(&script).status.success());
+    assert_eq!(fs::read_to_string(repo.dir.join("calls")).unwrap(), "");
+    fs::write(
+        repo.dir.join("releases"),
+        complete.replace("\"draft\":false", "\"draft\":true"),
+    )
+    .unwrap();
+    assert!(!repo.run(&script).status.success());
+    fs::write(repo.dir.join("releases"), "[]").unwrap();
+    repo.git(&["tag", "-d", "v0.1.0"]);
+    repo.git(&["tag", "v0.1.0"]);
+    assert!(
+        !repo.run(&script).status.success(),
+        "lightweight tag must be rejected"
+    );
+    repo.git(&["tag", "-d", "v0.1.0"]);
+    repo.git(&["commit", "--allow-empty", "-qm", "fix: later"]);
+    repo.git(&["tag", "-a", "v0.1.0", "-m", "wrong commit"]);
+    assert!(
+        !repo.run(&script).status.success(),
+        "tag pointing to another commit must be rejected"
+    );
 }

@@ -1,5 +1,5 @@
 [workspace.package]
-version = "1.0.0-canary.100"
+version = "0.1.0"
 edition = "2024"
 authors = ["Du <github.com/dukasn>"]
 publish = false

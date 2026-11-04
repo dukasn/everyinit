@@ -1,7 +1,7 @@
 #!evin/v1
 workspace:
   name: main
-  version: "1.0.0-canary.100"
+  version: "0.1.0"
   rules: ".evin/gitrules.flow"
   install_hint: "cargo install --path crates/evin"
   hook_runner:

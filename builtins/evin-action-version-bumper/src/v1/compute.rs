@@ -16,6 +16,22 @@ use semver::{Prerelease, Version};
 
 use evin_gitrules::models::Impact;
 
+fn bump_base(v: &mut Version, impact: Impact, cargo_pre_1_0: bool) {
+    match (cargo_pre_1_0 && v.major == 0, impact) {
+        (true, Impact::Major) | (false, Impact::Minor) => {
+            v.minor += 1;
+            v.patch = 0;
+        }
+        (false, Impact::Major) => {
+            v.major += 1;
+            v.minor = 0;
+            v.patch = 0;
+        }
+        (_, Impact::Patch) | (true, Impact::Minor) => v.patch += 1,
+        (_, Impact::None) => {}
+    }
+}
+
 pub fn compute_version(
     current: &str,
     impacts: &[Impact],
@@ -23,6 +39,7 @@ pub fn compute_version(
     prerelease: Option<&str>,
     channel_template: Option<&str>,
     start_at_one: bool,
+    cargo_pre_1_0: bool,
 ) -> Option<String> {
     let max_impact = impacts.iter().max().copied().unwrap_or(Impact::None);
 
@@ -70,21 +87,7 @@ pub fn compute_version(
         }
 
         // Branching from stable: bump base and reset `{n}`
-        match max_impact {
-            Impact::Major => {
-                v.major += 1;
-                v.minor = 0;
-                v.patch = 0;
-            }
-            Impact::Minor => {
-                v.minor += 1;
-                v.patch = 0;
-            }
-            Impact::Patch => {
-                v.patch += 1;
-            }
-            Impact::None => return None,
-        }
+        bump_base(&mut v, max_impact, cargo_pre_1_0);
         let new_pre = format!("{}.{}", prefix_clean, start_num);
         v.pre = Prerelease::new(&new_pre).unwrap_or(Prerelease::EMPTY);
         return Some(v.to_string());
@@ -105,21 +108,7 @@ pub fn compute_version(
         return Some(v.to_string());
     }
 
-    match max_impact {
-        Impact::Major => {
-            v.major += 1;
-            v.minor = 0;
-            v.patch = 0;
-        }
-        Impact::Minor => {
-            v.minor += 1;
-            v.patch = 0;
-        }
-        Impact::Patch => {
-            v.patch += 1;
-        }
-        Impact::None => return None,
-    }
+    bump_base(&mut v, max_impact, cargo_pre_1_0);
 
     if let Some(prefix) = prerelease {
         let new_pre = format!("{}.1", prefix);
@@ -127,4 +116,130 @@ pub fn compute_version(
     }
 
     Some(v.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn impacts_follow_pre_one_and_stable_version_rules() {
+        for (current, impact, expected) in [
+            ("0.1.0", Impact::Patch, "0.1.1"),
+            ("0.1.0", Impact::Minor, "0.1.1"),
+            ("0.1.2", Impact::Major, "0.2.0"),
+            ("0.0.1", Impact::Major, "0.1.0"),
+            ("1.2.3", Impact::Patch, "1.2.4"),
+            ("1.2.3", Impact::Minor, "1.3.0"),
+            ("1.2.3", Impact::Major, "2.0.0"),
+        ] {
+            assert_eq!(
+                compute_version(current, &[impact], false, None, None, false, true).as_deref(),
+                Some(expected)
+            );
+        }
+        assert_eq!(
+            compute_version(
+                "0.1.0",
+                &[Impact::Patch, Impact::Major],
+                false,
+                None,
+                None,
+                false,
+                true
+            )
+            .as_deref(),
+            Some("0.2.0")
+        );
+        assert_eq!(
+            compute_version("0.1.0", &[], false, None, None, false, true),
+            None
+        );
+    }
+
+    #[test]
+    fn prerelease_modes_use_pre_one_base_and_preserve_existing_prereleases() {
+        for (current, impact, stable, prerelease, channel, expected) in [
+            (
+                "0.1.0",
+                Impact::Minor,
+                false,
+                Some("rc"),
+                None,
+                "0.1.1-rc.1",
+            ),
+            (
+                "0.1.3",
+                Impact::Major,
+                false,
+                None,
+                Some("rc.{n}"),
+                "0.2.0-rc.0",
+            ),
+            (
+                "1.2.3",
+                Impact::Major,
+                false,
+                None,
+                Some("rc.{n}"),
+                "2.0.0-rc.0",
+            ),
+            ("0.2.0-rc.1", Impact::Major, false, None, None, "0.2.0-rc.2"),
+            (
+                "0.2.0-rc.1",
+                Impact::Major,
+                false,
+                None,
+                Some("beta.{n}"),
+                "0.2.0-beta.0",
+            ),
+            ("0.2.0-rc.1", Impact::Minor, true, None, None, "0.2.0"),
+        ] {
+            assert_eq!(
+                compute_version(current, &[impact], stable, prerelease, channel, false, true)
+                    .as_deref(),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn generic_mode_keeps_existing_semver_behavior() {
+        for (impact, expected) in [
+            (Impact::Patch, "0.1.1"),
+            (Impact::Minor, "0.2.0"),
+            (Impact::Major, "1.0.0"),
+        ] {
+            assert_eq!(
+                compute_version("0.1.0", &[impact], false, None, None, false, false).as_deref(),
+                Some(expected)
+            );
+        }
+        assert_eq!(
+            compute_version(
+                "0.1.0",
+                &[Impact::Minor],
+                false,
+                Some("rc"),
+                None,
+                false,
+                false
+            )
+            .as_deref(),
+            Some("0.2.0-rc.1")
+        );
+        assert_eq!(
+            compute_version(
+                "0.1.0",
+                &[Impact::Major],
+                false,
+                None,
+                Some("rc.{n}"),
+                false,
+                false
+            )
+            .as_deref(),
+            Some("1.0.0-rc.0")
+        );
+    }
 }

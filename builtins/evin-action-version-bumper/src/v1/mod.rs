@@ -61,6 +61,7 @@ pub struct VersionBumperConfig {
     pub read_only: bool,
     pub fixed_version: Option<String>,
     pub initial_version: String,
+    pub cargo_pre_1_0: bool,
     pub stable: bool,
     pub prerelease: Option<String>,
     pub channel: Option<String>,
@@ -75,6 +76,7 @@ impl Default for VersionBumperConfig {
             read_only: false,
             fixed_version: None,
             initial_version: "0.1.0".to_string(),
+            cargo_pre_1_0: false,
             stable: false,
             prerelease: None,
             channel: None,
@@ -519,6 +521,7 @@ pub async fn execute(
             config.prerelease.as_deref(),
             hydrated_channel.as_deref(),
             start_at_one,
+            config.cargo_pre_1_0,
         ) {
             Some(version) => {
                 semantic_change = true;
@@ -587,13 +590,14 @@ pub async fn execute(
     ctx.log.debug_event(evin_action_sdk::debug::VersionOutput {
         count: config.files.len(),
     });
-    let mut modified_files = Vec::new();
+    let mut planned_updates = Vec::new();
+    let mut planned_contents: HashMap<std::path::PathBuf, String> = HashMap::new();
     for file in if semantic_change && !config.read_only {
         config.files.as_slice()
     } else {
         &[]
     } {
-        let (path, regex, replacement) = match file {
+        let (path, regex, fallback_regex, replacement) = match file {
             FileConfig::Auto(path) => {
                 let kind = manifest_kind(path).expect("validated manifest");
                 let regex = if kind == "json" {
@@ -606,7 +610,7 @@ pub async fn execute(
                 } else {
                     format!("version = \"{version}\"")
                 };
-                (path.clone(), regex, replacement)
+                (path.clone(), regex, None, replacement)
             }
             FileConfig::Custom(custom) => {
                 let mut regex_values = self_values.clone();
@@ -616,27 +620,56 @@ pub async fn execute(
                 );
                 let pattern = resolve_local_template(&custom.match_pattern, ctx, &regex_values)?;
                 let regex = Regex::new(&pattern).map_err(|e| e.to_string())?;
+                let fallback_regex = if !found_tag
+                    && custom.match_pattern.contains("${previous_version}")
+                {
+                    regex_values.insert("previous_version".to_string(), regex::escape(&version));
+                    let pattern =
+                        resolve_local_template(&custom.match_pattern, ctx, &regex_values)?;
+                    Some(Regex::new(&pattern).map_err(|e| e.to_string())?)
+                } else {
+                    None
+                };
                 let replacement = resolve_local_template(&custom.write, ctx, &self_values)?;
-                (custom.path.clone(), regex, replacement)
+                (custom.path.clone(), regex, fallback_regex, replacement)
             }
         };
 
-        let content = ctx.fs.read_to_string(&path).map_err(|e| e.to_string())?;
+        let physical_path = ctx
+            .fs
+            .get_safe_physical_path(&path)
+            .map_err(|e| e.to_string())?;
+        let content = match planned_contents.get(&physical_path) {
+            Some(content) => content.clone(),
+            None => ctx.fs.read_to_string(&path).map_err(|e| e.to_string())?,
+        };
+        let regex = if regex.is_match(&content) {
+            &regex
+        } else if let Some(fallback) = fallback_regex.as_ref().filter(|r| r.is_match(&content)) {
+            fallback
+        } else {
+            return Err(format!("version replacement did not match file: {path}").into());
+        };
         let new_content = regex.replace(&content, replacement.as_str()).to_string();
         if content != new_content {
-            if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
-                ctx.log.plan(evin_action_sdk::activity::VersionUpdatePlan {
-                    version: version.clone(),
-                    path: path.clone(),
-                });
-                modified_files.push(path);
-            } else {
-                ctx.fs
-                    .write(&path, new_content.as_bytes())
-                    .map_err(|e| e.to_string())?;
-                modified_files.push(path);
-            }
+            planned_contents.insert(physical_path, new_content.clone());
+            planned_updates.push((path, new_content));
         }
+    }
+
+    let mut modified_files = Vec::new();
+    for (path, new_content) in planned_updates {
+        if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
+            ctx.log.plan(evin_action_sdk::activity::VersionUpdatePlan {
+                version: version.clone(),
+                path: path.clone(),
+            });
+        } else {
+            ctx.fs
+                .write(&path, new_content.as_bytes())
+                .map_err(|e| e.to_string())?;
+        }
+        modified_files.push(path);
     }
 
     let mut lock_changed = false;
@@ -761,7 +794,12 @@ pub async fn execute(
                 .map_err(|e| e.to_string())?;
         }
 
-        if !ctx.git().has_staged_changes().await.unwrap_or(false) {
+        let has_staged_changes = ctx
+            .git()
+            .has_staged_changes()
+            .await
+            .map_err(|e| e.to_string())?;
+        if !has_staged_changes && (found_tag || !config.git.defer) {
             return Err(evin_diagnostic::Diagnostic::new(
                 "Action Failed",
                 evin_diagnostic::IssueCode::new("no-staged-changes"),
@@ -864,6 +902,286 @@ mod tests {
         ] {
             git(root, args);
         }
+    }
+
+    #[test]
+    fn cargo_pre_one_option_is_optional_and_boolean() {
+        assert!(!VersionBumperConfig::from_with(None).unwrap().cargo_pre_1_0);
+        for (yaml, expected) in [
+            ("cargo_pre_1_0: true\n", true),
+            ("cargo_pre_1_0: false\n", false),
+        ] {
+            let config =
+                VersionBumperConfig::from_with(Some(evin_yaml::parse_yaml(yaml).unwrap())).unwrap();
+            assert_eq!(config.cargo_pre_1_0, expected);
+        }
+        assert!(
+            VersionBumperConfig::from_with(Some(
+                evin_yaml::parse_yaml("cargo_pre_1_0: nope\n").unwrap()
+            ))
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn first_release_accepts_existing_initial_version_when_deferred() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "0.1.0\n").unwrap();
+        std::fs::write(
+            temp.path().join("Cargo.toml"),
+            "[package]\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "initial_version: 0.1.0\nfiles:\n  - Cargo.toml\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
+        )
+        .unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        {
+            let outputs = ctx.state.outputs.lock().unwrap();
+            assert_eq!(outputs["version"], "0.1.0");
+            assert_eq!(outputs["tag"], "v0.1.0");
+            assert_eq!(outputs["changed"], "true");
+        }
+        assert!(!ctx.git().has_staged_changes().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn first_release_without_staged_changes_cannot_commit() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "0.1.0\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  message: 'release: ${version}'\n",
+        )
+        .unwrap();
+        let error = execute(&ctx, Some(with)).await.unwrap_err();
+        assert_eq!(error.code.key, "no-staged-changes");
+        assert!(!ctx.git().has_tag("v0.1.0").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn first_release_still_replaces_zero_previous_version_and_can_defer() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "0.0.0\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
+        )
+        .unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("VERSION")).unwrap(),
+            "0.1.0\n"
+        );
+        assert!(ctx.git().has_staged_changes().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn first_release_with_no_edits_can_defer() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "0.1.0\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
+        )
+        .unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        assert_eq!(ctx.state.outputs.lock().unwrap()["changed"], "true");
+        assert!(!ctx.git().has_staged_changes().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn tagged_pre_one_releases_use_commit_impacts() {
+        for (option, subject, expected) in [
+            ("cargo_pre_1_0: true\n", "fix: correct an issue", "0.1.1"),
+            ("cargo_pre_1_0: true\n", "feat: add a capability", "0.1.1"),
+            (
+                "cargo_pre_1_0: true\n",
+                "feat!: break compatibility",
+                "0.2.0",
+            ),
+            ("", "feat: add a capability", "0.2.0"),
+            (
+                "cargo_pre_1_0: false\n",
+                "feat!: break compatibility",
+                "1.0.0",
+            ),
+        ] {
+            let temp = tempfile::TempDir::new().unwrap();
+            init_repo(temp.path());
+            std::fs::write(temp.path().join("VERSION"), "0.1.0\n").unwrap();
+            git(temp.path(), &["add", "."]);
+            git(temp.path(), &["commit", "-qm", "feat: initial"]);
+            git(temp.path(), &["tag", "v0.1.0"]);
+            git(temp.path(), &["commit", "--allow-empty", "-qm", subject]);
+            let mut ctx = context(temp.path());
+            ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+            let with = evin_yaml::parse_yaml(&format!(
+                "{option}files:\n  - path: VERSION\n    match: '(?m)^${{previous_version}}$'\n    write: '${{version}}'\n"
+            ))
+            .unwrap();
+            execute(&ctx, Some(with)).await.unwrap();
+            assert_eq!(ctx.state.outputs.lock().unwrap()["version"], expected);
+            assert_eq!(
+                std::fs::read_to_string(temp.path().join("VERSION")).unwrap(),
+                format!("{expected}\n")
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unmatched_replacements_fail_with_and_without_existing_tag() {
+        for tagged in [false, true] {
+            for automatic in [false, true] {
+                let temp = tempfile::TempDir::new().unwrap();
+                init_repo(temp.path());
+                let (filename, files) = if automatic {
+                    ("Cargo.toml", "files:\n  - Cargo.toml\n")
+                } else {
+                    (
+                        "VERSION",
+                        "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
+                    )
+                };
+                std::fs::write(temp.path().join(filename), "unrelated\n").unwrap();
+                git(temp.path(), &["add", "."]);
+                git(temp.path(), &["commit", "-qm", "feat: initial"]);
+                if tagged {
+                    git(temp.path(), &["tag", "v0.1.0"]);
+                    git(
+                        temp.path(),
+                        &["commit", "--allow-empty", "-qm", "feat: next"],
+                    );
+                }
+                let mut ctx = context(temp.path());
+                ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+                let error = execute(&ctx, Some(evin_yaml::parse_yaml(files).unwrap()))
+                    .await
+                    .unwrap_err();
+                assert!(
+                    error
+                        .to_string()
+                        .contains("version replacement did not match file"),
+                    "{error}"
+                );
+                assert_eq!(
+                    std::fs::read_to_string(temp.path().join(filename)).unwrap(),
+                    "unrelated\n"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn later_mismatch_does_not_write_earlier_replacement() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("Cargo.toml"), "version = \"0.0.0\"\n").unwrap();
+        std::fs::write(temp.path().join("VERSION"), "unrelated\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "files:\n  - Cargo.toml\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
+        )
+        .unwrap();
+        assert!(execute(&ctx, Some(with)).await.is_err());
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("Cargo.toml")).unwrap(),
+            "version = \"0.0.0\"\n"
+        );
+        assert!(!ctx.git().has_staged_changes().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn repeated_file_replacements_are_validated_in_order() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "old\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "files:\n  - path: VERSION\n    match: old\n    write: intermediate\n  - path: ./VERSION\n    match: intermediate\n    write: '${version}'\n",
+        )
+        .unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("VERSION")).unwrap(),
+            "0.1.0\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn tagged_release_does_not_fall_back_to_new_version() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "0.1.1\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        git(temp.path(), &["tag", "v0.1.0"]);
+        git(
+            temp.path(),
+            &["commit", "--allow-empty", "-qm", "feat: next"],
+        );
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "cargo_pre_1_0: true\nfiles:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
+        )
+        .unwrap();
+        assert!(execute(&ctx, Some(with)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn calculated_existing_tag_fails_before_edits() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "0.1.0\n").unwrap();
+        git(temp.path(), &["add", "."]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        git(temp.path(), &["tag", "v0.1.1"]);
+        git(
+            temp.path(),
+            &["commit", "--allow-empty", "-qm", "chore: previous release"],
+        );
+        git(temp.path(), &["tag", "v0.1.0"]);
+        git(
+            temp.path(),
+            &["commit", "--allow-empty", "-qm", "feat: next"],
+        );
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let with = evin_yaml::parse_yaml(
+            "cargo_pre_1_0: true\nfiles:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
+        )
+        .unwrap();
+        let error = execute(&ctx, Some(with)).await.unwrap_err();
+        assert_eq!(error.code.key, "calculated-tag-already-exists");
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("VERSION")).unwrap(),
+            "0.1.0\n"
+        );
     }
 
     #[tokio::test]

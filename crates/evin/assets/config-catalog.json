@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generator": "docs-generator@1.0.0-canary.100",
+  "generator": "docs-generator@0.1.0",
   "generated_at": "1970-01-01T00:00:00+00:00",
   "symbols": {
     "GitRules": {
@@ -402,6 +402,16 @@
       "hover_markdown": "```flow\nuses: evin/version-bumper@v1\n```\n\n**Version bumper action** (`action.evin/version-bumper@v1`): Resolve and write the next release version.\n\nConfigure version sources and release behavior through `with:`.",
       "hover_plaintext": "uses: evin/version-bumper@v1\n\nVersion bumper action (action.evin/version-bumper@v1): Resolve and write the next release version.\n\nConfigure version sources and release behavior through with:.",
       "terminal_ansi": "\u001b[1;36muses: evin/version-bumper@v1\u001b[0m\n\n\u001b[1mVersion bumper action\u001b[0m (action.evin/version-bumper@v1): Resolve and write the next release version.\n\nConfigure version sources and release behavior through \u001b[33mwith:\u001b[0m."
+    },
+    "action.evin/version-bumper@v1.with.cargo_pre_1_0": {
+      "name": "action.evin/version-bumper@v1.with.cargo_pre_1_0",
+      "synopsis": "cargo_pre_1_0: true",
+      "summary": "Use Cargo-compatible impact mapping below version 1.0.0.",
+      "category": "action-field",
+      "handler": "",
+      "hover_markdown": "```flow\ncargo_pre_1_0: true\n```\n\n**Cargo-compatible pre-1.0 versioning** (`action.evin/version-bumper@v1.with.cargo_pre_1_0`): Use Cargo-compatible impact mapping below version 1.0.0.\n\nBelow 1.0.0, patch and minor impacts increment the patch component, while\nmajor impacts increment the minor component. The default is `false`.",
+      "hover_plaintext": "cargo_pre_1_0: true\n\nCargo-compatible pre-1.0 versioning (action.evin/version-bumper@v1.with.cargo_pre_1_0): Use Cargo-compatible impact mapping below version 1.0.0.\n\nBelow 1.0.0, patch and minor impacts increment the patch component, while\nmajor impacts increment the minor component. The default is false.",
+      "terminal_ansi": "\u001b[1;36mcargo_pre_1_0: true\u001b[0m\n\n\u001b[1mCargo-compatible pre-1.0 versioning\u001b[0m (action.evin/version-bumper@v1.with.cargo_pre_1_0): Use Cargo-compatible impact mapping below version 1.0.0.\n\nBelow 1.0.0, patch and minor impacts increment the patch component, while\nmajor impacts increment the minor component. The default is \u001b[33mfalse\u001b[0m."
     },
     "action.evin/version-bumper@v1.with.fixed_version": {
       "name": "action.evin/version-bumper@v1.with.fixed_version",
