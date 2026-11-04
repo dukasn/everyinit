@@ -100,6 +100,10 @@ pub(crate) fn builtin_actions()
             "evin/git-release@v1",
             Arc::new(evin_action_git_release::GitReleaseAction),
         ),
+        (
+            "evin/review-request@v1",
+            Arc::new(evin_action_review_request::ReviewRequestAction),
+        ),
         ("evin/docs@v1", Arc::new(evin_action_docs::DocsAction)),
         ("evin/ci@v1", Arc::new(evin_action_ci::CiAction)),
     ]

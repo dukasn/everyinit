@@ -38,6 +38,7 @@ evin-config = { workspace = true }
 evin-locales = { workspace = true }
 evin-action-version-bumper = { workspace = true }
 evin-action-git-release = { workspace = true }
+evin-action-review-request = { workspace = true }
 evin-action-docs = { workspace = true }
 evin-action-ci = { workspace = true }
 evin-action-sdk = { workspace = true }
