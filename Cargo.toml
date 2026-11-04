@@ -76,6 +76,7 @@ evin-action-changelog = { path = "builtins/evin-action-changelog" }
 evin-action-archive = { path = "builtins/evin-action-archive" }
 evin-action-version-bumper = { path = "builtins/evin-action-version-bumper" }
 evin-action-git-release = { path = "builtins/evin-action-git-release" }
+evin-action-review-request = { path = "builtins/evin-action-review-request" }
 evin-action-docs = { path = "builtins/evin-action-docs" }
 evin-action-ci = { path = "builtins/evin-action-ci" }
 evin-ci = { path = "crates/evin-ci" }

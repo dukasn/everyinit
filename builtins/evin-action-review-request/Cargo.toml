@@ -1,0 +1,22 @@
+[package]
+license.workspace = true
+name = "evin-action-review-request"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
+
+[dev-dependencies]
+tokio = { workspace = true }
+tempfile = { workspace = true }
+
+[dependencies]
+evin-diagnostic = { workspace = true }
+evin-yaml = { workspace = true }
+evin-action-sdk = { workspace = true }
+serde = { workspace = true }
+marked-yaml = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+evin-locales = { workspace = true }
+esh = { workspace = true }

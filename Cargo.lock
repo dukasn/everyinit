@@ -1129,6 +1129,7 @@ dependencies = [
  "evin-action-ci",
  "evin-action-docs",
  "evin-action-git-release",
+ "evin-action-review-request",
  "evin-action-sdk",
  "evin-action-version-bumper",
  "evin-catalog",
@@ -1275,6 +1276,23 @@ dependencies = [
  "evin-yaml",
  "marked-yaml",
  "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "evin-action-review-request"
+version = "1.0.0-canary.100"
+dependencies = [
+ "async-trait",
+ "esh",
+ "evin-action-sdk",
+ "evin-diagnostic",
+ "evin-locales",
+ "evin-yaml",
+ "marked-yaml",
  "serde",
  "serde_json",
  "tempfile",
