@@ -38,6 +38,7 @@ pub enum GitError {
     ExecutionFailed(String),
     CommitFailed(String),
     TagFailed(String),
+    PushFailed(String),
     NoStagedChanges,
     TagAlreadyExists(String),
     InvalidTagName(String),
@@ -231,6 +232,100 @@ impl GitProvider {
         Ok(())
     }
 
+    /// Pushes explicit refspecs to a remote. Dry runs only record the plan.
+    pub async fn push(&self, remote: &str, refs: &[String], force: bool) -> Result<(), GitError> {
+        if self.mode == crate::PipelineMode::DryRun {
+            self.log.plan(crate::activity::GitPushPlan {
+                remote: remote.to_string(),
+                refs: refs.join(" "),
+                force,
+            });
+            return Ok(());
+        }
+        let mut args = vec!["push"];
+        if force {
+            args.push("--force");
+        }
+        args.push(remote);
+        args.extend(refs.iter().map(String::as_str));
+        self.run_checked(&args, GitError::PushFailed)
+            .await
+            .map(drop)
+    }
+
+    /// Lists tags on a remote with the commit each one points at.
+    pub async fn remote_tags(&self, remote: &str) -> Result<Vec<(String, String)>, GitError> {
+        let stdout = self
+            .run_checked(&["ls-remote", "--tags", remote], GitError::ExecutionFailed)
+            .await?;
+        let mut tags: Vec<(String, String)> = Vec::new();
+        for line in stdout.lines() {
+            let Some((sha, name)) = line.split_once('\t') else {
+                continue;
+            };
+            let Some(name) = name.trim().strip_prefix("refs/tags/") else {
+                continue;
+            };
+            // Annotated tags list the tag object first and the peeled commit
+            // on a following `^{}` line.
+            match name.strip_suffix("^{}") {
+                Some(name) => {
+                    if let Some(entry) = tags.iter_mut().find(|(n, _)| n == name) {
+                        entry.1 = sha.to_string();
+                    }
+                }
+                None => tags.push((name.to_string(), sha.to_string())),
+            }
+        }
+        Ok(tags)
+    }
+
+    /// Tells whether `commit` is an ancestor of `rev`, or `None` when the commit
+    /// is not present in this repository.
+    pub async fn is_ancestor(&self, commit: &str, rev: &str) -> Result<Option<bool>, GitError> {
+        let present = evin_git::cmd::git_cmd()
+            .args(["cat-file", "-e", &format!("{commit}^{{commit}}")])
+            .current_dir(&self.workspace_root)
+            .output()
+            .await
+            .map_err(|e| GitError::ExecutionFailed(e.to_string()))?;
+        if !present.status.success() {
+            return Ok(None);
+        }
+        let output = evin_git::cmd::git_cmd()
+            .args(["merge-base", "--is-ancestor", commit, rev])
+            .current_dir(&self.workspace_root)
+            .output()
+            .await
+            .map_err(|e| GitError::ExecutionFailed(e.to_string()))?;
+        Ok(Some(output.status.success()))
+    }
+
+    /// Deletes one tag from a remote.
+    pub async fn delete_remote_tag(&self, remote: &str, tag: &str) -> Result<(), GitError> {
+        let refspec = format!(":refs/tags/{tag}");
+        self.run_checked(&["push", remote, &refspec], GitError::PushFailed)
+            .await
+            .map(drop)
+    }
+
+    async fn run_checked(
+        &self,
+        args: &[&str],
+        failure: fn(String) -> GitError,
+    ) -> Result<String, GitError> {
+        let output = evin_git::cmd::git_cmd()
+            .args(args)
+            .current_dir(&self.workspace_root)
+            .output()
+            .await
+            .map_err(|e| GitError::ExecutionFailed(e.to_string()))?;
+        if !output.status.success() {
+            return Err(failure(String::from_utf8_lossy(&output.stderr).to_string()));
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
     pub async fn validate_tag_name(&self, tag: &str) -> Result<(), GitError> {
         let output = evin_git::cmd::git_cmd()
             .args(["check-ref-format", &format!("refs/tags/{}", tag)])
@@ -375,6 +470,11 @@ impl From<GitError> for evin_diagnostic::Diagnostic {
             GitError::TagFailed(e) => evin_locales::diagnostic(
                 evin_diagnostic::IssueCode::new("issue-git-command-failed")
                     .arg("command", "git tag")
+                    .arg("error", e),
+            ),
+            GitError::PushFailed(e) => evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("issue-git-command-failed")
+                    .arg("command", "git push")
                     .arg("error", e),
             ),
             GitError::NoStagedChanges => {
