@@ -74,6 +74,9 @@ jobs:
           [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || { echo 'Invalid stable release version' >&2; exit 1; }
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
           echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
+      - name: Extract merged release notes with Evin
+        if: steps.proposal.outputs.merged == '1'
+        run: cargo evin-dev run release:release-notes
       - name: Build and verify release archives with Evin
         if: steps.proposal.outputs.merged == '1'
         run: cargo evin-dev run release:release-archives-verify
@@ -100,7 +103,7 @@ jobs:
             echo 'Existing draft or incomplete release: inspect and repair or remove it before retrying.' >&2
             exit 1
           fi
-          gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --generate-notes \
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes-file target/release-notes.md \
             "target/release-archives/evin-$RELEASE_TAG-$RELEASE_TARGET.tar.gz" \
             "target/release-archives/esh-$RELEASE_TAG-$RELEASE_TARGET.tar.gz"
           gh release edit "$RELEASE_TAG" --draft=false

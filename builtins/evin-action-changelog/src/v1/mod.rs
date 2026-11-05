@@ -68,6 +68,8 @@ struct ChangelogConfig {
     label: Option<String>,
     #[serde(default)]
     notes_path: Option<String>,
+    #[serde(default)]
+    section: Option<String>,
 }
 
 impl Default for ChangelogConfig {
@@ -83,6 +85,7 @@ impl Default for ChangelogConfig {
             version: None,
             label: None,
             notes_path: None,
+            section: None,
         }
     }
 }
@@ -115,6 +118,22 @@ impl ChangelogConfig {
                     span: None,
                 },
             ));
+        }
+        if let Some(section) = &self.section {
+            if section.trim().is_empty() || self.notes_path.is_none() {
+                return Err(ChangelogError::InvalidConfiguration(
+                    evin_yaml::ConfigError {
+                        message: "section must be non-empty and requires notes_path".to_string(),
+                        span: None,
+                    },
+                ));
+            }
+            validate_template_syntax(section).map_err(|error| {
+                ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+                    message: format!("section contains invalid template syntax: {error}"),
+                    span: None,
+                })
+            })?;
         }
         if self.unreleased_heading.trim().is_empty() {
             return Err(ChangelogError::InvalidConfiguration(
@@ -151,7 +170,7 @@ impl ChangelogConfig {
                     span: None,
                 })
             })?;
-        } else if !self.include_unreleased {
+        } else if !self.include_unreleased && self.section.is_none() {
             return Err(ChangelogError::InvalidConfiguration(
                 evin_yaml::ConfigError {
                     message: evin_locales::t!(
@@ -192,6 +211,10 @@ enum ChangelogError {
         evin_locales::t!("file-write-failed", path = path, error = message)
     )]
     WriteFileFailed { path: String, message: String },
+    #[error("Failed to read changelog '{path}': {message}")]
+    ReadFileFailed { path: String, message: String },
+    #[error("{0}")]
+    InvalidSection(String),
 }
 
 #[derive(Debug)]
@@ -241,6 +264,59 @@ async fn generate_changelog(
         .load_config(with.as_ref())
         .map_err(ChangelogError::InvalidConfiguration)?;
     config.validate()?;
+
+    if let Some(section) = &config.section {
+        let section = resolve_templates(section, ctx)
+            .map_err(|error| ChangelogError::InvalidSection(format!("Invalid section: {error}")))?;
+        if section.trim().is_empty() {
+            return Err(ChangelogError::InvalidSection(
+                "Changelog section must not be empty".to_string(),
+            ));
+        }
+        let notes_path = config.notes_path.as_deref().expect("validated notes_path");
+        let input_path = ctx
+            .fs
+            .get_safe_physical_path(&config.path)
+            .map_err(|error| ChangelogError::ReadFileFailed {
+                path: config.path.clone(),
+                message: error.to_string(),
+            })?;
+        let output_path = ctx.fs.get_safe_physical_path(notes_path).map_err(|error| {
+            ChangelogError::WriteFileFailed {
+                path: notes_path.to_string(),
+                message: error.to_string(),
+            }
+        })?;
+        if input_path == output_path {
+            return Err(ChangelogError::InvalidSection(
+                "Changelog and notes paths must differ".to_string(),
+            ));
+        }
+        let content = ctx.fs.read_to_string(&config.path).map_err(|error| {
+            ChangelogError::ReadFileFailed {
+                path: config.path.clone(),
+                message: error.to_string(),
+            }
+        })?;
+        let slicer = evin_ci::ChangelogSlicer::parse(&content);
+        let notes = slicer
+            .get_unique_slice(&section)
+            .map_err(ChangelogError::InvalidSection)?
+            .ok_or_else(|| {
+                ChangelogError::InvalidSection(format!(
+                    "Missing or empty changelog section for {section}"
+                ))
+            })?;
+        ctx.fs
+            .write(notes_path, format!("{}\n", notes.body))
+            .map_err(|error| ChangelogError::WriteFileFailed {
+                path: notes_path.to_string(),
+                message: error.to_string(),
+            })?;
+        ctx.state.set_output("path", &config.path);
+        ctx.state.set_output("notes_path", notes_path);
+        return Ok(());
+    }
 
     // 1. Fetch entire commit history
     let commits = ctx
@@ -630,9 +706,99 @@ mod tests {
         assert!(!ctx.state.outputs.lock().unwrap().contains_key("notes_path"));
     }
 
+    #[tokio::test]
+    async fn release_commit_filter_and_chore_section_follow_git_rules() {
+        let temp = repository(false);
+        for subject in [
+            "chore(release): 1.0.1",
+            "chore(release): v1.0.2",
+            "chore(ship): 1.0.3",
+            "chore(sdk): maintain the toolkit",
+            "fix(core): repair the parser",
+        ] {
+            git(temp.path(), &["commit", "--allow-empty", "-qm", subject]);
+        }
+        let mut ctx = context(temp.path());
+        let mut rules = evin_gitrules::GitRulesRoot::default();
+        let releases = rules.releases.as_mut().unwrap();
+        releases
+            .change_types
+            .get_mut("chore")
+            .unwrap()
+            .changelog_section = Some("Maintenance".to_string());
+        ctx.gitrules = Arc::new(rules);
+        let with = evin_yaml::parse_yaml("version: 1.0.1\nnotes_path: target/notes.md\n").unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+
+        let notes = std::fs::read_to_string(temp.path().join("target/notes.md")).unwrap();
+        assert!(notes.contains("### Maintenance"));
+        assert!(notes.contains("**sdk:** maintain the toolkit"));
+        assert!(notes.contains("**ship:** 1.0.3"));
+        assert!(notes.contains("**core:** repair the parser"));
+        assert!(!notes.contains("**release:** 1.0.1"));
+        assert!(!notes.contains("**release:** v1.0.2"));
+
+        Arc::make_mut(&mut ctx.gitrules)
+            .releases
+            .as_mut()
+            .unwrap()
+            .commit_message = Some("chore(ship): {version}".to_string());
+        let with = evin_yaml::parse_yaml("version: 1.0.1\nnotes_path: target/notes.md\n").unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        let custom_notes = std::fs::read_to_string(temp.path().join("target/notes.md")).unwrap();
+        assert!(!custom_notes.contains("**ship:** 1.0.3"));
+        assert!(custom_notes.contains("**release:** 1.0.1"));
+    }
+
     #[test]
     fn rejects_an_empty_notes_path() {
         let with = evin_yaml::parse_yaml("notes_path: \"  \"\n").unwrap();
         assert!(validate_config(Some(&with)).is_err());
+    }
+
+    #[tokio::test]
+    async fn exports_existing_section_without_regenerating_changelog() {
+        let temp = repository(true);
+        let changelog = "# Changelog\n\n## [v1.0.1]\n\n### Bug Fixes\n\n- reviewed fix\n\n## [v1.0.0]\n\n- older\n";
+        std::fs::write(temp.path().join("CHANGELOG.md"), changelog).unwrap();
+        let ctx = context(temp.path());
+        let with = evin_yaml::parse_yaml("section: v1.0.1\nnotes_path: target/notes.md\n").unwrap();
+        execute(&ctx, Some(with)).await.unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("target/notes.md")).unwrap(),
+            "### Bug Fixes\n\n- reviewed fix\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("CHANGELOG.md")).unwrap(),
+            changelog
+        );
+    }
+
+    #[tokio::test]
+    async fn export_rejects_missing_empty_duplicate_and_same_path() {
+        let temp = repository(false);
+        let ctx = context(temp.path());
+        let path = temp.path().join("CHANGELOG.md");
+        for changelog in [
+            "## [v1.0.0]\n- older\n",
+            "## [v1.0.1]\n\n## [v1.0.0]\n- older\n",
+            "## [v1.0.1]\n- first\n## [v1.0.1]\n- duplicate\n",
+        ] {
+            std::fs::write(&path, changelog).unwrap();
+            let with = evin_yaml::parse_yaml("section: v1.0.1\nnotes_path: notes.md\n").unwrap();
+            assert!(execute(&ctx, Some(with)).await.is_err());
+            assert!(!temp.path().join("notes.md").exists());
+        }
+        std::fs::write(&path, "## [v1.0.1]\n- keep\n").unwrap();
+        let with = evin_yaml::parse_yaml("section: v1.0.1\nnotes_path: ./CHANGELOG.md\n").unwrap();
+        assert!(execute(&ctx, Some(with)).await.is_err());
+        assert_eq!(
+            std::fs::read_to_string(path).unwrap(),
+            "## [v1.0.1]\n- keep\n"
+        );
+
+        assert!(
+            validate_config(Some(&evin_yaml::parse_yaml("section: v1.0.1\n").unwrap())).is_err()
+        );
     }
 }

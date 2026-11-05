@@ -47,7 +47,14 @@ const CHANGELOG_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             path: "notes_path",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Optional file receiving only the pending section body.",
+            description: "File receiving the pending or selected version section body.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
+            path: "section",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Export an existing version section instead of generating a changelog.",
             condition: None,
         },
         ActionFieldDescriptor {

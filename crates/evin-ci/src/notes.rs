@@ -14,17 +14,21 @@
 
 use crate::traits::NoteSlice;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Slices CHANGELOG.md into version sections and calculates SHA-256 digests
 #[derive(Debug, Clone, Default)]
 pub struct ChangelogSlicer {
     slices: HashMap<String, NoteSlice>,
+    headings: HashSet<String>,
+    duplicates: HashSet<String>,
 }
 
 impl ChangelogSlicer {
     pub fn parse(markdown: &str) -> Self {
         let mut slices = HashMap::new();
+        let mut seen = HashSet::new();
+        let mut duplicates = HashSet::new();
         let mut current_tag: Option<String> = None;
         let mut current_body_lines: Vec<&str> = Vec::new();
 
@@ -67,12 +71,17 @@ impl ChangelogSlicer {
                         .trim()
                 };
 
+                flush(&current_tag, &current_body_lines, &mut slices);
+                current_body_lines.clear();
                 if !candidate_tag.is_empty() && candidate_tag != "Unreleased" {
-                    flush(&current_tag, &current_body_lines, &mut slices);
+                    if !seen.insert(candidate_tag.to_string()) {
+                        duplicates.insert(candidate_tag.to_string());
+                    }
                     current_tag = Some(candidate_tag.to_string());
-                    current_body_lines.clear();
-                    continue;
+                } else {
+                    current_tag = None;
                 }
+                continue;
             }
 
             if current_tag.is_some() {
@@ -81,7 +90,11 @@ impl ChangelogSlicer {
         }
 
         flush(&current_tag, &current_body_lines, &mut slices);
-        Self { slices }
+        Self {
+            slices,
+            headings: seen,
+            duplicates,
+        }
     }
 
     pub fn get_slice(&self, tag: &str) -> Option<&NoteSlice> {
@@ -95,6 +108,21 @@ impl ChangelogSlicer {
                 self.slices.get(&with_v)
             }
         })
+    }
+
+    pub fn get_unique_slice(&self, tag: &str) -> Result<Option<&NoteSlice>, String> {
+        let clean = tag.trim();
+        let alternate = clean
+            .strip_prefix('v')
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("v{clean}"));
+        if self.duplicates.contains(clean)
+            || self.duplicates.contains(&alternate)
+            || (self.headings.contains(clean) && self.headings.contains(&alternate))
+        {
+            return Err(format!("Duplicate changelog sections for {clean}"));
+        }
+        Ok(self.get_slice(clean))
     }
 }
 
@@ -159,5 +187,27 @@ All notable changes to this project will be documented in this file.
         assert_ne!(slice6.sha256, slice5.sha256);
 
         assert!(slicer.get_slice("v2.0.0").is_none());
+    }
+
+    #[test]
+    fn unique_slices_reject_duplicates_and_stop_at_unreleased() {
+        let slicer = ChangelogSlicer::parse(
+            "## [v0.1.1]\n### Fixed\n- first\n## [Unreleased]\n- future\n## [v0.1.0]\n- old\n",
+        );
+        assert_eq!(
+            slicer.get_unique_slice("v0.1.1").unwrap().unwrap().body,
+            "### Fixed\n- first"
+        );
+        assert!(slicer.get_unique_slice("v0.2.0").unwrap().is_none());
+        for duplicate in [
+            "## [v0.1.1]\n- first\n## [v0.1.1]\n",
+            "## [v0.1.1]\n- first\n## [0.1.1]\n",
+        ] {
+            assert!(
+                ChangelogSlicer::parse(duplicate)
+                    .get_unique_slice("v0.1.1")
+                    .is_err()
+            );
+        }
     }
 }

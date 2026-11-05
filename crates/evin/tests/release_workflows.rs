@@ -75,7 +75,10 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     assert!(pos("Require release bot token") < pos("Require exact successful main push CI"));
     assert!(pos("Require exact successful main push CI") < pos("Identify merged release proposal"));
     assert!(
-        pos("Identify merged release proposal")
+        pos("Identify merged release proposal") < pos("Extract merged release notes with Evin")
+    );
+    assert!(
+        pos("Extract merged release notes with Evin")
             < pos("Build and verify release archives with Evin")
     );
     assert!(
@@ -119,6 +122,15 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     assert_eq!(git["enabled"].as_str(), Some("${release:bump.changed}"));
     assert!(release.contains("evin/review-request@v1"));
     assert!(release.contains("evin/archive@v1"));
+    let notes = &tasks["tasks"]["release-notes"]["steps"][0]["with"];
+    assert_eq!(notes["section"].as_str(), Some("${env.RELEASE_TAG}"));
+    assert_eq!(
+        notes["notes_path"].as_str(),
+        Some("target/release-notes.md")
+    );
+    let publish = step("Tag and publish the merged release");
+    assert!(publish.contains("--notes-file target/release-notes.md"));
+    assert!(!publish.contains("--generate-notes"));
     let yaml = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     assert!(!yaml.contains("github-script"));
     assert!(!yaml.contains("node "));
@@ -171,6 +183,12 @@ impl Repo {
         fs::create_dir_all(dir.join("bin")).unwrap();
         fs::create_dir_all(dir.join("work")).unwrap();
         let work = dir.join("work");
+        fs::create_dir_all(work.join("target")).unwrap();
+        fs::write(
+            work.join("target/release-notes.md"),
+            "### Fixes\n\n- reviewed fix\n",
+        )
+        .unwrap();
         let mut repo = Self {
             dir,
             work,
@@ -217,6 +235,17 @@ elif [ "$1 $2" = "pr list" ]; then
   echo 1
 elif [ "$1 $2" = "pr close" ]; then
   printf '%s\n' "$*" >> "$GH_TEST_DIR/calls"
+elif [ "$1 $2" = "release create" ]; then
+  printf '%s\n' "$*" >> "$GH_TEST_DIR/calls"
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--notes-file" ]; then
+      cp "$2" "$GH_TEST_DIR/published-notes"
+      exit 0
+    fi
+    shift
+  done
+  echo "Missing notes file" >&2
+  exit 1
 else
   printf '%s\n' "$*" >> "$GH_TEST_DIR/calls"
 fi
@@ -545,6 +574,10 @@ fn tag_and_publication_are_idempotent_and_reject_partial_or_conflicting_state() 
     let calls = fs::read_to_string(repo.dir.join("calls")).unwrap();
     assert!(calls.contains("release create v0.1.0 --verify-tag --draft"));
     assert!(calls.contains("release edit v0.1.0 --draft=false"));
+    assert_eq!(
+        fs::read_to_string(repo.dir.join("published-notes")).unwrap(),
+        "### Fixes\n\n- reviewed fix\n"
+    );
     fs::write(repo.dir.join("calls"), "").unwrap();
     let complete = r#"[{"tag_name":"v0.1.0","draft":false,"assets":[{"name":"evin-v0.1.0-x86_64-unknown-linux-musl.tar.gz"},{"name":"esh-v0.1.0-x86_64-unknown-linux-musl.tar.gz"}]}]"#;
     fs::write(repo.dir.join("releases"), complete).unwrap();
