@@ -110,6 +110,7 @@ pub struct SemanticTokens {
     pub data: Vec<u32>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DocumentSymbol {
     pub name: String,
     pub kind: u32,
@@ -117,6 +118,7 @@ pub struct DocumentSymbol {
     pub selection_range: Range,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceSymbol {
     pub name: String,
     pub kind: u32,
