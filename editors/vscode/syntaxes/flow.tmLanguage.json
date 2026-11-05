@@ -1,0 +1,160 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Evin Flow",
+  "scopeName": "source.flow",
+  "patterns": [
+    {
+      "include": "#shebang"
+    },
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#interpolation"
+    },
+    {
+      "include": "#top-level-keywords"
+    },
+    {
+      "include": "#task-properties"
+    },
+    {
+      "include": "#step-actions"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#yaml-keys"
+    }
+  ],
+  "repository": {
+    "shebang": {
+      "match": "^#!evin(?:/[^\\r\\n]+)?",
+      "name": "comment.line.shebang.flow"
+    },
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.flow"
+    },
+    "interpolation": {
+      "begin": "(\\$\\{\\{)",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.template-expression.begin.flow" }
+      },
+      "end": "(\\}\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.template-expression.end.flow" }
+      },
+      "name": "meta.template.expression.flow",
+      "patterns": [
+        {
+          "match": "\\b(env|matrix|steps|tasks|inputs|outputs)\\b",
+          "name": "variable.language.flow"
+        },
+        {
+          "match": "\\b(true|false|null)\\b",
+          "name": "constant.language.flow"
+        },
+        {
+          "match": "==|!=|<=|>=|<|>|&&|\\|\\||!",
+          "name": "keyword.operator.logical.flow"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#numbers"
+        }
+      ]
+    },
+    "top-level-keywords": {
+      "match": "^\\s*(workspace|module|stages|tasks|presets|rules|include|actions|matrix|env|hook_runner|install_hint|version|name)\\s*:",
+      "captures": {
+        "1": { "name": "entity.name.section.flow" }
+      }
+    },
+    "task-properties": {
+      "match": "^\\s*(stage|description|needs|steps|on|hooks|matrix|timeout|policy|presets)\\s*:",
+      "captures": {
+        "1": { "name": "support.type.property-name.flow" }
+      }
+    },
+    "step-actions": {
+      "match": "^\\s*-\\s*(run|use|with)\\s*:",
+      "captures": {
+        "1": { "name": "keyword.control.step.flow" }
+      }
+    },
+    "constants": {
+      "patterns": [
+        {
+          "match": "\\b(true|false|yes|no|on|off)\\b",
+          "name": "constant.language.boolean.flow"
+        },
+        {
+          "match": "\\b(null|~)\\b",
+          "name": "constant.language.null.flow"
+        }
+      ]
+    },
+    "numbers": {
+      "match": "\\b[0-9]+(?:\\.[0-9]+)?\\b",
+      "name": "constant.numeric.flow"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.flow" }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.flow" }
+          },
+          "name": "string.quoted.double.flow",
+          "patterns": [
+            {
+              "include": "#interpolation"
+            },
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.flow"
+            }
+          ]
+        },
+        {
+          "begin": "'",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.flow" }
+          },
+          "end": "'",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.flow" }
+          },
+          "name": "string.quoted.single.flow",
+          "patterns": [
+            {
+              "match": "''",
+              "name": "constant.character.escape.flow"
+            }
+          ]
+        }
+      ]
+    },
+    "yaml-keys": {
+      "match": "^\\s*([a-zA-Z0-9_.-]+)\\s*:",
+      "captures": {
+        "1": { "name": "entity.name.tag.flow" }
+      }
+    }
+  }
+}
+

@@ -16,6 +16,8 @@
     "infra:quality:build": "cargo evin-dev run infra:quality:build",
     "infra:quality:verify": "cargo evin-dev run infra:quality:verify",
     "infra:deploy:workers": "cargo evin-dev run infra:deploy:workers",
+    "vscode:build": "cargo evin-dev run vscode:build",
+    "vscode:verify": "cargo evin-dev run vscode:verify",
     "test:docs-responsive": "cargo evin-dev run docs:test-responsive",
     "verify": "cargo evin-dev run verify"
   },

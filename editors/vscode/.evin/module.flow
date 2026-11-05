@@ -1,0 +1,27 @@
+#!evin/v1
+module:
+  name: vscode
+
+tasks:
+  build:
+    stage: Build
+    description: "Bundle the Everyinit VS Code extension"
+    steps:
+      - run: npm run build
+
+  check:
+    stage: Check
+    description: "Typecheck the Everyinit VS Code extension"
+    steps:
+      - run: npm run check
+
+  lint:
+    stage: Check
+    description: "Lint the Everyinit VS Code extension source"
+    steps:
+      - run: npm run lint
+
+  verify:
+    stage: Test
+    description: "Verify Everyinit VS Code extension"
+    needs: [check, lint, build]

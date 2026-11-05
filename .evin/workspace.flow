@@ -12,6 +12,7 @@ workspace:
     - crates/evin/
     - crates/esh/
     - infra/
+    - editors/vscode/
   include:
     - .evin/release.flow
 
@@ -73,13 +74,14 @@ tasks:
 
   quality:
     stage: Check
-    description: "Run Rust, browser documentation, and Cloudflare infra quality checks"
+    description: "Run Rust, browser documentation, Cloudflare infra, and editor extension quality checks"
     needs:
       - check
       - fmt
       - lint
       - docs:verify
       - infra:quality:verify
+      - vscode:verify
 
   verify:
     stage: Test

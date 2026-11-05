@@ -18,6 +18,7 @@
 !/.evin/
 !/.github/
 !/builtins/
+!/editors/
 !/infra/
 !/locales/
 !/CHANGELOG.md

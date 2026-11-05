@@ -1,0 +1,182 @@
+{
+  "name": "everyinit",
+  "displayName": "Everyinit",
+  "description": "Language support, diagnostics, and workflow orchestration for Evin (.flow) and ESH (.esh)",
+  "version": "0.1.0",
+  "publisher": "everyinit",
+  "license": "GPL-3.0-only",
+  "homepage": "https://everyinit.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dukasn/everyinit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dukasn/everyinit/issues"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Snippets"
+  ],
+  "keywords": [
+    "everyinit",
+    "evin",
+    "esh",
+    "flow",
+    "workflow",
+    "shell",
+    "lsp"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "flow",
+        "aliases": [
+          "Evin Flow",
+          "flow"
+        ],
+        "extensions": [
+          ".flow"
+        ],
+        "filenames": [
+          "workspace.flow",
+          "gitrules.flow",
+          "release.flow",
+          "environment.flow",
+          "module.flow",
+          "package.flow"
+        ],
+        "firstLine": "^#!evin/v[0-9]+",
+        "configuration": "./language-configuration-flow.json"
+      },
+      {
+        "id": "esh",
+        "aliases": [
+          "ESH",
+          "esh",
+          "Evin Shell"
+        ],
+        "extensions": [
+          ".esh"
+        ],
+        "firstLine": "^#!.*\\besh\\b",
+        "configuration": "./language-configuration-esh.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "flow",
+        "scopeName": "source.flow",
+        "path": "./syntaxes/flow.tmLanguage.json"
+      },
+      {
+        "language": "esh",
+        "scopeName": "source.esh",
+        "path": "./syntaxes/esh.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "everyinit.restartLsp",
+        "title": "Restart Language Servers",
+        "category": "Everyinit"
+      },
+      {
+        "command": "everyinit.runTask",
+        "title": "Run Task in Workspace",
+        "category": "Everyinit"
+      },
+      {
+        "command": "everyinit.runScript",
+        "title": "Run Active ESH Script",
+        "category": "Everyinit"
+      },
+      {
+        "command": "everyinit.showOutput",
+        "title": "Show Language Server Output",
+        "category": "Everyinit"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "everyinit.runScript",
+          "when": "resourceExtname == .esh",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "everyinit.restartLsp"
+        },
+        {
+          "command": "everyinit.runTask"
+        },
+        {
+          "command": "everyinit.runScript",
+          "when": "resourceExtname == .esh"
+        },
+        {
+          "command": "everyinit.showOutput"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Everyinit",
+      "properties": {
+        "everyinit.evin.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Evin language server for .flow files."
+        },
+        "everyinit.evin.path": {
+          "type": "string",
+          "default": "evin",
+          "description": "Path or command for the Evin CLI executable. Defaults to 'evin' on PATH."
+        },
+        "everyinit.esh.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the ESH language server for .esh files."
+        },
+        "everyinit.esh.path": {
+          "type": "string",
+          "default": "esh",
+          "description": "Path or command for the ESH executable. Defaults to 'esh' on PATH."
+        },
+        "everyinit.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language servers."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.mjs --production",
+    "watch": "node esbuild.mjs --watch",
+    "check": "tsc --noEmit",
+    "lint": "oxlint src",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/vscode": "^1.90.0",
+    "esbuild": "^0.28.2",
+    "oxlint": "^1.87.0",
+    "typescript": "^7.0.2"
+  }
+}
