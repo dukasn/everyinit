@@ -109,5 +109,6 @@ tasks:
     steps:
       - run: cargo fetch --locked
       - run: npm ci
+      - run: npm --prefix editors/vscode ci
       - run: npx playwright install chromium
       - run: cargo evin-dev sync

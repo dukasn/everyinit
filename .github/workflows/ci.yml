@@ -52,6 +52,9 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            editors/vscode/package-lock.json
       - name: Bootstrap locked workspace dependencies
         run: cargo evin-dev run bootstrap
       - name: Install Chromium system dependencies

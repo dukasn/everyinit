@@ -4,7 +4,7 @@ import {
   LanguageClientOptions,
   ServerOptions,
   Trace,
-} from "vscode-languageclient/node.js";
+} from "vscode-languageclient/node";
 import { getConfiguration, resolveBinaryPath } from "./config.js";
 import { TraceLevel } from "./types.js";
 
