@@ -16,11 +16,19 @@ import { readFile } from "node:fs/promises";
 
 const cargo = await readFile("Cargo.toml", "utf8");
 const flow = await readFile(".evin/workspace.flow", "utf8");
+const vscode = JSON.parse(await readFile("editors/vscode/package.json", "utf8"));
 const cargoVersion = /^version\s*=\s*"([^"]+)"/m.exec(cargo)?.[1];
 const flowVersion = /^\s+version:\s*"([^"]+)"/m.exec(flow)?.[1];
+const vscodeVersion = vscode.version;
+
 if (!cargoVersion || !flowVersion || cargoVersion !== flowVersion) {
   throw new Error(
     `workspace versions do not match (Cargo.toml=${cargoVersion ?? "missing"}, .evin/workspace.flow=${flowVersion ?? "missing"})`,
+  );
+}
+if (cargoVersion !== vscodeVersion) {
+  throw new Error(
+    `workspace versions do not match (Cargo.toml=${cargoVersion}, editors/vscode/package.json=${vscodeVersion ?? "missing"})`,
   );
 }
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(cargoVersion)) {

@@ -30,12 +30,13 @@ tasks:
 
   distribution-rehearsal:
     stage: Publish
-    description: "Build and verify all Evin and ESH distribution formats without publishing"
+    description: "Build and verify all Evin, ESH, and editor extension distribution formats without publishing"
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs:
       - release:changelog-rehearsal
       - evin:package:distribution-verify
       - esh:package:distribution-verify
+      - vscode:package:distribution-verify
     steps:
       - run: node scripts/release/verify-rehearsal-clean.mjs
 
@@ -52,6 +53,9 @@ tasks:
             - path: ".evin/workspace.flow"
               match: 'version:\s*"${previous_version}"'
               write: 'version: "${version}"'
+            - path: "editors/vscode/package.json"
+              match: '"version":\s*"${previous_version}"'
+              write: '"version": "${version}"'
           git:
             commit: true
             tag: true
@@ -86,6 +90,7 @@ tasks:
       - run: cargo evin-dev run docs:catalog
       - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.yaml CHANGELOG.md
       - run: git add crates/evin/assets/config-catalog.json crates/esh/assets/builtins-catalog.json
+      - run: git add editors/vscode/package.json
       - uses: evin/git-release@v1
         with:
           stage: existing
@@ -185,11 +190,12 @@ tasks:
 
   package:
     stage: Publish
-    description: "Build all GitHub release formats for Evin and ESH"
+    description: "Build all GitHub release formats for Evin, ESH, and editor extensions"
     needs:
       - release:tag-verify
       - evin:package:github
       - esh:package:github
+      - vscode:package:github
 
   package-cloudflare:
     stage: Publish
@@ -209,11 +215,12 @@ tasks:
 
   package-verify:
     stage: Publish
-    description: "Verify both release archives"
+    description: "Verify all release archives and editor packages"
     needs:
       - release:package
       - evin:package:github-verify
       - esh:package:github-verify
+      - vscode:package:github-verify
 
   publish-prebuilt:
     stage: Publish
@@ -250,6 +257,17 @@ tasks:
           artifacts_dir: crates/esh/dist/github
           changelog: CHANGELOG.md
       - run: node scripts/release/github-ci.mjs apply .evin/actions/ci/esh-plan.v1.json
+      - run: node scripts/release/github-ci.mjs snapshot "$RELEASE_TAG"
+      - uses: evin/ci@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/ci/remote-state.v1.json
+          plan_out: .evin/actions/ci/vscode-plan.v1.json
+          notes_dir: .evin/actions/ci/notes/vscode
+          artifacts_dir: editors/vscode/dist/github
+          changelog: CHANGELOG.md
+      - run: node scripts/release/github-ci.mjs apply .evin/actions/ci/vscode-plan.v1.json
       - run: node scripts/release/github-ci.mjs summary "$RELEASE_TAG"
 
   github-publish-prebuilt:
@@ -282,4 +300,15 @@ tasks:
           artifacts_dir: crates/esh/dist/github
           changelog: CHANGELOG.md
       - run: node scripts/release/github-ci.mjs apply .evin/actions/ci/esh-plan.v1.json
+      - run: node scripts/release/github-ci.mjs snapshot "$RELEASE_TAG"
+      - uses: evin/ci@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/ci/remote-state.v1.json
+          plan_out: .evin/actions/ci/vscode-plan.v1.json
+          notes_dir: .evin/actions/ci/notes/vscode
+          artifacts_dir: editors/vscode/dist/github
+          changelog: CHANGELOG.md
+      - run: node scripts/release/github-ci.mjs apply .evin/actions/ci/vscode-plan.v1.json
       - run: node scripts/release/github-ci.mjs summary "$RELEASE_TAG"

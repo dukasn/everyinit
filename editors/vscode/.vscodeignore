@@ -1,6 +1,7 @@
 .vscode/**
 .evin/**
 src/**
+scripts/**
 tsconfig.json
 esbuild.mjs
 node_modules/**

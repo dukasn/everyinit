@@ -93,6 +93,13 @@ releases:
       targets: [deb, apk, arch]
       revision:
         scope: target
+    vscode:
+      watch:
+        - editors/vscode/**
+        - LICENSE
+      targets: [vsix]
+      revision:
+        scope: package
 
 branches:
   # The format required for branch names.

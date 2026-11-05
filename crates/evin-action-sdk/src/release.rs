@@ -268,10 +268,10 @@ fn normalized_targets(policy: &PackageReleasePolicy) -> Result<BTreeSet<String>,
         || targets.len() != policy.targets.len()
         || targets
             .iter()
-            .any(|v| v != "deb" && v != "apk" && v != "arch")
+            .any(|v| v != "deb" && v != "apk" && v != "arch" && v != "vsix")
     {
         return Err(ReleaseError::Policy(
-            "targets must be a non-empty unique subset of deb, apk, and arch".into(),
+            "targets must be a non-empty unique subset of deb, apk, arch, and vsix".into(),
         ));
     }
     Ok(targets)
@@ -774,5 +774,34 @@ mod tests {
         )
         .unwrap();
         assert_eq!(merged.packages["app"].revision, Some(4));
+    }
+
+    #[test]
+    fn vsix_target_is_supported_in_package_policy() {
+        let policy = BTreeMap::from([(
+            "vscode".into(),
+            PackageReleasePolicy {
+                watch: vec!["editors/vscode/**".into()],
+                targets: vec!["vsix".into()],
+                revision: evin_gitrules::PackageRevisionPolicy {
+                    scope: PackageRevisionScope::Package,
+                },
+            },
+        )]);
+        let lock = resolve_lock(
+            None,
+            ReleaseIdentity {
+                version: "0.2.0".into(),
+                tag: "v0.2.0".into(),
+            },
+            &policy,
+            &BTreeMap::from([("vscode".into(), format!("sha256:{}", "e".repeat(64)))]),
+        )
+        .unwrap();
+        let artifact = lock.artifact(&policy).unwrap();
+        assert_eq!(
+            artifact.packages["vscode"].revisions["vsix"].version,
+            "0.2.0"
+        );
     }
 }

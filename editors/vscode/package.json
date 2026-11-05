@@ -2,7 +2,7 @@
   "name": "everyinit",
   "displayName": "Everyinit",
   "description": "Language support, diagnostics, and workflow orchestration for Evin (.flow) and ESH (.esh)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "everyinit",
   "license": "GPL-3.0-only",
   "homepage": "https://everyinit.dev",
@@ -167,7 +167,8 @@
     "watch": "node esbuild.mjs --watch",
     "check": "tsc --noEmit",
     "lint": "oxlint src",
-    "package": "vsce package"
+    "package": "node scripts/package-vsix.mjs",
+    "package:verify": "node scripts/verify-vsix.mjs"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
@@ -175,6 +176,7 @@
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.28.2",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2"

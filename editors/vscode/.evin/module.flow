@@ -1,6 +1,7 @@
 #!evin/v1
 module:
   name: vscode
+  include: [.evin/package.flow]
 
 tasks:
   build:

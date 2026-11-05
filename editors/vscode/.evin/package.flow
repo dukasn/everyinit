@@ -1,0 +1,31 @@
+#!evin/v1
+namespace:
+  name: package
+  description: "Everyinit VS Code extension packaging and distribution tasks"
+
+tasks:
+  github:
+    stage: Publish
+    description: "Create Everyinit VS Code extension VSIX artifact for GitHub Releases"
+    env: [RELEASE_VERSION]
+    steps:
+      - run: npm run package
+
+  github-verify:
+    stage: Publish
+    description: "Verify Everyinit VS Code extension VSIX artifact for GitHub Releases"
+    env: [RELEASE_VERSION]
+    needs: [github]
+    steps:
+      - run: npm run package:verify
+
+  verify:
+    stage: Publish
+    description: "Verify all VS Code extension release artifacts"
+    needs: [github-verify]
+
+  distribution-verify:
+    stage: Publish
+    description: "Verify complete VS Code extension distribution for rehearsal"
+    needs: [verify]
+
