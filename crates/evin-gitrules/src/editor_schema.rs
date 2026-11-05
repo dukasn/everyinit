@@ -127,6 +127,12 @@ const CHANGE_TYPE: Schema = Schema::Object(&[
     ),
 ]);
 const CHANGE_TYPES: Schema = Schema::Map(&CHANGE_TYPE);
+const VERSIONING: Schema = Schema::Object(&[Field::new(
+    "strategy",
+    Schema::Enum(&["semver", "cargo"]),
+    "flow-schema-versioning-strategy",
+)
+.non_nullable()]);
 const TICKET_LINKING: Schema = Schema::Object(&[
     Field::new(
         "prefix",
@@ -200,6 +206,7 @@ const PACKAGE: Schema = Schema::Object(&[
 ]);
 const PACKAGES: Schema = Schema::Map(&PACKAGE);
 const RELEASES: Schema = Schema::Object(&[
+    Field::new("versioning", VERSIONING, "flow-schema-release-versioning").non_nullable(),
     Field::new(
         "change_types",
         CHANGE_TYPES,

@@ -227,7 +227,7 @@ fn quoted_unicode_value_range_covers_the_source_scalar() {
 #[test]
 fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
     let path = PathBuf::from(".evin/gitrules.flow");
-    let text = "commits:\n  message_format: '{type}: {description}'\n  fields:\n    type:\n      allowed_values: [feat, fix]\n      pattern: '['\n  policies:\n    require_body: true\n    surprise: false\n    require_body: no\nreleases:\n  packages:\n    app:\n      watch: [src/**]\n      targets: [deb]\n      revision: { scope: target }\n    incomplete: { watch: [] }\n";
+    let text = "commits:\n  message_format: '{type}: {description}'\n  fields:\n    type:\n      allowed_values: [feat, fix]\n      pattern: '['\n  policies:\n    require_body: true\n    surprise: false\n    require_body: no\nreleases:\n  versioning: { strategy: invalid }\n  packages:\n    app:\n      watch: [src/**]\n      targets: [deb]\n      revision: { scope: target }\n    incomplete: { watch: [] }\n";
     let snapshot = WorkspaceSnapshot {
         config: None,
         documents: BTreeMap::from([(
@@ -249,6 +249,7 @@ fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
         ("message_format", "GitRules.commits.message_format"),
         ("allowed_values", "GitRules.commits.fields.*.allowed_values"),
         ("require_body", "GitRules.commits.policies.require_body"),
+        ("strategy", "GitRules.releases.versioning.strategy"),
         ("watch", "GitRules.releases.packages.*.watch"),
         ("scope", "GitRules.releases.packages.*.revision.scope"),
     ] {
@@ -309,6 +310,12 @@ fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
     assert!(messages.iter().any(|message| {
         message.contains("Invalid regular expression for GitRules.commits.fields.*.pattern")
     }));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message.contains("GitRules.releases.versioning.strategy")),
+        "{messages:?}"
+    );
 }
 
 #[tokio::test]
@@ -528,6 +535,36 @@ fn empty_enum_value_offers_only_declared_choices() {
         "offset={offset} choices={:?}",
         index.schema_choices
     );
+}
+
+#[test]
+fn gitrules_versioning_strategy_completion_offers_supported_presets() {
+    let path = PathBuf::from(".evin/gitrules.flow");
+    let text = "releases:\n  versioning:\n    strategy: \n";
+    let snapshot = WorkspaceSnapshot {
+        config: None,
+        documents: BTreeMap::from([(
+            path.clone(),
+            WorkspaceDocument {
+                path: path.clone(),
+                kind: DocumentKind::GitRules,
+                header: None,
+                text: text.into(),
+                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                completion_ast: None,
+                diagnostics: Vec::new(),
+            },
+        )]),
+        diagnostics: Vec::new(),
+    };
+    let index = WorkspaceSemanticIndex::build(snapshot, &HashMap::new());
+    let offset = text.find("strategy: ").unwrap() + "strategy: ".len();
+    let labels = index
+        .completions_at(&path, offset, &HashMap::new())
+        .into_iter()
+        .map(|candidate| candidate.label)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(labels, BTreeSet::from(["cargo".into(), "semver".into()]));
 }
 
 #[tokio::test]
@@ -906,6 +943,7 @@ fn configuration_keys_share_canonical_completion_and_hover_targets() {
         "GitRules.commits.message_format",
         "GitRules.commits.fields.*.allowed_values",
         "GitRules.commits.policies.require_body",
+        "GitRules.releases.versioning.strategy",
         "GitRules.releases.packages.*.revision.scope",
     ] {
         assert!(targets.contains(target), "missing schema target {target}");

@@ -31,13 +31,6 @@ const BUMPER_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "cargo_pre_1_0",
-            kind: ActionFieldKind::Boolean,
-            required: false,
-            description: "Use Cargo-compatible version bumps below 1.0.0.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
             path: "channel",
             kind: ActionFieldKind::String,
             required: false,

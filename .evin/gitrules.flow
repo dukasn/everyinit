@@ -31,6 +31,9 @@ commits:
     require_ticket_reference: false
 
 releases:
+  versioning:
+    strategy: cargo
+
   # Define how different commit types impact the semantic version bump and the changelog.
   change_types:
     feat:

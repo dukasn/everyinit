@@ -57,6 +57,7 @@ pub fn parse_str(
 #[cfg(test)]
 mod tests {
     use super::{ParserError, parse_str};
+    use crate::VersioningStrategy;
     use std::path::Path;
 
     #[test]
@@ -75,5 +76,32 @@ mod tests {
         assert!(
             matches!(error, ParserError::Diagnostic(ref diagnostic) if diagnostic.code.key == "issue-evin-header-invalid")
         );
+    }
+
+    #[test]
+    fn versioning_strategy_is_typed_and_defaults_to_semver() {
+        for (flow, expected) in [
+            ("releases: {}\n", VersioningStrategy::Semver),
+            ("releases:\n  versioning: {}\n", VersioningStrategy::Semver),
+            (
+                "releases:\n  versioning:\n    strategy: cargo\n",
+                VersioningStrategy::Cargo,
+            ),
+            (
+                "releases:\n  versioning:\n    strategy: semver\n",
+                VersioningStrategy::Semver,
+            ),
+        ] {
+            let rules = parse_str(flow, "flow", None).unwrap();
+            assert_eq!(rules.releases.unwrap().versioning.strategy, expected);
+        }
+        for flow in [
+            "releases:\n  versioning:\n    strategy: unknown\n",
+            "releases:\n  versioning:\n    strategy: null\n",
+            "releases:\n  versioning: null\n",
+            "releases:\n  versioning:\n    other: cargo\n",
+        ] {
+            assert!(parse_str(flow, "flow", None).is_err(), "{flow}");
+        }
     }
 }

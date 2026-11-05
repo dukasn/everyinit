@@ -46,7 +46,6 @@ tasks:
       - uses: evin/version-bumper@v1
         with:
           initial_version: "0.1.0"
-          cargo_pre_1_0: true
           require_change: false
           files:
             - "Cargo.toml"

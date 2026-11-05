@@ -368,6 +368,7 @@ pub struct BranchPolicies {
 #[serde(default)]
 pub struct ReleasesNamespace {
     pub change_types: HashMap<String, ChangeTypeDefinition>,
+    pub versioning: VersioningConfig,
     pub changelog: Option<ChangelogConfig>,
     pub policies: Option<ReleasePolicies>,
     pub prerelease: Option<PrereleaseConfig>,
@@ -455,6 +456,7 @@ impl Default for ReleasesNamespace {
 
         Self {
             change_types,
+            versioning: VersioningConfig::default(),
             changelog: Some(ChangelogConfig {
                 ticket_linking: None,
                 host_integration: None,
@@ -471,6 +473,20 @@ impl Default for ReleasesNamespace {
             packages: BTreeMap::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum VersioningStrategy {
+    #[default]
+    Semver,
+    Cargo,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, default)]
+pub struct VersioningConfig {
+    pub strategy: VersioningStrategy,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]

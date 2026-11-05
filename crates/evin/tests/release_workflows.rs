@@ -110,7 +110,11 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     let tasks = flow(".evin/release.flow");
     let bump = &tasks["tasks"]["bump"]["steps"][0]["with"];
     assert_eq!(bump["initial_version"].as_str(), Some("0.1.0"));
-    assert_eq!(bump["cargo_pre_1_0"].as_bool(), Some(true));
+    assert!(bump["cargo_pre_1_0"].is_null());
+    assert_eq!(
+        flow(".evin/gitrules.flow")["releases"]["versioning"]["strategy"].as_str(),
+        Some("cargo")
+    );
     let propose = &tasks["tasks"]["propose"];
     let git = &propose["steps"]
         .as_sequence()
@@ -274,6 +278,62 @@ fi
             .env("GITHUB_OUTPUT", self.dir.join("output"))
             .output()
             .unwrap()
+    }
+}
+
+#[test]
+fn cli_version_bumper_uses_the_configured_git_rules_strategy() {
+    for (strategy, expected) in [("cargo", "0.1.1\n"), ("semver", "0.2.0\n")] {
+        let repo = Repo::new();
+        fs::create_dir_all(repo.work.join(".evin")).unwrap();
+        fs::write(
+            repo.work.join(".evin/workspace.flow"),
+            r#"#!evin/v1
+workspace:
+  name: versioning-test
+  version: "0.1.0"
+  rules: .evin/gitrules.flow
+stages: [Release]
+tasks:
+  bump:
+    stage: Release
+    steps:
+      - uses: evin/version-bumper@v1
+        with:
+          files:
+            - path: VERSION
+              match: '(?m)^${previous_version}$'
+              write: '${version}'
+"#,
+        )
+        .unwrap();
+        fs::write(
+            repo.work.join(".evin/gitrules.flow"),
+            format!("#!evin/v1\nreleases:\n  versioning:\n    strategy: {strategy}\n"),
+        )
+        .unwrap();
+        fs::write(repo.work.join("VERSION"), "0.1.0\n").unwrap();
+        repo.git(&["add", ".evin", "VERSION"]);
+        repo.git(&["commit", "-qm", "chore: configure versioning"]);
+        repo.git(&["tag", "v0.1.0"]);
+        repo.git(&["commit", "--allow-empty", "-qm", "feat: add capability"]);
+
+        let output = Command::new(env!("CARGO_BIN_EXE_evin"))
+            .current_dir(&repo.work)
+            .args(["run", "bump"])
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{strategy}: {} {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            fs::read_to_string(repo.work.join("VERSION")).unwrap(),
+            expected,
+            "{strategy}"
+        );
     }
 }
 

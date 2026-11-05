@@ -14,10 +14,13 @@
 
 use semver::{Prerelease, Version};
 
-use evin_gitrules::models::Impact;
+use evin_gitrules::models::{Impact, VersioningStrategy};
 
-fn bump_base(v: &mut Version, impact: Impact, cargo_pre_1_0: bool) {
-    match (cargo_pre_1_0 && v.major == 0, impact) {
+fn bump_base(v: &mut Version, impact: Impact, strategy: VersioningStrategy) {
+    match (
+        strategy == VersioningStrategy::Cargo && v.major == 0,
+        impact,
+    ) {
         (true, Impact::Major) | (false, Impact::Minor) => {
             v.minor += 1;
             v.patch = 0;
@@ -39,7 +42,7 @@ pub fn compute_version(
     prerelease: Option<&str>,
     channel_template: Option<&str>,
     start_at_one: bool,
-    cargo_pre_1_0: bool,
+    strategy: VersioningStrategy,
 ) -> Option<String> {
     let max_impact = impacts.iter().max().copied().unwrap_or(Impact::None);
 
@@ -87,7 +90,7 @@ pub fn compute_version(
         }
 
         // Branching from stable: bump base and reset `{n}`
-        bump_base(&mut v, max_impact, cargo_pre_1_0);
+        bump_base(&mut v, max_impact, strategy);
         let new_pre = format!("{}.{}", prefix_clean, start_num);
         v.pre = Prerelease::new(&new_pre).unwrap_or(Prerelease::EMPTY);
         return Some(v.to_string());
@@ -108,7 +111,7 @@ pub fn compute_version(
         return Some(v.to_string());
     }
 
-    bump_base(&mut v, max_impact, cargo_pre_1_0);
+    bump_base(&mut v, max_impact, strategy);
 
     if let Some(prefix) = prerelease {
         let new_pre = format!("{}.1", prefix);
@@ -134,7 +137,16 @@ mod tests {
             ("1.2.3", Impact::Major, "2.0.0"),
         ] {
             assert_eq!(
-                compute_version(current, &[impact], false, None, None, false, true).as_deref(),
+                compute_version(
+                    current,
+                    &[impact],
+                    false,
+                    None,
+                    None,
+                    false,
+                    VersioningStrategy::Cargo
+                )
+                .as_deref(),
                 Some(expected)
             );
         }
@@ -146,13 +158,21 @@ mod tests {
                 None,
                 None,
                 false,
-                true
+                VersioningStrategy::Cargo
             )
             .as_deref(),
             Some("0.2.0")
         );
         assert_eq!(
-            compute_version("0.1.0", &[], false, None, None, false, true),
+            compute_version(
+                "0.1.0",
+                &[],
+                false,
+                None,
+                None,
+                false,
+                VersioningStrategy::Cargo
+            ),
             None
         );
     }
@@ -196,8 +216,16 @@ mod tests {
             ("0.2.0-rc.1", Impact::Minor, true, None, None, "0.2.0"),
         ] {
             assert_eq!(
-                compute_version(current, &[impact], stable, prerelease, channel, false, true)
-                    .as_deref(),
+                compute_version(
+                    current,
+                    &[impact],
+                    stable,
+                    prerelease,
+                    channel,
+                    false,
+                    VersioningStrategy::Cargo
+                )
+                .as_deref(),
                 Some(expected)
             );
         }
@@ -211,7 +239,16 @@ mod tests {
             (Impact::Major, "1.0.0"),
         ] {
             assert_eq!(
-                compute_version("0.1.0", &[impact], false, None, None, false, false).as_deref(),
+                compute_version(
+                    "0.1.0",
+                    &[impact],
+                    false,
+                    None,
+                    None,
+                    false,
+                    VersioningStrategy::Semver
+                )
+                .as_deref(),
                 Some(expected)
             );
         }
@@ -223,7 +260,7 @@ mod tests {
                 Some("rc"),
                 None,
                 false,
-                false
+                VersioningStrategy::Semver
             )
             .as_deref(),
             Some("0.2.0-rc.1")
@@ -236,7 +273,7 @@ mod tests {
                 None,
                 Some("rc.{n}"),
                 false,
-                false
+                VersioningStrategy::Semver
             )
             .as_deref(),
             Some("1.0.0-rc.0")

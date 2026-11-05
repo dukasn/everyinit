@@ -61,7 +61,6 @@ pub struct VersionBumperConfig {
     pub read_only: bool,
     pub fixed_version: Option<String>,
     pub initial_version: String,
-    pub cargo_pre_1_0: bool,
     pub stable: bool,
     pub prerelease: Option<String>,
     pub channel: Option<String>,
@@ -76,7 +75,6 @@ impl Default for VersionBumperConfig {
             read_only: false,
             fixed_version: None,
             initial_version: "0.1.0".to_string(),
-            cargo_pre_1_0: false,
             stable: false,
             prerelease: None,
             channel: None,
@@ -521,7 +519,11 @@ pub async fn execute(
             config.prerelease.as_deref(),
             hydrated_channel.as_deref(),
             start_at_one,
-            config.cargo_pre_1_0,
+            ctx.gitrules()
+                .releases
+                .as_ref()
+                .map(|release| release.versioning.strategy)
+                .unwrap_or_default(),
         ) {
             Some(version) => {
                 semantic_change = true;
@@ -905,22 +907,12 @@ mod tests {
     }
 
     #[test]
-    fn cargo_pre_one_option_is_optional_and_boolean() {
-        assert!(!VersionBumperConfig::from_with(None).unwrap().cargo_pre_1_0);
-        for (yaml, expected) in [
-            ("cargo_pre_1_0: true\n", true),
-            ("cargo_pre_1_0: false\n", false),
-        ] {
-            let config =
-                VersionBumperConfig::from_with(Some(evin_yaml::parse_yaml(yaml).unwrap())).unwrap();
-            assert_eq!(config.cargo_pre_1_0, expected);
+    fn removed_cargo_option_is_rejected() {
+        assert!(VersionBumperConfig::from_with(None).is_ok());
+        for value in ["true", "false"] {
+            let with = evin_yaml::parse_yaml(&format!("cargo_pre_1_0: {value}\n")).unwrap();
+            assert!(VersionBumperConfig::from_with(Some(with)).is_err());
         }
-        assert!(
-            VersionBumperConfig::from_with(Some(
-                evin_yaml::parse_yaml("cargo_pre_1_0: nope\n").unwrap()
-            ))
-            .is_err()
-        );
     }
 
     #[tokio::test]
@@ -1010,20 +1002,13 @@ mod tests {
 
     #[tokio::test]
     async fn tagged_pre_one_releases_use_commit_impacts() {
-        for (option, subject, expected) in [
-            ("cargo_pre_1_0: true\n", "fix: correct an issue", "0.1.1"),
-            ("cargo_pre_1_0: true\n", "feat: add a capability", "0.1.1"),
-            (
-                "cargo_pre_1_0: true\n",
-                "feat!: break compatibility",
-                "0.2.0",
-            ),
-            ("", "feat: add a capability", "0.2.0"),
-            (
-                "cargo_pre_1_0: false\n",
-                "feat!: break compatibility",
-                "1.0.0",
-            ),
+        use evin_gitrules::VersioningStrategy::{Cargo, Semver};
+        for (strategy, subject, expected) in [
+            (Cargo, "fix: correct an issue", "0.1.1"),
+            (Cargo, "feat: add a capability", "0.1.1"),
+            (Cargo, "feat!: break compatibility", "0.2.0"),
+            (Semver, "feat: add a capability", "0.2.0"),
+            (Semver, "feat!: break compatibility", "1.0.0"),
         ] {
             let temp = tempfile::TempDir::new().unwrap();
             init_repo(temp.path());
@@ -1033,11 +1018,12 @@ mod tests {
             git(temp.path(), &["tag", "v0.1.0"]);
             git(temp.path(), &["commit", "--allow-empty", "-qm", subject]);
             let mut ctx = context(temp.path());
-            ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-            let with = evin_yaml::parse_yaml(&format!(
-                "{option}files:\n  - path: VERSION\n    match: '(?m)^${{previous_version}}$'\n    write: '${{version}}'\n"
-            ))
-            .unwrap();
+            let mut rules = evin_gitrules::GitRulesRoot::default();
+            rules.releases.as_mut().unwrap().versioning.strategy = strategy;
+            ctx.gitrules = Arc::new(rules);
+            let with = evin_yaml::parse_yaml(
+                "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n"
+            ).unwrap();
             execute(&ctx, Some(with)).await.unwrap();
             assert_eq!(ctx.state.outputs.lock().unwrap()["version"], expected);
             assert_eq!(
@@ -1045,6 +1031,62 @@ mod tests {
                 format!("{expected}\n")
             );
         }
+    }
+
+    #[tokio::test]
+    async fn proposal_recalculation_uses_last_tag_when_main_adds_a_breaking_change() {
+        let temp = tempfile::TempDir::new().unwrap();
+        init_repo(temp.path());
+        std::fs::write(temp.path().join("VERSION"), "0.1.0\n").unwrap();
+        git(temp.path(), &["add", "VERSION"]);
+        git(temp.path(), &["commit", "-qm", "feat: initial"]);
+        git(temp.path(), &["branch", "-M", "main"]);
+        git(temp.path(), &["tag", "v0.1.0"]);
+        git(
+            temp.path(),
+            &["commit", "--allow-empty", "-qm", "fix: first change"],
+        );
+        let rules = evin_gitrules::parse_str(
+            "releases:\n  versioning:\n    strategy: cargo\n",
+            "flow",
+            None,
+        )
+        .unwrap();
+        let config = "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n";
+        git(temp.path(), &["switch", "-qc", "automation/release"]);
+        let mut first = context(temp.path());
+        first.gitrules = Arc::new(rules.clone());
+        execute(&first, Some(evin_yaml::parse_yaml(config).unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(first.state.outputs.lock().unwrap()["version"], "0.1.1");
+        git(temp.path(), &["add", "VERSION"]);
+        git(temp.path(), &["commit", "-qm", "chore(release): 0.1.1"]);
+
+        git(temp.path(), &["switch", "-q", "main"]);
+        git(
+            temp.path(),
+            &[
+                "commit",
+                "--allow-empty",
+                "-qm",
+                "feat!: break compatibility",
+            ],
+        );
+        git(
+            temp.path(),
+            &["switch", "--force-create", "automation/release", "main"],
+        );
+        let mut updated = context(temp.path());
+        updated.gitrules = Arc::new(rules);
+        execute(&updated, Some(evin_yaml::parse_yaml(config).unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(updated.state.outputs.lock().unwrap()["version"], "0.2.0");
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("VERSION")).unwrap(),
+            "0.2.0\n"
+        );
     }
 
     #[tokio::test]
@@ -1145,9 +1187,12 @@ mod tests {
             &["commit", "--allow-empty", "-qm", "feat: next"],
         );
         let mut ctx = context(temp.path());
-        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let mut rules = evin_gitrules::GitRulesRoot::default();
+        rules.releases.as_mut().unwrap().versioning.strategy =
+            evin_gitrules::VersioningStrategy::Cargo;
+        ctx.gitrules = Arc::new(rules);
         let with = evin_yaml::parse_yaml(
-            "cargo_pre_1_0: true\nfiles:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
+            "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
         .unwrap();
         assert!(execute(&ctx, Some(with)).await.is_err());
@@ -1171,9 +1216,12 @@ mod tests {
             &["commit", "--allow-empty", "-qm", "feat: next"],
         );
         let mut ctx = context(temp.path());
-        ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+        let mut rules = evin_gitrules::GitRulesRoot::default();
+        rules.releases.as_mut().unwrap().versioning.strategy =
+            evin_gitrules::VersioningStrategy::Cargo;
+        ctx.gitrules = Arc::new(rules);
         let with = evin_yaml::parse_yaml(
-            "cargo_pre_1_0: true\nfiles:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
+            "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
         .unwrap();
         let error = execute(&ctx, Some(with)).await.unwrap_err();
