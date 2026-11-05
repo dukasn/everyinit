@@ -24,6 +24,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
 
+  // Listen for active editor changes
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(async (editor) => {
+      const languageId = editor?.document.languageId;
+      if (languageId === "flow" || languageId === "esh") {
+        await clientManager?.ensureClientForLanguage(languageId);
+      }
+      statusBar.update(languageId);
+    })
+  );
+
+  // Immediately check the currently active editor
+  const activeLanguage = vscode.window.activeTextEditor?.document.languageId;
+  if (activeLanguage === "flow" || activeLanguage === "esh") {
+    void clientManager.ensureClientForLanguage(activeLanguage).then(() => {
+      statusBar.update(vscode.window.activeTextEditor?.document.languageId);
+    });
+  }
+
   // Check already opened documents (in case files were restored on startup)
   for (const document of vscode.workspace.textDocuments) {
     if (document.languageId === "flow" || document.languageId === "esh") {

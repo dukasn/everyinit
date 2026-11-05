@@ -42,6 +42,7 @@ export class EveryinitClientManager implements vscode.Disposable {
 
     const binaryPath = resolveBinaryPath(config.evinPath);
     if (!binaryPath) {
+      this.outputChannel.appendLine(`[evin] Binary could not be resolved from configured path: '${config.evinPath}'`);
       if (!this.evinMissingNotified) {
         this.evinMissingNotified = true;
         this.notifyMissingBinary(
@@ -58,10 +59,12 @@ export class EveryinitClientManager implements vscode.Disposable {
     try {
       this.outputChannel.appendLine(`[evin] Starting language server: ${binaryPath} lsp`);
 
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       const serverOptions: ServerOptions = {
         command: binaryPath,
         args: ["lsp"],
         options: {
+          cwd: workspaceFolder,
           env: {
             ...process.env,
             RUST_BACKTRACE: "1",
@@ -104,6 +107,7 @@ export class EveryinitClientManager implements vscode.Disposable {
 
     const binaryPath = resolveBinaryPath(config.eshPath);
     if (!binaryPath) {
+      this.outputChannel.appendLine(`[esh] Binary could not be resolved from configured path: '${config.eshPath}'`);
       if (!this.eshMissingNotified) {
         this.eshMissingNotified = true;
         this.notifyMissingBinary(
@@ -120,10 +124,12 @@ export class EveryinitClientManager implements vscode.Disposable {
     try {
       this.outputChannel.appendLine(`[esh] Starting language server: ${binaryPath} lsp`);
 
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
       const serverOptions: ServerOptions = {
         command: binaryPath,
         args: ["lsp"],
         options: {
+          cwd: workspaceFolder,
           env: {
             ...process.env,
             RUST_BACKTRACE: "1",

@@ -18,22 +18,38 @@ export function getConfiguration(): EveryinitConfig {
 /**
  * Resolve the full path to a command/binary.
  * Searches:
- * 1. Exact path if absolute or relative to workspace.
+ * 1. Exact path (with ${workspaceFolder} and ~ variable expansion).
  * 2. System PATH.
- * 3. Cargo fallback (~/.cargo/bin/<name>).
+ * 3. Workspace target directories (target/debug/<name>, target/release/<name>).
+ * 4. Cargo fallback (~/.cargo/bin/<name>).
  */
 export function resolveBinaryPath(binaryName: string): string | null {
   if (!binaryName) {
     return null;
   }
 
-  // If path contains separators, resolve directly
-  if (binaryName.includes("/") || binaryName.includes("\\")) {
-    const resolved = path.isAbsolute(binaryName)
-      ? binaryName
-      : vscode.workspace.workspaceFolders?.[0]
-        ? path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, binaryName)
-        : path.resolve(binaryName);
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  let expanded = binaryName.trim();
+
+  // Expand ${workspaceFolder} and ${workspaceRoot}
+  if (workspaceRoot) {
+    expanded = expanded
+      .replace(/\${workspaceFolder}/g, workspaceRoot)
+      .replace(/\${workspaceRoot}/g, workspaceRoot);
+  }
+
+  // Expand ~ to user home directory
+  if (expanded === "~" || expanded.startsWith("~/")) {
+    expanded = path.join(os.homedir(), expanded.slice(expanded === "~" ? 1 : 2));
+  }
+
+  // If path contains directory separators, resolve directly
+  if (expanded.includes("/") || expanded.includes("\\")) {
+    const resolved = path.isAbsolute(expanded)
+      ? expanded
+      : workspaceRoot
+        ? path.join(workspaceRoot, expanded)
+        : path.resolve(expanded);
 
     if (isExecutable(resolved)) {
       return resolved;
@@ -46,14 +62,26 @@ export function resolveBinaryPath(binaryName: string): string | null {
   const pathDirs = envPath.split(path.delimiter);
   for (const dir of pathDirs) {
     if (!dir) continue;
-    const candidate = path.join(dir, binaryName);
+    const candidate = path.join(dir, expanded);
     if (isExecutable(candidate)) {
       return candidate;
     }
   }
 
+  // Check workspace target/debug and target/release fallback
+  if (workspaceRoot) {
+    const debugCandidate = path.join(workspaceRoot, "target", "debug", expanded);
+    if (isExecutable(debugCandidate)) {
+      return debugCandidate;
+    }
+    const releaseCandidate = path.join(workspaceRoot, "target", "release", expanded);
+    if (isExecutable(releaseCandidate)) {
+      return releaseCandidate;
+    }
+  }
+
   // Fallback to ~/.cargo/bin
-  const cargoBin = path.join(os.homedir(), ".cargo", "bin", binaryName);
+  const cargoBin = path.join(os.homedir(), ".cargo", "bin", expanded);
   if (isExecutable(cargoBin)) {
     return cargoBin;
   }
@@ -76,4 +104,3 @@ function isExecutable(filePath: string): boolean {
     return false;
   }
 }
-
