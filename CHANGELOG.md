@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.0]
+
+### Bug Fixes
+
+- **ci:** reduce runner disk usage (92e962a)
+- **release:** publish reviewed changelog notes (e6ad1dc)
+
+### Features
+
+- **versioning:** move strategy into git rules (7e6a332)
+
 ## [v0.1.0]
 
 ### Bug Fixes
