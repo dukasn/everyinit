@@ -79,6 +79,47 @@
         "path": "./syntaxes/esh.tmLanguage.json"
       }
     ],
+    "semanticTokenScopes": [
+      {
+        "language": "flow",
+        "scopes": {
+          "property": [
+            "entity.name.tag.yaml",
+            "entity.name.tag.flow",
+            "support.type.property-name.flow"
+          ],
+          "modifier": [
+            "keyword.control.directive.flow",
+            "keyword.control.flow"
+          ],
+          "namespace": [
+            "keyword.other.section.flow",
+            "entity.name.section.flow"
+          ],
+          "function": [
+            "entity.name.function.task.flow",
+            "entity.name.function"
+          ],
+          "method": [
+            "support.class.action.flow",
+            "entity.name.function.action.flow"
+          ],
+          "enumMember": [
+            "constant.language.enum.flow",
+            "entity.name.type.enum.flow"
+          ],
+          "variable": [
+            "variable.other.flow"
+          ],
+          "parameter": [
+            "variable.parameter.flow"
+          ],
+          "string": [
+            "string.unquoted.flow"
+          ]
+        }
+      }
+    ],
     "commands": [
       {
         "command": "everyinit.restartLsp",
