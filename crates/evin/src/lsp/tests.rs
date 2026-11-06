@@ -1241,3 +1241,112 @@ fn missing_output_dependency_is_published_and_clears_after_adding_needs() {
         }
     }
 }
+
+#[test]
+fn workspace_catalog_returns_tasks_manifests_and_preserves_stale_state() {
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(directory.path().join(".evin")).unwrap();
+    std::fs::create_dir_all(directory.path().join("web/.evin")).unwrap();
+    std::fs::write(
+        directory.path().join(".evin/workspace.flow"),
+        "workspace:\n  name: demo\n  version: 0.3.0\n  modules: [web/]\nstages: [Build, Check]\ntasks:\n  lint:\n    stage: Check\n    description: Run workspace lint\n    on:\n      hooks: [pre-commit]\n    steps:\n      - run: echo lint\n  verify:\n    stage: Check\n    needs: [lint, web:build]\n    steps:\n      - run: echo verify\n",
+    )
+    .unwrap();
+    std::fs::write(
+        directory.path().join("web/.evin/module.flow"),
+        "module:\n  name: web\ntasks:\n  build:\n    stage: Build\n    description: Build web bundle\n    steps:\n      - run: echo web\n",
+    )
+    .unwrap();
+
+    let mut server = EvinLspServer::default();
+    initialize(&mut server, directory.path(), false);
+
+    let mut output = Vec::new();
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "everyinit/workspaceCatalog",
+                "params": {}
+            })
+            .to_string(),
+            &mut output,
+        )
+        .unwrap();
+    let result = &bodies(output)[0]["result"];
+    assert_eq!(result["workspaceName"], "demo");
+    assert_eq!(result["workspaceVersion"], "0.3.0");
+    assert_eq!(result["stages"], json!(["Build", "Check"]));
+    assert_eq!(result["stale"], false);
+    assert_eq!(result["diagnostics"]["errors"], 0);
+
+    let manifests = result["manifests"].as_array().unwrap();
+    assert!(
+        manifests
+            .iter()
+            .any(|m| m["path"] == ".evin/workspace.flow" && m["kind"] == "workspace")
+    );
+    assert!(
+        manifests
+            .iter()
+            .any(|m| m["path"] == "web/.evin/module.flow" && m["kind"] == "module")
+    );
+
+    let tasks = result["tasks"].as_array().unwrap();
+    assert_eq!(tasks.len(), 3);
+    let lint = tasks.iter().find(|t| t["name"] == "lint").unwrap();
+    assert_eq!(lint["stage"], "Check");
+    assert_eq!(lint["description"], "Run workspace lint");
+    assert_eq!(lint["hooks"], json!(["pre-commit"]));
+    assert!(
+        lint["location"]["uri"]
+            .as_str()
+            .unwrap()
+            .ends_with(".evin/workspace.flow")
+    );
+
+    let web_build = tasks.iter().find(|t| t["name"] == "web:build").unwrap();
+    assert_eq!(web_build["module"], "web");
+    assert_eq!(web_build["shortName"], "build");
+    assert_eq!(web_build["stage"], "Build");
+
+    // Break workspace.flow temporarily and verify stale tasks remain available
+    let ws_uri = uri(directory.path(), ".evin/workspace.flow");
+    let mut change_out = Vec::new();
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {
+                        "uri": ws_uri,
+                        "version": 1,
+                        "text": "workspace: [\n"
+                    }
+                }
+            })
+            .to_string(),
+            &mut change_out,
+        )
+        .unwrap();
+
+    let mut stale_out = Vec::new();
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "everyinit/workspaceCatalog",
+                "params": {}
+            })
+            .to_string(),
+            &mut stale_out,
+        )
+        .unwrap();
+    let stale_result = &bodies(stale_out)[0]["result"];
+    assert_eq!(stale_result["stale"], true);
+    assert_eq!(stale_result["tasks"].as_array().unwrap().len(), 3);
+    assert!(stale_result["diagnostics"]["errors"].as_u64().unwrap() >= 1);
+}

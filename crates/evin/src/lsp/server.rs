@@ -43,6 +43,8 @@ pub struct EvinLspServer {
     pub(super) source: OverlaySource,
     pub(super) documents: DocumentStore,
     pub(super) session: WorkspaceAnalysisSession,
+    pub(super) config: Option<evin_config::EverInitConfig>,
+    pub(super) config_stale: bool,
     pub(super) findings: Vec<evin_config::analysis::AnalysisFinding>,
     pub(super) snippet_support: bool,
     pub(super) published: BTreeSet<String>,
@@ -110,6 +112,7 @@ impl EvinLspServer {
             .on::<ReferencesRequest, _>(Self::on_references)?
             .on::<DocumentSymbolRequest, _>(Self::on_document_symbols)?
             .on::<WorkspaceSymbolRequest, _>(Self::on_workspace_symbols)?
+            .on::<WorkspaceCatalogRequest, _>(Self::on_workspace_catalog)?
             .finish()
     }
 
@@ -123,6 +126,9 @@ impl EvinLspServer {
             .on::<DidOpenNotification, _>(Self::on_did_open)?
             .on::<DidChangeNotification, _>(Self::on_did_change)?
             .on::<DidCloseNotification, _>(Self::on_did_close)?
+            .on::<DidChangeWatchedFilesNotification, _>(|server, _, writer| {
+                server.rebuild_and_publish(writer)
+            })?
             .on::<ExitNotification, _>(Self::on_exit)?
             .finish()
     }
@@ -137,6 +143,12 @@ impl EvinLspServer {
             WorkspaceSnapshot::load_sync(&self.source),
             &builtin_actions(),
         );
+        if let Some(config) = analysis.config {
+            self.config = Some(config);
+            self.config_stale = false;
+        } else if self.config.is_some() {
+            self.config_stale = true;
+        }
         self.findings = analysis.findings;
         self.session.update_index(analysis.index);
         self.publish_diagnostics(writer)

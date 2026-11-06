@@ -97,6 +97,13 @@ impl LspRequest for WorkspaceSymbolRequest {
     type Result = Vec<WorkspaceSymbol>;
 }
 
+pub struct WorkspaceCatalogRequest;
+impl LspRequest for WorkspaceCatalogRequest {
+    const METHOD: &'static str = "everyinit/workspaceCatalog";
+    type Params = Value;
+    type Result = WorkspaceCatalogResult;
+}
+
 // Notification Markers
 pub struct InitializedNotification;
 impl LspNotification for InitializedNotification {
@@ -120,6 +127,12 @@ pub struct DidCloseNotification;
 impl LspNotification for DidCloseNotification {
     const METHOD: &'static str = "textDocument/didClose";
     type Params = DidCloseTextDocumentParams;
+}
+
+pub struct DidChangeWatchedFilesNotification;
+impl LspNotification for DidChangeWatchedFilesNotification {
+    const METHOD: &'static str = "workspace/didChangeWatchedFiles";
+    type Params = Value;
 }
 
 pub struct ExitNotification;
@@ -238,6 +251,53 @@ pub struct TextDocumentContentChangeEvent {
 #[serde(rename_all = "camelCase")]
 pub struct DidCloseTextDocumentParams {
     pub text_document: TextDocumentIdentifier,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceCatalogResult {
+    pub workspace_name: Option<String>,
+    pub workspace_version: Option<String>,
+    pub stages: Vec<String>,
+    pub stale: bool,
+    pub diagnostics: CatalogDiagnosticCounts,
+    pub manifests: Vec<CatalogManifestItem>,
+    pub tasks: Vec<CatalogTaskItem>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogDiagnosticCounts {
+    pub errors: usize,
+    pub warnings: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogManifestItem {
+    pub path: String,
+    pub uri: String,
+    pub kind: String,
+    pub errors: usize,
+    pub warnings: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogTaskItem {
+    pub name: String,
+    pub short_name: String,
+    pub module: Option<String>,
+    pub description: Option<String>,
+    pub stage: Option<String>,
+    pub needs: Vec<String>,
+    pub hooks: Vec<String>,
+    pub has_watch: bool,
+    pub watch_paths: Vec<String>,
+    pub presets: Vec<String>,
+    pub exposed: bool,
+    pub source_path: String,
+    pub location: Option<Location>,
 }
 
 // ---------------------------------------------------------------------------

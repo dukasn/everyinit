@@ -16,16 +16,18 @@ use super::catalog::{catalog_augmented_markdown, catalog_entry};
 use super::protocol::*;
 use super::server::{EvinLspServer, lsp_symbol_kind};
 use crate::commands::builtin_actions;
-use evin_config::semantic::STANDARD_SEMANTIC_TOKEN_TYPES;
-use evin_config::source::OverlaySource;
+use evin_config::semantic::{DocumentKind, STANDARD_SEMANTIC_TOKEN_TYPES, SemanticKind};
+use evin_config::source::{OverlaySource, normalize};
+use evin_diagnostic::{Diagnostic as EvinDiagnostic, FileLocation, Severity};
 use evin_lsp::LspDocument;
 use evin_lsp::protocol::{
-    CompletionItem, DocumentSymbol, Hover, Location, MarkupContent, SemanticTokens, TextEdit,
-    WorkspaceSymbol,
+    CompletionItem, DocumentSymbol, Hover, Location, MarkupContent, Position, Range,
+    SemanticTokens, TextEdit, WorkspaceSymbol,
 };
 use serde_json::{Value, json};
+use std::collections::{BTreeMap, HashSet};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 impl EvinLspServer {
     // -----------------------------------------------------------------------
@@ -261,6 +263,181 @@ impl EvinLspServer {
             })
             .collect();
         Ok(symbols)
+    }
+
+    pub(super) fn on_workspace_catalog(
+        &mut self,
+        _params: Value,
+    ) -> Result<WorkspaceCatalogResult, LspError> {
+        let Some(index) = self.session.current.as_ref() else {
+            return Ok(WorkspaceCatalogResult::default());
+        };
+
+        let mut counts_by_path = BTreeMap::<PathBuf, (usize, usize)>::new();
+        let mut total_errors = 0_usize;
+        let mut total_warnings = 0_usize;
+
+        let mut record_diag = |diagnostic: &EvinDiagnostic, fallback: Option<&str>| {
+            let raw_path = match &diagnostic.location {
+                Some(FileLocation::ByteSpan { path, .. })
+                | Some(FileLocation::Path { path, .. }) => PathBuf::from(path),
+                None => fallback
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|| PathBuf::from(evin_config::paths::WORKSPACE_MANIFEST)),
+            };
+            let entry = counts_by_path.entry(normalize(raw_path)).or_default();
+            match diagnostic.severity {
+                Severity::Error => {
+                    entry.0 += 1;
+                    total_errors += 1;
+                }
+                Severity::Warning => {
+                    entry.1 += 1;
+                    total_warnings += 1;
+                }
+                Severity::Info => {}
+            }
+        };
+
+        for diagnostic in &index.diagnostics {
+            record_diag(diagnostic, None);
+        }
+        for finding in &self.findings {
+            record_diag(&finding.diagnostic, finding.source_file.as_deref());
+        }
+
+        let manifests = index
+            .documents()
+            .map(|document| {
+                let (errors, warnings) = counts_by_path
+                    .get(&document.path)
+                    .copied()
+                    .unwrap_or((0, 0));
+                let kind = match document.kind {
+                    DocumentKind::Workspace => "workspace",
+                    DocumentKind::Module => "module",
+                    DocumentKind::Namespace => "namespace",
+                    DocumentKind::GitRules => "gitrules",
+                    DocumentKind::Environment => "environment",
+                    DocumentKind::Unknown => "unknown",
+                };
+                CatalogManifestItem {
+                    path: document.path.to_string_lossy().replace('\\', "/"),
+                    uri: self.uri_for(&document.path),
+                    kind: kind.to_string(),
+                    errors,
+                    warnings,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let Some(config) = &self.config else {
+            return Ok(WorkspaceCatalogResult {
+                stale: self.config_stale,
+                diagnostics: CatalogDiagnosticCounts {
+                    errors: total_errors,
+                    warnings: total_warnings,
+                },
+                manifests,
+                ..Default::default()
+            });
+        };
+
+        let exposed: HashSet<&str> = config.expose.iter().map(String::as_str).collect();
+        let mut sorted_tasks: Vec<_> = config.tasks.iter().collect();
+        sorted_tasks.sort_by(|left, right| left.name.cmp(&right.name));
+
+        let tasks = sorted_tasks
+            .into_iter()
+            .map(|task| {
+                let (module, short_name) = match task.name.split_once(':') {
+                    Some((module, rest)) => (Some(module.to_string()), rest.to_string()),
+                    None => (None, task.name.clone()),
+                };
+                let source_path = task
+                    .source_file
+                    .clone()
+                    .unwrap_or_else(|| evin_config::paths::WORKSPACE_MANIFEST.to_string())
+                    .replace('\\', "/");
+
+                let symbol_range = index
+                    .symbols
+                    .iter()
+                    .find(|sym| sym.kind == SemanticKind::Task && sym.name == task.name)
+                    .map(|sym| &sym.range)
+                    .or_else(|| {
+                        self.session
+                            .stale_symbols
+                            .values()
+                            .flatten()
+                            .find(|sym| sym.kind == SemanticKind::Task && sym.name == task.name)
+                            .map(|sym| &sym.range)
+                    });
+
+                let location = symbol_range
+                    .and_then(|range| self.location(range))
+                    .or_else(|| {
+                        let uri = self.uri_for(Path::new(&source_path));
+                        (!uri.is_empty()).then_some(Location {
+                            uri,
+                            range: Range {
+                                start: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                                end: Position {
+                                    line: 0,
+                                    character: 0,
+                                },
+                            },
+                        })
+                    });
+
+                let description = task
+                    .description
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|text| !text.is_empty())
+                    .map(String::from);
+
+                CatalogTaskItem {
+                    name: task.name.clone(),
+                    short_name,
+                    module,
+                    description,
+                    stage: task.stage.clone(),
+                    needs: task.needs.clone().unwrap_or_default(),
+                    hooks: task
+                        .on
+                        .as_ref()
+                        .and_then(|on| on.hooks.clone())
+                        .unwrap_or_default(),
+                    has_watch: task.watch.is_some(),
+                    watch_paths: task
+                        .watch
+                        .as_ref()
+                        .map(|watch| watch.paths.clone())
+                        .unwrap_or_default(),
+                    presets: task.presets.clone().unwrap_or_default(),
+                    exposed: exposed.contains(task.name.as_str()),
+                    source_path,
+                    location,
+                }
+            })
+            .collect();
+
+        Ok(WorkspaceCatalogResult {
+            workspace_name: Some(config.workspace_name.clone()),
+            workspace_version: Some(config.workspace_version.clone()),
+            stages: config.stages.clone(),
+            stale: self.config_stale,
+            diagnostics: CatalogDiagnosticCounts {
+                errors: total_errors,
+                warnings: total_warnings,
+            },
+            manifests,
+            tasks,
+        })
     }
 
     // -----------------------------------------------------------------------
