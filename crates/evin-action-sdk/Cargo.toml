@@ -8,7 +8,6 @@ edition = "2024"
 evin-git = { workspace = true }
 async-trait = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
 marked-yaml = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }

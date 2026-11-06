@@ -58,7 +58,7 @@ pub async fn reconcile(
     lock.validate(policies).map_err(diagnostic)?;
     if dry_run {
         return Ok(ReconcileOutcome::Planned(
-            lock.to_yaml().map_err(diagnostic)?,
+            lock.to_json().map_err(diagnostic)?,
         ));
     }
     release::write_lock(&root, &lock).map_err(diagnostic)?;

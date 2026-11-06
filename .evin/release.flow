@@ -88,7 +88,7 @@ tasks:
     steps:
       - run: cargo evin-dev run docs:evin-catalog
       - run: cargo evin-dev run docs:catalog
-      - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.yaml CHANGELOG.md
+      - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.json CHANGELOG.md
       - run: git add crates/evin/assets/config-catalog.json crates/esh/assets/builtins-catalog.json
       - run: git add editors/vscode/package.json
       - uses: evin/git-release@v1

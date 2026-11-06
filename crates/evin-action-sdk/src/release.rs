@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
-pub const RELEASE_LOCK_PATH: &str = ".evin/release-lock.yaml";
+pub const RELEASE_LOCK_PATH: &str = ".evin/release-lock.json";
 pub const PACKAGE_RELEASE_SUBJECT: &str = "chore(release): refresh package revisions";
 pub const PACKAGE_RELEASE_TRAILER: &str = "Evin-Release-Kind: package";
 
@@ -25,9 +25,7 @@ pub enum ReleaseError {
     Git(String),
     #[error("release lock I/O failed: {0}")]
     Io(#[from] std::io::Error),
-    #[error("release lock YAML failed: {0}")]
-    Yaml(#[from] serde_yaml::Error),
-    #[error("release JSON failed: {0}")]
+    #[error("release lock JSON failed: {0}")]
     Json(#[from] serde_json::Error),
 }
 
@@ -180,8 +178,8 @@ impl ReleaseLock {
         })
     }
 
-    pub fn to_yaml(&self) -> Result<String, ReleaseError> {
-        let mut text = serde_yaml::to_string(self)?;
+    pub fn to_json(&self) -> Result<String, ReleaseError> {
+        let mut text = serde_json::to_string_pretty(self)?;
         if !text.ends_with('\n') {
             text.push('\n');
         }
@@ -190,7 +188,7 @@ impl ReleaseLock {
 }
 
 pub fn parse_lock(source: &str) -> Result<ReleaseLock, ReleaseError> {
-    let lock: ReleaseLock = serde_yaml::from_str(source)?;
+    let lock: ReleaseLock = serde_json::from_str(source)?;
     if lock.version != 1 {
         return Err(ReleaseError::Lock(format!(
             "unsupported schema version {}",
@@ -214,7 +212,7 @@ pub fn write_lock(root: &Path, lock: &ReleaseLock) -> Result<(), ReleaseError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, lock.to_yaml()?)?;
+    std::fs::write(path, lock.to_json()?)?;
     Ok(())
 }
 
@@ -803,5 +801,24 @@ mod tests {
             artifact.packages["vscode"].revisions["vsix"].version,
             "0.2.0"
         );
+    }
+
+    #[test]
+    fn json_serialization_round_trips() {
+        let policy = policies(PackageRevisionScope::Package);
+        let lock = resolve_lock(
+            None,
+            ReleaseIdentity {
+                version: "0.2.0".into(),
+                tag: "v0.2.0".into(),
+            },
+            &policy,
+            &BTreeMap::from([("app".into(), format!("sha256:{}", "f".repeat(64)))]),
+        )
+        .unwrap();
+        let json = lock.to_json().unwrap();
+        assert!(json.ends_with('\n'));
+        let parsed = parse_lock(&json).unwrap();
+        assert_eq!(parsed, lock);
     }
 }
