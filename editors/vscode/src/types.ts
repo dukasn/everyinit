@@ -78,8 +78,21 @@ export interface RawTraceEvent {
 }
 
 export interface RawTraceDocument {
+  otherData?: unknown;
   traceEvents?: unknown;
   displayTimeUnit?: unknown;
+}
+
+export interface ParsedTraceStep {
+  name: string;
+  kind: string;
+  index: number;
+  durationUs: number;
+  status: TraceTaskStatus;
+  command?: string;
+  action?: string;
+  version?: string;
+  issue?: string;
 }
 
 export interface ParsedTraceSpan {
@@ -96,6 +109,8 @@ export interface ParsedTraceSpan {
   tid: number;
   status: TraceTaskStatus;
   args: Record<string, string>;
+  source?: string;
+  steps?: ParsedTraceStep[];
 }
 
 export interface ParsedTraceCounts {
@@ -117,4 +132,12 @@ export interface ParsedTraceReport {
   overallStatus: TraceTaskStatus;
   spans: ParsedTraceSpan[];
   latestByTask: ReadonlyMap<string, ParsedTraceSpan>;
+  runId?: string;
+  scope?: { kind: string; module?: string; root?: string };
+  workspaceTrace?: string;
+  command?: string;
+  targets?: string[];
+  context?: string;
+  outcome?: string;
+  modules?: string[];
 }

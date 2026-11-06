@@ -90,6 +90,97 @@ test("parseTraceDocument computes wall duration, parallelism, and task statuses"
   assert.equal(report.latestByTask.get("test")?.status, "failed");
 });
 
+test("parseTraceDocument supports scoped traces with otherData and metadata events", () => {
+  const sample = JSON.stringify({
+    otherData: {
+      schema: "evin.trace/v1",
+      runId: "01RUNID",
+      scope: { kind: "module", module: "evin", root: "crates/evin" },
+      workspaceTrace: "../../.evin/trace.json",
+      outcome: "success",
+      command: "run",
+      targets: ["evin:test"],
+    },
+    traceEvents: [
+      {
+        name: "process_name",
+        cat: "__metadata",
+        ph: "M",
+        pid: 2,
+        args: { name: "evin" },
+      },
+      {
+        name: "thread_name",
+        cat: "__metadata",
+        ph: "M",
+        pid: 2,
+        tid: 1,
+        args: { name: "Slot 1" },
+      },
+      {
+        name: "evin:check \u2192 evin:test",
+        cat: "needs",
+        ph: "s",
+        id: 1,
+        pid: 2,
+        tid: 1,
+        ts: 1_200_000,
+      },
+      {
+        name: "evin:test",
+        cat: "task",
+        ph: "X",
+        ts: 1_200_000,
+        dur: 300_000,
+        pid: 2,
+        tid: 1,
+        args: {
+          status: "success",
+          source: "crates/evin/.evin/module.flow:27",
+          module: "evin",
+        },
+      },
+      {
+        name: "run",
+        cat: "step",
+        ph: "X",
+        ts: 1_205_000,
+        dur: 290_000,
+        pid: 2,
+        tid: 1,
+        args: {
+          task: "evin:test",
+          status: "success",
+        },
+      },
+    ],
+    displayTimeUnit: "ms",
+  });
+
+  const report = parseTraceDocument(
+    sample,
+    "/workspace/crates/evin/.evin/trace.json",
+    1700000000000
+  );
+  assert.ok(report);
+  assert.equal(report.runId, "01RUNID");
+  assert.equal(report.scope?.kind, "module");
+  assert.equal(report.scope?.module, "evin");
+  assert.equal(report.workspaceTrace, "../../.evin/trace.json");
+  // Only the task execution spans are included (not metadata ph:M, flow ph:s, or cat:step)
+  assert.equal(report.spans.length, 1);
+  const taskSpan = report.spans[0];
+  assert.ok(taskSpan);
+  assert.equal(taskSpan.name, "evin:test");
+  assert.equal(taskSpan.category, "task");
+  assert.equal(taskSpan.source, "crates/evin/.evin/module.flow:27");
+  assert.equal(taskSpan.status, "success");
+  assert.equal(taskSpan.tid, 1);
+  assert.equal(taskSpan.steps?.length, 1);
+  assert.equal(taskSpan.steps[0].name, "run");
+  assert.equal(taskSpan.steps[0].durationUs, 290_000);
+});
+
 test("parseTraceDocument rejects malformed payloads", () => {
   assert.equal(parseTraceDocument("{bad json", "/tmp/trace.json", 0), null);
   assert.equal(parseTraceDocument("{}", "/tmp/trace.json", 0), null);

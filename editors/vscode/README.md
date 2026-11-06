@@ -62,7 +62,7 @@ The extension recognizes all canonical Evin workflow files, including `.evin/wor
 Opening an Everyinit workspace adds the **Everyinit** sidebar in the Activity Bar with three views:
 
 - **Tasks**: Lists workspace and module tasks resolved by `evin lsp`, grouped by module or by stage, with live search filtering, `needs` / hook / watch metadata, latest trace status and duration badges, one-click terminal execution (`run`, `--dry-run`, `--parallel`, `--sequential`, `explain`, `check`), and direct navigation to the `.flow` definition.
-- **Execution Trace**: Watches `.evin/trace.json` automatically and summarizes wall-clock duration, cumulative task time, concurrency factor, and per-task outcomes. Clicking the summary or timeline button opens an interactive waterfall panel with worker thread lanes, filtering, sorting, and one-click task re-runs.
+- **Execution Trace**: Watches `.evin/trace.json` and module-scoped `<module>/.evin/trace.json` files automatically and summarizes wall-clock duration, cumulative task time, concurrency factor, and per-task outcomes. Clicking the summary or timeline button opens an interactive waterfall panel with worker slot concurrency lanes, filtering, sorting, and one-click task re-runs.
 - **Workspace & Scripts**: Surfaces quick workspace actions (`evin check -w`, `evin sync`), all discovered `.flow` manifests with live diagnostic counts, and workspace `.esh` scripts with inline run buttons.
 
 ---

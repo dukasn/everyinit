@@ -144,11 +144,9 @@ export function buildTraceHtml(
         threadCount: report.threadIds.length,
         counts: report.counts,
         overallStatus: report.overallStatus,
+        scope: report.scope,
+        runId: report.runId,
         selectedTaskName,
-        ticks: [0, 0.25, 0.5, 0.75, 1].map((ratio) => ({
-          pct: ratio * 100,
-          label: formatDurationUs(report.wallDurationUs * ratio),
-        })),
         spans: report.spans.map((span) => {
           const leftPct =
             report.wallDurationUs > 0
@@ -188,6 +186,20 @@ export function buildTraceHtml(
             tid: span.tid,
             status: span.status,
             args: span.args,
+            source: span.source,
+            steps:
+              span.steps?.map((step) => ({
+                name: step.name,
+                kind: step.kind,
+                index: step.index,
+                durationUs: step.durationUs,
+                durationFormatted: formatDurationUs(step.durationUs),
+                status: step.status,
+                command: step.command,
+                action: step.action,
+                version: step.version,
+                issue: step.issue,
+              })) || [],
           };
         }),
       }
@@ -200,7 +212,7 @@ export function buildTraceHtml(
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}' 'unsafe-inline'; script-src 'nonce-${nonce}';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';" />
   <title>Everyinit Execution Trace</title>
   <style nonce="${nonce}">
     :root {
@@ -228,6 +240,12 @@ export function buildTraceHtml(
       color: var(--vscode-foreground);
       background: var(--vscode-editor-background);
       line-height: 1.45;
+    }
+
+    @media (max-width: 560px) {
+      body {
+        padding: 12px 12px 24px;
+      }
     }
 
     .header {
@@ -292,12 +310,25 @@ export function buildTraceHtml(
 
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 10px;
       margin-bottom: 18px;
     }
 
+    @media (max-width: 760px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 360px) {
+      .kpi-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
     .kpi-card {
+      min-width: 0;
       padding: 11px 14px;
       border: 1px solid var(--evin-border);
       border-radius: 6px;
@@ -369,6 +400,11 @@ export function buildTraceHtml(
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .toolbar-left {
+      flex: 1 1 320px;
     }
 
     input[type="search"], select {
@@ -383,7 +419,9 @@ export function buildTraceHtml(
     }
 
     input[type="search"] {
-      min-width: 210px;
+      flex: 1 1 160px;
+      min-width: 0;
+      max-width: 300px;
     }
 
     input[type="search"]:focus, select:focus {
@@ -410,16 +448,32 @@ export function buildTraceHtml(
     .waterfall {
       border: 1px solid var(--evin-border);
       border-radius: 6px;
-      overflow: hidden;
+      overflow: clip;
       background: var(--evin-surface);
     }
 
     .wf-header, .wf-row {
       display: grid;
-      grid-template-columns: minmax(190px, 260px) 1fr 120px;
+      grid-template-columns: minmax(120px, 26%) minmax(0, 1fr) minmax(92px, max-content);
+      grid-template-areas: "task track dur";
       align-items: center;
-      gap: 14px;
+      column-gap: 14px;
+      row-gap: 6px;
       padding: 8px 14px;
+    }
+
+    .wf-task-head, .task-cell { grid-area: task; }
+    .wf-ruler, .track-cell { grid-area: track; }
+    .wf-dur-head, .dur-cell { grid-area: dur; }
+
+    @media (max-width: 560px) {
+      .wf-header, .wf-row {
+        grid-template-columns: minmax(0, 1fr) max-content;
+        grid-template-areas:
+          "task dur"
+          "track track";
+        padding: 8px 10px;
+      }
     }
 
     .wf-header {
@@ -430,6 +484,9 @@ export function buildTraceHtml(
       background: var(--vscode-editorWidget-background, var(--evin-surface));
       letter-spacing: 0.03em;
       text-transform: uppercase;
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
 
     .wf-ruler {
@@ -437,6 +494,10 @@ export function buildTraceHtml(
       height: 18px;
       line-height: 18px;
       user-select: none;
+      overflow: hidden;
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 500;
     }
 
     .wf-tick {
@@ -446,6 +507,21 @@ export function buildTraceHtml(
       color: var(--evin-muted);
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
+    }
+
+    .wf-dur-head {
+      text-align: right;
+    }
+
+    .wf-empty {
+      padding: 24px;
+      text-align: center;
+      color: var(--evin-muted);
+    }
+
+    .sort-label {
+      color: var(--evin-muted);
+      font-size: 11.5px;
     }
 
     .wf-row {
@@ -516,7 +592,7 @@ export function buildTraceHtml(
         var(--evin-border) 1px,
         transparent 1px
       );
-      background-size: 25% 100%;
+      background-size: var(--grid-step, 25%) 100%;
       overflow: hidden;
     }
 
@@ -593,8 +669,20 @@ export function buildTraceHtml(
 
     .detail-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
+    }
+
+    @media (max-width: 760px) {
+      .detail-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 360px) {
+      .detail-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
 
     .detail-item {
@@ -609,6 +697,98 @@ export function buildTraceHtml(
     .detail-val {
       font-family: var(--vscode-editor-font-family, monospace);
       margin-top: 3px;
+      overflow-wrap: anywhere;
+    }
+
+    .detail-item.wide {
+      grid-column: 1 / -1;
+    }
+
+    .steps-section {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--evin-border);
+    }
+
+    .steps-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--evin-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .steps-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      background: var(--vscode-editorWidget-background, rgba(127, 127, 127, 0.08));
+      font-size: 12px;
+      flex-wrap: wrap;
+    }
+
+    .step-num {
+      font-size: 10px;
+      color: var(--evin-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .step-name {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-weight: 500;
+    }
+
+    .step-kind-badge {
+      font-size: 9.5px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: var(--evin-border);
+      color: var(--vscode-foreground);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .step-cmd {
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      color: var(--evin-muted);
+      background: rgba(0, 0, 0, 0.15);
+      padding: 1px 5px;
+      border-radius: 3px;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .step-dur {
+      margin-left: auto;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      color: var(--evin-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .step-issue {
+      width: 100%;
+      margin-top: 4px;
+      padding: 4px 8px;
+      background: rgba(248, 81, 73, 0.1);
+      border-left: 2px solid var(--evin-fail);
+      color: var(--evin-fail);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-all;
     }
 
     .empty-state {
@@ -685,6 +865,84 @@ export function buildTraceHtml(
       return sorted;
     }
 
+    // Inline style attributes are blocked by the nonce-based CSP; CSSOM writes are not.
+    function applyGeometry(root) {
+      root.querySelectorAll("[data-left-pct]").forEach((el) => {
+        el.style.left = el.dataset.leftPct + "%";
+        if (el.dataset.widthPct !== undefined) {
+          el.style.width = el.dataset.widthPct + "%";
+        }
+      });
+    }
+
+    const MIN_TICK_SPACING_PX = 72;
+    const TICK_GAP_PX = 8;
+
+    function niceStep(raw) {
+      const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));
+      const normalized = raw / magnitude;
+      const factor =
+        normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5 ? 2.5 : normalized <= 5 ? 5 : 10;
+      return factor * magnitude;
+    }
+
+    function trimNumber(value) {
+      return String(Number(value.toFixed(2)));
+    }
+
+    function formatTick(us) {
+      if (us === 0) return "0";
+      if (us < 1000) return trimNumber(us) + "µs";
+      if (us < 1000000) return trimNumber(us / 1000) + "ms";
+      if (us < 60000000) return trimNumber(us / 1000000) + "s";
+      const minutes = Math.floor(us / 60000000);
+      const seconds = (us % 60000000) / 1000000;
+      return seconds > 0 ? minutes + "m " + trimNumber(seconds) + "s" : minutes + "m";
+    }
+
+    // Round tick steps sized to the ruler's rendered width; labels that would
+    // collide are dropped instead of overlapping.
+    function layoutAxis() {
+      const ruler = document.getElementById("wf-ruler");
+      const waterfall = document.querySelector(".waterfall");
+      if (!ruler || !waterfall || !traceData) return;
+      ruler.textContent = "";
+      const width = ruler.clientWidth;
+      const wall = traceData.wallDurationUs;
+      if (width <= 0 || wall <= 0) return;
+
+      const maxTicks = Math.max(1, Math.floor(width / MIN_TICK_SPACING_PX));
+      const step = niceStep(wall / maxTicks);
+      waterfall.style.setProperty("--grid-step", (step / wall) * 100 + "%");
+
+      let lastRight = -Infinity;
+      for (let i = 0; i * step <= wall * 1.0001; i++) {
+        const value = i * step;
+        const x = (value / wall) * width;
+        const tick = document.createElement("span");
+        tick.className = "wf-tick";
+        tick.textContent = formatTick(value);
+        ruler.appendChild(tick);
+
+        const labelWidth = tick.offsetWidth;
+        let left = x - labelWidth / 2;
+        if (left < 0) left = 0;
+        if (left + labelWidth > width) left = width - labelWidth;
+        if (left < lastRight + TICK_GAP_PX) {
+          tick.remove();
+          continue;
+        }
+        tick.style.left = left + "px";
+        lastRight = left + labelWidth;
+      }
+    }
+
+    let axisFrame = 0;
+    new ResizeObserver(() => {
+      cancelAnimationFrame(axisFrame);
+      axisFrame = requestAnimationFrame(layoutAxis);
+    }).observe(document.body);
+
     function renderApp() {
       const root = document.getElementById("app");
       if (!traceData || traceData.spans.length === 0) {
@@ -712,21 +970,9 @@ export function buildTraceHtml(
         traceData.spans.find((s) => s.index === state.selectedIndex) || visibleSpans[0] || null;
 
       const wsLabel = traceData.workspaceName ? \` · workspace \${escapeHtml(traceData.workspaceName)}\` : "";
-      const ticksHtml = traceData.ticks
-        .map((t, idx) => {
-          let posStyle = \`left: \${t.pct}%; transform: translateX(-50%); text-align: center;\`;
-          if (idx === 0) {
-            posStyle = "left: 0; transform: none; text-align: left;";
-          } else if (idx === traceData.ticks.length - 1) {
-            posStyle = "right: 0; left: auto; transform: none; text-align: right;";
-          }
-          return \`<span class="wf-tick" style="\${posStyle}">\${escapeHtml(t.label)}</span>\`;
-        })
-        .join("");
-
       const rowsHtml =
         visibleSpans.length === 0
-          ? \`<div style="padding: 24px; text-align: center; color: var(--evin-muted);">No trace spans match the current filter.</div>\`
+          ? \`<div class="wf-empty">No trace spans match the current filter.</div>\`
           : visibleSpans
               .map((span) => {
                 const isSelected = selectedSpan && span.index === selectedSpan.index;
@@ -736,10 +982,10 @@ export function buildTraceHtml(
                     <div class="task-cell">
                       <span class="status-dot dot-\${escapeHtml(span.status)}"></span>
                       <span class="task-name" title="\${escapeHtml(span.name)}">\${escapeHtml(span.name)}</span>
-                      <span class="tid-badge" title="Worker thread \${span.tid}">T\${span.tid}</span>
+                      <span class="tid-badge" title="Worker slot \${span.tid}">T\${span.tid}</span>
                     </div>
                     <div class="track-cell">
-                      <div class="bar bar-\${escapeHtml(span.status)}" style="left: \${span.leftPct}%; width: \${span.widthPct}%;" title="\${tooltipText}"></div>
+                      <div class="bar bar-\${escapeHtml(span.status)}" data-left-pct="\${span.leftPct}" data-width-pct="\${span.widthPct}" title="\${tooltipText}"></div>
                     </div>
                     <div class="dur-cell">
                       \${escapeHtml(span.durationFormatted)}<span class="dur-share">\${span.wallSharePct}%</span>
@@ -748,6 +994,33 @@ export function buildTraceHtml(
                 \`;
               })
               .join("");
+
+      const stepsHtml =
+        selectedSpan && selectedSpan.steps && selectedSpan.steps.length > 0
+          ? \`
+            <div class="steps-section">
+              <div class="steps-title">Steps (\${selectedSpan.steps.length})</div>
+              <div class="steps-list">
+                \${selectedSpan.steps
+                  .map(
+                    (step) => \`
+                  <div class="step-item">
+                    <span class="status-dot dot-\${escapeHtml(step.status)}"></span>
+                    <span class="step-num">#\${step.index}</span>
+                    <span class="step-kind-badge">\${escapeHtml(step.kind)}</span>
+                    <span class="step-name">\${escapeHtml(step.name)}</span>
+                    \${step.command ? '<span class="step-cmd" title="' + escapeHtml(step.command) + '">' + escapeHtml(step.command) + '</span>' : ""}
+                    \${step.action ? '<span class="step-cmd" title="' + escapeHtml(step.action) + (step.version ? "@" + escapeHtml(step.version) : "") + '">' + escapeHtml(step.action) + (step.version ? "@" + escapeHtml(step.version) : "") + '</span>' : ""}
+                    <span class="step-dur">\${escapeHtml(step.durationFormatted)}</span>
+                    \${step.issue ? '<div class="step-issue">' + escapeHtml(step.issue) + '</div>' : ""}
+                  </div>
+                \`
+                  )
+                  .join("")}
+              </div>
+            </div>
+          \`
+          : "";
 
       const inspectorHtml = selectedSpan
         ? \`
@@ -778,9 +1051,15 @@ export function buildTraceHtml(
               </div>
               <div class="detail-item">
                 <div class="detail-key">Execution Lane</div>
-                <div class="detail-val">cat: \${escapeHtml(selectedSpan.category)} · pid \${selectedSpan.pid} · tid \${selectedSpan.tid}</div>
+                <div class="detail-val">slot \${selectedSpan.tid} · pid \${selectedSpan.pid}</div>
               </div>
+              \${selectedSpan.source ? \`
+              <div class="detail-item wide">
+                <div class="detail-key">Source</div>
+                <div class="detail-val">\${escapeHtml(selectedSpan.source)}</div>
+              </div>\` : ""}
             </div>
+            \${stepsHtml}
           </div>
         \`
         : "";
@@ -831,7 +1110,7 @@ export function buildTraceHtml(
             <button class="chip \${state.statusFilter === "failed" ? "active" : ""}" data-status="failed">Failed (\${traceData.counts.failed})</button>
           </div>
           <div class="toolbar-right">
-            <label for="sort-select" style="color: var(--evin-muted); font-size: 11.5px;">Sort:</label>
+            <label for="sort-select" class="sort-label">Sort:</label>
             <select id="sort-select">
               <option value="timeline" \${state.sortBy === "timeline" ? "selected" : ""}>Timeline (Start)</option>
               <option value="slowest" \${state.sortBy === "slowest" ? "selected" : ""}>Slowest First</option>
@@ -843,9 +1122,9 @@ export function buildTraceHtml(
 
         <div class="waterfall">
           <div class="wf-header">
-            <div>Task</div>
-            <div class="wf-ruler">\${ticksHtml}</div>
-            <div style="text-align: right;">Duration</div>
+            <div class="wf-task-head">Task</div>
+            <div class="wf-ruler" id="wf-ruler"></div>
+            <div class="wf-dur-head">Duration</div>
           </div>
           \${rowsHtml}
         </div>
@@ -854,6 +1133,8 @@ export function buildTraceHtml(
       \`;
 
       bindGlobalButtons();
+      applyGeometry(root);
+      layoutAxis();
 
       const searchInput = document.getElementById("search-input");
       if (searchInput) {

@@ -799,7 +799,8 @@ export class TraceSpanNode extends vscode.TreeItem {
         "",
         `- **Duration:** \`${formatDurationUs(span.durationUs)}\` (${span.durationUs.toLocaleString()} µs)`,
         `- **Start Offset:** \`+${formatDurationUs(span.offsetUs)}\``,
-        `- **Thread:** \`tid ${span.tid}\` (\`pid ${span.pid}\`)`,
+        `- **Slot:** \`slot ${span.tid}\` (\`pid ${span.pid}\`)`,
+        ...(span.source ? [`- **Source:** \`${span.source}\``] : []),
         "",
         "*Click to inspect in Waterfall Timeline*",
       ].join("\n")
