@@ -1,6 +1,27 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.1]
+
+### Bug Fixes
+
+- **pipeline:** record accurate task status in execution trace events (a06918f)
+- **lsp:** serialize document and workspace symbols with camelCase fields (143cc6b)
+- **vscode:** expand workspace variables and add local target binary fallback (4c019e4)
+- **ci:** bootstrap vscode extension dependencies and fix import (fa10d93)
+
+### Documentation
+
+- update reuse annotations and licensing for editor assets (ab195df)
+
+### Features
+
+- **vscode:** add sidebar, flow codelens, trace timeline, and icon font (6613f75)
+- **lsp:** expose workspace catalog and file watch sync for editors (feb5471)
+- **vscode:** enhance flow syntax highlighting and semantic scopes (2c3fac9)
+- **release:** integrate vscode extension into release flow (3119355)
+- **vscode:** add unified extension for flow and esh (e174f36)
+
 ## [v0.2.0]
 
 ### Bug Fixes
