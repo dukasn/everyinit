@@ -155,7 +155,7 @@ impl EvinLspServer {
                                 contents: MarkupContent {
                                     kind: "markdown".into(),
                                     value: format!(
-                                        "{markdown}\n\n_Stale local fact while the current YAML buffer is invalid._"
+                                        "{markdown}\n\n_Stale local fact while the current Flow buffer is invalid._"
                                     ),
                                 },
                                 range: self.range(&symbol.range),

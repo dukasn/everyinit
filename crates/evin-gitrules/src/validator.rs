@@ -165,7 +165,7 @@ impl<'a> RulesValidator<'a> {
             if !is_base_branch && let Some(format_list) = &branches.name_format {
                 let mut matched = false;
                 for format in format_list.iter() {
-                    let compiled = evin_yaml::template::regex::compile_template(format)
+                    let compiled = evin_flow::template::regex::compile_template(format)
                         .map_err(|e| ValidationError::RegexError(e.to_string()))?;
 
                     if compiled.is_match(branch_name) {
@@ -199,7 +199,7 @@ impl<'a> RulesValidator<'a> {
             if let Some(format_list) = &tags.name_format {
                 let mut matched = false;
                 for format in format_list.iter() {
-                    let compiled = evin_yaml::template::regex::compile_template(format)
+                    let compiled = evin_flow::template::regex::compile_template(format)
                         .map_err(|e| ValidationError::RegexError(e.to_string()))?;
 
                     if compiled.is_match(tag_name) {
@@ -614,7 +614,7 @@ impl<'a> RulesValidator<'a> {
 
             for format in format_list.iter() {
                 last_format = format.clone();
-                match evin_yaml::template::regex::compile_template(format) {
+                match evin_flow::template::regex::compile_template(format) {
                     Err(e) => errors.push(ValidationError::RegexError(e.to_string())),
                     Ok(compiled) => {
                         if let Some(captures) = compiled.captures(subject) {

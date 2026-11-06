@@ -86,7 +86,7 @@ evin-dotenv = { path = "crates/evin-dotenv" }
 evin-git = { path = "crates/evin-git" }
 evin-gitrules = { path = "crates/evin-gitrules" }
 evin-policy = { path = "crates/evin-policy" }
-evin-yaml = { path = "crates/evin-yaml" }
+evin-flow = { path = "crates/evin-flow" }
 evin-diagnostic = { path = "crates/evin-diagnostic" }
 evin-ui = { path = "crates/evin-ui" }
 evin-doc = { path = "crates/evin-doc" }

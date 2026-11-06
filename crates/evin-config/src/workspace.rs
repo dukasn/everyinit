@@ -58,7 +58,7 @@ pub struct WorkspaceConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{ModuleYaml, WorkspaceConfig};
+    use super::{ModuleFlow, WorkspaceConfig};
 
     #[test]
     fn hook_runner_deserializes_with_arguments() {
@@ -80,7 +80,7 @@ hook_runner:
 
     #[test]
     fn module_version_is_optional_for_workspace_version_inheritance() {
-        let config: ModuleYaml = serde_yaml::from_str(
+        let config: ModuleFlow = serde_yaml::from_str(
             r#"
 module:
   name: example
@@ -94,7 +94,7 @@ tasks: {}
 
     #[test]
     fn module_can_still_declare_an_independent_version() {
-        let config: ModuleYaml = serde_yaml::from_str(
+        let config: ModuleFlow = serde_yaml::from_str(
             r#"
 module:
   name: example
@@ -108,8 +108,8 @@ tasks: {}
     }
 
     #[test]
-    fn module_yaml_deserializes_root_variables() {
-        let config: ModuleYaml = serde_yaml::from_str(
+    fn module_flow_deserializes_root_variables() {
+        let config: ModuleFlow = serde_yaml::from_str(
             r#"
 module:
   name: api
@@ -131,9 +131,9 @@ values:
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct WorkspaceYaml {
+pub struct WorkspaceFlow {
     pub workspace: WorkspaceConfig,
-    pub stages: Vec<evin_yaml::Spanned<String>>,
+    pub stages: Vec<evin_flow::Spanned<String>>,
     #[serde(default)]
     pub expose: Vec<String>,
     #[serde(default)]
@@ -141,10 +141,12 @@ pub struct WorkspaceYaml {
     #[serde(default)]
     pub values: HashMap<String, String>,
     #[serde(default)]
-    pub tasks: Option<HashMap<evin_yaml::Spanned<String>, crate::models::TaskObject>>,
+    pub tasks: Option<HashMap<evin_flow::Spanned<String>, crate::models::TaskObject>>,
     #[serde(skip)]
     pub gitrules: Option<std::sync::Arc<evin_gitrules::GitRulesRoot>>,
 }
+
+pub type WorkspaceYaml = WorkspaceFlow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -159,15 +161,17 @@ pub struct ModuleConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ModuleYaml {
+pub struct ModuleFlow {
     pub module: ModuleConfig,
     #[serde(default)]
     pub env: HashMap<String, String>,
     #[serde(default)]
     pub values: HashMap<String, String>,
     #[serde(default)]
-    pub tasks: Option<HashMap<evin_yaml::Spanned<String>, crate::models::TaskObject>>,
+    pub tasks: Option<HashMap<evin_flow::Spanned<String>, crate::models::TaskObject>>,
 }
+
+pub type ModuleYaml = ModuleFlow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -178,17 +182,19 @@ pub struct NamespaceConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct NamespaceYaml {
+pub struct NamespaceFlow {
     pub namespace: NamespaceConfig,
     #[serde(default)]
     pub env: HashMap<String, String>,
     #[serde(default)]
     pub values: HashMap<String, String>,
     #[serde(default)]
-    pub tasks: Option<HashMap<evin_yaml::Spanned<String>, crate::models::TaskObject>>,
+    pub tasks: Option<HashMap<evin_flow::Spanned<String>, crate::models::TaskObject>>,
 }
 
-use evin_yaml::schema::{Field as EditorField, FieldRole as EditorRole, Schema as EditorSchema};
+pub type NamespaceYaml = NamespaceFlow;
+
+use evin_flow::schema::{Field as EditorField, FieldRole as EditorRole, Schema as EditorSchema};
 
 const EDITOR_STRING: EditorSchema = EditorSchema::String;
 const EDITOR_STRING_LIST: EditorSchema = EditorSchema::Sequence(&EDITOR_STRING);
@@ -408,9 +414,9 @@ pub const NAMESPACE_EDITOR_SCHEMA: EditorSchema = EditorSchema::Object(&[
     .catalog("namespace.tasks"),
 ]);
 
-impl evin_yaml::YamlDocument for WorkspaceYaml {}
-impl evin_yaml::YamlDocument for ModuleYaml {}
-impl evin_yaml::YamlDocument for NamespaceYaml {}
+impl evin_flow::YamlDocument for WorkspaceFlow {}
+impl evin_flow::YamlDocument for ModuleFlow {}
+impl evin_flow::YamlDocument for NamespaceFlow {}
 
 #[cfg(test)]
 mod include_tests {
@@ -458,8 +464,8 @@ includes:
     }
 
     #[test]
-    fn namespace_yaml_deserializes_correctly() {
-        let yaml = r#"
+    fn namespace_flow_deserializes_correctly() {
+        let flow = r#"
 namespace:
   name: release
   description: "Release engineering and distribution pipelines"
@@ -476,7 +482,7 @@ tasks:
     steps:
       - run: cargo run -p esh -- scripts/release/doctor.esh
 "#;
-        let parsed = <NamespaceYaml as evin_yaml::YamlDocument>::from_str(yaml, None).unwrap();
+        let parsed = <NamespaceFlow as evin_flow::YamlDocument>::from_str(flow, None).unwrap();
         assert_eq!(parsed.namespace.name, "release");
         assert_eq!(
             parsed.namespace.description.as_deref(),
@@ -499,7 +505,7 @@ tasks:
 
     #[test]
     fn nested_module_and_namespace_variables_are_rejected() {
-        let module_error = serde_yaml::from_str::<ModuleYaml>(
+        let module_error = serde_yaml::from_str::<ModuleFlow>(
             r#"
 module:
   name: api
@@ -510,7 +516,7 @@ module:
         .unwrap_err();
         assert!(module_error.to_string().contains("unknown field `env`"));
 
-        let namespace_env_error = serde_yaml::from_str::<NamespaceYaml>(
+        let namespace_env_error = serde_yaml::from_str::<NamespaceFlow>(
             r#"
 namespace:
   name: release
@@ -525,7 +531,7 @@ namespace:
                 .contains("unknown field `env`")
         );
 
-        let namespace_values_error = serde_yaml::from_str::<NamespaceYaml>(
+        let namespace_values_error = serde_yaml::from_str::<NamespaceFlow>(
             r#"
 namespace:
   name: release
@@ -543,7 +549,7 @@ namespace:
 
     #[test]
     fn module_include_deserializes_list_and_map_variants() {
-        let list_config: ModuleYaml = serde_yaml::from_str(
+        let list_config: ModuleFlow = serde_yaml::from_str(
             r#"
 module:
   name: api
@@ -561,7 +567,7 @@ module:
             ]))
         );
 
-        let map_config: ModuleYaml = serde_yaml::from_str(
+        let map_config: ModuleFlow = serde_yaml::from_str(
             r#"
 module:
   name: api

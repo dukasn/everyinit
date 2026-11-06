@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use evin_yaml::schema::{Field, FieldRole, Schema, ValueConstraint};
+use evin_flow::schema::{Field, FieldRole, Schema, ValueConstraint};
 
 pub(super) fn schema_description(key: &str) -> String {
     evin_locales::render_message(key, &[])
@@ -130,7 +130,7 @@ fn validate_schema_constraints(
                         )
                     }),
                     ValueConstraint::GitTemplate => {
-                        evin_yaml::template::regex::compile_template(text)
+                        evin_flow::template::regex::compile_template(text)
                             .err()
                             .map(|error| {
                                 schema_message(

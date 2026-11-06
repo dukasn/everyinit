@@ -49,8 +49,9 @@ impl Phase for ResolveConfigPhase {
         }
         let config = evin_config::load_workspace_tasks().await?;
 
-        let workspace_yaml_path = std::path::PathBuf::from(evin_config::paths::WORKSPACE_MANIFEST);
-        let bytes = if let Ok(metadata) = std::fs::metadata(&workspace_yaml_path) {
+        let workspace_manifest_path =
+            std::path::PathBuf::from(evin_config::paths::WORKSPACE_MANIFEST);
+        let bytes = if let Ok(metadata) = std::fs::metadata(&workspace_manifest_path) {
             metadata.len() as usize
         } else {
             0
@@ -131,7 +132,7 @@ impl Phase for ResolveConfigPhase {
 
         let env_schema_path = workspace_root.join(evin_config::paths::ENVIRONMENT_MANIFEST);
         let env_schema = if env_schema_path.exists() {
-            match <evin_config::environment::EnvironmentYaml as evin_yaml::YamlDocument>::from_file(
+            match <evin_config::environment::EnvironmentFlow as evin_flow::YamlDocument>::from_file(
                 &env_schema_path,
             ) {
                 Ok(schema) => Some(schema),
@@ -445,11 +446,11 @@ mod tests {
             source_file: Some("docs/.evin/module.flow".into()),
             steps: Some(vec![StepObject {
                 run: None,
-                uses: Some(evin_yaml::Spanned::new(
+                uses: Some(evin_flow::Spanned::new(
                     "evin/docs@v1".into(),
-                    evin_yaml::Span::default(),
+                    evin_flow::Span::default(),
                 )),
-                with: Some(evin_yaml::parse_yaml(with).unwrap()),
+                with: Some(evin_flow::parse_yaml(with).unwrap()),
             }]),
             ..Default::default()
         }

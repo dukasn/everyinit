@@ -20,8 +20,8 @@ use crate::paths::{
 use crate::source::{WorkspaceDocuments, WorkspaceSource, normalize};
 use evin_action_sdk::{Action, ActionDescriptor, ActionFieldDescriptor};
 use evin_diagnostic::Diagnostic;
-use evin_yaml::template::{TemplateReferenceKind, references};
-use evin_yaml::{EvinHeader, Span, SpannedValue, validate_evin_header};
+use evin_flow::template::{TemplateReferenceKind, references};
+use evin_flow::{EvinHeader, Span, SpannedValue, validate_evin_header};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -172,15 +172,15 @@ impl WorkspaceSnapshot {
                 }
             };
             let kind = document_kind(&path, header.is_some());
-            let (ast, completion_ast) = match evin_yaml::parse_yaml(&text) {
+            let (ast, completion_ast) = match evin_flow::parse_yaml(&text) {
                 Ok(ast) => (Some(ast), None),
                 Err(error) => {
                     let diagnostic = error
-                        .into_diagnostic("YAML Syntax Error", Some(path.display().to_string()));
+                        .into_diagnostic("Flow Syntax Error", Some(path.display().to_string()));
                     push_unique(&mut document_diagnostics, diagnostic.clone());
                     push_unique(&mut diagnostics, diagnostic);
                     let recovered = if header_is_valid {
-                        recover_incomplete_yaml(&text)
+                        recover_incomplete_flow(&text)
                     } else {
                         None
                     };
@@ -189,7 +189,7 @@ impl WorkspaceSnapshot {
             };
             if kind == DocumentKind::Environment
                 && let Err(diagnostic) =
-                    <crate::environment::EnvironmentYaml as evin_yaml::YamlDocument>::from_str(
+                    <crate::environment::EnvironmentFlow as evin_flow::YamlDocument>::from_str(
                         &text,
                         Some(&path),
                     )
@@ -226,7 +226,7 @@ impl WorkspaceSnapshot {
     }
 }
 
-fn recover_incomplete_yaml(text: &str) -> Option<SpannedValue> {
+fn recover_incomplete_flow(text: &str) -> Option<SpannedValue> {
     let mut stack = Vec::new();
     let mut quote = None;
     let mut escaped = false;
@@ -281,7 +281,7 @@ fn recover_incomplete_yaml(text: &str) -> Option<SpannedValue> {
         repaired.push(if delimiter == '[' { ']' } else { '}' });
     }
     repaired.push_str(&text[insertion..]);
-    evin_yaml::parse_yaml(&repaired).ok()
+    evin_flow::parse_yaml(&repaired).ok()
 }
 
 fn supplement_reachable_documents(
@@ -293,9 +293,9 @@ fn supplement_reachable_documents(
     let Some(workspace_text) = texts.get(&workspace_path).cloned() else {
         return;
     };
-    let Some(workspace_ast) = evin_yaml::parse_yaml(&workspace_text)
+    let Some(workspace_ast) = evin_flow::parse_yaml(&workspace_text)
         .ok()
-        .or_else(|| recover_incomplete_yaml(&workspace_text))
+        .or_else(|| recover_incomplete_flow(&workspace_text))
     else {
         return;
     };
@@ -334,7 +334,7 @@ fn supplement_reachable_documents(
             let Some(module_text) = texts.get(&module_path) else {
                 continue;
             };
-            let Ok(module_ast) = evin_yaml::parse_yaml(module_text) else {
+            let Ok(module_ast) = evin_flow::parse_yaml(module_text) else {
                 continue;
             };
             let module_root = module_path

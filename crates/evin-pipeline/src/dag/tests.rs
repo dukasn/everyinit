@@ -140,8 +140,8 @@ on:
 run: cargo clippy
 "#;
 
-    let ast = evin_yaml::parse_yaml(yaml_str).expect("Failed to parse YAML");
-    let task: TaskObject = evin_yaml::de::from_spanned_value(ast).expect("Failed to deserialize");
+    let ast = evin_flow::parse_yaml(yaml_str).expect("Failed to parse YAML");
+    let task: TaskObject = evin_flow::de::from_spanned_value(ast).expect("Failed to deserialize");
     assert_eq!(task.name, "lint");
     assert!(task.on.is_some());
 

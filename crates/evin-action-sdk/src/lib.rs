@@ -20,7 +20,7 @@ pub mod http;
 pub mod packaging;
 pub mod release;
 pub mod secrets;
-use evin_yaml::template::pipeline::TemplateContext;
+use evin_flow::template::pipeline::TemplateContext;
 pub mod state;
 
 pub mod dry_run {
@@ -179,7 +179,7 @@ impl ActionDescriptor {
 }
 
 impl ActionFieldDescriptor {
-    /// Default YAML insertion text for editor completion clients.
+    /// Default Flow insertion text for editor completion clients.
     pub fn snippet(&self) -> String {
         format!(
             "{}: ${{1}}",
@@ -779,13 +779,13 @@ impl RunnerContext {
     }
     pub fn load_config<T: serde::de::DeserializeOwned>(
         &self,
-        with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<T, evin_yaml::ConfigError> {
+        with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<T, evin_flow::ConfigError> {
         let evaluated_with = with.map(|v| evaluate_spanned_value(v.clone(), self));
         let (config, mut report) = match &evaluated_with {
-            Some(value) => evin_yaml::de::from_spanned_value_with_report(value.clone())?,
-            None => evin_yaml::de::from_spanned_value_with_report(
-                evin_yaml::SpannedValue::Mapping(Default::default(), evin_yaml::Span::default()),
+            Some(value) => evin_flow::de::from_spanned_value_with_report(value.clone())?,
+            None => evin_flow::de::from_spanned_value_with_report(
+                evin_flow::SpannedValue::Mapping(Default::default(), evin_flow::Span::default()),
             )?,
         };
 
@@ -795,7 +795,7 @@ impl RunnerContext {
     }
 }
 
-fn emit_config_debug(logger: &Logger, report: &mut evin_yaml::ConfigReport) {
+fn emit_config_debug(logger: &Logger, report: &mut evin_flow::ConfigReport) {
     report.overrides.sort();
     logger.debug_event(debug::ActionConfig {
         overrides: report.overrides.len(),
@@ -853,25 +853,25 @@ pub trait Action: Send + Sync {
         &[]
     }
 
-    /// Statically validates the `with:` payload provided in the YAML configuration.
+    /// Statically validates the `with:` payload provided in the Flow configuration.
     /// Every action must implement this contract, including actions that accept no options.
     fn validate_config(
         &self,
-        with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError>;
+        with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError>;
 
     fn validate_task_config(
         &self,
         _ctx: &ActionValidationContext<'_>,
-        with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
+        with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError> {
         self.validate_config(with)
     }
 
     async fn sync(
         &self,
         _ctx: &ActionSyncContext,
-        _configs: &[Option<evin_yaml::SpannedValue>],
+        _configs: &[Option<evin_flow::SpannedValue>],
     ) -> Result<Vec<SyncResource>, evin_diagnostic::Diagnostic> {
         Ok(Vec::new())
     }
@@ -882,7 +882,7 @@ pub trait Action: Send + Sync {
     async fn execute(
         &self,
         ctx: &RunnerContext,
-        with: Option<evin_yaml::SpannedValue>,
+        with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic>;
 
     /// Executes the action with its runner-resolved invocation flags.
@@ -892,7 +892,7 @@ pub trait Action: Send + Sync {
     async fn execute_with_invocation(
         &self,
         ctx: &RunnerContext,
-        with: Option<evin_yaml::SpannedValue>,
+        with: Option<evin_flow::SpannedValue>,
         _flags: &InvocationFlags,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         self.execute(ctx, with).await
@@ -901,13 +901,13 @@ pub trait Action: Send + Sync {
 
 /// Helper method to deserialize the plugin's configuration from the `with` mapping.
 pub fn parse_config<T: serde::de::DeserializeOwned>(
-    with: Option<&evin_yaml::SpannedValue>,
-) -> Result<T, evin_yaml::ConfigError> {
+    with: Option<&evin_flow::SpannedValue>,
+) -> Result<T, evin_flow::ConfigError> {
     match with {
-        Some(value) => evin_yaml::de::from_spanned_value(value.clone()),
-        None => evin_yaml::de::from_spanned_value(evin_yaml::SpannedValue::Mapping(
+        Some(value) => evin_flow::de::from_spanned_value(value.clone()),
+        None => evin_flow::de::from_spanned_value(evin_flow::SpannedValue::Mapping(
             Default::default(),
-            evin_yaml::Span::default(),
+            evin_flow::Span::default(),
         )),
     }
 }
@@ -974,29 +974,29 @@ impl TemplateContext for RunnerContext {
 }
 
 fn evaluate_spanned_value<C: TemplateContext>(
-    val: evin_yaml::SpannedValue,
+    val: evin_flow::SpannedValue,
     ctx: &C,
-) -> evin_yaml::SpannedValue {
+) -> evin_flow::SpannedValue {
     match val {
-        evin_yaml::SpannedValue::String(s, span) => {
+        evin_flow::SpannedValue::String(s, span) => {
             if s.contains("${") {
-                if let Ok(resolved) = evin_yaml::template::resolve_templates(&s, ctx) {
-                    evin_yaml::SpannedValue::String(resolved, span)
+                if let Ok(resolved) = evin_flow::template::resolve_templates(&s, ctx) {
+                    evin_flow::SpannedValue::String(resolved, span)
                 } else {
-                    evin_yaml::SpannedValue::String(s, span)
+                    evin_flow::SpannedValue::String(s, span)
                 }
             } else {
-                evin_yaml::SpannedValue::String(s, span)
+                evin_flow::SpannedValue::String(s, span)
             }
         }
-        evin_yaml::SpannedValue::Sequence(seq, span) => {
+        evin_flow::SpannedValue::Sequence(seq, span) => {
             let new_seq = seq
                 .into_iter()
                 .map(|item| evaluate_spanned_value(item, ctx))
                 .collect();
-            evin_yaml::SpannedValue::Sequence(new_seq, span)
+            evin_flow::SpannedValue::Sequence(new_seq, span)
         }
-        evin_yaml::SpannedValue::Mapping(map, span) => {
+        evin_flow::SpannedValue::Mapping(map, span) => {
             let new_map = map
                 .into_iter()
                 .map(|(k, v)| {
@@ -1005,7 +1005,7 @@ fn evaluate_spanned_value<C: TemplateContext>(
                     (new_k, new_v)
                 })
                 .collect();
-            evin_yaml::SpannedValue::Mapping(new_map, span)
+            evin_flow::SpannedValue::Mapping(new_map, span)
         }
         other => other,
     }
@@ -1023,7 +1023,7 @@ mod tests {
             tx,
             std::sync::Arc::new(secrets::SecretsProvider::default()),
         );
-        let mut report = evin_yaml::ConfigReport {
+        let mut report = evin_flow::ConfigReport {
             overrides: vec!["title".to_string(), "mode".to_string()],
             defaults: vec!["port".to_string(), "theme".to_string()],
         };

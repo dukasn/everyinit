@@ -79,12 +79,12 @@ pub fn configuration_catalog_targets() -> BTreeSet<CatalogTarget> {
 }
 
 fn collect_schema_targets(
-    schema: evin_yaml::schema::Schema,
+    schema: evin_flow::schema::Schema,
     path: &str,
     targets: &mut BTreeSet<CatalogTarget>,
 ) {
     match schema {
-        evin_yaml::schema::Schema::Object(fields) => {
+        evin_flow::schema::Schema::Object(fields) => {
             for field in fields {
                 let target = field
                     .catalog_target
@@ -94,15 +94,15 @@ fn collect_schema_targets(
                 collect_schema_targets(field.schema, &target, targets);
             }
         }
-        evin_yaml::schema::Schema::Map(value) => {
+        evin_flow::schema::Schema::Map(value) => {
             let target = format!("{path}.*");
             targets.insert(CatalogTarget(target.clone()));
             collect_schema_targets(*value, &target, targets);
         }
-        evin_yaml::schema::Schema::Sequence(value) => {
+        evin_flow::schema::Schema::Sequence(value) => {
             collect_schema_targets(*value, &format!("{path}[]"), targets);
         }
-        evin_yaml::schema::Schema::Union(variants) => {
+        evin_flow::schema::Schema::Union(variants) => {
             for variant in variants {
                 collect_schema_targets(*variant, path, targets);
             }

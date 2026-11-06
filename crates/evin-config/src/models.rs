@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use evin_yaml::Spanned;
+use evin_flow::Spanned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path};
@@ -88,7 +88,7 @@ pub struct TriggerObject {
 pub struct StepObject {
     pub run: Option<String>,
     pub uses: Option<Spanned<String>>,
-    pub with: Option<evin_yaml::SpannedValue>,
+    pub with: Option<evin_flow::SpannedValue>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,7 +122,7 @@ pub struct TaskObject {
     pub steps: Option<Vec<StepObject>>,
 }
 
-use evin_yaml::schema::{Field as EditorField, FieldRole as EditorRole, Schema as EditorSchema};
+use evin_flow::schema::{Field as EditorField, FieldRole as EditorRole, Schema as EditorSchema};
 
 const EDITOR_STRING: EditorSchema = EditorSchema::String;
 const EDITOR_STRING_LIST: EditorSchema = EditorSchema::Sequence(&EDITOR_STRING);

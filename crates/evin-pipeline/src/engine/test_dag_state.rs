@@ -26,15 +26,15 @@ struct MockWriterAction;
 impl Action for MockWriterAction {
     fn validate_config(
         &self,
-        _with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
+        _with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError> {
         Ok(())
     }
 
     async fn execute(
         &self,
         ctx: &RunnerContext,
-        _with: Option<evin_yaml::SpannedValue>,
+        _with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         ctx.state.set_output("secret", "42");
         Ok(())
@@ -47,15 +47,15 @@ struct MockReaderAction;
 impl Action for MockReaderAction {
     fn validate_config(
         &self,
-        _with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
+        _with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError> {
         Ok(())
     }
 
     async fn execute(
         &self,
         ctx: &RunnerContext,
-        _with: Option<evin_yaml::SpannedValue>,
+        _with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         let val = ctx.state.get_input("writer_task", "secret");
         if val == Some("42".to_string()) {
@@ -74,9 +74,9 @@ async fn test_executor_dag_state_passing() {
         name: "writer_task".to_string(),
         steps: Some(vec![StepObject {
             run: None,
-            uses: Some(evin_yaml::Spanned::new(
+            uses: Some(evin_flow::Spanned::new(
                 "writer".to_string(),
-                evin_yaml::Span::default(),
+                evin_flow::Span::default(),
             )),
             with: None,
         }]),
@@ -88,9 +88,9 @@ async fn test_executor_dag_state_passing() {
         needs: Some(vec!["writer_task".to_string()]),
         steps: Some(vec![StepObject {
             run: None,
-            uses: Some(evin_yaml::Spanned::new(
+            uses: Some(evin_flow::Spanned::new(
                 "reader".to_string(),
-                evin_yaml::Span::default(),
+                evin_flow::Span::default(),
             )),
             with: None,
         }]),

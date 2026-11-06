@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use evin_config::environment::EnvironmentYaml;
+use evin_config::environment::EnvironmentFlow;
 use evin_config::models::EnvDeclaration;
 use evin_diagnostic::Spanned;
 use evin_diagnostic::{Diagnostic, IssueCode};
@@ -35,7 +35,7 @@ impl EnvironmentProvider for OsEnvironmentProvider {
 pub fn load_global_env(
     workspace_root: &std::path::Path,
     workspace_env: &HashMap<String, String>,
-    schema: Option<&EnvironmentYaml>,
+    schema: Option<&EnvironmentFlow>,
 ) -> Result<HashMap<String, String>, Diagnostic> {
     let mut global = HashMap::new();
     let mut parsed_spans: HashMap<String, Spanned<String>> = HashMap::new();
@@ -110,7 +110,7 @@ pub fn build_task_env<P: EnvironmentProvider>(
     task_declaration: Option<&EnvDeclaration>,
     presets: Option<&[String]>,
     provider: &P,
-    schema: Option<&EnvironmentYaml>,
+    schema: Option<&EnvironmentFlow>,
     stage: &str,
 ) -> HashMap<String, String> {
     let mut task_env = HashMap::new();

@@ -1,6 +1,6 @@
 [package]
 license.workspace = true
-name = "evin-yaml"
+name = "evin-flow"
 version = { workspace = true }
 edition = { workspace = true }
 publish = { workspace = true }

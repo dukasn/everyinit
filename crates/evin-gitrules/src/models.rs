@@ -92,7 +92,7 @@ impl GitRulesRoot {
             .unwrap_or(message);
 
         for format in format_list.iter() {
-            let compiled = match evin_yaml::template::regex::compile_template(format) {
+            let compiled = match evin_flow::template::regex::compile_template(format) {
                 Ok(c) => c,
                 Err(_) => continue,
             };
@@ -800,7 +800,7 @@ pub struct RemotePolicies {
     pub require_up_to_date: Option<bool>,
 }
 
-impl evin_yaml::YamlDocument for GitRulesRoot {}
+impl evin_flow::YamlDocument for GitRulesRoot {}
 
 #[cfg(test)]
 mod tests {

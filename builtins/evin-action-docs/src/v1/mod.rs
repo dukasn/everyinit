@@ -316,8 +316,8 @@ pub fn resolve_layout_assets(
 }
 
 pub fn validate_config(
-    with: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     let config: DocsConfig = evin_action_sdk::parse_config(with)?;
     let validation = config
         .normalized_reference_prefix()
@@ -346,7 +346,7 @@ pub fn validate_config(
                 Ok(())
             }
         });
-    validation.map_err(|message| evin_yaml::ConfigError {
+    validation.map_err(|message| evin_flow::ConfigError {
         message,
         span: None,
     })
@@ -1312,14 +1312,14 @@ fn prune_stale_page_outputs(
 
 pub async fn execute(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     execute_with_invocation(ctx, with, &InvocationFlags::default()).await
 }
 
 pub async fn execute_with_invocation(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
     invocation_flags: &InvocationFlags,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     let started = std::time::Instant::now();

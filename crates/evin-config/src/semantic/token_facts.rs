@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-fn collect_yaml_token_facts(
+fn collect_flow_token_facts(
     value: &SpannedValue,
     path: &Path,
     properties: &mut Vec<SemanticTokenFact>,
@@ -31,12 +31,12 @@ fn collect_yaml_token_facts(
                         kind: SemanticTokenKind::Property,
                     });
                 }
-                collect_yaml_token_facts(value, path, properties, strings);
+                collect_flow_token_facts(value, path, properties, strings);
             }
         }
         SpannedValue::Sequence(values, _) => {
             for value in values {
-                collect_yaml_token_facts(value, path, properties, strings);
+                collect_flow_token_facts(value, path, properties, strings);
             }
         }
         SpannedValue::String(_, span) => strings.push(SourceRange {

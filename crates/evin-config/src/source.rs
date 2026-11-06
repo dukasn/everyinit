@@ -16,19 +16,19 @@ use std::path::{Path, PathBuf};
 use crate::paths::{ENVIRONMENT_MANIFEST, MODULE_MANIFEST, is_canonical_manifest};
 
 /// Whether a document is eligible for Evin-aware editor treatment. Eligibility
-/// is deliberately separate from workspace discovery: a marked external YAML
+/// is deliberately separate from workspace discovery: a marked external Flow
 /// file still must be included by a workspace or module to join that graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EvinDocumentRecognition {
     pub canonical_path: bool,
-    pub header: Option<evin_yaml::EvinHeader>,
+    pub header: Option<evin_flow::EvinHeader>,
 }
 
 pub fn recognize_evin_document(
     path: &Path,
     text: &str,
 ) -> Result<Option<EvinDocumentRecognition>, evin_diagnostic::Diagnostic> {
-    let header = evin_yaml::validate_evin_header(text, Some(path))?;
+    let header = evin_flow::validate_evin_header(text, Some(path))?;
     let canonical_path = is_canonical_manifest(path);
     Ok(
         (canonical_path || header.is_some()).then_some(EvinDocumentRecognition {
@@ -51,11 +51,11 @@ impl WorkspaceDocuments {
         source: &dyn WorkspaceSource,
         workspace_path: impl Into<PathBuf>,
     ) -> Result<Self, evin_diagnostic::Diagnostic> {
-        use evin_yaml::YamlDocument;
+        use evin_flow::YamlDocument;
         let workspace_path = normalize(workspace_path.into());
         let workspace_text = read(source, &workspace_path)?;
         let workspace =
-            crate::workspace::WorkspaceYaml::from_str(&workspace_text, Some(&workspace_path))?;
+            crate::workspace::WorkspaceFlow::from_str(&workspace_text, Some(&workspace_path))?;
         let mut result = Self {
             texts: BTreeMap::from([(workspace_path.clone(), workspace_text)]),
         };
@@ -72,7 +72,7 @@ impl WorkspaceDocuments {
                 continue;
             }
             let text = read(source, &module_path)?;
-            let module = crate::workspace::ModuleYaml::from_str(&text, Some(&module_path))?;
+            let module = crate::workspace::ModuleFlow::from_str(&text, Some(&module_path))?;
             result.texts.insert(module_path.clone(), text);
             let module_root = module_path
                 .parent()
@@ -325,7 +325,7 @@ mod tests {
         );
 
         let marked = recognize_evin_document(
-            Path::new("automation.yaml"),
+            Path::new("automation.flow"),
             "#!evin/v1\nnamespace: { name: automation }\n",
         )
         .unwrap()
@@ -334,7 +334,7 @@ mod tests {
         assert_eq!(marked.header.unwrap().version, 1);
 
         assert!(
-            recognize_evin_document(Path::new("notes.yaml"), "title: notes\n")
+            recognize_evin_document(Path::new("notes.flow"), "title: notes\n")
                 .unwrap()
                 .is_none()
         );
@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn document_recognition_reports_invalid_evin_headers() {
         let diagnostic =
-            recognize_evin_document(Path::new("automation.yaml"), "#!evin/v2\n").unwrap_err();
+            recognize_evin_document(Path::new("automation.flow"), "#!evin/v2\n").unwrap_err();
         assert_eq!(diagnostic.code.key, "issue-evin-header-invalid");
     }
 }

@@ -15,5 +15,5 @@ thiserror = { workspace = true }
 rayon = { workspace = true }
 glob = { workspace = true }
 miette = { workspace = true }
-evin-yaml = { workspace = true }
+evin-flow = { workspace = true }
 evin-diagnostic = { workspace = true }

@@ -1135,6 +1135,7 @@ dependencies = [
  "evin-catalog",
  "evin-config",
  "evin-diagnostic",
+ "evin-flow",
  "evin-git",
  "evin-gitrules",
  "evin-io",
@@ -1143,7 +1144,6 @@ dependencies = [
  "evin-pipeline",
  "evin-policy",
  "evin-ui",
- "evin-yaml",
  "globset",
  "humansize",
  "marked-yaml",
@@ -1167,8 +1167,8 @@ dependencies = [
  "async-trait",
  "evin-action-sdk",
  "evin-diagnostic",
+ "evin-flow",
  "evin-locales",
- "evin-yaml",
  "flate2",
  "glob",
  "marked-yaml",
@@ -1189,9 +1189,9 @@ dependencies = [
  "evin-action-sdk",
  "evin-ci",
  "evin-diagnostic",
+ "evin-flow",
  "evin-gitrules",
  "evin-locales",
- "evin-yaml",
  "marked-yaml",
  "regex",
  "serde",
@@ -1209,10 +1209,10 @@ dependencies = [
  "evin-action-sdk",
  "evin-ci",
  "evin-diagnostic",
+ "evin-flow",
  "evin-git",
  "evin-gitrules",
  "evin-locales",
- "evin-yaml",
  "semver",
  "serde",
  "serde_json",
@@ -1236,8 +1236,8 @@ dependencies = [
  "evin-catalog",
  "evin-diagnostic",
  "evin-doc",
+ "evin-flow",
  "evin-locales",
- "evin-yaml",
  "flate2",
  "globset",
  "grass",
@@ -1273,8 +1273,8 @@ dependencies = [
  "async-trait",
  "evin-action-sdk",
  "evin-diagnostic",
+ "evin-flow",
  "evin-locales",
- "evin-yaml",
  "marked-yaml",
  "regex",
  "serde",
@@ -1291,8 +1291,8 @@ dependencies = [
  "esh",
  "evin-action-sdk",
  "evin-diagnostic",
+ "evin-flow",
  "evin-locales",
- "evin-yaml",
  "marked-yaml",
  "serde",
  "serde_json",
@@ -1306,11 +1306,11 @@ version = "0.2.1"
 dependencies = [
  "async-trait",
  "evin-diagnostic",
+ "evin-flow",
  "evin-git",
  "evin-gitrules",
  "evin-io",
  "evin-locales",
- "evin-yaml",
  "flate2",
  "fluent-bundle",
  "glob",
@@ -1337,9 +1337,9 @@ dependencies = [
  "chrono",
  "evin-action-sdk",
  "evin-diagnostic",
+ "evin-flow",
  "evin-gitrules",
  "evin-locales",
- "evin-yaml",
  "marked-yaml",
  "regex",
  "semver",
@@ -1376,10 +1376,10 @@ dependencies = [
  "async-trait",
  "evin-action-sdk",
  "evin-diagnostic",
+ "evin-flow",
  "evin-gitrules",
  "evin-locales",
  "evin-policy",
- "evin-yaml",
  "globset",
  "marked-yaml",
  "regex",
@@ -1426,6 +1426,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "evin-flow"
+version = "0.2.1"
+dependencies = [
+ "evin-diagnostic",
+ "evin-locales",
+ "regex",
+ "serde",
+ "thiserror 2.0.20",
+ "yaml-rust2 0.9.0",
+]
+
+[[package]]
 name = "evin-git"
 version = "0.2.1"
 dependencies = [
@@ -1440,7 +1452,7 @@ name = "evin-gitrules"
 version = "0.2.1"
 dependencies = [
  "evin-diagnostic",
- "evin-yaml",
+ "evin-flow",
  "glob",
  "marked-yaml",
  "miette",
@@ -1490,10 +1502,10 @@ dependencies = [
  "evin-config",
  "evin-diagnostic",
  "evin-dotenv",
+ "evin-flow",
  "evin-gitrules",
  "evin-locales",
  "evin-process",
- "evin-yaml",
  "marked-yaml",
  "regex",
  "serde",
@@ -1539,18 +1551,6 @@ dependencies = [
  "human_format",
  "textwrap",
  "tokio",
-]
-
-[[package]]
-name = "evin-yaml"
-version = "0.2.1"
-dependencies = [
- "evin-diagnostic",
- "evin-locales",
- "regex",
- "serde",
- "thiserror 2.0.20",
- "yaml-rust2 0.9.0",
 ]
 
 [[package]]

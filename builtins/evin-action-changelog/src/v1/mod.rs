@@ -13,7 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use evin_action_sdk::RunnerContext;
-use evin_yaml::template::pipeline::{resolve_templates, validate_template_syntax};
+use evin_flow::template::pipeline::{resolve_templates, validate_template_syntax};
 use regex::Regex;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -91,7 +91,7 @@ impl Default for ChangelogConfig {
 }
 
 impl ChangelogConfig {
-    fn from_with(with: Option<evin_yaml::SpannedValue>) -> Result<Self, ChangelogError> {
+    fn from_with(with: Option<evin_flow::SpannedValue>) -> Result<Self, ChangelogError> {
         let config: Self = evin_action_sdk::parse_config(with.as_ref())
             .map_err(ChangelogError::InvalidConfiguration)?;
         config.validate()?;
@@ -101,7 +101,7 @@ impl ChangelogConfig {
     fn validate(&self) -> Result<(), ChangelogError> {
         if self.path.trim().is_empty() {
             return Err(ChangelogError::InvalidConfiguration(
-                evin_yaml::ConfigError {
+                evin_flow::ConfigError {
                     message: evin_locales::t!("changelog-path-must-not-be-empty"),
                     span: None,
                 },
@@ -113,7 +113,7 @@ impl ChangelogConfig {
             .is_some_and(|path| path.trim().is_empty())
         {
             return Err(ChangelogError::InvalidConfiguration(
-                evin_yaml::ConfigError {
+                evin_flow::ConfigError {
                     message: "notes_path must not be empty when provided".to_string(),
                     span: None,
                 },
@@ -122,14 +122,14 @@ impl ChangelogConfig {
         if let Some(section) = &self.section {
             if section.trim().is_empty() || self.notes_path.is_none() {
                 return Err(ChangelogError::InvalidConfiguration(
-                    evin_yaml::ConfigError {
+                    evin_flow::ConfigError {
                         message: "section must be non-empty and requires notes_path".to_string(),
                         span: None,
                     },
                 ));
             }
             validate_template_syntax(section).map_err(|error| {
-                ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+                ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
                     message: format!("section contains invalid template syntax: {error}"),
                     span: None,
                 })
@@ -137,7 +137,7 @@ impl ChangelogConfig {
         }
         if self.unreleased_heading.trim().is_empty() {
             return Err(ChangelogError::InvalidConfiguration(
-                evin_yaml::ConfigError {
+                evin_flow::ConfigError {
                     message: evin_locales::t!("unreleased-heading-must-not-be-empty"),
                     span: None,
                 },
@@ -145,7 +145,7 @@ impl ChangelogConfig {
         }
         if self.sections.keys().any(|key| key.trim().is_empty()) {
             return Err(ChangelogError::InvalidConfiguration(
-                evin_yaml::ConfigError {
+                evin_flow::ConfigError {
                     message: evin_locales::t!("sections-keys-must-not-be-empty"),
                     span: None,
                 },
@@ -155,14 +155,14 @@ impl ChangelogConfig {
             let is_empty = version.trim().is_empty();
             if is_empty {
                 return Err(ChangelogError::InvalidConfiguration(
-                    evin_yaml::ConfigError {
+                    evin_flow::ConfigError {
                         message: evin_locales::t!("version-must-not-be-empty"),
                         span: None,
                     },
                 ));
             }
             validate_template_syntax(version).map_err(|e| {
-                ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+                ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
                     message: evin_locales::t!(
                         "issue-changelog-version-invalid",
                         error = e.to_string()
@@ -172,7 +172,7 @@ impl ChangelogConfig {
             })?;
         } else if !self.include_unreleased && self.section.is_none() {
             return Err(ChangelogError::InvalidConfiguration(
-                evin_yaml::ConfigError {
+                evin_flow::ConfigError {
                     message: evin_locales::t!(
                         "version-is-required-when-include-unreleased-is-false"
                     ),
@@ -183,14 +183,14 @@ impl ChangelogConfig {
         if let Some(label) = &self.label {
             if label.trim().is_empty() {
                 return Err(ChangelogError::InvalidConfiguration(
-                    evin_yaml::ConfigError {
+                    evin_flow::ConfigError {
                         message: "label must not be empty when provided".to_string(),
                         span: None,
                     },
                 ));
             }
             validate_template_syntax(label).map_err(|e| {
-                ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+                ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
                     message: format!("label contains invalid template syntax: {e}"),
                     span: None,
                 })
@@ -203,7 +203,7 @@ impl ChangelogConfig {
 #[derive(Debug, Error)]
 enum ChangelogError {
     #[error("{0}")]
-    InvalidConfiguration(evin_yaml::ConfigError),
+    InvalidConfiguration(evin_flow::ConfigError),
     #[error("{}", evin_locales::t!("git-execution-failed", error = .0))]
     GitExecutionFailed(String),
     #[error(
@@ -232,12 +232,12 @@ struct ReleaseBlock {
 }
 
 pub fn validate_config(
-    with: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     match ChangelogConfig::from_with(with.cloned()) {
         Ok(_) => Ok(()),
         Err(ChangelogError::InvalidConfiguration(error)) => Err(error),
-        Err(error) => Err(evin_yaml::ConfigError {
+        Err(error) => Err(evin_flow::ConfigError {
             message: error.to_string(),
             span: None,
         }),
@@ -249,7 +249,7 @@ pub fn validate_config(
 #[allow(clippy::result_large_err)]
 pub async fn execute(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     generate_changelog(ctx, with)
         .await
@@ -258,7 +258,7 @@ pub async fn execute(
 
 async fn generate_changelog(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), ChangelogError> {
     let config: ChangelogConfig = ctx
         .load_config(with.as_ref())
@@ -334,7 +334,7 @@ async fn generate_changelog(
         .releases
         .as_ref()
         .and_then(|r| r.commit_message.as_deref())
-        .and_then(|tpl| evin_yaml::template::regex::compile_template(tpl).ok());
+        .and_then(|tpl| evin_flow::template::regex::compile_template(tpl).ok());
 
     // 2. Top-Down Parsing
     let mut blocks: Vec<ReleaseBlock> = Vec::new();
@@ -403,7 +403,7 @@ async fn generate_changelog(
         .map(|version| resolve_templates(version, ctx))
         .transpose()
         .map_err(|e| {
-            ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+            ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
                 message: e.to_string(),
                 span: None,
             })
@@ -416,7 +416,7 @@ async fn generate_changelog(
             let clean = v.trim_start_matches('v');
             let mut args = std::collections::HashMap::new();
             args.insert("version", clean);
-            evin_yaml::template::format::render(tags_format, &args)
+            evin_flow::template::format::render(tags_format, &args)
         })
         .unwrap_or_else(|| config.unreleased_heading.clone());
     let label_suffix = config
@@ -425,7 +425,7 @@ async fn generate_changelog(
         .map(|label| resolve_templates(label, ctx))
         .transpose()
         .map_err(|e| {
-            ChangelogError::InvalidConfiguration(evin_yaml::ConfigError {
+            ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
                 message: e.to_string(),
                 span: None,
             })
@@ -678,7 +678,7 @@ mod tests {
     async fn notes_path_receives_only_the_pending_section_body() {
         let temp = repository(true);
         let ctx = context(temp.path());
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "version: 1.0.1\nshow_hashes: false\nnotes_path: target/notes.md\n",
         )
         .unwrap();
@@ -699,7 +699,7 @@ mod tests {
     async fn notes_path_is_not_written_without_a_pending_section() {
         let temp = repository(false);
         let ctx = context(temp.path());
-        let with = evin_yaml::parse_yaml("notes_path: notes.md\n").unwrap();
+        let with = evin_flow::parse_yaml("notes_path: notes.md\n").unwrap();
         execute(&ctx, Some(with)).await.unwrap();
 
         assert!(!temp.path().join("notes.md").exists());
@@ -727,7 +727,7 @@ mod tests {
             .unwrap()
             .changelog_section = Some("Maintenance".to_string());
         ctx.gitrules = Arc::new(rules);
-        let with = evin_yaml::parse_yaml("version: 1.0.1\nnotes_path: target/notes.md\n").unwrap();
+        let with = evin_flow::parse_yaml("version: 1.0.1\nnotes_path: target/notes.md\n").unwrap();
         execute(&ctx, Some(with)).await.unwrap();
 
         let notes = std::fs::read_to_string(temp.path().join("target/notes.md")).unwrap();
@@ -743,7 +743,7 @@ mod tests {
             .as_mut()
             .unwrap()
             .commit_message = Some("chore(ship): {version}".to_string());
-        let with = evin_yaml::parse_yaml("version: 1.0.1\nnotes_path: target/notes.md\n").unwrap();
+        let with = evin_flow::parse_yaml("version: 1.0.1\nnotes_path: target/notes.md\n").unwrap();
         execute(&ctx, Some(with)).await.unwrap();
         let custom_notes = std::fs::read_to_string(temp.path().join("target/notes.md")).unwrap();
         assert!(!custom_notes.contains("**ship:** 1.0.3"));
@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn rejects_an_empty_notes_path() {
-        let with = evin_yaml::parse_yaml("notes_path: \"  \"\n").unwrap();
+        let with = evin_flow::parse_yaml("notes_path: \"  \"\n").unwrap();
         assert!(validate_config(Some(&with)).is_err());
     }
 
@@ -762,7 +762,7 @@ mod tests {
         let changelog = "# Changelog\n\n## [v1.0.1]\n\n### Bug Fixes\n\n- reviewed fix\n\n## [v1.0.0]\n\n- older\n";
         std::fs::write(temp.path().join("CHANGELOG.md"), changelog).unwrap();
         let ctx = context(temp.path());
-        let with = evin_yaml::parse_yaml("section: v1.0.1\nnotes_path: target/notes.md\n").unwrap();
+        let with = evin_flow::parse_yaml("section: v1.0.1\nnotes_path: target/notes.md\n").unwrap();
         execute(&ctx, Some(with)).await.unwrap();
         assert_eq!(
             std::fs::read_to_string(temp.path().join("target/notes.md")).unwrap(),
@@ -785,12 +785,12 @@ mod tests {
             "## [v1.0.1]\n- first\n## [v1.0.1]\n- duplicate\n",
         ] {
             std::fs::write(&path, changelog).unwrap();
-            let with = evin_yaml::parse_yaml("section: v1.0.1\nnotes_path: notes.md\n").unwrap();
+            let with = evin_flow::parse_yaml("section: v1.0.1\nnotes_path: notes.md\n").unwrap();
             assert!(execute(&ctx, Some(with)).await.is_err());
             assert!(!temp.path().join("notes.md").exists());
         }
         std::fs::write(&path, "## [v1.0.1]\n- keep\n").unwrap();
-        let with = evin_yaml::parse_yaml("section: v1.0.1\nnotes_path: ./CHANGELOG.md\n").unwrap();
+        let with = evin_flow::parse_yaml("section: v1.0.1\nnotes_path: ./CHANGELOG.md\n").unwrap();
         assert!(execute(&ctx, Some(with)).await.is_err());
         assert_eq!(
             std::fs::read_to_string(path).unwrap(),
@@ -798,7 +798,7 @@ mod tests {
         );
 
         assert!(
-            validate_config(Some(&evin_yaml::parse_yaml("section: v1.0.1\n").unwrap())).is_err()
+            validate_config(Some(&evin_flow::parse_yaml("section: v1.0.1\n").unwrap())).is_err()
         );
     }
 }

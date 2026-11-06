@@ -13,7 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use evin_action_sdk::{OutputStream, PipelineMode, RunnerContext};
-use evin_yaml::template::pipeline::{resolve_templates, validate_template_syntax};
+use evin_flow::template::pipeline::{resolve_templates, validate_template_syntax};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -54,11 +54,11 @@ struct ReviewRequestConfig {
 }
 
 impl ReviewRequestConfig {
-    fn from_with(with: Option<evin_yaml::SpannedValue>) -> Result<Self, evin_yaml::ConfigError> {
+    fn from_with(with: Option<evin_flow::SpannedValue>) -> Result<Self, evin_flow::ConfigError> {
         let config: Self = evin_action_sdk::parse_config(with.as_ref())?;
         config
             .validate()
-            .map_err(|message| evin_yaml::ConfigError {
+            .map_err(|message| evin_flow::ConfigError {
                 message,
                 span: None,
             })?;
@@ -132,8 +132,8 @@ fn parse_flag(text: &str) -> Result<bool, String> {
 }
 
 pub fn validate_config(
-    with: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     ReviewRequestConfig::from_with(with.cloned()).map(|_| ())
 }
 
@@ -159,7 +159,7 @@ fn decide(wanted: bool, existing: bool) -> Decision {
 #[allow(clippy::result_large_err)]
 pub async fn execute(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     let config: ReviewRequestConfig = ctx
         .load_config(with.as_ref())
@@ -292,8 +292,8 @@ async fn execute_command(
 mod tests {
     use super::*;
 
-    fn config(yaml: &str) -> Result<ReviewRequestConfig, evin_yaml::ConfigError> {
-        let with = evin_yaml::parse_yaml(yaml).expect("valid YAML");
+    fn config(yaml: &str) -> Result<ReviewRequestConfig, evin_flow::ConfigError> {
+        let with = evin_flow::parse_yaml(yaml).expect("valid YAML");
         ReviewRequestConfig::from_with(Some(with))
     }
 
@@ -357,8 +357,8 @@ mod tests {
         .build()
     }
 
-    fn with(yaml: &str) -> Option<evin_yaml::SpannedValue> {
-        Some(evin_yaml::parse_yaml(yaml).expect("valid YAML"))
+    fn with(yaml: &str) -> Option<evin_flow::SpannedValue> {
+        Some(evin_flow::parse_yaml(yaml).expect("valid YAML"))
     }
 
     fn output(ctx: &RunnerContext, key: &str) -> Option<String> {

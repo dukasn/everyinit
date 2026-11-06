@@ -185,7 +185,7 @@ impl ConfigError {
     }
 }
 
-pub fn parse_yaml(input: &str) -> Result<SpannedValue, ConfigError> {
+pub fn parse_flow(input: &str) -> Result<SpannedValue, ConfigError> {
     let mut parser = Parser::new(input.chars());
     let mut stack = Vec::new();
 
@@ -259,16 +259,18 @@ pub fn parse_yaml(input: &str) -> Result<SpannedValue, ConfigError> {
     }
 }
 
+pub use parse_flow as parse_yaml;
+
 #[allow(clippy::result_large_err)]
-pub trait YamlDocument: serde::de::DeserializeOwned {
+pub trait FlowDocument: serde::de::DeserializeOwned {
     fn from_str(
         content: &str,
         file_path: Option<&std::path::Path>,
     ) -> Result<Self, evin_diagnostic::Diagnostic> {
         validate_evin_header(content, file_path)?;
-        let ast = parse_yaml(content).map_err(|e| {
+        let ast = parse_flow(content).map_err(|e| {
             e.into_diagnostic(
-                "YAML Syntax Error",
+                "Flow Syntax Error",
                 file_path.map(|p| p.display().to_string()),
             )
         })?;
@@ -292,6 +294,8 @@ pub trait YamlDocument: serde::de::DeserializeOwned {
         Self::from_str(&content, Some(file_path))
     }
 }
+
+pub use FlowDocument as YamlDocument;
 
 fn push_value(stack: &mut Vec<SpannedValue>, value: SpannedValue) {
     if stack.is_empty() {

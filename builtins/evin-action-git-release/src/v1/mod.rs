@@ -13,7 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use evin_action_sdk::RunnerContext;
-use evin_yaml::template::pipeline::{resolve_templates, validate_template_syntax};
+use evin_flow::template::pipeline::{resolve_templates, validate_template_syntax};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq)]
@@ -67,11 +67,11 @@ struct GitReleaseConfig {
 }
 
 impl GitReleaseConfig {
-    fn from_with(with: Option<evin_yaml::SpannedValue>) -> Result<Self, evin_yaml::ConfigError> {
+    fn from_with(with: Option<evin_flow::SpannedValue>) -> Result<Self, evin_flow::ConfigError> {
         let config: Self = evin_action_sdk::parse_config(with.as_ref())?;
         config
             .validate()
-            .map_err(|message| evin_yaml::ConfigError {
+            .map_err(|message| evin_flow::ConfigError {
                 message,
                 span: None,
             })?;
@@ -117,8 +117,8 @@ impl GitReleaseConfig {
 }
 
 pub fn validate_config(
-    with: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     GitReleaseConfig::from_with(with.cloned()).map(|_| ())
 }
 
@@ -127,7 +127,7 @@ pub fn validate_config(
 #[allow(clippy::result_large_err)]
 pub async fn execute(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     let config: GitReleaseConfig = ctx
         .load_config(with.as_ref())
@@ -284,7 +284,7 @@ async fn publish(ctx: &RunnerContext, push: &PushConfig, tag: Option<&str>) -> R
         return Ok(());
     }
 
-    let format = evin_yaml::template::regex::compile_template(ctx.tag_format())
+    let format = evin_flow::template::regex::compile_template(ctx.tag_format())
         .map_err(|e| format!("tag format is not usable for pruning: {e}"))?;
     let base_ref = format!("refs/remotes/{}/{base}", push.remote);
     for (stale, commit) in ctx
@@ -316,7 +316,7 @@ async fn publish(ctx: &RunnerContext, push: &PushConfig, tag: Option<&str>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
-    use evin_yaml::Span;
+    use evin_flow::Span;
     use std::collections::HashMap;
     use std::process::Command;
 
@@ -324,21 +324,21 @@ mod tests {
         Command::new("git")
     }
 
-    fn spanned_string(value: &str) -> evin_yaml::SpannedValue {
-        evin_yaml::SpannedValue::String(value.to_string(), Span::default())
+    fn spanned_string(value: &str) -> evin_flow::SpannedValue {
+        evin_flow::SpannedValue::String(value.to_string(), Span::default())
     }
 
-    fn spanned_mapping(with: HashMap<String, evin_yaml::SpannedValue>) -> evin_yaml::SpannedValue {
-        evin_yaml::SpannedValue::Mapping(
+    fn spanned_mapping(with: HashMap<String, evin_flow::SpannedValue>) -> evin_flow::SpannedValue {
+        evin_flow::SpannedValue::Mapping(
             with.into_iter()
-                .map(|(key, value)| (evin_yaml::SpannedValue::String(key, Span::default()), value))
+                .map(|(key, value)| (evin_flow::SpannedValue::String(key, Span::default()), value))
                 .collect(),
             Span::default(),
         )
     }
 
-    fn config(yaml: &str) -> Result<GitReleaseConfig, evin_yaml::ConfigError> {
-        let with = evin_yaml::parse_yaml(yaml).expect("valid YAML");
+    fn config(yaml: &str) -> Result<GitReleaseConfig, evin_flow::ConfigError> {
+        let with = evin_flow::parse_yaml(yaml).expect("valid YAML");
         GitReleaseConfig::from_with(Some(with))
     }
 
@@ -552,7 +552,7 @@ mod tests {
             dry_run,
         );
         let with =
-            evin_yaml::parse_yaml("stage: all\nmessage: 'release 1.1.0'\ntag: v1.1.0").unwrap();
+            evin_flow::parse_yaml("stage: all\nmessage: 'release 1.1.0'\ntag: v1.1.0").unwrap();
 
         super::execute(&ctx, Some(with)).await.unwrap();
 
@@ -628,7 +628,7 @@ mod tests {
     async fn release_with_push(work: &std::path::Path, yaml: &str) {
         std::fs::write(work.join("file"), "release").unwrap();
         run_git(work, &["add", "file"]);
-        let with = evin_yaml::parse_yaml(yaml).unwrap();
+        let with = evin_flow::parse_yaml(yaml).unwrap();
         let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
         let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default());
         let ctx = evin_action_sdk::RunnerContext::new(

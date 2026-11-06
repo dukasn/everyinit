@@ -10,7 +10,7 @@ use crate::models::TaskObject;
 use crate::parser::EverInitConfig;
 use evin_action_sdk::Action;
 use evin_diagnostic::{Diagnostic, IssueCode, Severity};
-use evin_yaml::{ConfigError, Span, SpannedValue};
+use evin_flow::{ConfigError, Span, SpannedValue};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -54,9 +54,9 @@ fn task_output_dependency_findings(
     fn references(value: &SpannedValue, result: &mut Vec<(String, String, Span)>) {
         match value {
             SpannedValue::String(text, span) => {
-                if let Ok(references) = evin_yaml::template::references(text) {
+                if let Ok(references) = evin_flow::template::references(text) {
                     for reference in references {
-                        if let evin_yaml::template::TemplateReferenceKind::TaskOutput {
+                        if let evin_flow::template::TemplateReferenceKind::TaskOutput {
                             task,
                             key,
                         } = reference.kind
@@ -337,7 +337,7 @@ fn first_template_error(value: Option<&SpannedValue>) -> Option<ConfigError> {
     let value = value?;
     match value {
         SpannedValue::String(text, span) => {
-            evin_yaml::template::pipeline::validate_template_syntax(text)
+            evin_flow::template::pipeline::validate_template_syntax(text)
                 .err()
                 .map(|error| ConfigError {
                     message: error.to_string(),
@@ -359,7 +359,7 @@ mod tests {
     use super::*;
     use crate::parser::GitRulesSource;
     use evin_action_sdk::{Action, RunnerContext};
-    use evin_yaml::{Span, Spanned};
+    use evin_flow::{Span, Spanned};
     use std::collections::BTreeMap;
 
     struct Archive;
@@ -382,7 +382,7 @@ mod tests {
 
     fn config(name: &str) -> EverInitConfig {
         let with =
-            evin_yaml::parse_yaml(&format!("format: arch\npackage:\n  name: {name}\n")).unwrap();
+            evin_flow::parse_yaml(&format!("format: arch\npackage:\n  name: {name}\n")).unwrap();
         let task = TaskObject {
             name: "packages:arch".into(),
             source_file: Some(".evin/packages.flow".into()),
@@ -474,7 +474,7 @@ mod tests {
             let mut config = config("app");
             config.tasks[0].needs = Some(needs.into_iter().map(str::to_owned).collect());
             config.tasks[0].steps.as_mut().unwrap()[0].with = Some(
-                evin_yaml::parse_yaml(&format!("nested:\n  values: ['{reference}']\n")).unwrap(),
+                evin_flow::parse_yaml(&format!("nested:\n  values: ['{reference}']\n")).unwrap(),
             );
             let findings = analyze(&config, &actions).findings;
             let missing = findings

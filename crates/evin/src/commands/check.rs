@@ -271,7 +271,7 @@ async fn release_lock_issues(config: &EverInitConfig) -> Vec<CheckIssueView> {
             ),
         ));
     }
-    let expected_tag = evin_yaml::template::format::render(
+    let expected_tag = evin_flow::template::format::render(
         rules
             .tags
             .as_ref()
@@ -897,11 +897,11 @@ mod tests {
             source_file: Some(".evin/workspace.flow".into()),
             steps: Some(vec![StepObject {
                 run: None,
-                uses: Some(evin_yaml::Spanned::new(
+                uses: Some(evin_flow::Spanned::new(
                     "evin/docs@v1".into(),
                     Span::default(),
                 )),
-                with: Some(evin_yaml::parse_yaml(with).unwrap()),
+                with: Some(evin_flow::parse_yaml(with).unwrap()),
             }]),
             ..Default::default()
         }]);
@@ -928,12 +928,12 @@ mod tests {
     fn check_aggregates_action_errors_across_manifests() {
         let invalid_step = || StepObject {
             run: None,
-            uses: Some(evin_yaml::Spanned::new(
+            uses: Some(evin_flow::Spanned::new(
                 "evin/docs@v1".into(),
                 Span::default(),
             )),
             with: Some(
-                evin_yaml::parse_yaml("site_url: https://example.com\ntile: Docs\n").unwrap(),
+                evin_flow::parse_yaml("site_url: https://example.com\ntile: Docs\n").unwrap(),
             ),
         };
         let cfg = sample_config(vec![
@@ -962,7 +962,7 @@ mod tests {
     #[test]
     fn every_builtin_rejects_unknown_top_level_options_with_a_span() {
         for (action_id, action) in crate::commands::builtin_actions() {
-            let with = evin_yaml::parse_yaml("mistyped_option: true\n").unwrap();
+            let with = evin_flow::parse_yaml("mistyped_option: true\n").unwrap();
             let error = action.validate_config(Some(&with)).unwrap_err();
             assert!(
                 error.message.contains("unknown field"),

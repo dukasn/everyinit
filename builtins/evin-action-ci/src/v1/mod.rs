@@ -24,15 +24,15 @@ use evin_action_sdk::RunnerContext;
 use evin_ci::Reconciler;
 
 pub fn validate_config(
-    with: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     CiConfig::from_with(with).map(|_| ())
 }
 
 #[allow(clippy::result_large_err)]
 pub async fn execute(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     let config = CiConfig::from_with(with.as_ref())
         .map_err(|e| evin_diagnostic::Diagnostic::from(e.message))?;

@@ -21,7 +21,7 @@ fn namespace_path_candidate(source: &dyn WorkspaceSource, path: &Path) -> bool {
         && source
             .read_to_string(path)
             .ok()
-            .is_some_and(|text| evin_yaml::validate_evin_header(&text, Some(path)).is_ok())
+            .is_some_and(|text| evin_flow::validate_evin_header(&text, Some(path)).is_ok())
 }
 
 fn template_component_context(

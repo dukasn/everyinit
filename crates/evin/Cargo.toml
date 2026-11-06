@@ -18,7 +18,7 @@ name = "evin"
 path = "src/main.rs"
 
 [dependencies]
-evin-yaml = { workspace = true }
+evin-flow = { workspace = true }
 evin-io = { workspace = true }
 clap = { workspace = true }
 

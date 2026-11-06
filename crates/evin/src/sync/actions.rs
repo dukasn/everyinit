@@ -20,7 +20,7 @@ pub async fn sync_actions(
     actions: &std::collections::HashMap<String, std::sync::Arc<dyn evin_action_sdk::Action>>,
     pipeline_mode: evin_action_sdk::PipelineMode,
 ) -> std::result::Result<Vec<evin_action_sdk::SyncResource>, evin_diagnostic::Diagnostic> {
-    let mut configurations: BTreeMap<String, Vec<Option<evin_yaml::SpannedValue>>> =
+    let mut configurations: BTreeMap<String, Vec<Option<evin_flow::SpannedValue>>> =
         BTreeMap::new();
 
     for task in tasks {

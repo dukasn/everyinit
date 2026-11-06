@@ -22,7 +22,7 @@ reqwest = { version = "0.13.4", default-features = false, features = ["rustls", 
 evin-diagnostic = { workspace = true }
 evin-io = { workspace = true }
 
-evin-yaml = { workspace = true }
+evin-flow = { workspace = true }
 tar = { workspace = true }
 flate2 = { workspace = true }
 sha2 = { workspace = true }

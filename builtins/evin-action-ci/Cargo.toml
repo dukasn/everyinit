@@ -14,7 +14,7 @@ evin-diagnostic = { workspace = true }
 evin-git = { workspace = true }
 evin-gitrules = { workspace = true }
 evin-locales = { workspace = true }
-evin-yaml = { workspace = true }
+evin-flow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 semver = { workspace = true }

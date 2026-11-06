@@ -83,16 +83,16 @@ impl Default for CiConfig {
 
 impl CiConfig {
     pub fn from_with(
-        with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<Self, evin_yaml::ConfigError> {
+        with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<Self, evin_flow::ConfigError> {
         let config: Self = evin_action_sdk::parse_config(with)?;
         config.validate()?;
         Ok(config)
     }
 
-    pub fn validate(&self) -> Result<(), evin_yaml::ConfigError> {
+    pub fn validate(&self) -> Result<(), evin_flow::ConfigError> {
         if self.tag.as_ref().is_some_and(|tag| tag.trim().is_empty()) {
-            return Err(evin_yaml::ConfigError {
+            return Err(evin_flow::ConfigError {
                 message: "tag must not be empty when provided".to_string(),
                 span: None,
             });
@@ -102,25 +102,25 @@ impl CiConfig {
             .as_ref()
             .is_some_and(|title| title.trim().is_empty())
         {
-            return Err(evin_yaml::ConfigError {
+            return Err(evin_flow::ConfigError {
                 message: "title must not be empty when provided".to_string(),
                 span: None,
             });
         }
         if self.state.trim().is_empty() {
-            return Err(evin_yaml::ConfigError {
+            return Err(evin_flow::ConfigError {
                 message: "state file path must not be empty".to_string(),
                 span: None,
             });
         }
         if self.plan_out.trim().is_empty() {
-            return Err(evin_yaml::ConfigError {
+            return Err(evin_flow::ConfigError {
                 message: "plan_out path must not be empty".to_string(),
                 span: None,
             });
         }
         if self.notes_dir.trim().is_empty() {
-            return Err(evin_yaml::ConfigError {
+            return Err(evin_flow::ConfigError {
                 message: "notes_dir path must not be empty".to_string(),
                 span: None,
             });

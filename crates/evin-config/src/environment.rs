@@ -44,7 +44,7 @@ pub fn builtin_environment_preset(name: &str) -> Option<&'static [&'static str]>
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct EnvironmentYaml {
+pub struct EnvironmentFlow {
     pub version: u32,
     #[serde(default)]
     pub presets: HashMap<String, Vec<String>>,
@@ -52,7 +52,9 @@ pub struct EnvironmentYaml {
     pub environments: HashMap<String, EnvVarDef>,
 }
 
-impl evin_yaml::YamlDocument for EnvironmentYaml {}
+pub type EnvironmentYaml = EnvironmentFlow;
+
+impl evin_flow::YamlDocument for EnvironmentFlow {}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
@@ -180,49 +182,49 @@ pub enum EnvVarType {
     Secret,
 }
 
-const EDITOR_STRING: evin_yaml::schema::Schema = evin_yaml::schema::Schema::String;
-const EDITOR_STRING_LIST: evin_yaml::schema::Schema =
-    evin_yaml::schema::Schema::Sequence(&EDITOR_STRING);
-const EDITOR_VARIABLE: evin_yaml::schema::Schema = evin_yaml::schema::Schema::Object(&[
-    evin_yaml::schema::Field::new(
+const EDITOR_STRING: evin_flow::schema::Schema = evin_flow::schema::Schema::String;
+const EDITOR_STRING_LIST: evin_flow::schema::Schema =
+    evin_flow::schema::Schema::Sequence(&EDITOR_STRING);
+const EDITOR_VARIABLE: evin_flow::schema::Schema = evin_flow::schema::Schema::Object(&[
+    evin_flow::schema::Field::new(
         "type",
-        evin_yaml::schema::Schema::Enum(&["string", "number", "boolean", "secret"]),
+        evin_flow::schema::Schema::Enum(&["string", "number", "boolean", "secret"]),
         "flow-schema-environment-variable-type",
     )
     .required()
     .catalog("environment.type"),
-    evin_yaml::schema::Field::new(
+    evin_flow::schema::Field::new(
         "required",
-        evin_yaml::schema::Schema::Boolean,
+        evin_flow::schema::Schema::Boolean,
         "flow-schema-require-the-variable-to-be-present",
     )
     .catalog("environment.required"),
-    evin_yaml::schema::Field::new(
+    evin_flow::schema::Field::new(
         "pattern",
         EDITOR_STRING,
         "flow-schema-regular-expression-for-validation",
     )
     .catalog("environment.pattern")
-    .constraints(&[evin_yaml::schema::ValueConstraint::Regex]),
-    evin_yaml::schema::Field::new(
+    .constraints(&[evin_flow::schema::ValueConstraint::Regex]),
+    evin_flow::schema::Field::new(
         "description",
         EDITOR_STRING,
         "flow-schema-human-readable-variable-description",
     )
     .catalog("environment.description"),
-    evin_yaml::schema::Field::new(
+    evin_flow::schema::Field::new(
         "default",
-        evin_yaml::schema::Schema::Union(&[
-            evin_yaml::schema::Schema::String,
-            evin_yaml::schema::Schema::Number,
-            evin_yaml::schema::Schema::Boolean,
+        evin_flow::schema::Schema::Union(&[
+            evin_flow::schema::Schema::String,
+            evin_flow::schema::Schema::Number,
+            evin_flow::schema::Schema::Boolean,
         ]),
         "flow-schema-fallback-value-converted-to-a-string",
     )
     .catalog("environment.default"),
-    evin_yaml::schema::Field::new(
+    evin_flow::schema::Field::new(
         "scopes",
-        evin_yaml::schema::Schema::Sequence(&evin_yaml::schema::Schema::Enum(&[
+        evin_flow::schema::Schema::Sequence(&evin_flow::schema::Schema::Enum(&[
             "Internal", "Process",
         ])),
         "flow-schema-variable-injection-scopes",
@@ -230,7 +232,7 @@ const EDITOR_VARIABLE: evin_yaml::schema::Schema = evin_yaml::schema::Schema::Ob
     .non_nullable()
     .default_value("[Internal, Process]")
     .catalog("environment.scopes"),
-    evin_yaml::schema::Field::new(
+    evin_flow::schema::Field::new(
         "stages",
         EDITOR_STRING_LIST,
         "flow-schema-stage-export-filter",
@@ -240,25 +242,25 @@ const EDITOR_VARIABLE: evin_yaml::schema::Schema = evin_yaml::schema::Schema::Ob
     .catalog("environment.stages"),
 ]);
 
-pub const EDITOR_SCHEMA: evin_yaml::schema::Schema = evin_yaml::schema::Schema::Object(&[
-    evin_yaml::schema::Field::new(
+pub const EDITOR_SCHEMA: evin_flow::schema::Schema = evin_flow::schema::Schema::Object(&[
+    evin_flow::schema::Field::new(
         "version",
-        evin_yaml::schema::Schema::Integer,
+        evin_flow::schema::Schema::Integer,
         "flow-schema-environment-schema-version",
     )
     .required()
     .catalog("environment.version"),
-    evin_yaml::schema::Field::new(
+    evin_flow::schema::Field::new(
         "presets",
-        evin_yaml::schema::Schema::Map(&EDITOR_STRING_LIST),
+        evin_flow::schema::Schema::Map(&EDITOR_STRING_LIST),
         "flow-schema-named-variable-presets",
     )
     .non_nullable()
     .default_value("{}")
     .catalog("environment.presets"),
-    evin_yaml::schema::Field::new(
+    evin_flow::schema::Field::new(
         "environments",
-        evin_yaml::schema::Schema::Map(&EDITOR_VARIABLE),
+        evin_flow::schema::Schema::Map(&EDITOR_VARIABLE),
         "flow-schema-variable-definitions-keyed-by-environment-variable-name",
     )
     .non_nullable()

@@ -5,7 +5,7 @@ version.workspace = true
 edition = "2024"
 
 [dependencies]
-evin-yaml = { workspace = true }
+evin-flow = { workspace = true }
 evin-action-sdk = { workspace = true }
 evin-locales = { workspace = true }
 evin-gitrules = { workspace = true }

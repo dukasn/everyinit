@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 #[cfg(test)]
-use evin_yaml::{Span, SpannedValue};
+use evin_flow::{Span, SpannedValue};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InvocationResolution {
@@ -121,7 +121,7 @@ mod tests {
         fn validate_config(
             &self,
             with: Option<&SpannedValue>,
-        ) -> Result<(), evin_yaml::ConfigError> {
+        ) -> Result<(), evin_flow::ConfigError> {
             evin_action_sdk::parse_config::<StrictConfig>(with).map(|config| {
                 let _ = config.required;
             })
@@ -145,7 +145,7 @@ mod tests {
         fn validate_config(
             &self,
             _with: Option<&SpannedValue>,
-        ) -> Result<(), evin_yaml::ConfigError> {
+        ) -> Result<(), evin_flow::ConfigError> {
             Ok(())
         }
 
@@ -167,7 +167,7 @@ mod tests {
         fn validate_config(
             &self,
             _with: Option<&SpannedValue>,
-        ) -> Result<(), evin_yaml::ConfigError> {
+        ) -> Result<(), evin_flow::ConfigError> {
             Ok(())
         }
 
@@ -193,11 +193,11 @@ mod tests {
             source_file: Some(".evin/workspace.flow".into()),
             steps: Some(vec![StepObject {
                 run: None,
-                uses: Some(evin_yaml::Spanned::new(
+                uses: Some(evin_flow::Spanned::new(
                     "test/strict@v1".into(),
                     Span::default(),
                 )),
-                with: Some(evin_yaml::parse_yaml(yaml).unwrap()),
+                with: Some(evin_flow::parse_yaml(yaml).unwrap()),
             }]),
             ..Default::default()
         }
@@ -208,7 +208,7 @@ mod tests {
             name: name.into(),
             steps: Some(vec![StepObject {
                 run: None,
-                uses: Some(evin_yaml::Spanned::new(action.into(), Span::default())),
+                uses: Some(evin_flow::Spanned::new(action.into(), Span::default())),
                 with: None,
             }]),
             ..Default::default()
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn unknown_actions_are_located_at_the_uses_value() {
         let mut task = action_task("build", "required: value\n");
-        task.steps.as_mut().unwrap()[0].uses = Some(evin_yaml::Spanned::new(
+        task.steps.as_mut().unwrap()[0].uses = Some(evin_flow::Spanned::new(
             "test/missing@v1".into(),
             Span {
                 line: 8,

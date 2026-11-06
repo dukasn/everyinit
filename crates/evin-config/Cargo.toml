@@ -13,7 +13,7 @@ evin-locales = { workspace = true }
 thiserror = { workspace = true }
 evin-gitrules = { workspace = true }
 evin-diagnostic = { workspace = true }
-evin-yaml = { workspace = true }
+evin-flow = { workspace = true }
 evin-action-sdk = { workspace = true }
 evin-policy = { workspace = true }
 globset = { workspace = true }

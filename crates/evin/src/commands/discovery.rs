@@ -496,17 +496,17 @@ mod tests {
                     )]))),
                     steps: Some(vec![evin_config::models::StepObject {
                         run: None,
-                        uses: Some(evin_yaml::Spanned::new(
+                        uses: Some(evin_flow::Spanned::new(
                             "evin/docs@v1".into(),
                             evin_diagnostic::Span::default(),
                         )),
-                        with: Some(evin_yaml::SpannedValue::Mapping(
+                        with: Some(evin_flow::SpannedValue::Mapping(
                             vec![(
-                                evin_yaml::SpannedValue::String(
+                                evin_flow::SpannedValue::String(
                                     "token".into(),
                                     evin_diagnostic::Span::default(),
                                 ),
-                                evin_yaml::SpannedValue::String(
+                                evin_flow::SpannedValue::String(
                                     "action-secret".into(),
                                     evin_diagnostic::Span::default(),
                                 ),

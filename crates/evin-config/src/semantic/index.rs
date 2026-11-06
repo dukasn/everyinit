@@ -58,7 +58,7 @@ struct ActionInvocation {
 #[derive(Debug, Clone)]
 struct SchemaContext {
     range: SourceRange,
-    schema: evin_yaml::schema::Schema,
+    schema: evin_flow::schema::Schema,
     present: BTreeSet<String>,
     keys: Vec<SourceRange>,
     occupied: Vec<SourceRange>,
@@ -308,7 +308,7 @@ impl WorkspaceSemanticIndex {
 
         let mut properties = Vec::new();
         let mut strings = Vec::new();
-        collect_yaml_token_facts(ast, &document.path, &mut properties, &mut strings);
+        collect_flow_token_facts(ast, &document.path, &mut properties, &mut strings);
 
         let mut overlays = BTreeMap::<(usize, usize), SemanticTokenKind>::new();
         for symbol in self
@@ -678,7 +678,7 @@ impl WorkspaceSemanticIndex {
             .iter()
             .filter(|context| context.range.contains_inclusive(path, offset))
             .min_by_key(|context| context.range.len())?;
-        let evin_yaml::schema::Schema::Object(fields) = context.schema else {
+        let evin_flow::schema::Schema::Object(fields) = context.schema else {
             return Some(Vec::new());
         };
         let key_position = context
@@ -1193,11 +1193,11 @@ impl WorkspaceDocument {
         false
     }
 
-    /// Whether a byte offset lies in a YAML comment. Editor features return
+    /// Whether a byte offset lies in a Flow comment. Editor features return
     /// nothing there. Offsets inside a parsed scalar are never comments, which
     /// keeps `#` lines inside multi-line quoted or block scalars meaningful.
     pub fn is_comment_at(&self, offset: usize) -> bool {
-        evin_yaml::is_comment_at(&self.text, offset)
+        evin_flow::is_comment_at(&self.text, offset)
             && !self
                 .ast
                 .as_ref()

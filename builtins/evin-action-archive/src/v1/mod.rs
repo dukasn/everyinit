@@ -76,11 +76,11 @@ const PACKAGE_ENCODERS: [PackageEncoder; 3] = [
 ];
 
 pub fn validate_config(
-    with_payload: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with_payload: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     let payload = with_payload
         .cloned()
-        .unwrap_or(evin_yaml::SpannedValue::Null(Default::default()));
+        .unwrap_or(evin_flow::SpannedValue::Null(Default::default()));
     let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&payload)).map_err(|error| {
         error.map_message(|message| evin_locales::t!("invalid-config", error = message))
     })?;
@@ -92,7 +92,7 @@ pub fn validate_config(
                 PackageFormat::parse(&config.format).expect("validated format"),
             )
         })
-        .map_err(|d| evin_yaml::ConfigError {
+        .map_err(|d| evin_flow::ConfigError {
             message: evin_locales::render_issue(&d.code),
             span: None,
         })
@@ -100,19 +100,19 @@ pub fn validate_config(
 
 pub fn validate_task_config(
     ctx: &evin_action_sdk::ActionValidationContext<'_>,
-    with_payload: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with_payload: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     validate_config(with_payload)?;
     let config: ArchiveConfig = evin_action_sdk::parse_config(with_payload)?;
     let Some(release) = config.release else {
         return Ok(());
     };
-    let task = release_reference_task(&release).ok_or_else(|| evin_yaml::ConfigError {
+    let task = release_reference_task(&release).ok_or_else(|| evin_flow::ConfigError {
         message: "release must be exactly '${task.release}'".into(),
         span: None,
     })?;
     if !ctx.needs.iter().any(|need| need == task) {
-        return Err(evin_yaml::ConfigError {
+        return Err(evin_flow::ConfigError {
             message: format!("release references '{task}', but that task is not declared in needs"),
             span: None,
         });
@@ -129,7 +129,7 @@ fn release_reference_task(value: &str) -> Option<&str> {
 
 pub async fn execute(
     ctx: &RunnerContext,
-    with_payload: Option<evin_yaml::SpannedValue>,
+    with_payload: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     let mut config: ArchiveConfig = ctx.load_config(with_payload.as_ref()).map_err(|e| {
         evin_locales::diagnostic(
@@ -140,7 +140,7 @@ pub async fn execute(
     validate_format_keys(
         with_payload
             .as_ref()
-            .unwrap_or(&evin_yaml::SpannedValue::Null(Default::default())),
+            .unwrap_or(&evin_flow::SpannedValue::Null(Default::default())),
         config.package_format()?,
     )?;
 
@@ -473,16 +473,16 @@ fn format_byte_size(bytes: u64) -> String {
 }
 
 fn validate_format_keys(
-    payload: &evin_yaml::SpannedValue,
+    payload: &evin_flow::SpannedValue,
     format: PackageFormat,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let evin_yaml::SpannedValue::Mapping(entries, _) = payload else {
+    let evin_flow::SpannedValue::Mapping(entries, _) = payload else {
         return Ok(());
     };
     let keys = entries
         .iter()
         .filter_map(|(key, _)| match key {
-            evin_yaml::SpannedValue::String(value, _) => Some(value.as_str()),
+            evin_flow::SpannedValue::String(value, _) => Some(value.as_str()),
             _ => None,
         })
         .collect::<std::collections::BTreeSet<_>>();
@@ -970,29 +970,29 @@ mod tests {
     use std::collections::HashMap;
     use tempfile::TempDir;
 
-    fn spanned_value(value: serde_json::Value) -> evin_yaml::SpannedValue {
-        let span = evin_yaml::Span::default();
+    fn spanned_value(value: serde_json::Value) -> evin_flow::SpannedValue {
+        let span = evin_flow::Span::default();
         match value {
-            serde_json::Value::Null => evin_yaml::SpannedValue::Null(span),
-            serde_json::Value::Bool(value) => evin_yaml::SpannedValue::Bool(value, span),
+            serde_json::Value::Null => evin_flow::SpannedValue::Null(span),
+            serde_json::Value::Bool(value) => evin_flow::SpannedValue::Bool(value, span),
             serde_json::Value::Number(value) => {
                 if let Some(value) = value.as_i64() {
-                    evin_yaml::SpannedValue::Integer(value, span)
+                    evin_flow::SpannedValue::Integer(value, span)
                 } else {
-                    evin_yaml::SpannedValue::Float(value.as_f64().unwrap_or_default(), span)
+                    evin_flow::SpannedValue::Float(value.as_f64().unwrap_or_default(), span)
                 }
             }
-            serde_json::Value::String(value) => evin_yaml::SpannedValue::String(value, span),
-            serde_json::Value::Array(values) => evin_yaml::SpannedValue::Sequence(
+            serde_json::Value::String(value) => evin_flow::SpannedValue::String(value, span),
+            serde_json::Value::Array(values) => evin_flow::SpannedValue::Sequence(
                 values.into_iter().map(spanned_value).collect(),
                 span,
             ),
-            serde_json::Value::Object(values) => evin_yaml::SpannedValue::Mapping(
+            serde_json::Value::Object(values) => evin_flow::SpannedValue::Mapping(
                 values
                     .into_iter()
                     .map(|(key, value)| {
                         (
-                            evin_yaml::SpannedValue::String(key, span),
+                            evin_flow::SpannedValue::String(key, span),
                             spanned_value(value),
                         )
                     })
@@ -1002,17 +1002,17 @@ mod tests {
         }
     }
 
-    fn spanned_mapping(with: HashMap<String, serde_json::Value>) -> evin_yaml::SpannedValue {
-        evin_yaml::SpannedValue::Mapping(
+    fn spanned_mapping(with: HashMap<String, serde_json::Value>) -> evin_flow::SpannedValue {
+        evin_flow::SpannedValue::Mapping(
             with.into_iter()
                 .map(|(key, value)| {
                     (
-                        evin_yaml::SpannedValue::String(key, evin_yaml::Span::default()),
+                        evin_flow::SpannedValue::String(key, evin_flow::Span::default()),
                         spanned_value(value),
                     )
                 })
                 .collect(),
-            evin_yaml::Span::default(),
+            evin_flow::Span::default(),
         )
     }
 
@@ -1389,7 +1389,7 @@ mod tests {
         );
         ctx.mark_unverified("Depends on skipped build");
 
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "path: dist/app.tar.gz\ninclude: [target/release/app]\nlayout: flat",
         )
         .unwrap();
@@ -1483,7 +1483,7 @@ mod tests {
         );
 
         let package = "package:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  license: MIT\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\n  targets:\n    deb:\n      depends: [libc6]\n    apk:\n      depends: [so:libc.musl-x86_64.so.1]\n    arch:\n      depends: [glibc]\n      optdepends: ['bash: completion support']\n      provides: [example-cli]\n      conflicts: [example-old]\n      replaces: [example-old]\n      backup: [etc/example.conf]\n      scripts:\n        install: bin/install\n";
-        let deb_with = evin_yaml::parse_yaml(&format!("format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
+        let deb_with = evin_flow::parse_yaml(&format!("format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
         ArchiveAction.execute(&ctx, Some(deb_with)).await.unwrap();
         let deb = std::fs::read(temp.path().join("dist/example_1.2.3-1_amd64.deb")).unwrap();
         assert!(deb.starts_with(b"!<arch>\n"));
@@ -1496,12 +1496,12 @@ mod tests {
                 .any(|window| window == b"data.tar.gz")
         );
 
-        let apk_with = evin_yaml::parse_yaml(&format!("format: apk\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
+        let apk_with = evin_flow::parse_yaml(&format!("format: apk\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
         ArchiveAction.execute(&ctx, Some(apk_with)).await.unwrap();
         let apk = std::fs::read(temp.path().join("dist/example-1.2.3-r1.apk")).unwrap();
         assert!(apk.starts_with(&[0x1f, 0x8b]));
         assert!(apk.len() > 64);
-        let arch_with = evin_yaml::parse_yaml(&format!("format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
+        let arch_with = evin_flow::parse_yaml(&format!("format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
         ArchiveAction
             .execute(&ctx, Some(arch_with.clone()))
             .await
@@ -1550,14 +1550,14 @@ mod tests {
     #[test]
     fn formats_reject_each_others_keys() {
         let tar_with_package =
-            evin_yaml::parse_yaml("path: out.tar.gz\ninclude: [x]\npackage: { name: app }\n")
+            evin_flow::parse_yaml("path: out.tar.gz\ninclude: [x]\npackage: { name: app }\n")
                 .unwrap();
         assert!(validate_config(Some(&tar_with_package)).is_err());
-        let package_with_path = evin_yaml::parse_yaml(
+        let package_with_path = evin_flow::parse_yaml(
             "format: deb\npath: out.deb\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { deb: {} } }\n",
         ).unwrap();
         assert!(validate_config(Some(&package_with_path)).is_err());
-        let configured_default = evin_yaml::parse_yaml(
+        let configured_default = evin_flow::parse_yaml(
             "format: deb\noutput_dir: dist\narchitecture: x86_64\nlayout: flat\n",
         )
         .unwrap();
@@ -1566,7 +1566,7 @@ mod tests {
 
     #[test]
     fn package_release_reference_must_be_a_declared_need() {
-        let with = evin_yaml::parse_yaml("format: deb\noutput_dir: dist\narchitecture: x86_64\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { deb: {} } }\nrelease: ${bump.release}\n").unwrap();
+        let with = evin_flow::parse_yaml("format: deb\noutput_dir: dist\narchitecture: x86_64\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { deb: {} } }\nrelease: ${bump.release}\n").unwrap();
         let missing = evin_action_sdk::ActionValidationContext {
             task_name: "package",
             needs: &[],
@@ -1582,14 +1582,14 @@ mod tests {
 
     #[test]
     fn package_validation_rejects_invalid_relations_and_backup_paths() {
-        let invalid_relation = evin_yaml::parse_yaml(
+        let invalid_relation = evin_flow::parse_yaml(
             "format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { arch: { depends: [glibc, glibc] } } }\n",
         )
         .unwrap();
         let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&invalid_relation)).unwrap();
         assert!(validate_package(config.package.as_ref().unwrap(), PackageFormat::Arch).is_err());
 
-        let unsafe_backup = evin_yaml::parse_yaml(
+        let unsafe_backup = evin_flow::parse_yaml(
             "format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { arch: { backup: ['../etc/app.conf'] } } }\n",
         )
         .unwrap();

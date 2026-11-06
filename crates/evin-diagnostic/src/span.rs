@@ -91,7 +91,7 @@ impl<T> std::ops::Deref for Spanned<T> {
     }
 }
 
-pub const SPANNED_MAGIC_STRUCT: &str = "$__evin_yaml_private_Spanned";
+pub const SPANNED_MAGIC_STRUCT: &str = "$__evin_flow_private_Spanned";
 pub const SPANNED_VALUE_FIELD: &str = "$__value";
 pub const SPANNED_SPAN_FIELD: &str = "$__span";
 

@@ -62,7 +62,7 @@ impl Action for DemoAction {
     fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
         Some(&DEMO_DESCRIPTOR)
     }
-    fn validate_config(&self, _: Option<&SpannedValue>) -> Result<(), evin_yaml::ConfigError> {
+    fn validate_config(&self, _: Option<&SpannedValue>) -> Result<(), evin_flow::ConfigError> {
         Ok(())
     }
     async fn execute(&self, _: &RunnerContext, _: Option<SpannedValue>) -> Result<(), Diagnostic> {
@@ -95,7 +95,7 @@ async fn snapshot_keeps_raw_documents_and_template_definitions() {
 }
 
 #[tokio::test]
-async fn semantic_tokens_overlay_flow_meaning_on_generic_yaml_roles() {
+async fn semantic_tokens_overlay_flow_meaning_on_generic_structure_roles() {
     let text = r#"workspace:
   name: app
   rules: ".evin/gitrules.flow"
@@ -166,7 +166,7 @@ fn semantic_ranges_are_utf8_bytes_after_unicode() {
                 kind: DocumentKind::Workspace,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -208,7 +208,7 @@ fn quoted_unicode_value_range_covers_the_source_scalar() {
                 kind: DocumentKind::Workspace,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -237,7 +237,7 @@ fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
                 kind: DocumentKind::GitRules,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -379,7 +379,7 @@ async fn canonical_and_alias_fields_share_presence() {
 
 #[test]
 fn owned_configuration_schemas_match_serialized_field_names() {
-    use evin_yaml::schema::Schema;
+    use evin_flow::schema::Schema;
     fn field(schema: Schema, name: &str) -> Schema {
         let Schema::Object(fields) = schema else {
             panic!("expected object")
@@ -483,7 +483,7 @@ fn completion_uses_the_open_mapping_at_a_blank_line() {
                 kind: DocumentKind::Workspace,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -515,7 +515,7 @@ fn empty_enum_value_offers_only_declared_choices() {
                 kind: DocumentKind::Workspace,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -550,7 +550,7 @@ fn gitrules_versioning_strategy_completion_offers_supported_presets() {
                 kind: DocumentKind::GitRules,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -568,14 +568,14 @@ fn gitrules_versioning_strategy_completion_offers_supported_presets() {
 }
 
 #[tokio::test]
-async fn snapshot_classifies_an_explicitly_included_marked_yaml_as_a_namespace() {
+async fn snapshot_classifies_an_explicitly_included_marked_flow_as_a_namespace() {
     let mut source = OverlaySource::default();
     source.insert(
         ".evin/workspace.flow",
-        "workspace: { name: app, version: 1.0.0, include: [automation.yaml] }\nstages: []\n",
+        "workspace: { name: app, version: 1.0.0, include: [automation.flow] }\nstages: []\n",
     );
     source.insert(
-        "automation.yaml",
+        "automation.flow",
         "#!evin/v1\nnamespace: { name: automation }\ntasks: {}\n",
     );
 
@@ -583,7 +583,7 @@ async fn snapshot_classifies_an_explicitly_included_marked_yaml_as_a_namespace()
     assert_eq!(
         snapshot
             .documents
-            .get(&PathBuf::from("automation.yaml"))
+            .get(&PathBuf::from("automation.flow"))
             .map(|document| document.kind),
         Some(DocumentKind::Namespace)
     );
@@ -824,7 +824,7 @@ fn configuration_keys_share_canonical_completion_and_hover_targets() {
                 kind,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -1349,7 +1349,7 @@ fn environment_variable_fields_index_catalog_targets() {
             kind: DocumentKind::Environment,
             header: None,
             text: text.into(),
-            ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+            ast: Some(evin_flow::parse_yaml(text).unwrap()),
             completion_ast: None,
             diagnostics: Vec::new(),
         },
@@ -1390,7 +1390,7 @@ fn workspace_metadata_fields_index_catalog_targets() {
             kind: DocumentKind::Workspace,
             header: None,
             text: text.into(),
-            ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+            ast: Some(evin_flow::parse_yaml(text).unwrap()),
             completion_ast: None,
             diagnostics: Vec::new(),
         },
@@ -1429,7 +1429,7 @@ fn comments_do_not_trigger_hover() {
                 kind: DocumentKind::GitRules,
                 header: None,
                 text: text.into(),
-                ast: Some(evin_yaml::parse_yaml(text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -1501,7 +1501,7 @@ fn no_comment_byte_produces_a_hover_wherever_it_is_placed() {
                 kind: DocumentKind::GitRules,
                 header: None,
                 text: text.clone(),
-                ast: Some(evin_yaml::parse_yaml(&text).unwrap()),
+                ast: Some(evin_flow::parse_yaml(&text).unwrap()),
                 completion_ast: None,
                 diagnostics: Vec::new(),
             },
@@ -1544,7 +1544,7 @@ fn test_exact_gitrules_file() {
         kind: DocumentKind::GitRules,
         header: None,
         text: content.clone(),
-        ast: evin_yaml::parse_yaml(&content).ok(),
+        ast: evin_flow::parse_yaml(&content).ok(),
         completion_ast: None,
         diagnostics: Vec::new(),
     };
@@ -1574,7 +1574,7 @@ fn test_exact_gitrules_file() {
     let mut failures = Vec::new();
     let mut offset = 0;
     for (line_no, line) in content.lines().enumerate() {
-        if let Some(_hash_pos) = evin_yaml::comment_start_in_line(line) {
+        if let Some(_hash_pos) = evin_flow::comment_start_in_line(line) {
             let check_start = if line.trim_start().starts_with('#') {
                 0
             } else {

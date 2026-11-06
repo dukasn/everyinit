@@ -16,8 +16,8 @@ use crate::{ConfigError, Span, SpannedValue};
 use serde::Deserialize;
 use serde::de::{self, DeserializeSeed, Error, MapAccess, SeqAccess, Visitor};
 
-pub const SPANNED_MAGIC_STRUCT: &str = "$__evin_yaml_private_Spanned";
-pub const SPANNED_VALUE_MAGIC_STRUCT: &str = "$__evin_yaml_private_RawSpannedValue";
+pub const SPANNED_MAGIC_STRUCT: &str = "$__evin_flow_private_Spanned";
+pub const SPANNED_VALUE_MAGIC_STRUCT: &str = "$__evin_flow_private_RawSpannedValue";
 pub const SPANNED_VALUE_FIELD: &str = "$__value";
 pub const SPANNED_SPAN_FIELD: &str = "$__span";
 
@@ -349,7 +349,7 @@ mod tests {
 
     #[test]
     fn unknown_fields_use_the_exact_mapping_key_span() {
-        let value = crate::parse_yaml("typo: value\n").unwrap();
+        let value = crate::parse_flow("typo: value\n").unwrap();
 
         let error = from_spanned_value::<StrictConfig>(value).unwrap_err();
 

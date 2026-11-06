@@ -132,7 +132,7 @@ fn initialize_advertises_workspace_capabilities_and_stdout_is_framed() {
 }
 
 #[test]
-fn semantic_tokens_use_utf16_positions_and_clear_for_invalid_yaml() {
+fn semantic_tokens_use_utf16_positions_and_clear_for_invalid_flow() {
     let directory = tempfile::tempdir().unwrap();
     workspace(directory.path());
     let mut server = EvinLspServer::default();

@@ -46,7 +46,7 @@ pub fn parse_str(
     path: Option<&Path>,
 ) -> Result<GitRulesRoot, ParserError> {
     match extension {
-        "flow" => Ok(<GitRulesRoot as evin_yaml::YamlDocument>::from_str(
+        "flow" => Ok(<GitRulesRoot as evin_flow::YamlDocument>::from_str(
             content, path,
         )?),
         "json" => Ok(serde_json::from_str(content)?),

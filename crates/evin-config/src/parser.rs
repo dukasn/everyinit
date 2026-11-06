@@ -15,7 +15,7 @@
 #![allow(clippy::result_large_err)]
 
 use crate::models::TaskObject;
-use crate::workspace::{ModuleYaml, WorkspaceYaml};
+use crate::workspace::{ModuleFlow, WorkspaceFlow};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,12 +69,12 @@ pub struct TaskParseContext<'a> {
     pub source_file: Option<&'a str>,
     pub module_env: Option<&'a HashMap<String, String>>,
     pub module_values: Option<&'a HashMap<String, String>>,
-    pub valid_stages: &'a [evin_yaml::Spanned<String>],
+    pub valid_stages: &'a [evin_flow::Spanned<String>],
     pub workspace_name: Option<&'a str>,
 }
 
 pub fn parse_tasks(
-    tasks: HashMap<evin_yaml::Spanned<String>, TaskObject>,
+    tasks: HashMap<evin_flow::Spanned<String>, TaskObject>,
     cx: TaskParseContext<'_>,
 ) -> Result<Vec<TaskObject>, evin_diagnostic::Diagnostic> {
     let mut parsed_tasks = Vec::new();
@@ -236,7 +236,7 @@ pub fn load_workspace_tasks_from_sync(
         });
     }
 
-    let workspace: WorkspaceYaml = load_yaml(source, &workspace_path)?;
+    let workspace: WorkspaceFlow = load_flow(source, &workspace_path)?;
 
     let mut gitrules = None;
     let mut gitrules_source = GitRulesSource::Fallback;
@@ -360,7 +360,7 @@ pub fn load_workspace_tasks_from_sync(
                 .with_file_location(&file_path, None, None));
             }
 
-            let namespace_doc: crate::workspace::NamespaceYaml = load_yaml(source, &ns_path)?;
+            let namespace_doc: crate::workspace::NamespaceFlow = load_flow(source, &ns_path)?;
 
             let ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
 
@@ -396,7 +396,7 @@ pub fn load_workspace_tasks_from_sync(
                 continue;
             }
 
-            let module: ModuleYaml = load_yaml(source, &mod_path)?;
+            let module: ModuleFlow = load_flow(source, &mod_path)?;
             module_versions.insert(
                 module.module.name.clone(),
                 resolved_module_version(&module.module, &workspace.workspace.version),
@@ -459,8 +459,8 @@ pub fn load_workspace_tasks_from_sync(
                         .with_file_location(&file_path, None, None));
                     }
 
-                    let namespace_doc: crate::workspace::NamespaceYaml =
-                        load_yaml(source, &ns_path)?;
+                    let namespace_doc: crate::workspace::NamespaceFlow =
+                        load_flow(source, &ns_path)?;
 
                     let raw_ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
                     let full_ns_name = if raw_ns_name == module.module.name {
@@ -528,7 +528,7 @@ pub fn load_workspace_tasks_from_sync(
     })
 }
 
-fn load_yaml<T: evin_yaml::YamlDocument>(
+fn load_flow<T: evin_flow::YamlDocument>(
     source: &dyn crate::source::WorkspaceSource,
     path: &std::path::Path,
 ) -> Result<T, evin_diagnostic::Diagnostic> {
@@ -545,7 +545,7 @@ fn load_yaml<T: evin_yaml::YamlDocument>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use evin_yaml::Spanned;
+    use evin_flow::Spanned;
 
     #[test]
     fn module_version_inherits_or_overrides_workspace_version() {
@@ -854,7 +854,7 @@ mod tests {
 
     #[test]
     fn headers_are_accepted_for_workspace_module_namespace_gitrules_and_environment() {
-        use evin_yaml::YamlDocument;
+        use evin_flow::YamlDocument;
 
         let mut source = crate::source::OverlaySource::default();
         source.insert(
@@ -880,7 +880,7 @@ mod tests {
                 .any(|(name, _, _)| name == "api")
         );
         assert_eq!(
-            <crate::environment::EnvironmentYaml as YamlDocument>::from_str(
+            <crate::environment::EnvironmentFlow as YamlDocument>::from_str(
                 "#!evin/v1\nversion: 1\n",
                 None,
             )

@@ -47,7 +47,7 @@ pub struct CliContext {
     pub run_payload: Vec<String>,
     pub invocation_flags: std::collections::HashMap<String, evin_action_sdk::InvocationFlags>,
     pub global_env: Option<std::collections::HashMap<String, String>>,
-    pub env_schema: Option<std::sync::Arc<evin_config::environment::EnvironmentYaml>>,
+    pub env_schema: Option<std::sync::Arc<evin_config::environment::EnvironmentFlow>>,
     pub is_hook: bool,
     pub hook_summaries: Vec<crate::sync::hooks::HookSummary>,
     pub hook_plans: Vec<evin_git::manager::HookPlan>,

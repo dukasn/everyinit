@@ -54,7 +54,7 @@ pub struct PipelineConfig {
     pub mode: evin_action_sdk::PipelineMode,
     pub workspace_env: HashMap<String, String>,
     pub global_env: Arc<HashMap<String, String>>,
-    pub env_schema: Option<Arc<evin_config::environment::EnvironmentYaml>>,
+    pub env_schema: Option<Arc<evin_config::environment::EnvironmentFlow>>,
     pub workspace_values: HashMap<String, String>,
     pub workspace_name: Option<String>,
     pub run_payload: Vec<String>,

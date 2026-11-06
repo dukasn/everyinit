@@ -14,7 +14,7 @@
 
 #![allow(clippy::result_large_err)]
 use evin_action_sdk::RunnerContext;
-use evin_yaml::template::pipeline::{
+use evin_flow::template::pipeline::{
     resolve_templates_with_self, validate_template_syntax_with_self,
 };
 use regex::Regex;
@@ -85,13 +85,13 @@ impl Default for VersionBumperConfig {
 
 impl VersionBumperConfig {
     pub fn from_with(
-        with: Option<evin_yaml::SpannedValue>,
-    ) -> Result<Self, evin_yaml::ConfigError> {
+        with: Option<evin_flow::SpannedValue>,
+    ) -> Result<Self, evin_flow::ConfigError> {
         let with = with.unwrap_or_else(|| {
-            evin_yaml::SpannedValue::Mapping(Default::default(), evin_yaml::Span::default())
+            evin_flow::SpannedValue::Mapping(Default::default(), evin_flow::Span::default())
         });
         let config: Self = evin_action_sdk::parse_config(Some(&with))?;
-        config.validate().map_err(|e| evin_yaml::ConfigError {
+        config.validate().map_err(|e| evin_flow::ConfigError {
             message: e.to_string(),
             span: None,
         })?;
@@ -268,8 +268,8 @@ fn validate_file(file: &FileConfig) -> Result<(), evin_diagnostic::Diagnostic> {
 }
 
 pub fn validate_config(
-    with: Option<&evin_yaml::SpannedValue>,
-) -> Result<(), evin_yaml::ConfigError> {
+    with: Option<&evin_flow::SpannedValue>,
+) -> Result<(), evin_flow::ConfigError> {
     VersionBumperConfig::from_with(with.cloned()).map(|_| ())
 }
 
@@ -398,7 +398,7 @@ async fn hydrate_channel(
 
 pub async fn execute(
     ctx: &RunnerContext,
-    with: Option<evin_yaml::SpannedValue>,
+    with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     let mut config: VersionBumperConfig = ctx
         .load_config(with.as_ref())
@@ -566,7 +566,7 @@ pub async fn execute(
 
     let mut args = std::collections::HashMap::new();
     args.insert("version", version.as_str());
-    let version_with_v = evin_yaml::template::format::render(ctx.tag_format(), &args);
+    let version_with_v = evin_flow::template::format::render(ctx.tag_format(), &args);
 
     if semantic_change && ctx.git().has_tag(&version_with_v).await.unwrap_or(false) {
         return Err(evin_locales::diagnostic(
@@ -751,7 +751,7 @@ pub async fn execute(
         {
             let mut args = std::collections::HashMap::new();
             args.insert("version", "${version}");
-            evin_yaml::template::format::render(&m, &args)
+            evin_flow::template::format::render(&m, &args)
         } else {
             return Err(evin_diagnostic::Diagnostic::new(
                 "Action Failed",
@@ -910,7 +910,7 @@ mod tests {
     fn removed_cargo_option_is_rejected() {
         assert!(VersionBumperConfig::from_with(None).is_ok());
         for value in ["true", "false"] {
-            let with = evin_yaml::parse_yaml(&format!("cargo_pre_1_0: {value}\n")).unwrap();
+            let with = evin_flow::parse_yaml(&format!("cargo_pre_1_0: {value}\n")).unwrap();
             assert!(VersionBumperConfig::from_with(Some(with)).is_err());
         }
     }
@@ -929,7 +929,7 @@ mod tests {
         git(temp.path(), &["commit", "-qm", "feat: initial"]);
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "initial_version: 0.1.0\nfiles:\n  - Cargo.toml\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
         )
         .unwrap();
@@ -952,7 +952,7 @@ mod tests {
         git(temp.path(), &["commit", "-qm", "feat: initial"]);
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  message: 'release: ${version}'\n",
         )
         .unwrap();
@@ -970,7 +970,7 @@ mod tests {
         git(temp.path(), &["commit", "-qm", "feat: initial"]);
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
         )
         .unwrap();
@@ -991,7 +991,7 @@ mod tests {
         git(temp.path(), &["commit", "-qm", "feat: initial"]);
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
         )
         .unwrap();
@@ -1021,7 +1021,7 @@ mod tests {
             let mut rules = evin_gitrules::GitRulesRoot::default();
             rules.releases.as_mut().unwrap().versioning.strategy = strategy;
             ctx.gitrules = Arc::new(rules);
-            let with = evin_yaml::parse_yaml(
+            let with = evin_flow::parse_yaml(
                 "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n"
             ).unwrap();
             execute(&ctx, Some(with)).await.unwrap();
@@ -1056,7 +1056,7 @@ mod tests {
         git(temp.path(), &["switch", "-qc", "automation/release"]);
         let mut first = context(temp.path());
         first.gitrules = Arc::new(rules.clone());
-        execute(&first, Some(evin_yaml::parse_yaml(config).unwrap()))
+        execute(&first, Some(evin_flow::parse_yaml(config).unwrap()))
             .await
             .unwrap();
         assert_eq!(first.state.outputs.lock().unwrap()["version"], "0.1.1");
@@ -1079,7 +1079,7 @@ mod tests {
         );
         let mut updated = context(temp.path());
         updated.gitrules = Arc::new(rules);
-        execute(&updated, Some(evin_yaml::parse_yaml(config).unwrap()))
+        execute(&updated, Some(evin_flow::parse_yaml(config).unwrap()))
             .await
             .unwrap();
         assert_eq!(updated.state.outputs.lock().unwrap()["version"], "0.2.0");
@@ -1115,7 +1115,7 @@ mod tests {
                 }
                 let mut ctx = context(temp.path());
                 ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-                let error = execute(&ctx, Some(evin_yaml::parse_yaml(files).unwrap()))
+                let error = execute(&ctx, Some(evin_flow::parse_yaml(files).unwrap()))
                     .await
                     .unwrap_err();
                 assert!(
@@ -1142,7 +1142,7 @@ mod tests {
         git(temp.path(), &["commit", "-qm", "feat: initial"]);
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "files:\n  - Cargo.toml\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
         .unwrap();
@@ -1163,7 +1163,7 @@ mod tests {
         git(temp.path(), &["commit", "-qm", "feat: initial"]);
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: old\n    write: intermediate\n  - path: ./VERSION\n    match: intermediate\n    write: '${version}'\n",
         )
         .unwrap();
@@ -1191,7 +1191,7 @@ mod tests {
         rules.releases.as_mut().unwrap().versioning.strategy =
             evin_gitrules::VersioningStrategy::Cargo;
         ctx.gitrules = Arc::new(rules);
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
         .unwrap();
@@ -1220,7 +1220,7 @@ mod tests {
         rules.releases.as_mut().unwrap().versioning.strategy =
             evin_gitrules::VersioningStrategy::Cargo;
         ctx.gitrules = Arc::new(rules);
-        let with = evin_yaml::parse_yaml(
+        let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
         .unwrap();
@@ -1265,7 +1265,7 @@ mod tests {
         )]);
         ctx.gitrules = Arc::new(rules);
         let with =
-            evin_yaml::parse_yaml("initial_version: 1.0.0\ngit:\n  commit: true\n  tag: true\n")
+            evin_flow::parse_yaml("initial_version: 1.0.0\ngit:\n  commit: true\n  tag: true\n")
                 .unwrap();
         execute(&ctx, Some(with)).await.unwrap();
 
@@ -1303,7 +1303,7 @@ mod tests {
 
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml("initial_version: 1.0.0\n").unwrap();
+        let with = evin_flow::parse_yaml("initial_version: 1.0.0\n").unwrap();
         execute(&ctx, Some(with)).await.unwrap();
         let outputs = ctx.state.outputs.lock().unwrap();
         assert_eq!(outputs["changed"], "false");
@@ -1323,7 +1323,7 @@ mod tests {
 
         let mut ctx = context(temp.path());
         ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
-        let with = evin_yaml::parse_yaml("initial_version: 1.0.0\n").unwrap();
+        let with = evin_flow::parse_yaml("initial_version: 1.0.0\n").unwrap();
         execute(&ctx, Some(with)).await.unwrap();
         let outputs = ctx.state.outputs.lock().unwrap();
         assert_eq!(outputs["changed"], "true");

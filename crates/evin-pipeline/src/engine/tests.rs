@@ -25,15 +25,15 @@ struct NoopAction;
 impl evin_action_sdk::Action for NoopAction {
     fn validate_config(
         &self,
-        _with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
+        _with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError> {
         Ok(())
     }
 
     async fn execute(
         &self,
         _ctx: &evin_action_sdk::RunnerContext,
-        _with: Option<evin_yaml::SpannedValue>,
+        _with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         Ok(())
     }
@@ -45,15 +45,15 @@ struct ValuesAction;
 impl evin_action_sdk::Action for ValuesAction {
     fn validate_config(
         &self,
-        _with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
+        _with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError> {
         Ok(())
     }
 
     async fn execute(
         &self,
         ctx: &evin_action_sdk::RunnerContext,
-        _with: Option<evin_yaml::SpannedValue>,
+        _with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         assert_eq!(
             ctx.values.get("workspace_only").map(String::as_str),
@@ -74,15 +74,15 @@ struct GitRulesAction;
 impl evin_action_sdk::Action for GitRulesAction {
     fn validate_config(
         &self,
-        _with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
+        _with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError> {
         Ok(())
     }
 
     async fn execute(
         &self,
         ctx: &evin_action_sdk::RunnerContext,
-        _with: Option<evin_yaml::SpannedValue>,
+        _with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         let format = ctx
             .gitrules()
@@ -260,9 +260,9 @@ async fn dry_run_propagates_unverified_shell_outcomes() {
     package.run = None;
     package.steps = Some(vec![evin_config::models::StepObject {
         run: None,
-        uses: Some(evin_yaml::Spanned::new(
+        uses: Some(evin_flow::Spanned::new(
             "noop".to_string(),
-            evin_yaml::Span::default(),
+            evin_flow::Span::default(),
         )),
         with: None,
     }]);
@@ -293,9 +293,9 @@ async fn dry_run_native_only_task_is_fully_planned() {
     task.run = None;
     task.steps = Some(vec![evin_config::models::StepObject {
         run: None,
-        uses: Some(evin_yaml::Spanned::new(
+        uses: Some(evin_flow::Spanned::new(
             "noop".to_string(),
-            evin_yaml::Span::default(),
+            evin_flow::Span::default(),
         )),
         with: None,
     }]);
@@ -333,9 +333,9 @@ async fn merges_workspace_module_and_task_values_for_native_actions() {
     )]));
     task.steps = Some(vec![evin_config::models::StepObject {
         run: None,
-        uses: Some(evin_yaml::Spanned::new(
+        uses: Some(evin_flow::Spanned::new(
             "values".to_string(),
-            evin_yaml::Span::default(),
+            evin_flow::Span::default(),
         )),
         with: None,
     }]);
@@ -367,9 +367,9 @@ async fn test_gitrules_injected_into_context() {
     task.run = None;
     task.steps = Some(vec![evin_config::models::StepObject {
         run: None,
-        uses: Some(evin_yaml::Spanned::new(
+        uses: Some(evin_flow::Spanned::new(
             "gitrules_action".to_string(),
-            evin_yaml::Span::default(),
+            evin_flow::Span::default(),
         )),
         with: None,
     }]);

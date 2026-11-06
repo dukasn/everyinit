@@ -97,11 +97,11 @@ fn strict_filenames_require_the_public_documentation_contract() {
 
 #[test]
 fn site_url_is_required_and_site_settings_are_validated() {
-    let missing = evin_yaml::parse_yaml("title: Docs\n").unwrap();
-    assert!(evin_yaml::de::from_spanned_value::<DocsConfig>(missing).is_err());
+    let missing = evin_flow::parse_yaml("title: Docs\n").unwrap();
+    assert!(evin_flow::de::from_spanned_value::<DocsConfig>(missing).is_err());
 
     let invalid =
-        evin_yaml::parse_yaml("site_url: ftp://example.com/docs\nlanguage: not_a_language\n")
+        evin_flow::parse_yaml("site_url: ftp://example.com/docs\nlanguage: not_a_language\n")
             .unwrap();
     let error = validate_config(Some(&invalid)).unwrap_err();
     assert!(error.message.contains("site_url"));
@@ -109,7 +109,7 @@ fn site_url_is_required_and_site_settings_are_validated() {
 
 #[test]
 fn site_url_template_is_validated_after_value_resolution() {
-    let templated = evin_yaml::parse_yaml("site_url: ${docs_site_url}\n").unwrap();
+    let templated = evin_flow::parse_yaml("site_url: ${docs_site_url}\n").unwrap();
     assert!(validate_config(Some(&templated)).is_ok());
 }
 
@@ -125,8 +125,8 @@ fn serve_mode_defaults_to_unminified_assets() {
 #[test]
 fn serve_host_accepts_yaml_and_routed_invocation_override() {
     let yaml = "site_url: https://example.com/\nhost: true\n";
-    let value = evin_yaml::parse_yaml(yaml).unwrap();
-    let configured = evin_yaml::de::from_spanned_value::<DocsConfig>(value).unwrap();
+    let value = evin_flow::parse_yaml(yaml).unwrap();
+    let configured = evin_flow::de::from_spanned_value::<DocsConfig>(value).unwrap();
     assert!(configured.host);
     assert_eq!(
         resolve_serve_host(&configured, &InvocationFlags::default()),
@@ -150,8 +150,8 @@ fn serve_host_accepts_yaml_and_routed_invocation_override() {
     );
 
     let invalid =
-        evin_yaml::parse_yaml("site_url: https://example.com/\nhost: 127.0.0.1\n").unwrap();
-    assert!(evin_yaml::de::from_spanned_value::<DocsConfig>(invalid).is_err());
+        evin_flow::parse_yaml("site_url: https://example.com/\nhost: 127.0.0.1\n").unwrap();
+    assert!(evin_flow::de::from_spanned_value::<DocsConfig>(invalid).is_err());
 }
 
 #[test]
@@ -162,9 +162,9 @@ fn reference_prefix_defaults_normalizes_and_validates() {
     );
 
     let value =
-        evin_yaml::parse_yaml("site_url: https://example.com/docs/\nreference_prefix: rfc\n")
+        evin_flow::parse_yaml("site_url: https://example.com/docs/\nreference_prefix: rfc\n")
             .unwrap();
-    let config = evin_yaml::de::from_spanned_value::<DocsConfig>(value).unwrap();
+    let config = evin_flow::de::from_spanned_value::<DocsConfig>(value).unwrap();
     assert_eq!(config.normalized_reference_prefix().unwrap(), "RFC");
 
     for invalid in ["", "RFC-DOC", "RFC DOC"] {
@@ -179,7 +179,7 @@ fn reference_prefix_defaults_normalizes_and_validates() {
 #[test]
 fn asset_directory_must_stay_inside_the_documentation_source() {
     let invalid =
-        evin_yaml::parse_yaml("site_url: https://example.com/\nasset_dir: ../outside\n").unwrap();
+        evin_flow::parse_yaml("site_url: https://example.com/\nasset_dir: ../outside\n").unwrap();
     let error = validate_config(Some(&invalid)).unwrap_err();
     assert!(error.message.contains("asset_dir"));
 }
@@ -187,7 +187,7 @@ fn asset_directory_must_stay_inside_the_documentation_source() {
 #[test]
 fn asset_directory_can_be_resolved_from_a_template() {
     let templated =
-        evin_yaml::parse_yaml("site_url: ${docs_site_url}\nasset_dir: ${docs_asset_dir}\n")
+        evin_flow::parse_yaml("site_url: ${docs_site_url}\nasset_dir: ${docs_asset_dir}\n")
             .unwrap();
     assert!(validate_config(Some(&templated)).is_ok());
 }
@@ -203,8 +203,8 @@ fn bundled_search_prioritizes_and_displays_formal_reference_ids() {
 #[test]
 fn legacy_inputs_are_rejected() {
     let yaml = "ast: old.json\nserve: true\n";
-    let value = evin_yaml::parse_yaml(yaml).unwrap();
-    let error = evin_yaml::de::from_spanned_value::<DocsConfig>(value).unwrap_err();
+    let value = evin_flow::parse_yaml(yaml).unwrap();
+    let error = evin_flow::de::from_spanned_value::<DocsConfig>(value).unwrap_err();
     assert!(error.message.contains("unknown field"));
 }
 
@@ -1152,7 +1152,7 @@ fn custom_extension_brand_assets_render_in_output() {
 #[test]
 fn test_metrics_config_validation() {
     let yaml_bad = "metrics: false\nmetrics_budget_kb: 110\nsite_url: 'https://example.com'";
-    let val_bad = evin_yaml::parse_yaml(yaml_bad).unwrap();
+    let val_bad = evin_flow::parse_yaml(yaml_bad).unwrap();
     let err = validate_config(Some(&val_bad));
     assert!(err.is_err());
     assert!(
@@ -1162,11 +1162,11 @@ fn test_metrics_config_validation() {
     );
 
     let yaml_good = "metrics: true\nmetrics_budget_kb: 110\nsite_url: 'https://example.com'";
-    let val_good = evin_yaml::parse_yaml(yaml_good).unwrap();
+    let val_good = evin_flow::parse_yaml(yaml_good).unwrap();
     assert!(validate_config(Some(&val_good)).is_ok());
 
     let yaml_no_budget = "metrics: true\nsite_url: 'https://example.com'";
-    let val_no_budget = evin_yaml::parse_yaml(yaml_no_budget).unwrap();
+    let val_no_budget = evin_flow::parse_yaml(yaml_no_budget).unwrap();
     assert!(validate_config(Some(&val_no_budget)).is_ok());
 }
 

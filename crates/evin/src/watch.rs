@@ -254,8 +254,8 @@ mod tests {
         let root = Path::new(".");
         let mut watcher = PollingWatcher::new(spec(root, &["crates/**"], &[]));
         let invalid = Err(evin_diagnostic::Diagnostic::new(
-            "Invalid YAML",
-            evin_diagnostic::IssueCode::custom("invalid YAML"),
+            "Invalid Flow",
+            evin_diagnostic::IssueCode::custom("invalid Flow"),
         ));
         assert!(!watcher.apply_resolved_spec(invalid));
         assert!(watcher.spec.matches("crates/evin/src/main.rs"));

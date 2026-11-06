@@ -114,15 +114,15 @@ impl Action for GitReleaseAction {
     }
     fn validate_config(
         &self,
-        with: Option<&evin_yaml::SpannedValue>,
-    ) -> Result<(), evin_yaml::ConfigError> {
+        with: Option<&evin_flow::SpannedValue>,
+    ) -> Result<(), evin_flow::ConfigError> {
         v1::validate_config(with)
     }
 
     async fn execute(
         &self,
         ctx: &RunnerContext,
-        with: Option<evin_yaml::SpannedValue>,
+        with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         v1::execute(ctx, with).await
     }

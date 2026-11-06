@@ -36,7 +36,7 @@ export const FLOW_SEMANTIC_LEGEND = new vscode.SemanticTokensLegend(
 );
 
 const FLOW_DIRECTIVES = new Set(["on", "watch", "steps"]);
-const YAML_CONSTANTS = new Set(["true", "false", "null", "~"]);
+const FLOW_CONSTANTS = new Set(["true", "false", "null", "~"]);
 const MAPPING_KEY_SUFFIX_RE = /^["']?\s*:(?:\s|$)/;
 const TEMPLATE_EXPR_RE = /\$\{[^{}\r\n]+\}/g;
 
@@ -280,7 +280,7 @@ function classifyFlowToken(
     }
 
     case "enumMember": {
-      if (YAML_CONSTANTS.has(tokenText.trim())) {
+      if (FLOW_CONSTANTS.has(tokenText.trim())) {
         return null;
       }
       return "flowEnum";

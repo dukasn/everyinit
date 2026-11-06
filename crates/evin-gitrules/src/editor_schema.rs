@@ -15,7 +15,7 @@
 //! Editor-facing shape of GitRules. Keep this beside the serde models and
 //! cover its field names against serialization in tests.
 
-use evin_yaml::schema::{Field, Schema, ValueConstraint};
+use evin_flow::schema::{Field, Schema, ValueConstraint};
 
 const STRING: Schema = Schema::String;
 const STRING_LIST: Schema = Schema::Sequence(&STRING);

@@ -7,7 +7,7 @@ authors.workspace = true
 
 [dependencies]
 evin-diagnostic = { workspace = true }
-evin-yaml = { workspace = true }
+evin-flow = { workspace = true }
 evin-action-sdk = { workspace = true }
 evin-locales = { workspace = true }
 serde = { workspace = true }
