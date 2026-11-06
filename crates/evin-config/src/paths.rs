@@ -29,9 +29,33 @@ pub fn is_flow_manifest(path: &Path) -> bool {
     path.extension().and_then(|extension| extension.to_str()) == Some(FLOW_EXTENSION)
 }
 
+/// Returns the relative path to the `.evin` directory containing `source_file`,
+/// or `.evin` if at the workspace root or not located within a specific module.
+pub fn find_evin_dir(source_file: &Path) -> std::path::PathBuf {
+    let mut accumulated = std::path::PathBuf::new();
+    for component in source_file.components() {
+        accumulated.push(component);
+        if component.as_os_str() == CONFIG_DIR {
+            return accumulated;
+        }
+    }
+    std::path::PathBuf::from(CONFIG_DIR)
+}
+
+/// Returns the module root directory containing `source_file` (the parent of `.evin`),
+/// or `None` if `source_file` is at the workspace root or lacks an `.evin` segment.
+pub fn find_module_root(source_file: &Path) -> Option<std::path::PathBuf> {
+    let evin_dir = find_evin_dir(source_file);
+    if evin_dir == Path::new(CONFIG_DIR) {
+        None
+    } else {
+        evin_dir.parent().map(|p| p.to_path_buf())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{is_canonical_manifest, is_flow_manifest};
+    use super::{find_evin_dir, find_module_root, is_canonical_manifest, is_flow_manifest};
     use std::path::Path;
 
     #[test]
@@ -43,5 +67,38 @@ mod tests {
         assert!(!is_canonical_manifest(Path::new(".evin/workspace.yaml")));
         assert!(!is_canonical_manifest(Path::new("automation.flow")));
         assert!(is_flow_manifest(Path::new("automation.flow")));
+    }
+
+    #[test]
+    fn resolves_evin_dir_and_module_root() {
+        assert_eq!(
+            find_evin_dir(Path::new(".evin/workspace.flow")),
+            Path::new(".evin")
+        );
+        assert_eq!(find_module_root(Path::new(".evin/workspace.flow")), None);
+
+        assert_eq!(
+            find_evin_dir(Path::new("crates/evin/.evin/module.flow")),
+            Path::new("crates/evin/.evin")
+        );
+        assert_eq!(
+            find_module_root(Path::new("crates/evin/.evin/module.flow")),
+            Some(Path::new("crates/evin").to_path_buf())
+        );
+
+        assert_eq!(
+            find_evin_dir(Path::new("crates/evin/.evin/package.flow")),
+            Path::new("crates/evin/.evin")
+        );
+        assert_eq!(
+            find_module_root(Path::new("crates/evin/.evin/package.flow")),
+            Some(Path::new("crates/evin").to_path_buf())
+        );
+
+        assert_eq!(
+            find_evin_dir(Path::new("random/file.txt")),
+            Path::new(".evin")
+        );
+        assert_eq!(find_module_root(Path::new("random/file.txt")), None);
     }
 }

@@ -18,7 +18,13 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const DEFAULT_IGNORES: [&str; 4] = [".git/**", "target/**", "dist/**", ".evin/trace.json"];
+const DEFAULT_IGNORES: [&str; 5] = [
+    ".git/**",
+    "target/**",
+    "dist/**",
+    ".evin/trace.json",
+    "**/.evin/trace.json",
+];
 
 #[derive(Clone)]
 pub struct WatchSpec {
@@ -67,6 +73,8 @@ impl WatchSpec {
                     path == root
                         || path.starts_with(&format!("{root}/"))
                         || (root == ".evin/trace.json" && path == root)
+                        || (root == "**/.evin/trace.json"
+                            && (path == ".evin/trace.json" || path.ends_with("/.evin/trace.json")))
                 })
             })
             .collect();

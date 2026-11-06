@@ -73,6 +73,7 @@ mod tests {
         let value = spec(Path::new("."), &["crates/**"], &[".evin/**"]);
         assert!(value.matches(".evin/workspace.flow"));
         assert!(!value.matches(".evin/trace.json"));
+        assert!(!value.matches("crates/evin/.evin/trace.json"));
         assert_eq!(value.debounce(), Duration::from_millis(300));
     }
 

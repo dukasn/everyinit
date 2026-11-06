@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskResult {
     pub task_name: String,
     pub result: Result<(), evin_diagnostic::IssueCode>,
@@ -26,6 +27,19 @@ pub struct TaskResult {
     pub start_ts: u64,
     pub dur_us: u64,
     pub thread_id: u64,
+    pub pid: u32,
+    pub ready_ts: u64,
+    pub queued_us: u64,
+    pub source_file: Option<String>,
+    pub module_name: Option<String>,
+    pub stage: Option<String>,
+    pub needs: Vec<String>,
+    pub cwd: Option<String>,
+    pub parallel: bool,
+    pub pure: bool,
+    pub presets: Vec<String>,
+    pub steps_count: usize,
+    pub steps_telemetry: Vec<TraceEvent>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

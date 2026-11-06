@@ -270,6 +270,7 @@ impl Phase for ExecuteTasksPhase {
         ctx: &mut CliContext,
         emitter: &PipelineEmitter,
     ) -> Result<(), Diagnostic> {
+        let phase_start = std::time::Instant::now();
         let config = match ctx.config.take() {
             Some(c) => c,
             None => {
@@ -416,10 +417,48 @@ impl Phase for ExecuteTasksPhase {
             .await;
         let _ = translator_handle.await;
 
+        let outcome = if report.cancelled {
+            "cancelled"
+        } else if report.failed > 0 || report.error.is_some() {
+            "failed"
+        } else if report.telemetry.is_empty() {
+            "empty"
+        } else {
+            "success"
+        };
+
+        let mode_str = match ctx.mode {
+            evin_action_sdk::PipelineMode::Normal => "normal",
+            evin_action_sdk::PipelineMode::DryRun => "dry-run",
+        };
+
+        let context_str = if ctx.is_hook {
+            "hook"
+        } else if ctx.watch_session {
+            "watch"
+        } else {
+            "run"
+        };
+
         emitter.emit(PipelineEvent::TelemetryReport {
             telemetry: report.telemetry,
             workspace_root: std::env::current_dir()
                 .unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            context: Some(crate::events::TelemetryContext {
+                command: "run".to_string(),
+                targets: ctx.targets.clone(),
+                context: context_str.to_string(),
+                hook: if ctx.is_hook {
+                    ctx.run_payload.first().cloned()
+                } else {
+                    None
+                },
+                mode: mode_str.to_string(),
+                watch_session: None,
+                started_at: chrono::Utc::now().to_rfc3339(),
+                duration_us: phase_start.elapsed().as_micros() as u64,
+                outcome: outcome.to_string(),
+            }),
         });
 
         if report.cancelled {

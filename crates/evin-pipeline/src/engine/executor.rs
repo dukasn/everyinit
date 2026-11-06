@@ -18,7 +18,7 @@ use crate::runner::{LogMessage, ShellRunner};
 use crate::telemetry::TraceEvent;
 use evin_action_sdk::TaskOutcome;
 use evin_config::models::TaskObject;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
@@ -109,6 +109,19 @@ impl PipelineEngine {
         let mut running_non_parallel_count: usize = 0;
         let mut task_is_parallel: HashMap<String, bool> = HashMap::new();
 
+        let run_start_ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_micros() as u64)
+            .unwrap_or(0);
+        let mut ready_timestamps: HashMap<String, u64> = HashMap::new();
+        let mut next_fresh_slot: u64 = 1;
+        let mut free_slots: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
+        let mut task_slots: HashMap<String, u64> = HashMap::new();
+        let mut module_pids: HashMap<String, u32> = HashMap::new();
+        let mut next_pid = 2u32;
+        let mut finished_tasks: HashMap<String, (u32, u64, u64, u64)> = HashMap::new();
+        let mut next_flow_id: u64 = 1;
+
         // Enqueue initial orphans
         for (node, &degree) in &in_degree {
             if degree == 0 {
@@ -116,6 +129,7 @@ impl PipelineEngine {
                     task_name: node.clone(),
                     in_degree: 0,
                 });
+                ready_timestamps.insert(node.clone(), run_start_ts);
                 ready_queue.push_back(node.clone());
             }
         }
@@ -124,7 +138,13 @@ impl PipelineEngine {
             |ready_queue: &mut std::collections::VecDeque<String>,
              running_non_parallel_count: &mut usize,
              join_set: &mut JoinSet<TaskResult>,
-             task_is_parallel: &mut HashMap<String, bool>| {
+             task_is_parallel: &mut HashMap<String, bool>,
+             task_slots: &mut HashMap<String, u64>,
+             free_slots: &mut std::collections::BTreeSet<u64>,
+             next_fresh_slot: &mut u64,
+             module_pids: &mut HashMap<String, u32>,
+             next_pid: &mut u32,
+             ready_timestamps: &HashMap<String, u64>| {
                 let mut remaining = std::collections::VecDeque::new();
                 while let Some(node) = ready_queue.pop_front() {
                     let task = registry.get(&node).unwrap();
@@ -132,13 +152,69 @@ impl PipelineEngine {
                         == evin_config::workspace::ExecutionMode::Parallel
                         || task.parallel == Some(true);
 
-                    if is_parallel {
-                        task_is_parallel.insert(node.clone(), true);
-                        self.spawn_task(node, task.clone(), join_set, engine_ctx.clone());
-                    } else if *running_non_parallel_count == 0 {
-                        *running_non_parallel_count += 1;
-                        task_is_parallel.insert(node.clone(), false);
-                        self.spawn_task(node, task.clone(), join_set, engine_ctx.clone());
+                    let can_run = is_parallel || *running_non_parallel_count == 0;
+                    if can_run {
+                        if !is_parallel {
+                            *running_non_parallel_count += 1;
+                        }
+                        task_is_parallel.insert(node.clone(), is_parallel);
+
+                        let slot_id = if let Some(&reused) = free_slots.iter().next() {
+                            free_slots.remove(&reused);
+                            reused
+                        } else {
+                            let s = *next_fresh_slot;
+                            *next_fresh_slot += 1;
+                            s
+                        };
+                        task_slots.insert(node.clone(), slot_id);
+
+                        let (task_pid, module_name) = if let Some(ref source) = task.source_file {
+                            let source_path = std::path::Path::new(source);
+                            if let Some(mod_root) =
+                                evin_config::paths::find_module_root(source_path)
+                            {
+                                let root_str = mod_root.display().to_string();
+                                let pid = *module_pids.entry(root_str).or_insert_with(|| {
+                                    let p = *next_pid;
+                                    *next_pid += 1;
+                                    p
+                                });
+                                let mod_name = node
+                                    .split_once(':')
+                                    .map(|(m, _)| m.to_string())
+                                    .unwrap_or_else(|| {
+                                        mod_root
+                                            .file_name()
+                                            .map(|f| f.to_string_lossy().to_string())
+                                            .unwrap_or_default()
+                                    });
+                                (pid, Some(mod_name))
+                            } else {
+                                (1, None)
+                            }
+                        } else {
+                            (1, None)
+                        };
+
+                        let dispatch_ts = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map(|d| d.as_micros() as u64)
+                            .unwrap_or(0);
+                        let ready_ts = ready_timestamps.get(&node).copied().unwrap_or(dispatch_ts);
+                        let queued_us = dispatch_ts.saturating_sub(ready_ts);
+
+                        self.spawn_task(
+                            node,
+                            task.clone(),
+                            join_set,
+                            engine_ctx.clone(),
+                            slot_id,
+                            task_pid,
+                            ready_ts,
+                            queued_us,
+                            module_name,
+                        );
                     } else {
                         remaining.push_back(node);
                     }
@@ -151,6 +227,12 @@ impl PipelineEngine {
             &mut running_non_parallel_count,
             &mut join_set,
             &mut task_is_parallel,
+            &mut task_slots,
+            &mut free_slots,
+            &mut next_fresh_slot,
+            &mut module_pids,
+            &mut next_pid,
+            &ready_timestamps,
         );
 
         let mut execution_failed = false;
@@ -168,8 +250,53 @@ impl PipelineEngine {
                                 running_non_parallel_count = running_non_parallel_count.saturating_sub(1);
                             }
 
-                            // Collect trace event
+                            if let Some(slot) = task_slots.remove(&task_result.task_name) {
+                                free_slots.insert(slot);
+                            }
+
+                            let task_name = task_result.task_name.clone();
+                            let task_finish_ts = task_result.start_ts + task_result.dur_us;
+                            finished_tasks.insert(
+                                task_name.clone(),
+                                (task_result.pid, task_result.thread_id, task_result.start_ts, task_result.dur_us),
+                            );
+
+                            for dep in &task_result.needs {
+                                if let Some(&(dep_pid, dep_tid, dep_start, dep_dur)) = finished_tasks.get(dep) {
+                                    let flow_id = next_flow_id;
+                                    next_flow_id += 1;
+                                    trace_events.push(TraceEvent {
+                                        name: format!("{dep} \u{2192} {task_name}"),
+                                        cat: "needs".to_string(),
+                                        ph: "s".to_string(),
+                                        ts: Some(dep_start + dep_dur),
+                                        dur: None,
+                                        pid: dep_pid,
+                                        tid: dep_tid,
+                                        id: Some(flow_id),
+                                        bp: None,
+                                        s: None,
+                                        args: BTreeMap::new(),
+                                    });
+                                    trace_events.push(TraceEvent {
+                                        name: format!("{dep} \u{2192} {task_name}"),
+                                        cat: "needs".to_string(),
+                                        ph: "f".to_string(),
+                                        ts: Some(task_result.start_ts),
+                                        dur: None,
+                                        pid: task_result.pid,
+                                        tid: task_result.thread_id,
+                                        id: Some(flow_id),
+                                        bp: Some("e".to_string()),
+                                        s: None,
+                                        args: BTreeMap::new(),
+                                    });
+                                }
+                            }
+
+                            // Collect trace events
                             trace_events.push(build_trace_event(&task_result));
+                            trace_events.extend(task_result.steps_telemetry);
                             if task_result.outcome == TaskOutcome::Cancelled {
                                 execution_cancelled = true;
                                 join_set.abort_all();
@@ -190,7 +317,6 @@ impl PipelineEngine {
                             }
 
                             // Success! Unlock neighbors
-                            let task_name = task_result.task_name;
                             if let Some(neighbors) = adjacency_list.get(&task_name) {
                                 for neighbor in neighbors {
                                     if let Some(degree) = in_degree.get_mut(neighbor) {
@@ -200,6 +326,7 @@ impl PipelineEngine {
                                             in_degree: *degree,
                                         });
                                         if *degree == 0 {
+                                            ready_timestamps.insert(neighbor.clone(), task_finish_ts);
                                             ready_queue.push_back(neighbor.clone());
                                         }
                                     }
@@ -211,6 +338,12 @@ impl PipelineEngine {
                                 &mut running_non_parallel_count,
                                 &mut join_set,
                                 &mut task_is_parallel,
+                                &mut task_slots,
+                                &mut free_slots,
+                                &mut next_fresh_slot,
+                                &mut module_pids,
+                                &mut next_pid,
+                                &ready_timestamps,
                             );
                         }
                         Some(Err(join_err)) => {
@@ -238,6 +371,7 @@ impl PipelineEngine {
                             while let Some(res) = join_set.join_next().await {
                                 if let Ok(task_result) = res {
                                     trace_events.push(build_trace_event(&task_result));
+                                    trace_events.extend(task_result.steps_telemetry);
                                 }
                             }
                         }
@@ -251,6 +385,14 @@ impl PipelineEngine {
                 }
             }
         }
+
+        trace_events.sort_by(|a, b| {
+            a.ts.cmp(&b.ts)
+                .then_with(|| a.pid.cmp(&b.pid))
+                .then_with(|| a.tid.cmp(&b.tid))
+                .then_with(|| a.name.cmp(&b.name))
+                .then_with(|| a.ph.cmp(&b.ph))
+        });
 
         let _ = log_tx.send(LogMessage::PipelineState(!execution_failed));
 
@@ -298,6 +440,11 @@ impl PipelineEngine {
         task: TaskObject,
         join_set: &mut JoinSet<TaskResult>,
         engine_ctx: Arc<EngineContext>,
+        slot_id: u64,
+        task_pid: u32,
+        ready_ts: u64,
+        queued_us: u64,
+        module_name: Option<String>,
     ) {
         let is_ci_mode = self.config.is_ci_mode;
         let mode = self.config.mode;
@@ -341,8 +488,7 @@ impl PipelineEngine {
                 .map(|d| d.as_micros() as u64)
                 .unwrap_or(0);
             let start_instant = Instant::now();
-            static NEXT_TID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
-            let thread_id = NEXT_TID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let thread_id = slot_id;
 
             let _ = engine_ctx.log_tx.send(LogMessage::TaskStarted {
                 task_name: task_name.clone(),
@@ -439,15 +585,79 @@ impl PipelineEngine {
                 ctx.mark_unverified(format!("Depends on unverified task '{}'", dep));
             }
 
+            let mut steps_telemetry = Vec::new();
+            let steps_count = if let Some(ref step_list) = steps {
+                step_list.len()
+            } else if run_script.is_some() {
+                1
+            } else {
+                0
+            };
+
             let final_result = if let Some(script) = run_script {
-                engine_ctx
+                let step_start_instant = Instant::now();
+                let step_start_ts = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_micros() as u64)
+                    .unwrap_or(0);
+
+                let res = engine_ctx
                     .runner
                     .run(&ctx, &script, merged_env, Some(&engine_ctx.cancel_token))
-                    .await
+                    .await;
+
+                let step_dur_us = step_start_instant.elapsed().as_micros() as u64;
+                let mut step_args = BTreeMap::new();
+                step_args.insert(
+                    "task".to_string(),
+                    serde_json::Value::String(task_name.clone()),
+                );
+                step_args.insert("index".to_string(), serde_json::json!(1));
+                step_args.insert(
+                    "kind".to_string(),
+                    serde_json::Value::String("run".to_string()),
+                );
+                step_args.insert(
+                    "command".to_string(),
+                    serde_json::Value::String(engine_ctx.secrets.redact(&script)),
+                );
+                let step_status = if res.is_err() { "failed" } else { "success" };
+                step_args.insert(
+                    "status".to_string(),
+                    serde_json::Value::String(step_status.to_string()),
+                );
+                if let Err(ref err) = res {
+                    step_args.insert(
+                        "issue".to_string(),
+                        serde_json::Value::String(err.to_string()),
+                    );
+                }
+
+                steps_telemetry.push(TraceEvent {
+                    name: "run".to_string(),
+                    cat: "step".to_string(),
+                    ph: "X".to_string(),
+                    ts: Some(step_start_ts),
+                    dur: Some(step_dur_us),
+                    pid: task_pid,
+                    tid: thread_id,
+                    id: None,
+                    bp: None,
+                    s: None,
+                    args: step_args,
+                });
+
+                res
             } else if let Some(step_list) = steps {
                 let mut res = Ok(());
                 let step_count = step_list.len();
                 for (step_index, step) in step_list.into_iter().enumerate() {
+                    let step_start_instant = Instant::now();
+                    let step_start_ts = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|d| d.as_micros() as u64)
+                        .unwrap_or(0);
+
                     if step_count > 1 {
                         let footer = step
                             .run
@@ -465,40 +675,109 @@ impl PipelineEngine {
                                 });
                     }
 
-                    if let Some(script) = step.run {
-                        let step_res = engine_ctx
-                            .runner
-                            .run(
-                                &ctx,
-                                &script,
-                                merged_env.clone(),
-                                Some(&engine_ctx.cancel_token),
-                            )
-                            .await;
-                        if step_res.is_err() {
-                            res = step_res;
-                            break;
-                        }
-                    } else if let Some(uses) = &step.uses {
-                        if let Some(action) = actions.get(uses.as_str()) {
-                            let flags = invocation_flags
-                                .get(uses.as_str())
-                                .cloned()
-                                .unwrap_or_default();
-                            let step_res = action
-                                .execute_with_invocation(&ctx, step.with.clone(), &flags)
+                    let (step_res, step_name, kind, cmd_or_action, version) =
+                        if let Some(script) = step.run {
+                            let step_res = engine_ctx
+                                .runner
+                                .run(
+                                    &ctx,
+                                    &script,
+                                    merged_env.clone(),
+                                    Some(&engine_ctx.cancel_token),
+                                )
                                 .await;
-                            if step_res.is_err() {
-                                res = step_res.map_err(|e| e.code);
-                                break;
+                            let cmd = engine_ctx.secrets.redact(&script);
+                            (
+                                step_res.map_err(|e| e.to_string()),
+                                "run".to_string(),
+                                "run",
+                                Some(cmd),
+                                None,
+                            )
+                        } else if let Some(uses) = &step.uses {
+                            if let Some(action) = actions.get(uses.as_str()) {
+                                let flags = invocation_flags
+                                    .get(uses.as_str())
+                                    .cloned()
+                                    .unwrap_or_default();
+                                let step_res = action
+                                    .execute_with_invocation(&ctx, step.with.clone(), &flags)
+                                    .await;
+                                (
+                                    step_res.map_err(|e| e.code.to_string()),
+                                    uses.as_str().to_string(),
+                                    "uses",
+                                    Some(uses.as_str().to_string()),
+                                    uses.as_str().split_once('@').map(|(_, v)| v.to_string()),
+                                )
+                            } else {
+                                (
+                                    Err("issue-unknown-native-action".to_string()),
+                                    uses.as_str().to_string(),
+                                    "uses",
+                                    Some(uses.as_str().to_string()),
+                                    None,
+                                )
                             }
                         } else {
-                            res = Err(evin_diagnostic::IssueCode::new(
-                                "issue-unknown-native-action",
-                            )
-                            .arg("action", uses.as_str()));
-                            break;
-                        }
+                            (Ok(()), "step".to_string(), "noop", None, None)
+                        };
+
+                    let step_dur_us = step_start_instant.elapsed().as_micros() as u64;
+                    let mut step_args = BTreeMap::new();
+                    step_args.insert(
+                        "task".to_string(),
+                        serde_json::Value::String(task_name.clone()),
+                    );
+                    step_args.insert("index".to_string(), serde_json::json!(step_index + 1));
+                    step_args.insert(
+                        "kind".to_string(),
+                        serde_json::Value::String(kind.to_string()),
+                    );
+                    if let Some(cmd) = cmd_or_action {
+                        step_args.insert(
+                            if kind == "run" {
+                                "command".to_string()
+                            } else {
+                                "action".to_string()
+                            },
+                            serde_json::Value::String(cmd),
+                        );
+                    }
+                    if let Some(ver) = version {
+                        step_args.insert("version".to_string(), serde_json::Value::String(ver));
+                    }
+                    let step_status = if step_res.is_err() {
+                        "failed"
+                    } else {
+                        "success"
+                    };
+                    step_args.insert(
+                        "status".to_string(),
+                        serde_json::Value::String(step_status.to_string()),
+                    );
+                    if let Err(ref err) = step_res {
+                        step_args
+                            .insert("issue".to_string(), serde_json::Value::String(err.clone()));
+                    }
+
+                    steps_telemetry.push(TraceEvent {
+                        name: step_name,
+                        cat: "step".to_string(),
+                        ph: "X".to_string(),
+                        ts: Some(step_start_ts),
+                        dur: Some(step_dur_us),
+                        pid: task_pid,
+                        tid: thread_id,
+                        id: None,
+                        bp: None,
+                        s: None,
+                        args: step_args,
+                    });
+
+                    if let Err(err_code) = step_res {
+                        res = Err(evin_diagnostic::IssueCode::custom(err_code));
+                        break;
                     }
                 }
                 res
@@ -551,6 +830,19 @@ impl PipelineEngine {
                 start_ts,
                 dur_us,
                 thread_id,
+                pid: task_pid,
+                ready_ts,
+                queued_us,
+                source_file: task.source_file.clone(),
+                module_name,
+                stage: task.stage.clone(),
+                needs: needs.clone(),
+                cwd: task.cwd.clone(),
+                parallel: task.parallel.unwrap_or(false),
+                pure,
+                presets: task.presets.clone().unwrap_or_default(),
+                steps_count,
+                steps_telemetry,
             }
         });
     }
@@ -567,16 +859,76 @@ fn build_trace_event(task_result: &super::types::TaskResult) -> TraceEvent {
         "success"
     };
 
-    let mut args = HashMap::new();
-    args.insert("status".to_string(), status.to_string());
+    let mut args = BTreeMap::new();
+    args.insert(
+        "status".to_string(),
+        serde_json::Value::String(status.to_string()),
+    );
+    if let Some(ref mod_name) = task_result.module_name {
+        args.insert(
+            "module".to_string(),
+            serde_json::Value::String(mod_name.clone()),
+        );
+    }
+    if let Some(ref source) = task_result.source_file {
+        args.insert(
+            "source".to_string(),
+            serde_json::Value::String(source.clone()),
+        );
+    }
+    if let Some(ref stage) = task_result.stage {
+        args.insert(
+            "stage".to_string(),
+            serde_json::Value::String(stage.clone()),
+        );
+    }
+    if let Some(ref cwd) = task_result.cwd {
+        args.insert("cwd".to_string(), serde_json::Value::String(cwd.clone()));
+    }
+    args.insert(
+        "parallel".to_string(),
+        serde_json::Value::Bool(task_result.parallel),
+    );
+    args.insert(
+        "pure".to_string(),
+        serde_json::Value::Bool(task_result.pure),
+    );
+    args.insert("needs".to_string(), serde_json::json!(task_result.needs));
+    args.insert(
+        "presets".to_string(),
+        serde_json::json!(task_result.presets),
+    );
+    args.insert(
+        "steps".to_string(),
+        serde_json::json!(task_result.steps_count),
+    );
+    args.insert(
+        "readyUs".to_string(),
+        serde_json::json!(task_result.ready_ts),
+    );
+    args.insert(
+        "queuedUs".to_string(),
+        serde_json::json!(task_result.queued_us),
+    );
+
+    if let Err(ref issue) = task_result.result {
+        args.insert(
+            "issue".to_string(),
+            serde_json::Value::String(issue.to_string()),
+        );
+    }
+
     TraceEvent {
         name: task_result.task_name.clone(),
         cat: "task".to_string(),
         ph: "X".to_string(),
-        ts: task_result.start_ts,
-        dur: task_result.dur_us,
-        pid: 1,
+        ts: Some(task_result.start_ts),
+        dur: Some(task_result.dur_us),
+        pid: task_result.pid,
         tid: task_result.thread_id,
+        id: None,
+        bp: None,
+        s: None,
         args,
     }
 }
@@ -626,9 +978,14 @@ mod cancellation_tests {
             message,
             LogMessage::TaskFinished(name, TaskOutcome::Cancelled, _) if name == "long-running"
         )));
-        assert_eq!(report.telemetry.len(), 1);
+        let task_spans: Vec<_> = report
+            .telemetry
+            .iter()
+            .filter(|e| e.cat == "task")
+            .collect();
+        assert_eq!(task_spans.len(), 1);
         assert_eq!(
-            report.telemetry[0].args.get("status").map(String::as_str),
+            task_spans[0].args.get("status").and_then(|v| v.as_str()),
             Some("cancelled")
         );
     }
