@@ -25,7 +25,7 @@ SPDX-FileCopyrightText = "2007 Free Software Foundation, Inc."
 SPDX-License-Identifier = "GPL-3.0-only"
 
 [[annotations]]
-path = ["README.md", "CONTRIBUTING.md", "TRADEMARKS.md", "ACKNOWLEDGMENTS.md", "THIRD_PARTY_NOTICES.md", "crates/**/README.md", "docs/**.md"]
+path = ["README.md", "CONTRIBUTING.md", "TRADEMARKS.md", "ACKNOWLEDGMENTS.md", "THIRD_PARTY_NOTICES.md", "crates/**/README.md", "docs/**.md", "editors/vscode/README.md"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Eduardo Marques Santos"
 SPDX-License-Identifier = "CC-BY-SA-4.0"
@@ -66,4 +66,25 @@ path = "builtins/evin-action-docs/icons/*.svg"
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2020-present Paweł Kuna"
 SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "editors/vscode/assets/**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Eduardo Marques Santos"
+SPDX-License-Identifier = "CC-BY-4.0"
+SPDX-FileComment = "Everyinit logo artwork and derived editor icon/font assets. See TRADEMARKS.md; this license does not grant trademark rights."
+
+[[annotations]]
+path = [
+  "editors/vscode/package.json",
+  "editors/vscode/src/**",
+  "editors/vscode/scripts/**",
+  "editors/vscode/*.mjs",
+  "editors/vscode/syntaxes/**",
+  "editors/vscode/language-configuration-*.json"
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Eduardo Marques Santos"
+SPDX-License-Identifier = "GPL-3.0-only"
+
 

@@ -12,13 +12,14 @@ from, or compatible with Evin or ESH, provided that the description does not
 suggest that the software is an official Everyinit release or is endorsed or
 maintained by the Everyinit project.
 
-The `logo.svg` and `favicon.svg` files in `.evin/actions/docs/` are original
-Everyinit artwork. They are licensed under CC BY 4.0 as copyrightable works.
-That copyright license permits copying and adaptation with attribution, but it
-does not grant trademark rights in the Everyinit name or identity. In
-particular, it does not authorize using the artwork to make an unofficial
-release look official or to imply endorsement, affiliation, or maintenance by
-Everyinit.
+The `logo.svg` and `favicon.svg` files in `.evin/actions/docs/`, as well as the
+original editor icons and font assets in `editors/vscode/assets/`, are original
+Everyinit artwork and derived assets. They are licensed under CC BY 4.0 as
+copyrightable works. That copyright license permits copying and adaptation with
+attribution, but it does not grant trademark rights in the Everyinit name or
+identity. In particular, it does not authorize using the artwork to make an
+unofficial release look official or to imply endorsement, affiliation, or
+maintenance by Everyinit.
 
 ## Modified software and forks
 
