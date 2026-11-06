@@ -169,18 +169,7 @@ impl PipelineEngine {
                             }
 
                             // Collect trace event
-                            let mut args = HashMap::new();
-                            args.insert("status".to_string(), "success".to_string());
-                            trace_events.push(TraceEvent {
-                                name: task_result.task_name.clone(),
-                                cat: "task".to_string(),
-                                ph: "X".to_string(),
-                                ts: task_result.start_ts,
-                                dur: task_result.dur_us,
-                                pid: 1,
-                                tid: task_result.thread_id,
-                                args,
-                            });
+                            trace_events.push(build_trace_event(&task_result));
                             if task_result.outcome == TaskOutcome::Cancelled {
                                 execution_cancelled = true;
                                 join_set.abort_all();
@@ -246,7 +235,11 @@ impl PipelineEngine {
                     let grace_period = tokio::time::timeout(
                         std::time::Duration::from_secs(2),
                         async {
-                            while join_set.join_next().await.is_some() {}
+                            while let Some(res) = join_set.join_next().await {
+                                if let Ok(task_result) = res {
+                                    trace_events.push(build_trace_event(&task_result));
+                                }
+                            }
                         }
                     ).await;
 
@@ -563,6 +556,31 @@ impl PipelineEngine {
     }
 }
 
+fn build_trace_event(task_result: &super::types::TaskResult) -> TraceEvent {
+    let status = if task_result.outcome == TaskOutcome::Cancelled {
+        "cancelled"
+    } else if task_result.result.is_err() || task_result.outcome == TaskOutcome::Failed {
+        "failed"
+    } else if task_result.outcome == TaskOutcome::Unverified {
+        "unverified"
+    } else {
+        "success"
+    };
+
+    let mut args = HashMap::new();
+    args.insert("status".to_string(), status.to_string());
+    TraceEvent {
+        name: task_result.task_name.clone(),
+        cat: "task".to_string(),
+        ph: "X".to_string(),
+        ts: task_result.start_ts,
+        dur: task_result.dur_us,
+        pid: 1,
+        tid: task_result.thread_id,
+        args,
+    }
+}
+
 #[cfg(test)]
 mod cancellation_tests {
     use super::*;
@@ -608,5 +626,10 @@ mod cancellation_tests {
             message,
             LogMessage::TaskFinished(name, TaskOutcome::Cancelled, _) if name == "long-running"
         )));
+        assert_eq!(report.telemetry.len(), 1);
+        assert_eq!(
+            report.telemetry[0].args.get("status").map(String::as_str),
+            Some("cancelled")
+        );
     }
 }

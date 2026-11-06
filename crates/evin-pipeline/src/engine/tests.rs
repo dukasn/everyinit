@@ -437,9 +437,11 @@ async fn test_parallel_task_cancellation_on_failure() {
     let start = std::time::Instant::now();
     let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
     let report = engine.execute(resolver, log_tx).await;
-
     assert!(report.error.is_some());
     assert!(start.elapsed() < std::time::Duration::from_secs(2));
+    assert!(report.telemetry.iter().any(|event| {
+        event.name == "fail_fast" && event.args.get("status").map(String::as_str) == Some("failed")
+    }));
 }
 
 #[tokio::test]
