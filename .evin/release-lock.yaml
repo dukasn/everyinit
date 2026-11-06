@@ -1,29 +1,33 @@
 version: 1
 release:
-  version: 0.2.0
-  tag: v0.2.0
+  version: 0.2.1
+  tag: v0.2.1
 packages:
   esh:
-    fingerprint: sha256:9a6fbaad352d5c72348a8ce51a85ab5f8ab67935d996240fed28482f95c315b6
+    fingerprint: sha256:259721ad11fe6a8591af3022d8060c3a3c4e20935d871b0e8712bfc6e6f19d1d
     targets:
       apk:
-        version: 0.2.0
+        version: 0.2.1
         revision: 1
       arch:
-        version: 0.2.0
+        version: 0.2.1
         revision: 1
       deb:
-        version: 0.2.0
+        version: 0.2.1
         revision: 1
   evin:
-    fingerprint: sha256:9a6fbaad352d5c72348a8ce51a85ab5f8ab67935d996240fed28482f95c315b6
+    fingerprint: sha256:259721ad11fe6a8591af3022d8060c3a3c4e20935d871b0e8712bfc6e6f19d1d
     targets:
       apk:
-        version: 0.2.0
+        version: 0.2.1
         revision: 1
       arch:
-        version: 0.2.0
+        version: 0.2.1
         revision: 1
       deb:
-        version: 0.2.0
+        version: 0.2.1
         revision: 1
+  vscode:
+    fingerprint: sha256:966632b2b73b2cb1530e045e88f8b31007a940e192837eae1d9417c4a145bfcc
+    version: 0.2.1
+    revision: 1
