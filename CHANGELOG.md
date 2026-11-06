@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.2]
+
+### Features
+
+- **vscode:** render concurrency slots and step details in trace viewer (a65fbab)
+- **pipeline:** record scoped execution traces with step telemetry (ce8e985)
+- **release:** migrate release lock format to json (d66dd7f)
+
+### Refactoring
+
+- **flow:** rename evin-yaml crate to evin-flow (1504767)
+
 ## [v0.2.1]
 
 ### Bug Fixes
