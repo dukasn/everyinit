@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Evin Flow",
+  "name": "FLOW",
   "scopeName": "source.flow",
   "patterns": [
     {
@@ -10,110 +10,562 @@
       "include": "#comment"
     },
     {
-      "include": "#variable-interpolation"
+      "include": "#tasks-section"
     },
     {
-      "include": "#strings-quoted"
+      "include": "#values-section"
     },
     {
-      "include": "#root-sections"
+      "include": "#environments-section"
     },
     {
-      "include": "#directives"
+      "include": "#root-stages-block"
     },
     {
-      "include": "#step-action-run"
+      "include": "#root-stages-inline"
     },
     {
-      "include": "#step-action-uses"
+      "include": "#root-block-scalar"
     },
     {
-      "include": "#step-action-with"
+      "include": "#root-key-line"
     },
     {
-      "include": "#stage-property"
-    },
-    {
-      "include": "#needs-property"
-    },
-    {
-      "include": "#path-properties"
-    },
-    {
-      "include": "#enum-properties"
-    },
-    {
-      "include": "#task-definitions"
-    },
-    {
-      "include": "#property-keys"
-    },
-    {
-      "include": "#inline-arrays"
-    },
-    {
-      "include": "#list-item-values"
-    },
-    {
-      "include": "#constants"
-    },
-    {
-      "include": "#numbers"
+      "include": "#block-elements"
     }
   ],
   "repository": {
     "shebang": {
       "match": "^#!evin(?:/[^\\r\\n]+)?",
-      "name": "comment.line.shebang.flow keyword.control.directive.pragma.flow"
+      "name": "comment.line.shebang.flow"
     },
     "comment": {
-      "match": "#.*$",
+      "match": "(?:^|(?<=\\s))#.*$",
       "name": "comment.line.number-sign.flow"
     },
     "variable-interpolation": {
-      "match": "(\\$\\{)([a-zA-Z0-9_.-]+)(\\})",
-      "captures": {
+      "match": "\\$\\{[^{}\\r\\n]+\\}",
+      "name": "support.variable.flow"
+    },
+    "tasks-section": {
+      "begin": "^(tasks)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
         "1": {
-          "name": "punctuation.definition.variable.begin.flow"
+          "name": "comment.block.section.flow"
         },
         "2": {
-          "name": "variable.other.flow"
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?:[ \\t]+.*|[ \\t]*(?:#.*)?)$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#task-declaration"
+        },
+        {
+          "include": "#block-elements"
+        }
+      ]
+    },
+    "task-declaration": {
+      "match": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "captures": {
+        "1": {
+          "name": "markup.bold.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      }
+    },
+    "values-section": {
+      "begin": "^(values)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?:[ \\t]+.*|[ \\t]*(?:#.*)?)$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#value-declaration"
+        },
+        {
+          "include": "#block-elements"
+        }
+      ]
+    },
+    "value-declaration": {
+      "begin": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "support.variable.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "environments-section": {
+      "begin": "^(environments)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?:[ \\t]+.*|[ \\t]*(?:#.*)?)$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#environment-declaration"
+        },
+        {
+          "include": "#block-elements"
+        }
+      ]
+    },
+    "environment-declaration": {
+      "match": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "captures": {
+        "1": {
+          "name": "support.variable.environment.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      }
+    },
+    "root-stages-block": {
+      "begin": "^(stages)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?:[ \\t]+-\\s+.*|[ \\t]*(?:#.*)?)$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#enum-list-item"
+        }
+      ]
+    },
+    "root-stages-inline": {
+      "begin": "^(stages)\\s*(:)(?=[ \\t]+[^#\\r\\n\\s])[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#enum-value-elements"
+        }
+      ]
+    },
+    "root-block-scalar": {
+      "begin": "^([a-zA-Z0-9_-]+)\\s*(:)\\s*([|>][-+]?[0-9]*)(?:\\s+(#.*))?\\s*$",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
         },
         "3": {
-          "name": "punctuation.definition.variable.end.flow"
+          "name": "storage.modifier.chomping-indicator.flow"
+        },
+        "4": {
+          "name": "comment.line.number-sign.flow"
         }
-      }
+      },
+      "while": "^(?:[ \\t]+.*|[ \\t]*)$",
+      "contentName": "string.unquoted.block.flow",
+      "patterns": [
+        {
+          "include": "#variable-interpolation"
+        }
+      ]
     },
-    "root-sections": {
-      "match": "^(workspace|module|package|stages|tasks|rules|include|env|values|expose|presets)\\s*(:)",
-      "captures": {
+    "root-key-line": {
+      "begin": "^([a-zA-Z0-9_-]+)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
         "1": {
-          "name": "keyword.other.section.flow entity.name.section.flow"
+          "name": "comment.block.section.flow"
         },
         "2": {
           "name": "punctuation.separator.key-value.flow"
         }
-      }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "block-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#directive-block-scalar"
+        },
+        {
+          "include": "#block-scalar-property"
+        },
+        {
+          "include": "#directives"
+        },
+        {
+          "include": "#enum-block-list-property"
+        },
+        {
+          "include": "#enum-inline-property"
+        },
+        {
+          "include": "#env-block-list-property"
+        },
+        {
+          "include": "#env-inline-property"
+        },
+        {
+          "include": "#uses-property"
+        },
+        {
+          "include": "#run-property"
+        },
+        {
+          "include": "#path-property"
+        },
+        {
+          "include": "#property-line"
+        },
+        {
+          "include": "#general-list-item"
+        }
+      ]
+    },
+    "directive-block-scalar": {
+      "begin": "^([ \\t]*)(?:(-\\s+))?(steps|on|watch)\\s*(:)\\s*([|>][-+]?[0-9]*)(?:\\s+(#.*))?\\s*$",
+      "beginCaptures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "3": {
+          "name": "entity.name.type.directive.flow"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.flow"
+        },
+        "5": {
+          "name": "storage.modifier.chomping-indicator.flow"
+        },
+        "6": {
+          "name": "comment.line.number-sign.flow"
+        }
+      },
+      "while": "^(?:\\1[ \\t]+.*|[ \\t]*)$",
+      "contentName": "string.unquoted.block.flow",
+      "patterns": [
+        {
+          "include": "#variable-interpolation"
+        }
+      ]
+    },
+    "block-scalar-property": {
+      "begin": "^([ \\t]*)(?:(-\\s+))?([a-zA-Z0-9_.-]+|\"[^\"\\r\\n]+\"|'[^'\\r\\n]+')\\s*(:)\\s*([|>][-+]?[0-9]*)(?:\\s+(#.*))?\\s*$",
+      "beginCaptures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "3": {
+          "name": "keyword.control.property.flow"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.flow"
+        },
+        "5": {
+          "name": "storage.modifier.chomping-indicator.flow"
+        },
+        "6": {
+          "name": "comment.line.number-sign.flow"
+        }
+      },
+      "while": "^(?:\\1[ \\t]+.*|[ \\t]*)$",
+      "contentName": "string.unquoted.block.flow",
+      "patterns": [
+        {
+          "include": "#variable-interpolation"
+        }
+      ]
     },
     "directives": {
-      "match": "^\\s*(?:-\\s*)?(steps|on|watch)\\s*(:)",
-      "captures": {
-        "1": {
-          "name": "keyword.control.directive.flow"
-        },
-        "2": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      }
-    },
-    "step-action-run": {
-      "begin": "^\\s*(?:(-\\s+))?(run)\\s*(:)\\s*",
+      "begin": "^\\s*(?:(-\\s+))?(steps|on|watch)\\s*(:)(?=\\s|$)[ \\t]*",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.list.begin.flow"
         },
         "2": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow keyword.control.step.flow"
+          "name": "entity.name.type.directive.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "enum-block-list-property": {
+      "begin": "^([ \\t]*)(stages|presets|hooks|targets|scopes)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?:\\1[ \\t]+-\\s+.*|[ \\t]*(?:#.*)?)$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#enum-list-item"
+        }
+      ]
+    },
+    "enum-inline-property": {
+      "begin": "^\\s*(?:(-\\s+))?(stage|stages|bump|channel|execution|format|hooks|presets|scope|scopes|strategy|must_be|targets)\\s*(:)(?=[ \\t]+[^#\\r\\n\\s])[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#enum-value-elements"
+        }
+      ]
+    },
+    "enum-list-item": {
+      "begin": "^\\s*(-\\s+)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#enum-value-elements"
+        }
+      ]
+    },
+    "enum-value-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "begin": "\\[",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.begin.flow"
+            }
+          },
+          "end": "\\]|$",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.end.flow"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#variable-interpolation"
+            },
+            {
+              "include": "#strings-quoted"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.sequence.flow"
+            },
+            {
+              "match": "[^\\s,\\[\\]\"'$#]+",
+              "name": "entity.name.tag.enum.flow"
+            }
+          ]
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+",
+          "name": "entity.name.tag.enum.flow"
+        }
+      ]
+    },
+    "env-block-list-property": {
+      "begin": "^([ \\t]+)(env)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?:\\1[ \\t]+-\\s+[a-zA-Z_][a-zA-Z0-9_]*\\s*(?:#.*)?|[ \\t]*(?:#.*)?)$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#env-list-item"
+        }
+      ]
+    },
+    "env-list-item": {
+      "begin": "^\\s*(-\\s+)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#env-value-elements"
+        }
+      ]
+    },
+    "env-inline-property": {
+      "begin": "^\\s*(?:(-\\s+))?(env)\\s*(:)\\s*(?=\\[)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#env-value-elements"
+        }
+      ]
+    },
+    "env-value-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "begin": "\\[",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.begin.flow"
+            }
+          },
+          "end": "\\]|$",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.end.flow"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#variable-interpolation"
+            },
+            {
+              "include": "#strings-quoted"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.sequence.flow"
+            },
+            {
+              "match": "[^\\s,\\[\\]\"'$#]+",
+              "name": "support.variable.environment.flow"
+            }
+          ]
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+",
+          "name": "support.variable.environment.flow"
+        }
+      ]
+    },
+    "uses-property": {
+      "begin": "^\\s*(?:(-\\s+))?(uses)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
         },
         "3": {
           "name": "punctuation.separator.key-value.flow"
@@ -131,19 +583,53 @@
           "include": "#strings-quoted"
         },
         {
-          "match": "[^#\\r\\n]+",
+          "match": "[a-zA-Z0-9_.-]+/[a-zA-Z0-9_./-]+@[a-zA-Z0-9_.-]+",
+          "name": "entity.name.function.action.flow"
+        },
+        {
+          "match": "[^\\s#\\r\\n]+",
+          "name": "entity.name.function.action.flow"
+        }
+      ]
+    },
+    "run-property": {
+      "begin": "^\\s*(?:(-\\s+))?(run)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "match": "[^\\r\\n\"'$#]+|\\$(?!\\{)|(?<!\\s)#",
           "name": "string.unquoted.command.flow"
         }
       ]
     },
-    "step-action-uses": {
-      "begin": "^\\s*(?:(-\\s+))?(uses)\\s*(:)\\s*",
+    "path-property": {
+      "begin": "^\\s*(?:(-\\s+))?(asset_dir|body_path|cwd|exclude|extensions_dir|favicon|files|icon_dir|include|layout_dir|logo|modules|notes_path|out|output_dir|path|paths|rules|source_dir)\\s*(:)(?=\\s|$)[ \\t]*",
       "beginCaptures": {
         "1": {
           "name": "punctuation.definition.list.begin.flow"
         },
         "2": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow keyword.control.step.flow"
+          "name": "keyword.control.property.flow"
         },
         "3": {
           "name": "punctuation.separator.key-value.flow"
@@ -152,176 +638,38 @@
       "end": "$",
       "patterns": [
         {
+          "include": "#path-value-elements"
+        }
+      ]
+    },
+    "path-value-elements": {
+      "patterns": [
+        {
           "include": "#comment"
         },
         {
-          "include": "#variable-interpolation"
+          "include": "#inline-sequence-path"
         },
         {
           "include": "#strings-quoted"
         },
         {
-          "match": "([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+)",
-          "name": "support.class.action.flow entity.name.function.action.flow"
-        },
-        {
-          "match": "[^#\\s\\r\\n]+",
-          "name": "string.unquoted.flow"
-        }
-      ]
-    },
-    "step-action-with": {
-      "match": "^\\s*(with)\\s*(:)",
-      "captures": {
-        "1": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow keyword.control.step.flow"
-        },
-        "2": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      }
-    },
-    "stage-property": {
-      "begin": "^\\s*(stage)\\s*(:)\\s*",
-      "beginCaptures": {
-        "1": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow support.type.property-name.flow"
-        },
-        "2": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      },
-      "end": "$",
-      "patterns": [
-        {
-          "include": "#comment"
-        },
-        {
           "include": "#variable-interpolation"
         },
         {
-          "match": "[a-zA-Z0-9_.-]+",
-          "name": "constant.language.enum.flow entity.name.type.enum.flow"
-        }
-      ]
-    },
-    "needs-property": {
-      "begin": "^\\s*(needs)\\s*(:)\\s*",
-      "beginCaptures": {
-        "1": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow support.type.property-name.flow"
-        },
-        "2": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      },
-      "end": "$",
-      "patterns": [
-        {
-          "include": "#comment"
-        },
-        {
-          "include": "#inline-arrays"
-        },
-        {
-          "match": "[a-zA-Z0-9_.-]+",
-          "name": "variable.other.task-ref.flow"
-        }
-      ]
-    },
-    "path-properties": {
-      "begin": "^\\s*(path|paths|files|include|exclude|source_dir|output_dir|layout_dir|asset_dir|icon_dir|rules|cwd|out)\\s*(:)\\s*",
-      "beginCaptures": {
-        "1": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow support.type.property-name.flow"
-        },
-        "2": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      },
-      "end": "$",
-      "patterns": [
-        {
-          "include": "#comment"
-        },
-        {
-          "include": "#variable-interpolation"
-        },
-        {
-          "include": "#inline-arrays"
-        },
-        {
-          "include": "#strings-quoted"
-        },
-        {
-          "match": "[^#\\s\\[\\]]+",
+          "match": "[^\\r\\n\"'$#]+|\\$(?!\\{)|(?<!\\s)#",
           "name": "string.unquoted.path.flow"
         }
       ]
     },
-    "enum-properties": {
-      "begin": "^\\s*(execution|format|layout|channel|bump|scope|targets|presets)\\s*(:)\\s*",
-      "beginCaptures": {
-        "1": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow support.type.property-name.flow"
-        },
-        "2": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      },
-      "end": "$",
-      "patterns": [
-        {
-          "include": "#comment"
-        },
-        {
-          "include": "#variable-interpolation"
-        },
-        {
-          "include": "#inline-arrays"
-        },
-        {
-          "include": "#strings-quoted"
-        },
-        {
-          "match": "[a-zA-Z0-9_.-]+",
-          "name": "constant.language.enum.flow entity.name.type.enum.flow"
-        }
-      ]
-    },
-    "task-definitions": {
-      "match": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?!\\s*[^\\s#])",
-      "captures": {
-        "1": {
-          "name": "entity.name.function.task.flow"
-        },
-        "2": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      }
-    },
-    "property-keys": {
-      "match": "^\\s*(?:(-\\s+))?([a-zA-Z0-9_.-]+)\\s*(:)",
-      "captures": {
-        "1": {
-          "name": "punctuation.definition.list.begin.flow"
-        },
-        "2": {
-          "name": "entity.name.tag.yaml entity.name.tag.flow support.type.property-name.flow"
-        },
-        "3": {
-          "name": "punctuation.separator.key-value.flow"
-        }
-      }
-    },
-    "inline-arrays": {
+    "inline-sequence-path": {
       "begin": "\\[",
       "beginCaptures": {
         "0": {
           "name": "punctuation.definition.sequence.begin.flow"
         }
       },
-      "end": "\\]",
+      "end": "\\]|$",
       "endCaptures": {
         "0": {
           "name": "punctuation.definition.sequence.end.flow"
@@ -332,79 +680,215 @@
           "include": "#comment"
         },
         {
+          "include": "#strings-quoted"
+        },
+        {
           "include": "#variable-interpolation"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.sequence.flow"
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+|\\$(?!\\{)",
+          "name": "string.unquoted.path.flow"
+        }
+      ]
+    },
+    "property-line": {
+      "begin": "^\\s*(?:(-\\s+))?([a-zA-Z0-9_.-]+|\"[^\"\\r\\n]+\"|'[^'\\r\\n]+')\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "general-list-item": {
+      "begin": "^\\s*(-\\s+)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "scalar-value-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#inline-mapping"
+        },
+        {
+          "include": "#inline-sequence"
         },
         {
           "include": "#strings-quoted"
         },
         {
-          "include": "#numbers"
+          "include": "#scalar-constants"
         },
         {
-          "include": "#constants"
+          "include": "#scalar-numbers"
         },
         {
-          "match": "([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+)",
-          "name": "support.class.action.flow entity.name.function.action.flow"
+          "include": "#variable-interpolation"
         },
         {
-          "match": "\\b[A-Z][a-zA-Z0-9_.-]*\\b",
-          "name": "constant.language.enum.flow entity.name.type.enum.flow"
-        },
-        {
-          "match": "[a-zA-Z0-9_./-]+",
+          "match": "[^\\r\\n\"'$#]+|\\$(?!\\{)|(?<!\\s)#",
           "name": "string.unquoted.flow"
+        }
+      ]
+    },
+    "inline-mapping": {
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.mapping.begin.flow"
+        }
+      },
+      "end": "\\}|$",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.mapping.end.flow"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#inline-mapping"
+        },
+        {
+          "include": "#inline-sequence"
+        },
+        {
+          "match": "([a-zA-Z0-9_.-]+|\"[^\"\\r\\n]+\"|'[^'\\r\\n]+')\\s*(:)(?=\\s|$)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.property.flow"
+            },
+            "2": {
+              "name": "punctuation.separator.key-value.flow"
+            }
+          }
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "include": "#inline-constants"
+        },
+        {
+          "include": "#inline-numbers"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.mapping.flow"
+        },
+        {
+          "match": "[^\\s,\\{\\}\"'$#:]+|\\$(?!\\{)",
+          "name": "string.unquoted.flow"
+        }
+      ]
+    },
+    "inline-sequence": {
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.sequence.begin.flow"
+        }
+      },
+      "end": "\\]|$",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.sequence.end.flow"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#inline-mapping"
+        },
+        {
+          "include": "#inline-sequence"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "include": "#inline-constants"
+        },
+        {
+          "include": "#inline-numbers"
+        },
+        {
+          "include": "#variable-interpolation"
         },
         {
           "match": ",",
           "name": "punctuation.separator.sequence.flow"
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+|\\$(?!\\{)",
+          "name": "string.unquoted.flow"
         }
       ]
     },
-    "list-item-values": {
-      "match": "^\\s*(-\\s+)([^#\\r\\n]+)",
-      "captures": {
-        "1": {
-          "name": "punctuation.definition.list.begin.flow"
-        },
-        "2": {
-          "patterns": [
-            {
-              "include": "#variable-interpolation"
-            },
-            {
-              "include": "#strings-quoted"
-            },
-            {
-              "match": "([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+@[a-zA-Z0-9_.-]+)",
-              "name": "support.class.action.flow entity.name.function.action.flow"
-            },
-            {
-              "match": "\\b[A-Z][a-zA-Z0-9_.-]*\\b",
-              "name": "constant.language.enum.flow entity.name.type.enum.flow"
-            },
-            {
-              "match": "[a-zA-Z0-9_./-]+/?",
-              "name": "string.unquoted.path.flow"
-            }
-          ]
-        }
-      }
-    },
-    "constants": {
+    "scalar-constants": {
       "patterns": [
         {
-          "match": "\\b(true|false|yes|no|on|off)\\b",
+          "match": "(?<=\\s|^)(true|false)(?=\\s*(?:#.*)?$)",
           "name": "constant.language.boolean.flow"
         },
         {
-          "match": "\\b(null|~)\\b",
+          "match": "(?<=\\s|^)(null|~)(?=\\s*(?:#.*)?$)",
           "name": "constant.language.null.flow"
         }
       ]
     },
-    "numbers": {
-      "match": "\\b[0-9]+(?:\\.[0-9]+)?\\b",
+    "scalar-numbers": {
+      "match": "(?<=\\s|^)-?[0-9]+(?:\\.[0-9]+)?(?=\\s*(?:#.*)?$)",
+      "name": "constant.numeric.flow"
+    },
+    "inline-constants": {
+      "patterns": [
+        {
+          "match": "(?<=[\\[\\{\\s,])(true|false)(?=[\\]\\}\\s,#]|$)",
+          "name": "constant.language.boolean.flow"
+        },
+        {
+          "match": "(?<=[\\[\\{\\s,])(null|~)(?=[\\]\\}\\s,#]|$)",
+          "name": "constant.language.null.flow"
+        }
+      ]
+    },
+    "inline-numbers": {
+      "match": "(?<=[\\[\\{\\s,])-?[0-9]+(?:\\.[0-9]+)?(?=[\\]\\}\\s,#]|$)",
       "name": "constant.numeric.flow"
     },
     "strings-quoted": {
@@ -416,7 +900,7 @@
               "name": "punctuation.definition.string.begin.flow"
             }
           },
-          "end": "\"",
+          "end": "\"|$",
           "endCaptures": {
             "0": {
               "name": "punctuation.definition.string.end.flow"
@@ -440,7 +924,7 @@
               "name": "punctuation.definition.string.begin.flow"
             }
           },
-          "end": "'",
+          "end": "'|$",
           "endCaptures": {
             "0": {
               "name": "punctuation.definition.string.end.flow"
@@ -452,7 +936,7 @@
               "include": "#variable-interpolation"
             },
             {
-              "match": "''",
+              "match": "''|\\\\.",
               "name": "constant.character.escape.flow"
             }
           ]

@@ -18,7 +18,7 @@ export class EveryinitStatusBar implements vscode.Disposable {
         const choice = await vscode.window.showQuickPick([
           {
             label: "$(refresh) Restart Language Servers",
-            description: "Restarts active Evin and ESH LSP instances",
+            description: "Restarts active FLOW and ESH language servers",
             command: "everyinit.restartLsp",
           },
           {
@@ -30,6 +30,11 @@ export class EveryinitStatusBar implements vscode.Disposable {
             label: "$(play) Run Workspace Task",
             description: "Execute an Evin workflow task",
             command: "everyinit.runTask",
+          },
+          {
+            label: "$(graph-line) Show Execution Trace Timeline",
+            description: "Inspect the latest .evin/trace.json waterfall",
+            command: "everyinit.openTraceTimeline",
           },
           {
             label: "$(terminal) Run ESH Script",
@@ -57,13 +62,13 @@ export class EveryinitStatusBar implements vscode.Disposable {
   public update(languageId?: string): void {
     if (languageId === "flow") {
       const running = this.clientManager.isEvinRunning();
-      this.item.text = running ? "$(symbol-event) Evin" : "$(circle-slash) Evin (offline)";
-      this.item.tooltip = "Everyinit: Evin Flow LSP";
+      this.item.text = running ? "$(everyinit-logo) FLOW" : "$(circle-slash) FLOW (offline)";
+      this.item.tooltip = "Everyinit: FLOW Language Server";
       this.item.show();
     } else if (languageId === "esh") {
       const running = this.clientManager.isEshRunning();
       this.item.text = running ? "$(terminal) ESH" : "$(circle-slash) ESH (offline)";
-      this.item.tooltip = "Everyinit: ESH Shell LSP";
+      this.item.tooltip = "Everyinit: ESH Language Server";
       this.item.show();
     } else {
       this.item.hide();

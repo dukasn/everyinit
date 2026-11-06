@@ -1,7 +1,9 @@
 import * as vscode from "vscode";
 import { EveryinitClientManager } from "./client.js";
-import { registerCommands } from "./commands.js";
+import { registerCommands, syncTerminalEnvironment } from "./commands.js";
+import { EveryinitSidebarController } from "./sidebar.js";
 import { EveryinitStatusBar } from "./statusBar.js";
+import { FlowTaskCodeLensProvider } from "./flowTasks.js";
 
 let clientManager: EveryinitClientManager | null = null;
 
@@ -12,7 +14,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const statusBar = new EveryinitStatusBar(clientManager);
   context.subscriptions.push(statusBar);
 
+  syncTerminalEnvironment(context);
   registerCommands(context, clientManager);
+
+  const sidebar = new EveryinitSidebarController(context, clientManager);
+  context.subscriptions.push(sidebar);
+
+  // Register CodeLens provider for Flow task execution
+  const flowCodeLens = new FlowTaskCodeLensProvider();
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider({ language: "flow" }, flowCodeLens)
+  );
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      if (e.document.languageId === "flow") {
+        flowCodeLens.refresh();
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    clientManager.onDidChangeState(() => {
+      statusBar.update(vscode.window.activeTextEditor?.document.languageId);
+    })
+  );
 
   // Lazy startup: listen for documents opening
   context.subscriptions.push(
@@ -56,6 +81,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {
       if (event.affectsConfiguration("everyinit")) {
+        syncTerminalEnvironment(context);
         await clientManager?.restart();
         statusBar.update(vscode.window.activeTextEditor?.document.languageId);
       }
@@ -69,4 +95,3 @@ export async function deactivate(): Promise<void> {
     clientManager = null;
   }
 }
-

@@ -22,7 +22,13 @@ tasks:
     steps:
       - run: npm run lint
 
+  test:
+    stage: Test
+    description: "Run Everyinit VS Code extension unit tests"
+    steps:
+      - run: npm test
+
   verify:
     stage: Test
     description: "Verify Everyinit VS Code extension"
-    needs: [check, lint, build]
+    needs: [check, lint, test, build]

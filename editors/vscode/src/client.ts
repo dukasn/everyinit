@@ -1,3 +1,4 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
 import {
   LanguageClient,
@@ -6,15 +7,33 @@ import {
   Trace,
 } from "vscode-languageclient/node";
 import { getConfiguration, resolveBinaryPath } from "./config.js";
-import { TraceLevel } from "./types.js";
+import { FlowSemanticTokensFeature } from "./semanticTokens.js";
+import {
+  CatalogManifestItem,
+  CatalogTaskItem,
+  LspLocation,
+  TraceLevel,
+  WorkspaceCatalogResult,
+} from "./types.js";
+
+interface LspWorkspaceSymbol {
+  name: string;
+  kind: number;
+  location: LspLocation;
+  containerName?: string | null;
+}
 
 export class EveryinitClientManager implements vscode.Disposable {
   private evinClient: LanguageClient | null = null;
   private eshClient: LanguageClient | null = null;
-  private evinStarting = false;
-  private eshStarting = false;
+  private evinStartPromise: Promise<void> | null = null;
+  private eshStartPromise: Promise<void> | null = null;
   private evinMissingNotified = false;
   private eshMissingNotified = false;
+  private stateChangeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private readonly stateEmitter = new vscode.EventEmitter<void>();
+  public readonly onDidChangeState: vscode.Event<void> = this.stateEmitter.event;
 
   private outputChannel: vscode.OutputChannel;
 
@@ -36,18 +55,33 @@ export class EveryinitClientManager implements vscode.Disposable {
 
   public async startEvinClient(): Promise<void> {
     const config = getConfiguration();
-    if (!config.evinEnable || this.evinClient || this.evinStarting) {
+    if (!config.evinEnable || this.evinClient) {
+      return;
+    }
+    if (this.evinStartPromise) {
+      await this.evinStartPromise;
       return;
     }
 
-    const binaryPath = resolveBinaryPath(config.evinPath);
+    this.evinStartPromise = this.doStartEvinClient(config.evinPath, config.trace);
+    try {
+      await this.evinStartPromise;
+    } finally {
+      this.evinStartPromise = null;
+    }
+  }
+
+  private async doStartEvinClient(evinPath: string, trace: TraceLevel): Promise<void> {
+    const binaryPath = resolveBinaryPath(evinPath);
     if (!binaryPath) {
-      this.outputChannel.appendLine(`[evin] Binary could not be resolved from configured path: '${config.evinPath}'`);
+      this.outputChannel.appendLine(
+        `[evin] Binary could not be resolved from configured path: '${evinPath}'`
+      );
       if (!this.evinMissingNotified) {
         this.evinMissingNotified = true;
         this.notifyMissingBinary(
           "Evin",
-          config.evinPath,
+          evinPath,
           "cargo install --path crates/evin",
           "everyinit.evin.path"
         );
@@ -55,7 +89,6 @@ export class EveryinitClientManager implements vscode.Disposable {
       return;
     }
 
-    this.evinStarting = true;
     try {
       this.outputChannel.appendLine(`[evin] Starting language server: ${binaryPath} lsp`);
 
@@ -77,42 +110,63 @@ export class EveryinitClientManager implements vscode.Disposable {
         synchronize: {
           fileEvents: vscode.workspace.createFileSystemWatcher("**/*.flow"),
         },
+        middleware: {
+          handleDiagnostics: (uri, diagnostics, next) => {
+            next(uri, diagnostics);
+            this.scheduleStateChange();
+          },
+        },
         outputChannel: this.outputChannel,
         traceOutputChannel: this.outputChannel,
       };
 
       const client = new LanguageClient(
         "everyinit.evin",
-        "Evin Flow Language Server",
+        "Flow Language Server",
         serverOptions,
         clientOptions
       );
 
-      client.setTrace(this.resolveTrace(config.trace));
+      client.registerFeature(new FlowSemanticTokensFeature(client));
+      client.setTrace(this.resolveTrace(trace));
       await client.start();
       this.evinClient = client;
       this.outputChannel.appendLine("[evin] Language server started successfully.");
+      this.scheduleStateChange();
     } catch (error) {
       this.outputChannel.appendLine(`[evin] Failed to start language server: ${String(error)}`);
-    } finally {
-      this.evinStarting = false;
     }
   }
 
   public async startEshClient(): Promise<void> {
     const config = getConfiguration();
-    if (!config.eshEnable || this.eshClient || this.eshStarting) {
+    if (!config.eshEnable || this.eshClient) {
+      return;
+    }
+    if (this.eshStartPromise) {
+      await this.eshStartPromise;
       return;
     }
 
-    const binaryPath = resolveBinaryPath(config.eshPath);
+    this.eshStartPromise = this.doStartEshClient(config.eshPath, config.trace);
+    try {
+      await this.eshStartPromise;
+    } finally {
+      this.eshStartPromise = null;
+    }
+  }
+
+  private async doStartEshClient(eshPath: string, trace: TraceLevel): Promise<void> {
+    const binaryPath = resolveBinaryPath(eshPath);
     if (!binaryPath) {
-      this.outputChannel.appendLine(`[esh] Binary could not be resolved from configured path: '${config.eshPath}'`);
+      this.outputChannel.appendLine(
+        `[esh] Binary could not be resolved from configured path: '${eshPath}'`
+      );
       if (!this.eshMissingNotified) {
         this.eshMissingNotified = true;
         this.notifyMissingBinary(
           "ESH",
-          config.eshPath,
+          eshPath,
           "cargo install --path crates/esh",
           "everyinit.esh.path"
         );
@@ -120,7 +174,6 @@ export class EveryinitClientManager implements vscode.Disposable {
       return;
     }
 
-    this.eshStarting = true;
     try {
       this.outputChannel.appendLine(`[esh] Starting language server: ${binaryPath} lsp`);
 
@@ -153,26 +206,125 @@ export class EveryinitClientManager implements vscode.Disposable {
         clientOptions
       );
 
-      client.setTrace(this.resolveTrace(config.trace));
+      client.setTrace(this.resolveTrace(trace));
       await client.start();
       this.eshClient = client;
       this.outputChannel.appendLine("[esh] Language server started successfully.");
+      this.scheduleStateChange();
     } catch (error) {
       this.outputChannel.appendLine(`[esh] Failed to start language server: ${String(error)}`);
-    } finally {
-      this.eshStarting = false;
+    }
+  }
+
+  /**
+   * Query the active Evin language server for the workspace catalog (tasks,
+   * stages, manifests, and diagnostic counts). Falls back to `workspace/symbol`
+   * if connected to an older `evin` binary.
+   */
+  public async fetchWorkspaceCatalog(): Promise<WorkspaceCatalogResult | null> {
+    await this.startEvinClient();
+    const client = this.evinClient;
+    if (!client) {
+      return null;
+    }
+
+    try {
+      return await client.sendRequest<WorkspaceCatalogResult>("everyinit/workspaceCatalog", {});
+    } catch (error) {
+      this.outputChannel.appendLine(
+        `[evin] workspaceCatalog fallback (${error instanceof Error ? error.message : String(error)})`
+      );
+      return this.fetchFallbackCatalog(client);
+    }
+  }
+
+  private async fetchFallbackCatalog(client: LanguageClient): Promise<WorkspaceCatalogResult | null> {
+    try {
+      const symbols =
+        (await client.sendRequest<LspWorkspaceSymbol[]>("workspace/symbol", { query: "" })) ?? [];
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+      const tasks: CatalogTaskItem[] = symbols
+        .filter((symbol) => symbol.kind === 12)
+        .map((symbol) => {
+          const colonIdx = symbol.name.indexOf(":");
+          const moduleName = colonIdx > 0 ? symbol.name.slice(0, colonIdx) : null;
+          const shortName = colonIdx > 0 ? symbol.name.slice(colonIdx + 1) : symbol.name;
+          const fsPath = vscode.Uri.parse(symbol.location.uri).fsPath;
+          const sourcePath = workspaceRoot
+            ? path.relative(workspaceRoot, fsPath).replace(/\\/g, "/")
+            : fsPath;
+
+          return {
+            name: symbol.name,
+            shortName,
+            module: moduleName,
+            description: null,
+            stage: null,
+            needs: [],
+            hooks: [],
+            hasWatch: false,
+            watchPaths: [],
+            presets: [],
+            exposed: false,
+            sourcePath,
+            location: symbol.location,
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      const flowUris = await vscode.workspace.findFiles(
+        "**/*.flow",
+        "{**/node_modules/**,**/target/**,**/dist/**,**/.git/**}"
+      );
+      const manifests: CatalogManifestItem[] = flowUris
+        .map((uri) => {
+          const relPath = workspaceRoot
+            ? path.relative(workspaceRoot, uri.fsPath).replace(/\\/g, "/")
+            : uri.fsPath;
+          return {
+            path: relPath,
+            uri: uri.toString(),
+            kind: inferManifestKind(relPath),
+            errors: 0,
+            warnings: 0,
+          };
+        })
+        .sort((a, b) => a.path.localeCompare(b.path));
+
+      return {
+        workspaceName: null,
+        workspaceVersion: null,
+        stages: [],
+        stale: false,
+        diagnostics: { errors: 0, warnings: 0 },
+        manifests,
+        tasks,
+      };
+    } catch {
+      return null;
     }
   }
 
   public async restart(): Promise<void> {
+    const evinWasRunning = this.evinClient !== null;
+    const eshWasRunning = this.eshClient !== null;
+
     this.outputChannel.appendLine("[everyinit] Restarting language servers...");
     await this.stopAll();
 
-    // Check currently open documents to restart active servers
+    if (evinWasRunning) {
+      await this.startEvinClient();
+    }
+    if (eshWasRunning) {
+      await this.startEshClient();
+    }
+
     for (const doc of vscode.workspace.textDocuments) {
       await this.ensureClientForLanguage(doc.languageId);
     }
 
+    this.scheduleStateChange();
     vscode.window.showInformationMessage("Everyinit language servers restarted.");
   }
 
@@ -200,6 +352,7 @@ export class EveryinitClientManager implements vscode.Disposable {
     }
 
     await Promise.all(stops);
+    this.scheduleStateChange();
   }
 
   public isEvinRunning(): boolean {
@@ -211,8 +364,23 @@ export class EveryinitClientManager implements vscode.Disposable {
   }
 
   public dispose(): void {
+    if (this.stateChangeTimer) {
+      clearTimeout(this.stateChangeTimer);
+      this.stateChangeTimer = null;
+    }
     void this.stopAll();
+    this.stateEmitter.dispose();
     this.outputChannel.dispose();
+  }
+
+  private scheduleStateChange(): void {
+    if (this.stateChangeTimer) {
+      clearTimeout(this.stateChangeTimer);
+    }
+    this.stateChangeTimer = setTimeout(() => {
+      this.stateChangeTimer = null;
+      this.stateEmitter.fire();
+    }, 120);
   }
 
   private resolveTrace(trace: TraceLevel): Trace {
@@ -252,3 +420,11 @@ export class EveryinitClientManager implements vscode.Disposable {
   }
 }
 
+function inferManifestKind(relPath: string): string {
+  const base = path.posix.basename(relPath);
+  if (base === "workspace.flow") return "workspace";
+  if (base === "module.flow") return "module";
+  if (base === "gitrules.flow") return "gitrules";
+  if (base === "environment.flow") return "environment";
+  return "namespace";
+}

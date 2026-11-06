@@ -5,6 +5,8 @@ scripts/**
 tsconfig.json
 esbuild.mjs
 node_modules/**
+dist/github/**
+**/*.vsix
 **/*.map
 .gitignore
 

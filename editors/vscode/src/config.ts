@@ -89,6 +89,31 @@ export function resolveBinaryPath(binaryName: string): string | null {
   return null;
 }
 
+/**
+ * Return deduplicated parent directories of the configured `evin` and `esh`
+ * binaries so integrated terminals and child workflow steps can invoke both
+ * tools on PATH.
+ */
+export function resolveConfiguredBinaryDirs(): string[] {
+  const config = getConfiguration();
+  const dirs: string[] = [];
+
+  for (const candidate of [
+    config.evinEnable ? resolveBinaryPath(config.evinPath) : null,
+    config.eshEnable ? resolveBinaryPath(config.eshPath) : null,
+  ]) {
+    if (!candidate) {
+      continue;
+    }
+    const dir = path.dirname(candidate);
+    if (dir && !dirs.includes(dir)) {
+      dirs.push(dir);
+    }
+  }
+
+  return dirs;
+}
+
 function isExecutable(filePath: string): boolean {
   try {
     const stats = fs.statSync(filePath);

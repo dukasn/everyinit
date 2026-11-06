@@ -5,6 +5,11 @@
   "version": "0.2.0",
   "publisher": "everyinit",
   "license": "GPL-3.0-only",
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#0d1117",
+    "theme": "dark"
+  },
   "homepage": "https://everyinit.dev",
   "repository": {
     "type": "git",
@@ -30,13 +35,26 @@
   "engines": {
     "vscode": "^1.90.0"
   },
+  "activationEvents": [
+    "workspaceContains:.evin/workspace.flow"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
+    "icons": {
+      "everyinit-logo": {
+        "description": "Everyinit Logo",
+        "default": {
+          "fontPath": "./assets/everyinit-icons.woff",
+          "fontCharacter": "\\E001"
+        }
+      }
+    },
     "languages": [
       {
         "id": "flow",
         "aliases": [
-          "Evin Flow",
+          "FLOW",
+          "Flow",
           "flow"
         ],
         "extensions": [
@@ -51,19 +69,26 @@
           "package.flow"
         ],
         "firstLine": "^#!evin/v[0-9]+",
+        "icon": {
+          "light": "./assets/logo-light.svg",
+          "dark": "./assets/logo-dark.svg"
+        },
         "configuration": "./language-configuration-flow.json"
       },
       {
         "id": "esh",
         "aliases": [
           "ESH",
-          "esh",
-          "Evin Shell"
+          "esh"
         ],
         "extensions": [
           ".esh"
         ],
         "firstLine": "^#!.*\\besh\\b",
+        "icon": {
+          "light": "./assets/logo-light.svg",
+          "dark": "./assets/logo-dark.svg"
+        },
         "configuration": "./language-configuration-esh.json"
       }
     ],
@@ -79,90 +104,474 @@
         "path": "./syntaxes/esh.tmLanguage.json"
       }
     ],
+    "semanticTokenTypes": [
+      {
+        "id": "flowRoot",
+        "description": "Top-level Flow configuration section header"
+      },
+      {
+        "id": "flowTask",
+        "description": "Flow task declaration"
+      },
+      {
+        "id": "flowDirective",
+        "description": "Flow orchestration directive (steps, on, watch)"
+      },
+      {
+        "id": "flowProperty",
+        "description": "Flow configuration or action property key"
+      },
+      {
+        "id": "flowEnum",
+        "description": "Flow stage, preset, hook, or schema enum value"
+      },
+      {
+        "id": "flowAction",
+        "description": "Flow built-in or external action identifier"
+      },
+      {
+        "id": "flowVariable",
+        "description": "Flow template variable or value declaration"
+      },
+      {
+        "id": "flowParameter",
+        "description": "Flow environment variable declaration or reference"
+      },
+      {
+        "id": "flowTaskRef",
+        "description": "Flow task dependency or exposure reference"
+      }
+    ],
     "semanticTokenScopes": [
       {
         "language": "flow",
         "scopes": {
-          "property": [
-            "entity.name.tag.yaml",
-            "entity.name.tag.flow",
-            "support.type.property-name.flow"
+          "flowRoot": [
+            "comment.block.section.flow"
           ],
-          "modifier": [
-            "keyword.control.directive.flow",
-            "keyword.control.flow"
+          "flowTask": [
+            "markup.bold.flow"
           ],
-          "namespace": [
-            "keyword.other.section.flow",
-            "entity.name.section.flow"
+          "flowDirective": [
+            "entity.name.type.directive.flow"
           ],
-          "function": [
-            "entity.name.function.task.flow",
-            "entity.name.function"
+          "flowProperty": [
+            "keyword.control.property.flow"
           ],
-          "method": [
-            "support.class.action.flow",
+          "flowEnum": [
+            "entity.name.tag.enum.flow"
+          ],
+          "flowAction": [
             "entity.name.function.action.flow"
           ],
-          "enumMember": [
-            "constant.language.enum.flow",
-            "entity.name.type.enum.flow"
+          "flowVariable": [
+            "support.variable.flow"
           ],
-          "variable": [
-            "variable.other.flow"
+          "flowParameter": [
+            "support.variable.environment.flow"
           ],
-          "parameter": [
-            "variable.parameter.flow"
-          ],
-          "string": [
-            "string.unquoted.flow"
+          "flowTaskRef": [
+            "string.unquoted.task-ref.flow"
           ]
         }
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "everyinit",
+          "title": "Everyinit",
+          "icon": "assets/activitybar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "everyinit": [
+        {
+          "id": "everyinit.tasksView",
+          "name": "Tasks"
+        },
+        {
+          "id": "everyinit.traceView",
+          "name": "Execution Trace"
+        },
+        {
+          "id": "everyinit.workspaceView",
+          "name": "Workspace & Scripts"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "everyinit.tasksView",
+        "when": "!everyinit.hasWorkspaceManifest",
+        "contents": "No `.evin/workspace.flow` manifest found in this workspace.\n[Initialize Everyinit Workspace](command:everyinit.initWorkspace)"
+      },
+      {
+        "view": "everyinit.traceView",
+        "contents": "No `.evin/trace.json` execution trace recorded yet.\nRun an Evin task to inspect task durations and parallel timeline lanes.\n[Run Task](command:everyinit.runTask)"
       }
     ],
     "commands": [
       {
         "command": "everyinit.restartLsp",
         "title": "Restart Language Servers",
-        "category": "Everyinit"
+        "category": "Everyinit",
+        "icon": "$(refresh)"
       },
       {
         "command": "everyinit.runTask",
         "title": "Run Task in Workspace",
-        "category": "Everyinit"
+        "category": "Everyinit",
+        "icon": "$(play)"
+      },
+      {
+        "command": "everyinit.runFlowTask",
+        "title": "Run Flow Task",
+        "category": "Everyinit",
+        "icon": "$(play)"
+      },
+      {
+        "command": "everyinit.runTaskDryRun",
+        "title": "Dry-Run Task",
+        "category": "Everyinit",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "everyinit.runTaskParallel",
+        "title": "Run Task in Parallel",
+        "category": "Everyinit",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "everyinit.runTaskSequential",
+        "title": "Run Task Sequentially",
+        "category": "Everyinit",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "everyinit.explainTask",
+        "title": "Explain Task",
+        "category": "Everyinit",
+        "icon": "$(info)"
+      },
+      {
+        "command": "everyinit.checkTask",
+        "title": "Check Task",
+        "category": "Everyinit",
+        "icon": "$(check)"
+      },
+      {
+        "command": "everyinit.checkWorkspace",
+        "title": "Check Workspace Configuration",
+        "category": "Everyinit",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "everyinit.syncWorkspace",
+        "title": "Sync Git Hooks and Environment",
+        "category": "Everyinit",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "everyinit.initWorkspace",
+        "title": "Initialize Workspace",
+        "category": "Everyinit",
+        "icon": "$(add)"
       },
       {
         "command": "everyinit.runScript",
-        "title": "Run Active ESH Script",
-        "category": "Everyinit"
+        "title": "Run ESH Script",
+        "category": "Everyinit",
+        "icon": "$(play)"
       },
       {
         "command": "everyinit.showOutput",
         "title": "Show Language Server Output",
-        "category": "Everyinit"
+        "category": "Everyinit",
+        "icon": "$(output)"
+      },
+      {
+        "command": "everyinit.openTaskDefinition",
+        "title": "Open Task in .flow",
+        "category": "Everyinit",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "everyinit.openTraceTimeline",
+        "title": "Show Execution Trace Timeline",
+        "category": "Everyinit",
+        "icon": "$(graph-line)"
+      },
+      {
+        "command": "everyinit.openTraceFile",
+        "title": "Open .evin/trace.json",
+        "category": "Everyinit",
+        "icon": "$(json)"
+      },
+      {
+        "command": "everyinit.refreshSidebar",
+        "title": "Refresh Sidebar",
+        "category": "Everyinit",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "everyinit.toggleTaskGrouping",
+        "title": "Switch Task Grouping (Module / Stage)",
+        "category": "Everyinit",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "everyinit.filterTasks",
+        "title": "Filter Tasks",
+        "category": "Everyinit",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "everyinit.clearTaskFilter",
+        "title": "Clear Task Filter",
+        "category": "Everyinit",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "everyinit.toggleTraceSort",
+        "title": "Switch Trace Sort (Timeline / Slowest)",
+        "category": "Everyinit",
+        "icon": "$(sort-precedence)"
       }
     ],
     "menus": {
       "editor/title": [
         {
+          "command": "everyinit.runFlowTask",
+          "when": "resourceExtname == .flow",
+          "group": "navigation"
+        },
+        {
           "command": "everyinit.runScript",
           "when": "resourceExtname == .esh",
           "group": "navigation"
+        },
+        {
+          "command": "everyinit.openTraceTimeline",
+          "when": "resourceFilename == trace.json",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "everyinit.runFlowTask",
+          "when": "resourceExtname == .flow",
+          "group": "1_run@1"
+        },
+        {
+          "command": "everyinit.runTaskDryRun",
+          "when": "resourceExtname == .flow",
+          "group": "1_run@2"
+        },
+        {
+          "command": "everyinit.runScript",
+          "when": "resourceExtname == .esh",
+          "group": "1_run@1"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "everyinit.filterTasks",
+          "when": "view == everyinit.tasksView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "everyinit.clearTaskFilter",
+          "when": "view == everyinit.tasksView && everyinit.hasTaskFilter",
+          "group": "navigation@2"
+        },
+        {
+          "command": "everyinit.toggleTaskGrouping",
+          "when": "view == everyinit.tasksView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "everyinit.refreshSidebar",
+          "when": "view == everyinit.tasksView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "everyinit.checkWorkspace",
+          "when": "view == everyinit.tasksView",
+          "group": "1_workspace@1"
+        },
+        {
+          "command": "everyinit.openTraceTimeline",
+          "when": "view == everyinit.traceView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "everyinit.toggleTraceSort",
+          "when": "view == everyinit.traceView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "everyinit.openTraceFile",
+          "when": "view == everyinit.traceView",
+          "group": "navigation@3"
+        },
+        {
+          "command": "everyinit.refreshSidebar",
+          "when": "view == everyinit.traceView",
+          "group": "navigation@4"
+        },
+        {
+          "command": "everyinit.checkWorkspace",
+          "when": "view == everyinit.workspaceView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "everyinit.syncWorkspace",
+          "when": "view == everyinit.workspaceView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "everyinit.refreshSidebar",
+          "when": "view == everyinit.workspaceView",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "everyinit.runTask",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "inline@1"
+        },
+        {
+          "command": "everyinit.openTaskDefinition",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "inline@2"
+        },
+        {
+          "command": "everyinit.runTask",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "1_run@1"
+        },
+        {
+          "command": "everyinit.runTaskDryRun",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "1_run@2"
+        },
+        {
+          "command": "everyinit.runTaskParallel",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "1_run@3"
+        },
+        {
+          "command": "everyinit.runTaskSequential",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "1_run@4"
+        },
+        {
+          "command": "everyinit.explainTask",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "2_inspect@1"
+        },
+        {
+          "command": "everyinit.checkTask",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "2_inspect@2"
+        },
+        {
+          "command": "everyinit.openTaskDefinition",
+          "when": "view == everyinit.tasksView && viewItem == taskItem",
+          "group": "3_nav@1"
+        },
+        {
+          "command": "everyinit.runTask",
+          "when": "view == everyinit.tasksView && viewItem == taskDependency",
+          "group": "inline@1"
+        },
+        {
+          "command": "everyinit.openTaskDefinition",
+          "when": "view == everyinit.tasksView && viewItem == taskDependency",
+          "group": "inline@2"
+        },
+        {
+          "command": "everyinit.openTraceTimeline",
+          "when": "view == everyinit.traceView && viewItem == traceSummary",
+          "group": "inline@1"
+        },
+        {
+          "command": "everyinit.openTraceFile",
+          "when": "view == everyinit.traceView && viewItem == traceSummary",
+          "group": "inline@2"
+        },
+        {
+          "command": "everyinit.runTask",
+          "when": "view == everyinit.traceView && viewItem == traceSpan",
+          "group": "inline@1"
+        },
+        {
+          "command": "everyinit.openTaskDefinition",
+          "when": "view == everyinit.traceView && viewItem == traceSpan",
+          "group": "inline@2"
+        },
+        {
+          "command": "everyinit.openTraceTimeline",
+          "when": "view == everyinit.traceView && viewItem == traceSpan",
+          "group": "1_trace@1"
+        },
+        {
+          "command": "everyinit.runTask",
+          "when": "view == everyinit.traceView && viewItem == traceSpan",
+          "group": "2_run@1"
+        },
+        {
+          "command": "everyinit.runTaskDryRun",
+          "when": "view == everyinit.traceView && viewItem == traceSpan",
+          "group": "2_run@2"
+        },
+        {
+          "command": "everyinit.openTaskDefinition",
+          "when": "view == everyinit.traceView && viewItem == traceSpan",
+          "group": "3_nav@1"
+        },
+        {
+          "command": "everyinit.runScript",
+          "when": "view == everyinit.workspaceView && viewItem == eshScriptItem",
+          "group": "inline@1"
+        },
+        {
+          "command": "everyinit.runScript",
+          "when": "view == everyinit.workspaceView && viewItem == eshScriptItem",
+          "group": "1_run@1"
         }
       ],
       "commandPalette": [
-        {
-          "command": "everyinit.restartLsp"
-        },
-        {
-          "command": "everyinit.runTask"
-        },
         {
           "command": "everyinit.runScript",
           "when": "resourceExtname == .esh"
         },
         {
-          "command": "everyinit.showOutput"
+          "command": "everyinit.openTaskDefinition",
+          "when": "false"
+        },
+        {
+          "command": "everyinit.refreshSidebar",
+          "when": "false"
+        },
+        {
+          "command": "everyinit.toggleTaskGrouping",
+          "when": "false"
+        },
+        {
+          "command": "everyinit.filterTasks",
+          "when": "false"
+        },
+        {
+          "command": "everyinit.clearTaskFilter",
+          "when": "false"
+        },
+        {
+          "command": "everyinit.toggleTraceSort",
+          "when": "false"
         }
       ]
     },
@@ -172,12 +581,12 @@
         "everyinit.evin.enable": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the Evin language server for .flow files."
+          "description": "Enable the FLOW language server for .flow files."
         },
         "everyinit.evin.path": {
           "type": "string",
           "default": "evin",
-          "description": "Path or command for the Evin CLI executable. Defaults to 'evin' on PATH."
+          "description": "Path or command for the Evin CLI executable (powers the FLOW language server and workflow execution). Defaults to 'evin' on PATH."
         },
         "everyinit.esh.enable": {
           "type": "boolean",
@@ -203,11 +612,13 @@
     }
   },
   "scripts": {
+    "build:icons": "node scripts/build-icon-font.mjs",
     "vscode:prepublish": "npm run build",
-    "build": "node esbuild.mjs --production",
-    "watch": "node esbuild.mjs --watch",
+    "build": "npm run build:icons && node esbuild.mjs --production",
+    "watch": "npm run build:icons && node esbuild.mjs --watch",
     "check": "tsc --noEmit",
     "lint": "oxlint src",
+    "test": "node scripts/test-trace.mjs",
     "package": "node scripts/package-vsix.mjs",
     "package:verify": "node scripts/verify-vsix.mjs"
   },
@@ -219,6 +630,7 @@
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^4.1.0",
     "esbuild": "^0.28.2",
+    "fantasticon": "^4.1.0",
     "oxlint": "^1.87.0",
     "typescript": "^7.0.2"
   }
