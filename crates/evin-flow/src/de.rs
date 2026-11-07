@@ -181,8 +181,28 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         }
     }
 
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        match self.value {
+            SpannedValue::String(s, _) => visitor.visit_string(s),
+            SpannedValue::Integer(i, _) => visitor.visit_string(i.to_string()),
+            SpannedValue::Float(f, _) => visitor.visit_string(f.to_string()),
+            SpannedValue::Bool(b, _) => visitor.visit_string(b.to_string()),
+            _ => self.deserialize_any(visitor),
+        }
+    }
+
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_str(visitor)
+    }
+
     serde::forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
         bytes byte_buf unit unit_struct newtype_struct seq tuple
         tuple_struct map identifier ignored_any
     }
@@ -363,5 +383,24 @@ mod tests {
                 length: 4,
             })
         );
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct StringFieldConfig {
+        value: String,
+    }
+
+    #[test]
+    fn quoted_scalar_is_parsed_as_string_and_deserialized_as_string() {
+        let value = crate::parse_flow("value: \"1\"\n").unwrap();
+        let parsed: StringFieldConfig = from_spanned_value(value).unwrap();
+        assert_eq!(parsed.value, "1");
+    }
+
+    #[test]
+    fn unquoted_numeric_scalar_coerces_to_string_field() {
+        let value = crate::parse_flow("value: 1\n").unwrap();
+        let parsed: StringFieldConfig = from_spanned_value(value).unwrap();
+        assert_eq!(parsed.value, "1");
     }
 }

@@ -209,7 +209,12 @@ pub fn parse_flow(input: &str) -> Result<SpannedValue, ConfigError> {
                 let mut span = span;
                 span.length = scalar_source_length(input, span.offset, &value, style);
                 // Determine true type of scalar
-                let v = if value == "null" || value == "~" {
+                let v = if matches!(
+                    style,
+                    TScalarStyle::SingleQuoted | TScalarStyle::DoubleQuoted
+                ) {
+                    SpannedValue::String(value, span)
+                } else if value == "null" || value == "~" {
                     SpannedValue::Null(span)
                 } else if value == "true" {
                     SpannedValue::Bool(true, span)

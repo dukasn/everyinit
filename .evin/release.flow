@@ -158,14 +158,16 @@ tasks:
     stage: Publish
     description: "Build Evin and ESH Debian and Arch packages"
     env: [RELEASE_TARGET, RELEASE_VERSION]
-    needs: [release:release-stage]
+    needs:
+      - release:release-stage
+      - release:package-state
     steps:
       - uses: evin/archive@v1
         with:
           format: deb
           output_dir: target/release-archives
           architecture: x86_64
-          release: "1"
+          release: "${release:package-state.release}"
           package:
             name: evin
             summary: Evin workflow engine
@@ -193,7 +195,7 @@ tasks:
           format: arch
           output_dir: target/release-archives
           architecture: x86_64
-          release: "1"
+          release: "${release:package-state.release}"
           package:
             name: evin
             summary: Evin workflow engine
@@ -221,7 +223,7 @@ tasks:
           format: deb
           output_dir: target/release-archives
           architecture: x86_64
-          release: "1"
+          release: "${release:package-state.release}"
           package:
             name: esh
             summary: ESH portable shell runtime
@@ -249,7 +251,7 @@ tasks:
           format: arch
           output_dir: target/release-archives
           architecture: x86_64
-          release: "1"
+          release: "${release:package-state.release}"
           package:
             name: esh
             summary: ESH portable shell runtime
