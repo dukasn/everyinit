@@ -13,7 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const [
@@ -27,14 +27,36 @@ if (!version) {
 }
 
 const dir = resolve(targetDir);
+const files = await readdir(dir);
 
+function nativePackage(name, format) {
+  const prefix = format === "deb" ? `${name}_${version}-` : `${name}-${version}-`;
+  const suffix = format === "deb" ? "_amd64.deb" : "-x86_64.pkg.tar.zst";
+  const matches = files.filter(
+    (file) =>
+      file.startsWith(prefix) &&
+      file.endsWith(suffix) &&
+      /^[1-9]\d*$/.test(file.slice(prefix.length, -suffix.length)),
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected exactly one ${name} ${format} package for ${version}; found ${matches.length}`,
+    );
+  }
+  return matches[0];
+}
+
+const evinDeb = nativePackage("evin", "deb");
+const eshDeb = nativePackage("esh", "deb");
+const evinArch = nativePackage("evin", "arch");
+const eshArch = nativePackage("esh", "arch");
 const expectedFiles = [
   `evin-v${version}-${target}.tar.gz`,
   `esh-v${version}-${target}.tar.gz`,
-  `evin_${version}-1_amd64.deb`,
-  `esh_${version}-1_amd64.deb`,
-  `evin-${version}-1-x86_64.pkg.tar.zst`,
-  `esh-${version}-1-x86_64.pkg.tar.zst`,
+  evinDeb,
+  eshDeb,
+  evinArch,
+  eshArch,
   `everyinit-${version}.vsix`,
   "SHA256SUMS",
   "SHA256SUMS.sig",
@@ -60,25 +82,17 @@ const checkMagic = async (name, bytes, desc) => {
 };
 
 await checkMagic(
-  `evin_${version}-1_amd64.deb`,
+  evinDeb,
   [0x21, 0x3c, 0x61, 0x72, 0x63, 0x68, 0x3e, 0x0a],
   "Debian package (!<arch>\\n)",
 );
 await checkMagic(
-  `esh_${version}-1_amd64.deb`,
+  eshDeb,
   [0x21, 0x3c, 0x61, 0x72, 0x63, 0x68, 0x3e, 0x0a],
   "Debian package (!<arch>\\n)",
 );
-await checkMagic(
-  `evin-${version}-1-x86_64.pkg.tar.zst`,
-  [0x28, 0xb5, 0x2f, 0xfd],
-  "Arch Linux zstd package",
-);
-await checkMagic(
-  `esh-${version}-1-x86_64.pkg.tar.zst`,
-  [0x28, 0xb5, 0x2f, 0xfd],
-  "Arch Linux zstd package",
-);
+await checkMagic(evinArch, [0x28, 0xb5, 0x2f, 0xfd], "Arch Linux zstd package");
+await checkMagic(eshArch, [0x28, 0xb5, 0x2f, 0xfd], "Arch Linux zstd package");
 await checkMagic(
   `everyinit-${version}.vsix`,
   [0x50, 0x4b, 0x03, 0x04],

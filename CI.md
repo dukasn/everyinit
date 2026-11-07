@@ -28,7 +28,8 @@ supported.
   packages, Arch packages, and the Everyinit VS Code extension package (`.vsix`).
   All packages are cryptographically signed with SHA-256 checksum manifests and
   Ed25519 signatures (`SHA256SUMS.sig`), then uploaded as workflow artifacts
-  for immediate testing.
+  for immediate testing. Native package verification accepts a single positive
+  revision for each package and format, and rejects ambiguous matches.
 - Scheduled CI runs only the Linux process-supervision soak suite. A manual
   dispatch can include it alongside full validation with `run_soak`.
 - The existing `Workspace tests`, `Binary E2E (Linux)`, `Formatting, Clippy,
