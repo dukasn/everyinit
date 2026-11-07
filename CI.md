@@ -23,10 +23,12 @@ supported.
 
 - Pull requests and pushes targeting `main` or `release`, and manual CI
   dispatches, run workspace tests, binary E2E, quality checks, and
-  `release:distribution-rehearsal`. The rehearsal generates the
-  candidate changelog under ignored `target/` output and builds and inspects
-  the Evin and ESH tar.gz, DEB, APK, and Arch packages. It does not publish or
-  access release-signing secrets.
+  `release:distribution-rehearsal`.
+- CI builds and verifies every release format—Evin and ESH tarballs, Debian
+  packages, Arch packages, and the Everyinit VS Code extension package (`.vsix`).
+  All packages are cryptographically signed with SHA-256 checksum manifests and
+  Ed25519 signatures (`SHA256SUMS.sig`), then uploaded as workflow artifacts
+  for immediate testing.
 - Scheduled CI runs only the Linux process-supervision soak suite. A manual
   dispatch can include it alongside full validation with `run_soak`.
 - The existing `Workspace tests`, `Binary E2E (Linux)`, `Formatting, Clippy,
@@ -37,10 +39,24 @@ supported.
   branch rulesets.
 - After successful main push CI, the Release workflow maintains a single
   release PR. Merging it (merge commit, squash, or rebase) starts a release only after
-  exact-SHA main push CI succeeds. Evin builds and verifies the Linux musl
-  archives, then the workflow tags the merged commit and publishes them.
+  exact-SHA main push CI succeeds. Evin builds, verifies, and cryptographically
+  signs all package formats (tarballs, `.deb`, Arch packages, and `.vsix`),
+  then the workflow tags the merged commit and publishes them to GitHub Releases.
   Ordinary pushes and tag pushes never publish. See the
   [release procedure](/contributing/development#prepare-a-github-release).
+
+## Verifying release signatures
+
+Release checksum manifests are signed with an Ed25519 key pinned at
+`infra/get/release-key.pub`. To verify artifact authenticity and integrity:
+
+```bash
+# 1. Verify the manifest signature:
+openssl pkeyutl -verify -pubin -inkey release-key.pub -rawin -in SHA256SUMS -sigfile SHA256SUMS.sig
+
+# 2. Verify artifact checksums:
+sha256sum -c SHA256SUMS
+```
 
 ## Expanding support
 

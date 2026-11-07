@@ -73,6 +73,17 @@ jobs:
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
       - name: Rehearse changelog and every package format without publishing
         run: cargo evin-dev run release:distribution-rehearsal
+      - name: Build and verify all release packages and signatures
+        env:
+          EVERYINIT_RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
+          RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY || secrets.RELEASE_SIGNING_KEY }}
+        run: cargo evin-dev run release:release-archives-verify
+      - name: Upload distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: everyinit-packages-${{ env.RELEASE_VERSION }}
+          path: target/release-archives/
+          if-no-files-found: error
       - name: Run process-supervision soak suite
         if: github.event_name == 'workflow_dispatch' && inputs.run_soak
         run: cargo evin-dev run soak
