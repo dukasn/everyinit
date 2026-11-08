@@ -459,9 +459,9 @@
       "summary": "Compute and check SHA-256 digests",
       "category": "crypto",
       "handler": "builtins::sha256sum",
-      "hover_markdown": "```esh\nsha256sum [-c checksums.txt] [file...]\n```\n\n**sha256sum** (`sha256sum`): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n### Exit Status\n\n* `0`: Success / Match.\n* `1`: Checksum mismatch.",
-      "hover_plaintext": "sha256sum [-c checksums.txt] [file...]\n\nsha256sum (sha256sum): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\nExit Status\n\n- 0: Success / Match.\n- 1: Checksum mismatch.",
-      "terminal_ansi": "\u001b[1;36msha256sum [-c checksums.txt] [file...]\u001b[0m\n\n\u001b[1msha256sum\u001b[0m (sha256sum): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success / Match.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Checksum mismatch."
+      "hover_markdown": "```esh\nsha256sum [-c checksums.txt] [file...]\n```\n\n**sha256sum** (`sha256sum`): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n### Options\n\n* `-c`, `--check <checksums.txt>`: Verify files listed in a checksum manifest.\n\n### Exit Status\n\n* `0`: Success / Match.\n* `1`: Checksum mismatch.\n* `2`: Invalid invocation.",
+      "hover_plaintext": "sha256sum [-c checksums.txt] [file...]\n\nsha256sum (sha256sum): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\nOptions\n\n- -c, --check <checksums.txt>: Verify files listed in a checksum manifest.\n\nExit Status\n\n- 0: Success / Match.\n- 1: Checksum mismatch.\n- 2: Invalid invocation.",
+      "terminal_ansi": "\u001b[1;36msha256sum [-c checksums.txt] [file...]\u001b[0m\n\n\u001b[1msha256sum\u001b[0m (sha256sum): Compute and check SHA-256 digests\n\nComputes and verifies SHA-256 checksums compatible with coreutils.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m, \u001b[33m--check <checksums.txt>\u001b[0m: Verify files listed in a checksum manifest.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success / Match.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Checksum mismatch.\n\u001b[36m•\u001b[0m \u001b[33m2\u001b[0m: Invalid invocation."
     },
     "shift": {
       "name": "shift",
@@ -482,6 +482,16 @@
       "hover_markdown": "```esh\nsleep <duration>\n```\n\n**sleep** (`sleep`): Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\n### Exit Status\n\n* `0`: Duration elapsed.",
       "hover_plaintext": "sleep <duration>\n\nsleep (sleep): Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\nExit Status\n\n- 0: Duration elapsed.",
       "terminal_ansi": "\u001b[1;36msleep <duration>\u001b[0m\n\n\u001b[1msleep\u001b[0m (sleep): Delay execution for specified duration\n\nPauses execution for a specified duration (e.g. 500ms, 2s, 1m).\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Duration elapsed."
+    },
+    "sort": {
+      "name": "sort",
+      "synopsis": "sort [-r] [-u] [file...]",
+      "summary": "Sort text lines",
+      "category": "text",
+      "handler": "builtins::sort",
+      "hover_markdown": "```esh\nsort [-r] [-u] [file...]\n```\n\n**sort** (`sort`): Sort text lines\n\nSorts input lines lexicographically.\n\n### Options\n\n* `-r`, `--reverse`: Reverse the sort order.\n* `-u`, `--unique`: Output one copy of each line.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "sort [-r] [-u] [file...]\n\nsort (sort): Sort text lines\n\nSorts input lines lexicographically.\n\nOptions\n\n- -r, --reverse: Reverse the sort order.\n- -u, --unique: Output one copy of each line.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36msort [-r] [-u] [file...]\u001b[0m\n\n\u001b[1msort\u001b[0m (sort): Sort text lines\n\nSorts input lines lexicographically.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m--reverse\u001b[0m: Reverse the sort order.\n\u001b[36m•\u001b[0m \u001b[33m-u\u001b[0m, \u001b[33m--unique\u001b[0m: Output one copy of each line.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "stat": {
       "name": "stat",
@@ -622,6 +632,16 @@
       "hover_markdown": "```esh\nunarchive <archive_file> [destination]\n```\n\n**unarchive** (`unarchive`): Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\n### Exit Status\n\n* `0`: Extraction successful.",
       "hover_plaintext": "unarchive <archive_file> [destination]\n\nunarchive (unarchive): Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\nExit Status\n\n- 0: Extraction successful.",
       "terminal_ansi": "\u001b[1;36munarchive <archive_file> [destination]\u001b[0m\n\n\u001b[1munarchive\u001b[0m (unarchive): Format-agnostic archive extractor\n\nAutomatically unpacks .tar, .tar.gz, and .zip files into target directory.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Extraction successful."
+    },
+    "uniq": {
+      "name": "uniq",
+      "synopsis": "uniq [-c] [-d|-u] [file...]",
+      "summary": "Filter adjacent duplicate lines",
+      "category": "text",
+      "handler": "builtins::uniq",
+      "hover_markdown": "```esh\nuniq [-c] [-d|-u] [file...]\n```\n\n**uniq** (`uniq`): Filter adjacent duplicate lines\n\nCollapses adjacent duplicate lines. Sort input first when duplicates are not adjacent.\n\n### Options\n\n* `-c`, `--count`: Prefix each output line with its occurrence count.\n* `-d`, `--repeated`: Output only repeated lines.\n* `-u`, `--unique`: Output only lines that occur once.\n\n### Exit Status\n\n* `0`: Success.",
+      "hover_plaintext": "uniq [-c] [-d|-u] [file...]\n\nuniq (uniq): Filter adjacent duplicate lines\n\nCollapses adjacent duplicate lines. Sort input first when duplicates are not adjacent.\n\nOptions\n\n- -c, --count: Prefix each output line with its occurrence count.\n- -d, --repeated: Output only repeated lines.\n- -u, --unique: Output only lines that occur once.\n\nExit Status\n\n- 0: Success.",
+      "terminal_ansi": "\u001b[1;36muniq [-c] [-d|-u] [file...]\u001b[0m\n\n\u001b[1muniq\u001b[0m (uniq): Filter adjacent duplicate lines\n\nCollapses adjacent duplicate lines. Sort input first when duplicates are not adjacent.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-c\u001b[0m, \u001b[33m--count\u001b[0m: Prefix each output line with its occurrence count.\n\u001b[36m•\u001b[0m \u001b[33m-d\u001b[0m, \u001b[33m--repeated\u001b[0m: Output only repeated lines.\n\u001b[36m•\u001b[0m \u001b[33m-u\u001b[0m, \u001b[33m--unique\u001b[0m: Output only lines that occur once.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Success."
     },
     "unzip": {
       "name": "unzip",

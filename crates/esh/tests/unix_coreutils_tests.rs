@@ -84,3 +84,69 @@ async fn test_sha256sum_and_md5sum() {
     );
     assert_eq!(lines[1], "5eb63bbbe01eeed093cb22bb8f5acdc3");
 }
+
+#[tokio::test]
+async fn test_sha256sum_check_manifest_reports_matches_and_mismatches() {
+    let tmp = tempdir().unwrap();
+    fs::write(tmp.path().join("data.txt"), b"hello world").unwrap();
+    fs::write(
+        tmp.path().join("SHA256SUMS"),
+        "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9  data.txt\n",
+    )
+    .unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    assert_eq!(
+        engine
+            .eval_str("sha256sum -c SHA256SUMS", &mut ctx)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "data.txt: OK\n");
+
+    fs::write(
+        tmp.path().join("SHA256SUMS"),
+        "0000000000000000000000000000000000000000000000000000000000000000  data.txt\n",
+    )
+    .unwrap();
+    ctx.enable_capture();
+    assert_eq!(
+        engine
+            .eval_str("sha256sum --check SHA256SUMS", &mut ctx)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "data.txt: FAILED\n");
+}
+
+#[tokio::test]
+async fn test_sort_and_uniq() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let code = engine
+        .eval_str(
+            r#"
+                printf 'pear\napple\napple\nbanana\n' | sort -u
+                printf 'apple\napple\nbanana\npear\npear\n' | uniq -c
+                printf 'apple\napple\nbanana\npear\npear\n' | uniq -d
+                printf 'apple\napple\nbanana\npear\npear\n' | uniq -u
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "apple\nbanana\npear\n      2 apple\n      1 banana\n      2 pear\napple\npear\nbanana\n"
+    );
+}

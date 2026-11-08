@@ -55,4 +55,4 @@ pub use str::str;
 pub use sys::{env, os, uname, which};
 pub use table_tool::{csv, table};
 pub use test_tool::test;
-pub use text::{cut, grep, tr, wc};
+pub use text::{cut, grep, sort, tr, uniq, wc};

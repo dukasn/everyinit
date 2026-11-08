@@ -28,6 +28,142 @@ fn resolve_path(ctx: &ExecutionContext, path: &str) -> PathBuf {
     }
 }
 
+fn read_text_inputs(
+    args: &[String],
+    ctx: &mut ExecutionContext,
+    command: &str,
+) -> Result<String, i32> {
+    if args.is_empty() {
+        return Ok(ctx
+            .take_stdin()
+            .map(|input| String::from_utf8_lossy(&input).into_owned())
+            .unwrap_or_default());
+    }
+
+    let mut input = String::new();
+    for arg in args {
+        if arg == "-" {
+            input.push_str(&String::from_utf8_lossy(
+                &ctx.take_stdin().unwrap_or_default(),
+            ));
+            continue;
+        }
+        let path = resolve_path(ctx, arg);
+        match fs::read_to_string(&path) {
+            Ok(contents) => input.push_str(&contents),
+            Err(error) => {
+                ctx.write_stderr(
+                    format!("esh: {}: cannot read '{}': {}\n", command, arg, error).as_bytes(),
+                );
+                return Err(1);
+            }
+        }
+    }
+    Ok(input)
+}
+
+pub fn sort<'a>(
+    args: &'a [String],
+    ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async move {
+        let mut reverse = false;
+        let mut unique = false;
+        let mut files = Vec::new();
+        let mut options = true;
+
+        for arg in args {
+            if options && arg == "--" {
+                options = false;
+            } else if options && (arg == "-r" || arg == "--reverse") {
+                reverse = true;
+            } else if options && (arg == "-u" || arg == "--unique") {
+                unique = true;
+            } else if options && arg.starts_with('-') && arg != "-" {
+                ctx.write_stderr(format!("esh: sort: unsupported option '{}'\n", arg).as_bytes());
+                return Ok(2);
+            } else {
+                files.push(arg.clone());
+            }
+        }
+
+        let input = match read_text_inputs(&files, ctx, "sort") {
+            Ok(input) => input,
+            Err(code) => return Ok(code),
+        };
+        let mut lines: Vec<&str> = input.lines().collect();
+        lines.sort_unstable();
+        if reverse {
+            lines.reverse();
+        }
+        if unique {
+            lines.dedup();
+        }
+        for line in lines {
+            ctx.write_stdout(format!("{}\n", line).as_bytes());
+        }
+        Ok(0)
+    })
+}
+
+pub fn uniq<'a>(
+    args: &'a [String],
+    ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async move {
+        let mut count = false;
+        let mut repeated_only = false;
+        let mut unique_only = false;
+        let mut files = Vec::new();
+        let mut options = true;
+
+        for arg in args {
+            if options && arg == "--" {
+                options = false;
+            } else if options && (arg == "-c" || arg == "--count") {
+                count = true;
+            } else if options && (arg == "-d" || arg == "--repeated") {
+                repeated_only = true;
+            } else if options && (arg == "-u" || arg == "--unique") {
+                unique_only = true;
+            } else if options && arg.starts_with('-') && arg != "-" {
+                ctx.write_stderr(format!("esh: uniq: unsupported option '{}'\n", arg).as_bytes());
+                return Ok(2);
+            } else {
+                files.push(arg.clone());
+            }
+        }
+
+        if repeated_only && unique_only {
+            ctx.write_stderr(b"esh: uniq: -d and -u are mutually exclusive\n");
+            return Ok(2);
+        }
+
+        let input = match read_text_inputs(&files, ctx, "uniq") {
+            Ok(input) => input,
+            Err(code) => return Ok(code),
+        };
+        let lines: Vec<&str> = input.lines().collect();
+        let mut index = 0;
+        while index < lines.len() {
+            let line = lines[index];
+            let mut occurrences = 1;
+            while index + occurrences < lines.len() && lines[index + occurrences] == line {
+                occurrences += 1;
+            }
+            if (!repeated_only || occurrences > 1) && (!unique_only || occurrences == 1) {
+                if count {
+                    ctx.write_stdout(format!("{:>7} {}\n", occurrences, line).as_bytes());
+                } else {
+                    ctx.write_stdout(format!("{}\n", line).as_bytes());
+                }
+            }
+            index += occurrences;
+        }
+        Ok(0)
+    })
+}
+
 pub fn grep<'a>(
     args: &'a [String],
     ctx: &'a mut ExecutionContext,

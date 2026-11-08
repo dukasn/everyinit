@@ -36,7 +36,40 @@ pub fn sha256sum<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        if args.is_empty() {
+        let mut check_manifest: Option<&str> = None;
+        let mut files = Vec::new();
+        let mut iter = args.iter();
+        while let Some(arg) = iter.next() {
+            if arg == "-c" || arg == "--check" {
+                let Some(manifest) = iter.next() else {
+                    ctx.write_stderr(b"esh: sha256sum: option requires an argument -- 'c'\n");
+                    return Ok(2);
+                };
+                if check_manifest.replace(manifest.as_str()).is_some() {
+                    ctx.write_stderr(b"esh: sha256sum: only one checksum file may be checked\n");
+                    return Ok(2);
+                }
+            } else if arg.starts_with('-') && arg != "-" {
+                ctx.write_stderr(
+                    format!("esh: sha256sum: unrecognized option '{}'\n", arg).as_bytes(),
+                );
+                return Ok(2);
+            } else {
+                files.push(arg.as_str());
+            }
+        }
+
+        if let Some(manifest) = check_manifest {
+            if !files.is_empty() {
+                ctx.write_stderr(
+                    b"esh: sha256sum: --check cannot be combined with file operands\n",
+                );
+                return Ok(2);
+            }
+            return check_sha256_manifest(manifest, ctx);
+        }
+
+        if files.is_empty() {
             if let Some(buf) = ctx.take_stdin() {
                 let mut hasher = Sha256::new();
                 hasher.update(&buf);
@@ -48,10 +81,7 @@ pub fn sha256sum<'a>(
         }
 
         let mut all_ok = true;
-        for path_str in args {
-            if path_str.starts_with('-') && path_str != "-" {
-                continue;
-            }
+        for path_str in files {
             if path_str == "-" {
                 if let Some(buf) = ctx.take_stdin() {
                     let mut hasher = Sha256::new();
@@ -238,6 +268,73 @@ fn hex_encode(bytes: &[u8]) -> String {
         s.push_str(&format!("{:02x}", b));
     }
     s
+}
+
+fn check_sha256_manifest(manifest_str: &str, ctx: &mut ExecutionContext) -> Result<i32, ExecError> {
+    let manifest_path = resolve_path(ctx, manifest_str);
+    let manifest = match fs::read_to_string(&manifest_path) {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            ctx.write_stderr(format!("esh: sha256sum: {}: {}\n", manifest_str, error).as_bytes());
+            return Ok(1);
+        }
+    };
+
+    let mut all_ok = true;
+    for line in manifest.lines() {
+        let Some((expected, remainder)) = line.split_once(char::is_whitespace) else {
+            ctx.write_stderr(
+                format!(
+                    "esh: sha256sum: {}: improperly formatted checksum line\n",
+                    manifest_str
+                )
+                .as_bytes(),
+            );
+            all_ok = false;
+            continue;
+        };
+        let filename = remainder
+            .trim_start()
+            .strip_prefix('*')
+            .unwrap_or(remainder.trim_start());
+        if expected.len() != 64
+            || !expected.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || filename.is_empty()
+        {
+            ctx.write_stderr(
+                format!(
+                    "esh: sha256sum: {}: improperly formatted checksum line\n",
+                    manifest_str
+                )
+                .as_bytes(),
+            );
+            all_ok = false;
+            continue;
+        }
+
+        let path = resolve_path(ctx, filename);
+        let actual = match fs::read(&path) {
+            Ok(bytes) => {
+                let mut hasher = Sha256::new();
+                hasher.update(bytes);
+                hex_encode(&hasher.finalize())
+            }
+            Err(error) => {
+                ctx.write_stderr(format!("esh: sha256sum: {}: {}\n", filename, error).as_bytes());
+                all_ok = false;
+                continue;
+            }
+        };
+
+        if actual.eq_ignore_ascii_case(expected) {
+            ctx.write_stdout(format!("{}: OK\n", filename).as_bytes());
+        } else {
+            ctx.write_stdout(format!("{}: FAILED\n", filename).as_bytes());
+            all_ok = false;
+        }
+    }
+
+    if all_ok { Ok(0) } else { Ok(1) }
 }
 
 pub fn base64<'a>(
