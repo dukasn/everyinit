@@ -77,13 +77,12 @@ assert [ "$(head -c 2 "$DIRECTORY/esh-v${VERSION}-${TARGET}.tar.gz" | base64)" =
 
 cd "$DIRECTORY"
 for FILE in "${FILES[@]}"; do
-  if test "$FILE" != SHA256SUMS; then
-    if test "$FILE" != SHA256SUMS.sig; then
-      if test "$FILE" != release-key.pub; then
-        assert "grep -Fq '  $FILE' SHA256SUMS" -- "artifact $FILE is missing from SHA256SUMS"
-      fi
-    fi
-  fi
+  case "$FILE" in
+    SHA256SUMS|SHA256SUMS.sig|release-key.pub)
+      continue
+      ;;
+  esac
+  assert "grep -Fq '  $FILE' SHA256SUMS" -- "artifact $FILE is missing from SHA256SUMS"
 done
 sha256sum -c SHA256SUMS
 crypto --verify --pubkey release-key.pub --sig SHA256SUMS.sig SHA256SUMS
