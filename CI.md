@@ -30,6 +30,8 @@ supported.
   Ed25519 signatures (`SHA256SUMS.sig`), then uploaded as workflow artifacts
   for immediate testing. Native package verification accepts a single positive
   revision for each package and format, and rejects ambiguous matches.
+  Staging clears the shared archive directory before any release package is
+  written, including the VS Code extension.
 - Scheduled CI runs only the Linux process-supervision soak suite. A manual
   dispatch can include it alongside full validation with `run_soak`.
 - The existing `Workspace tests`, `Binary E2E (Linux)`, `Formatting, Clippy,

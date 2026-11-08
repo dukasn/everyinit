@@ -279,6 +279,8 @@ tasks:
     stage: Publish
     description: "Package Everyinit VS Code extension for release"
     env: [RELEASE_VERSION]
+    # Staging clears the shared archive directory before any package is written.
+    needs: [release:release-stage]
     steps:
       - run: npm --prefix editors/vscode run package
       - run: mkdir -p target/release-archives

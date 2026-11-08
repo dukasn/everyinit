@@ -153,6 +153,34 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     );
 }
 
+#[test]
+fn release_package_producers_wait_for_archive_directory_cleanup() {
+    let release = flow(".evin/release.flow");
+    let tasks = &release["tasks"];
+    let sign_needs = tasks["release-sign"]["needs"].as_sequence().unwrap();
+
+    for producer in [
+        "release-archives",
+        "release-native-packages",
+        "release-vscode",
+    ] {
+        assert!(
+            tasks[producer]["needs"]
+                .as_sequence()
+                .is_some_and(|needs| needs
+                    .iter()
+                    .any(|dependency| dependency.as_str() == Some("release:release-stage"))),
+            "{producer} must wait until the archive directory is cleaned"
+        );
+        assert!(
+            sign_needs
+                .iter()
+                .any(|dependency| dependency.as_str() == Some(&format!("release:{producer}"))),
+            "signing must wait for {producer}"
+        );
+    }
+}
+
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Repo {
     dir: PathBuf,
