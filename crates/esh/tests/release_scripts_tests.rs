@@ -199,6 +199,125 @@ async fn find_merged_candidate_reports_a_single_new_release_tag() {
     );
 }
 
+#[tokio::test]
+async fn validate_candidate_accepts_the_next_annotated_release_tag() {
+    let temp = tempdir().unwrap();
+    git(temp.path(), &["init", "--quiet"]);
+    git(
+        temp.path(),
+        &["config", "user.email", "release@example.com"],
+    );
+    git(temp.path(), &["config", "user.name", "Release Test"]);
+    fs::create_dir_all(temp.path().join(".evin")).unwrap();
+
+    fs::write(temp.path().join("Cargo.toml"), "version = \"1.2.2\"\n").unwrap();
+    fs::write(
+        temp.path().join(".evin/workspace.flow"),
+        "workspace:\n  version: \"1.2.2\"\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("CHANGELOG.md"),
+        "# Changelog\n\n## [v1.2.2]\n",
+    )
+    .unwrap();
+    git(temp.path(), &["add", "."]);
+    git(temp.path(), &["commit", "--quiet", "-m", "release 1.2.2"]);
+    git(temp.path(), &["tag", "-a", "v1.2.2", "-m", "release 1.2.2"]);
+
+    fs::write(temp.path().join("base.txt"), "base\n").unwrap();
+    git(temp.path(), &["add", "base.txt"]);
+    git(temp.path(), &["commit", "--quiet", "-m", "base"]);
+    let base = git(temp.path(), &["rev-parse", "HEAD"]);
+
+    fs::write(temp.path().join("Cargo.toml"), "version = \"1.2.3\"\n").unwrap();
+    fs::write(
+        temp.path().join(".evin/workspace.flow"),
+        "workspace:\n  version: \"1.2.3\"\n",
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("CHANGELOG.md"),
+        "# Changelog\n\n## [v1.2.3]\n",
+    )
+    .unwrap();
+    git(temp.path(), &["add", "."]);
+    git(temp.path(), &["commit", "--quiet", "-m", "release 1.2.3"]);
+    git(temp.path(), &["tag", "-a", "v1.2.3", "-m", "release 1.2.3"]);
+    let candidate = git(temp.path(), &["rev-parse", "HEAD"]);
+
+    let (code, output, error) = run_script(
+        "validate-candidate.esh",
+        temp.path(),
+        &["auto", "auto", &candidate, &base],
+    )
+    .await;
+    assert_eq!(code, 0, "{error}");
+    assert_eq!(
+        output,
+        format!(
+            "{{\"tag\":\"v1.2.3\",\"version\":\"1.2.3\",\"commit\":\"{candidate}\",\"previous_tag\":\"v1.2.2\"}}\n"
+        )
+    );
+}
+
+#[tokio::test]
+async fn seed_local_mirror_uploads_each_file_to_its_local_bucket() {
+    let temp = tempdir().unwrap();
+    let mirror = temp.path().join("mirror");
+    fs::create_dir_all(mirror.join("evin/unstable/v1.2.3")).unwrap();
+    fs::create_dir_all(mirror.join("channels")).unwrap();
+    fs::write(mirror.join("evin/unstable/v1.2.3/release.json"), "release").unwrap();
+    fs::write(mirror.join("channels/canary.json"), "channel").unwrap();
+
+    let bin = temp.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let log = temp.path().join("corepack.log");
+    let corepack = bin.join("corepack");
+    fs::write(
+        &corepack,
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$SEED_LOG\"\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&corepack, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_env(
+        "PATH",
+        format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+    );
+    ctx.set_env("SEED_LOG", log.to_str().unwrap());
+    let mirror_arg = mirror.to_str().unwrap();
+    ctx.set_positional_args(vec![
+        "seed-local-mirror.esh".to_string(),
+        mirror_arg.to_string(),
+    ]);
+
+    let code = engine
+        .eval_file(
+            &repository_root().join("scripts/release/seed-local-mirror.esh"),
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "Seeded 2 objects into local R2 buckets everyinit-artifacts, everyinit-preview-artifacts\n"
+    );
+    let uploads = fs::read_to_string(log).unwrap();
+    assert!(uploads.contains("everyinit-preview-artifacts/evin/unstable/v1.2.3/release.json"));
+    assert!(uploads.contains("everyinit-artifacts/channels/canary.json"));
+    assert!(uploads.contains("--local --config infra/mirror/wrangler.toml"));
+}
+
 const RELEASE_VERSION: &str = "0.2.2";
 const RELEASE_TARGET: &str = "x86_64-unknown-linux-musl";
 

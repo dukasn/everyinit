@@ -1,0 +1,54 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+if test "$#" -eq 0; then set -- dist/mirror; fi
+CONFIG="infra/mirror/wrangler.toml"
+COUNT=0
+HAS_ARTIFACTS=false
+HAS_PREVIEW=false
+
+for ROOT; do
+  assert [ -d "$ROOT" ] "$ROOT is missing; generate release metadata before seeding local R2"
+  for FILE in $(glob "$ROOT/**"); do
+    if test -f "$FILE"; then
+      KEY=$(path -r "$FILE" "$ROOT")
+      PREVIEW=false
+      case "$KEY" in
+        */unstable/*|channels/unstable.json)
+          PREVIEW=true
+          ;;
+      esac
+      if test "$PREVIEW" = true; then
+        BUCKET="everyinit-preview-artifacts"
+        HAS_PREVIEW=true
+      else
+        BUCKET="everyinit-artifacts"
+        HAS_ARTIFACTS=true
+      fi
+      corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE" --local --config "$CONFIG"
+      COUNT=$((COUNT + 1))
+    fi
+  done
+done
+
+assert [ "$COUNT" -gt 0 ] "No mirror objects were found; generate release metadata before seeding local R2"
+BUCKETS=""
+if test "$HAS_ARTIFACTS" = true; then BUCKETS="everyinit-artifacts"; fi
+if test "$HAS_PREVIEW" = true; then
+  if test -n "$BUCKETS"; then BUCKETS="$BUCKETS, everyinit-preview-artifacts"; else BUCKETS="everyinit-preview-artifacts"; fi
+fi
+echo "Seeded $COUNT objects into local R2 buckets $BUCKETS"

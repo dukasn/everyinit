@@ -321,7 +321,7 @@ tasks:
     description: "Validate a tagged release candidate before it can merge"
     env: [RELEASE_BASE_SHA, RELEASE_COMMIT, RELEASE_TAG, RELEASE_VERSION]
     steps:
-      - run: node scripts/release/validate-candidate.mjs "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
+      - run: cargo run --locked -p esh -- scripts/release/validate-candidate.esh "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
 
   package-state:
     stage: Publish

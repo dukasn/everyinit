@@ -1,0 +1,67 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -ge 4 ] "usage: validate-candidate.esh <tag> <version> <commit> <base-commit> [previous-tags-base]"
+assert [ "$#" -le 5 ] "usage: validate-candidate.esh <tag> <version> <commit> <base-commit> [previous-tags-base]"
+REQUESTED_TAG="$1"
+REQUESTED_VERSION="$2"
+EXPECTED_COMMIT="$3"
+BASE_COMMIT="$4"
+PREVIOUS_TAGS_BASE="${5:-$BASE_COMMIT}"
+
+if test "$BASE_COMMIT" != "$EXPECTED_COMMIT"; then
+  assert "git merge-base --is-ancestor '$BASE_COMMIT' '$EXPECTED_COMMIT'" -- "candidate commit must include the target branch history"
+fi
+
+WORKSPACE_VERSION=$(git show "$EXPECTED_COMMIT:.evin/workspace.flow" | grep -E '^[[:space:]]+version:[[:space:]]*"' | head -n 1 | cut -d '"' -f 2)
+CARGO_VERSION=$(git show "$EXPECTED_COMMIT:Cargo.toml" | grep -E '^version[[:space:]]*=' | head -n 1 | cut -d '"' -f 2)
+VERSION="$REQUESTED_VERSION"
+if test "$VERSION" = auto; then VERSION="$WORKSPACE_VERSION"; fi
+TAG="$REQUESTED_TAG"
+if test "$TAG" = auto; then TAG="v$VERSION"; fi
+
+assert [ -n "$VERSION" ] "workspace release version could not be read from candidate commit"
+assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "invalid semantic version $VERSION"
+assert "echo '$TAG' | grep -Eq '^v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "candidate tag must be a supported release tag"
+assert [ "$TAG" = "v$VERSION" ] "candidate tag must be the v-prefixed workspace version"
+assert "git cat-file -t 'refs/tags/$TAG' | grep -Eq '^tag$'" -- "$TAG must be an annotated Git tag"
+TAGGED_COMMIT=$(git rev-parse "${TAG}^{commit}")
+assert [ "$TAGGED_COMMIT" = "$EXPECTED_COMMIT" ] "$TAG points to $TAGGED_COMMIT, expected candidate commit $EXPECTED_COMMIT"
+assert [ "$WORKSPACE_VERSION" = "$VERSION" ] "workspace version $WORKSPACE_VERSION does not match tag version $VERSION"
+assert [ "$CARGO_VERSION" = "$VERSION" ] "Cargo workspace version $CARGO_VERSION does not match $VERSION"
+assert "git show '$EXPECTED_COMMIT:CHANGELOG.md' | grep -Eq '^# Changelog[[:space:]]*$'" -- "candidate changelog is missing the root Changelog heading"
+assert "git show '$EXPECTED_COMMIT:CHANGELOG.md' | grep -Eq '^## \\[v$VERSION\\]$'" -- "candidate changelog is missing the heading for v$VERSION"
+
+PREVIOUS_TAG=""
+for CANDIDATE in $(git tag --list 'v*' --merged "$PREVIOUS_TAGS_BASE"); do
+  if echo "$CANDIDATE" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+    if test "$CANDIDATE" != "$TAG"; then
+      if test -z "$PREVIOUS_TAG"; then
+        PREVIOUS_TAG="$CANDIDATE"
+      else
+        if semver -c "${CANDIDATE#v}" '>' "${PREVIOUS_TAG#v}"; then PREVIOUS_TAG="$CANDIDATE"; fi
+      fi
+    fi
+  fi
+done
+if test -n "$PREVIOUS_TAG"; then
+  assert "semver -c '$VERSION' '>' '${PREVIOUS_TAG#v}'" -- "$TAG must advance beyond previous release $PREVIOUS_TAG"
+fi
+
+if test -n "$PREVIOUS_TAG"; then PREVIOUS_TAG_JSON="\"$PREVIOUS_TAG\""; else PREVIOUS_TAG_JSON=null; fi
+echo "{\"tag\":\"$TAG\",\"version\":\"$VERSION\",\"commit\":\"$TAGGED_COMMIT\",\"previous_tag\":$PREVIOUS_TAG_JSON}"
+if test -n "$GITHUB_OUTPUT"; then printf 'tag=%s\nversion=%s\ncommit=%s\nprevious_tag=%s\n' "$TAG" "$VERSION" "$TAGGED_COMMIT" "$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"; fi
