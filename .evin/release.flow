@@ -14,7 +14,7 @@ tasks:
     stage: Publish
     description: "Record repository status before generating the release rehearsal"
     steps:
-      - run: node scripts/release/verify-rehearsal-clean.mjs --snapshot
+      - run: cargo run --locked -p esh -- scripts/release/verify-rehearsal-clean.esh --snapshot
 
   changelog-rehearsal:
     stage: Publish
@@ -26,7 +26,7 @@ tasks:
         with:
           path: target/release-rehearsal/CHANGELOG.md
           version: "${env.RELEASE_VERSION}"
-      - run: node scripts/release/verify-changelog.mjs target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/verify-changelog.esh target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
 
   distribution-rehearsal:
     stage: Publish
@@ -38,7 +38,7 @@ tasks:
       - esh:package:distribution-verify
       - vscode:package:distribution-verify
     steps:
-      - run: node scripts/release/verify-rehearsal-clean.mjs
+      - run: cargo run --locked -p esh -- scripts/release/verify-rehearsal-clean.esh
 
   bump:
     stage: Publish

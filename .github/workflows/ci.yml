@@ -69,7 +69,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
       - name: Resolve and verify workspace version
         run: |
-          version=$(node scripts/release/workspace-version.mjs)
+          version=$(cargo run --locked -p esh -- scripts/release/workspace-version.esh)
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
       - name: Rehearse changelog and every package format without publishing
         run: cargo evin-dev run release:distribution-rehearsal

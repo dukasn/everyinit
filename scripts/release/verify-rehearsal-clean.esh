@@ -1,0 +1,38 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+SNAPSHOT="target/release-rehearsal/source-status.before"
+CURRENT="target/release-rehearsal/source-status.after"
+
+if test "$1" = "--snapshot"; then
+  assert [ "$#" -eq 1 ] "usage: verify-rehearsal-clean.esh [--snapshot]"
+  mkdir -p target/release-rehearsal
+  git status --porcelain > "$SNAPSHOT"
+  echo "Captured source status before distribution rehearsal"
+  exit 0
+fi
+
+assert [ "$#" -eq 0 ] "usage: verify-rehearsal-clean.esh [--snapshot]"
+assert [ -f "$SNAPSHOT" ] "missing distribution rehearsal source-status snapshot"
+git status --porcelain > "$CURRENT"
+if diff "$SNAPSHOT" "$CURRENT"; then
+  rm "$CURRENT"
+  echo "Distribution rehearsal left repository files unchanged"
+else
+  echo "distribution rehearsal changed repository files" >&2
+  exit 1
+fi

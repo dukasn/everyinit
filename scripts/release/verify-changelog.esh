@@ -1,0 +1,31 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -eq 2 ] "usage: verify-changelog.esh <generated-changelog> <version>"
+CHANGELOG="$1"
+VERSION="$2"
+
+assert [ -f "$CHANGELOG" ] "generated changelog is missing: $CHANGELOG"
+assert "grep -Eq '^# Changelog\s*$' '$CHANGELOG'" -- "${CHANGELOG} is missing the root Changelog heading"
+if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+  echo "release version is not supported: $VERSION" >&2
+  exit 1
+fi
+ESCAPED_VERSION=$(str -r . '\.' "$VERSION")
+assert "grep -Eq '^## \[v${ESCAPED_VERSION}\]$' '$CHANGELOG'" -- "${CHANGELOG} is missing the generated section for v${VERSION}"
+
+echo "Verified generated changelog section for v$VERSION"
