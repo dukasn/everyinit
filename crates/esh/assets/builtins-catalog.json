@@ -103,6 +103,16 @@
       "hover_plaintext": "cp [-r] <source...> <destination>\n\ncp (cp): Copy files and directories\n\nCopies files or directories from source to destination.\n\nOptions\n\n- -r, -R: Recursive copy for directory trees.\n\nExit Status\n\n- 0: Files copied successfully.\n- 1: Copy failure.",
       "terminal_ansi": "\u001b[1;36mcp [-r] <source...> <destination>\u001b[0m\n\n\u001b[1mcp\u001b[0m (cp): Copy files and directories\n\nCopies files or directories from source to destination.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-r\u001b[0m, \u001b[33m-R\u001b[0m: Recursive copy for directory trees.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Files copied successfully.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Copy failure."
     },
+    "crypto": {
+      "name": "crypto",
+      "synopsis": "crypto verify --pubkey <key.pem> --sig <signature> <file>",
+      "summary": "Verify Ed25519 signatures",
+      "category": "crypto",
+      "handler": "builtins::crypto",
+      "hover_markdown": "```esh\ncrypto verify --pubkey <key.pem> --sig <signature> <file>\n```\n\n**crypto** (`crypto`): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\n### Exit Status\n\n* `0`: Signature is valid.\n* `1`: Signature is invalid or an input cannot be read.\n* `2`: Invalid invocation.",
+      "hover_plaintext": "crypto verify --pubkey <key.pem> --sig <signature> <file>\n\ncrypto (crypto): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\nExit Status\n\n- 0: Signature is valid.\n- 1: Signature is invalid or an input cannot be read.\n- 2: Invalid invocation.",
+      "terminal_ansi": "\u001b[1;36mcrypto verify --pubkey <key.pem> --sig <signature> <file>\u001b[0m\n\n\u001b[1mcrypto\u001b[0m (crypto): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Signature is valid.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Signature is invalid or an input cannot be read.\n\u001b[36m•\u001b[0m \u001b[33m2\u001b[0m: Invalid invocation."
+    },
     "csv": {
       "name": "csv",
       "synopsis": "csv <parse|format> [args...]",

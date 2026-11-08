@@ -17,6 +17,7 @@ use crate::runtime::context::ExecutionContext;
 use crate::runtime::traits::BoxFuture;
 use base64::prelude::*;
 use md5::Md5;
+use ring::signature::{ED25519, UnparsedPublicKey};
 use sha2::digest::Digest;
 use sha2::{Sha256, Sha512};
 use std::fs;
@@ -268,6 +269,98 @@ fn hex_encode(bytes: &[u8]) -> String {
         s.push_str(&format!("{:02x}", b));
     }
     s
+}
+
+pub fn crypto<'a>(
+    args: &'a [String],
+    ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async move {
+        if args.first().map(String::as_str) != Some("verify") {
+            ctx.write_stderr(
+                b"esh: crypto: usage: crypto verify --pubkey <key.pem> --sig <signature> <file>\n",
+            );
+            return Ok(2);
+        }
+        let mut public_key = None;
+        let mut signature = None;
+        let mut file = None;
+        let mut iter = args[1..].iter();
+        while let Some(arg) = iter.next() {
+            if arg == "--pubkey" {
+                public_key = iter.next().map(String::as_str);
+            } else if arg == "--sig" {
+                signature = iter.next().map(String::as_str);
+            } else if !arg.starts_with('-') && file.is_none() {
+                file = Some(arg.as_str());
+            } else {
+                ctx.write_stderr(b"esh: crypto: usage: crypto verify --pubkey <key.pem> --sig <signature> <file>\n");
+                return Ok(2);
+            }
+        }
+        let (Some(public_key), Some(signature), Some(file)) = (public_key, signature, file) else {
+            ctx.write_stderr(
+                b"esh: crypto: usage: crypto verify --pubkey <key.pem> --sig <signature> <file>\n",
+            );
+            return Ok(2);
+        };
+        let key_pem = match fs::read_to_string(resolve_path(ctx, public_key)) {
+            Ok(value) => value,
+            Err(error) => {
+                ctx.write_stderr(format!("esh: crypto: {}: {}\n", public_key, error).as_bytes());
+                return Ok(1);
+            }
+        };
+        let key = match parse_ed25519_pem(&key_pem) {
+            Ok(key) => key,
+            Err(message) => {
+                ctx.write_stderr(format!("esh: crypto: {}: {}\n", public_key, message).as_bytes());
+                return Ok(1);
+            }
+        };
+        let signature = match fs::read(resolve_path(ctx, signature)) {
+            Ok(value) => value,
+            Err(error) => {
+                ctx.write_stderr(format!("esh: crypto: {}\n", error).as_bytes());
+                return Ok(1);
+            }
+        };
+        let message = match fs::read(resolve_path(ctx, file)) {
+            Ok(value) => value,
+            Err(error) => {
+                ctx.write_stderr(format!("esh: crypto: {}\n", error).as_bytes());
+                return Ok(1);
+            }
+        };
+        if UnparsedPublicKey::new(&ED25519, key)
+            .verify(&message, &signature)
+            .is_ok()
+        {
+            Ok(0)
+        } else {
+            ctx.write_stderr(b"esh: crypto: Ed25519 signature verification failed\n");
+            Ok(1)
+        }
+    })
+}
+
+fn parse_ed25519_pem(pem: &str) -> Result<[u8; 32], &'static str> {
+    let encoded: String = pem
+        .lines()
+        .filter(|line| !line.starts_with("-----"))
+        .collect();
+    let der = BASE64_STANDARD
+        .decode(encoded)
+        .map_err(|_| "invalid PEM encoding")?;
+    const PREFIX: [u8; 12] = [
+        0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+    ];
+    if der.len() != PREFIX.len() + 32 || !der.starts_with(&PREFIX) {
+        return Err("expected an Ed25519 SubjectPublicKeyInfo PEM key");
+    }
+    let mut key = [0; 32];
+    key.copy_from_slice(&der[PREFIX.len()..]);
+    Ok(key)
 }
 
 fn check_sha256_manifest(manifest_str: &str, ctx: &mut ExecutionContext) -> Result<i32, ExecError> {

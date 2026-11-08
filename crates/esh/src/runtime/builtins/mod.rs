@@ -34,7 +34,7 @@ pub mod test_tool;
 pub mod text;
 
 pub use archive::{archive, tar, unarchive, unzip, zip};
-pub use crypto::{base64, hash, md5sum, sha256sum};
+pub use crypto::{base64, crypto, hash, md5sum, sha256sum};
 pub use data::{json, yaml};
 pub use date_tool::date;
 pub use diff_tool::diff;

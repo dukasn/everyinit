@@ -17,6 +17,41 @@ use std::fs;
 use tempfile::tempdir;
 
 #[tokio::test]
+async fn crypto_verify_accepts_the_rfc8032_ed25519_vector() {
+    let tmp = tempdir().unwrap();
+    fs::write(
+        tmp.path().join("key.pem"),
+        "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=\n-----END PUBLIC KEY-----\n",
+    )
+    .unwrap();
+    fs::write(
+        tmp.path().join("signature"),
+        [
+            0xe5, 0x56, 0x43, 0x00, 0xc3, 0x60, 0xac, 0x72, 0x90, 0x86, 0xe2, 0xcc, 0x80, 0x6e,
+            0x82, 0x8a, 0x84, 0x87, 0x7f, 0x1e, 0xb8, 0xe5, 0xd9, 0x74, 0xd8, 0x73, 0xe0, 0x65,
+            0x22, 0x49, 0x01, 0x55, 0x5f, 0xb8, 0x82, 0x15, 0x90, 0xa3, 0x3b, 0xac, 0xc6, 0x1e,
+            0x39, 0x70, 0x1c, 0xf9, 0xb4, 0x6b, 0xd2, 0x5b, 0xf5, 0xf0, 0x59, 0x5b, 0xbe, 0x24,
+            0x65, 0x51, 0x41, 0x43, 0x8e, 0x7a, 0x10, 0x0b,
+        ],
+    )
+    .unwrap();
+    fs::write(tmp.path().join("message"), []).unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+    assert_eq!(
+        engine
+            .eval_str(
+                "crypto verify --pubkey key.pem --sig signature message",
+                &mut ctx
+            )
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
 async fn test_hash_and_base64() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
