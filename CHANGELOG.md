@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.3]
+
+### Bug Fixes
+
+- **ci:** stage release archives before packaging extension (6bab83a)
+- **ci:** verify native packages with resolved revisions (f4f5f5f)
+- **flow:** preserve quoted scalar strings and bind package-state release (ebcd2d5)
+
+### Features
+
+- **ci:** build and sign deb, arch, and vscode extension release packages (1916c7a)
+
 ## [v0.2.2]
 
 ### Features
