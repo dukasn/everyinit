@@ -35,6 +35,61 @@ async fn test_for_loop_explicit_words() {
 }
 
 #[tokio::test]
+async fn test_for_loop_splits_standalone_command_substitution_by_line() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let code = engine
+        .eval_str(
+            r#"
+                RESULT=""
+                for item in $(printf 'alpha\nbeta\ngamma\n'); do
+                    RESULT="${RESULT}:${item}"
+                done
+                echo "$RESULT"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap().trim(),
+        ":alpha:beta:gamma"
+    );
+}
+
+#[tokio::test]
+async fn test_for_loop_expands_array_values_as_individual_items() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let code = engine
+        .eval_str(
+            r#"
+                FRUIT=(apple banana cherry)
+                RESULT=""
+                for fruit in "${FRUIT[@]}"; do
+                    RESULT="${RESULT}:${fruit}"
+                done
+                echo "$RESULT"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap().trim(),
+        ":apple:banana:cherry"
+    );
+}
+
+#[tokio::test]
 async fn test_for_loop_default_positional_params() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();

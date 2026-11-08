@@ -105,13 +105,13 @@
     },
     "crypto": {
       "name": "crypto",
-      "synopsis": "crypto verify --pubkey <key.pem> --sig <signature> <file>",
+      "synopsis": "crypto --verify --pubkey <key.pem> --sig <signature> <file>",
       "summary": "Verify Ed25519 signatures",
       "category": "crypto",
       "handler": "builtins::crypto",
-      "hover_markdown": "```esh\ncrypto verify --pubkey <key.pem> --sig <signature> <file>\n```\n\n**crypto** (`crypto`): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\n### Exit Status\n\n* `0`: Signature is valid.\n* `1`: Signature is invalid or an input cannot be read.\n* `2`: Invalid invocation.",
-      "hover_plaintext": "crypto verify --pubkey <key.pem> --sig <signature> <file>\n\ncrypto (crypto): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\nExit Status\n\n- 0: Signature is valid.\n- 1: Signature is invalid or an input cannot be read.\n- 2: Invalid invocation.",
-      "terminal_ansi": "\u001b[1;36mcrypto verify --pubkey <key.pem> --sig <signature> <file>\u001b[0m\n\n\u001b[1mcrypto\u001b[0m (crypto): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Signature is valid.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Signature is invalid or an input cannot be read.\n\u001b[36m•\u001b[0m \u001b[33m2\u001b[0m: Invalid invocation."
+      "hover_markdown": "```esh\ncrypto --verify --pubkey <key.pem> --sig <signature> <file>\n```\n\n**crypto** (`crypto`): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\n### Exit Status\n\n* `0`: Signature is valid.\n* `1`: Signature is invalid or an input cannot be read.\n* `2`: Invalid invocation.",
+      "hover_plaintext": "crypto --verify --pubkey <key.pem> --sig <signature> <file>\n\ncrypto (crypto): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\nExit Status\n\n- 0: Signature is valid.\n- 1: Signature is invalid or an input cannot be read.\n- 2: Invalid invocation.",
+      "terminal_ansi": "\u001b[1;36mcrypto --verify --pubkey <key.pem> --sig <signature> <file>\u001b[0m\n\n\u001b[1mcrypto\u001b[0m (crypto): Verify Ed25519 signatures\n\nVerifies a raw Ed25519 signature with an Ed25519 SubjectPublicKeyInfo PEM public key.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: Signature is valid.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Signature is invalid or an input cannot be read.\n\u001b[36m•\u001b[0m \u001b[33m2\u001b[0m: Invalid invocation."
     },
     "csv": {
       "name": "csv",
@@ -275,13 +275,13 @@
     },
     "http": {
       "name": "http",
-      "synopsis": "http <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]",
+      "synopsis": "http [-X method] [-H header] [-d body] [-o out] <url>",
       "summary": "In-process HTTP client",
       "category": "net",
       "handler": "builtins::http",
-      "hover_markdown": "```esh\nhttp <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\n```\n\n**http** (`http`): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n### Options\n\n* `-H <key:value>`: Request header.\n* `-d <data>`: Request body payload.\n* `-o <file>`: Destination file.\n\n### Exit Status\n\n* `0`: HTTP 2xx response.\n* `1`: Network error or HTTP error status.",
-      "hover_plaintext": "http <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\n\nhttp (http): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\nOptions\n\n- -H <key:value>: Request header.\n- -d <data>: Request body payload.\n- -o <file>: Destination file.\n\nExit Status\n\n- 0: HTTP 2xx response.\n- 1: Network error or HTTP error status.",
-      "terminal_ansi": "\u001b[1;36mhttp <GET|POST|PUT|DELETE> <url> [-H header] [-d body] [-o out]\u001b[0m\n\n\u001b[1mhttp\u001b[0m (http): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-H <key:value>\u001b[0m: Request header.\n\u001b[36m•\u001b[0m \u001b[33m-d <data>\u001b[0m: Request body payload.\n\u001b[36m•\u001b[0m \u001b[33m-o <file>\u001b[0m: Destination file.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: HTTP 2xx response.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Network error or HTTP error status."
+      "hover_markdown": "```esh\nhttp [-X method] [-H header] [-d body] [-o out] <url>\n```\n\n**http** (`http`): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n### Options\n\n* `-X`, `--request <method>`: HTTP method, defaulting to `GET`.\n* `-H <key:value>`: Request header.\n* `-d <data>`: Request body payload.\n* `-o <file>`: Destination file.\n\n### Exit Status\n\n* `0`: HTTP 2xx response.\n* `1`: Network error or HTTP error status.",
+      "hover_plaintext": "http [-X method] [-H header] [-d body] [-o out] <url>\n\nhttp (http): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\nOptions\n\n- -X, --request <method>: HTTP method, defaulting to GET.\n- -H <key:value>: Request header.\n- -d <data>: Request body payload.\n- -o <file>: Destination file.\n\nExit Status\n\n- 0: HTTP 2xx response.\n- 1: Network error or HTTP error status.",
+      "terminal_ansi": "\u001b[1;36mhttp [-X method] [-H header] [-d body] [-o out] <url>\u001b[0m\n\n\u001b[1mhttp\u001b[0m (http): In-process HTTP client\n\nPerforms HTTP requests directly in-process without requiring external curl.\n\n\u001b[1;33mOptions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m-X\u001b[0m, \u001b[33m--request <method>\u001b[0m: HTTP method, defaulting to \u001b[33mGET\u001b[0m.\n\u001b[36m•\u001b[0m \u001b[33m-H <key:value>\u001b[0m: Request header.\n\u001b[36m•\u001b[0m \u001b[33m-d <data>\u001b[0m: Request body payload.\n\u001b[36m•\u001b[0m \u001b[33m-o <file>\u001b[0m: Destination file.\n\n\u001b[1;33mExit Status\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33m0\u001b[0m: HTTP 2xx response.\n\u001b[36m•\u001b[0m \u001b[33m1\u001b[0m: Network error or HTTP error status."
     },
     "json": {
       "name": "json",

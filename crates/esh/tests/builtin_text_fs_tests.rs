@@ -48,6 +48,43 @@ async fn test_pwd_cat_head_tail() {
 }
 
 #[tokio::test]
+async fn head_reads_a_binary_prefix() {
+    let tmp = tempdir().unwrap();
+    fs::write(
+        tmp.path().join("binary.bin"),
+        [0x28_u8, 0xb5, 0x2f, 0xfd, 4, 5],
+    )
+    .unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let code = engine
+        .eval_str("head -c 4 binary.bin", &mut ctx)
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        ctx.get_captured_stdout_bytes().unwrap(),
+        vec![0x28, 0xb5, 0x2f, 0xfd]
+    );
+
+    let mut pipeline_ctx = ExecutionContext::new();
+    pipeline_ctx.enable_capture();
+    pipeline_ctx.set_cwd(tmp.path()).unwrap();
+    let code = engine
+        .eval_str("head -c 4 binary.bin | base64", &mut pipeline_ctx)
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(pipeline_ctx.get_captured_stdout().unwrap(), "KLUv/Q==\n");
+}
+
+#[tokio::test]
 async fn test_grep_and_glob() {
     let tmp = tempdir().unwrap();
     let sub = tmp.path().join("src");

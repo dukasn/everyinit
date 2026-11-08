@@ -367,7 +367,8 @@ pub fn head<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        let mut count = 10usize;
+        let mut line_count = 10usize;
+        let mut byte_count = None;
         let mut files = Vec::new();
 
         let mut iter = args.iter().peekable();
@@ -376,16 +377,49 @@ pub fn head<'a>(
                 if let Some(val) = iter.next()
                     && let Ok(n) = val.parse::<usize>()
                 {
-                    count = n;
+                    line_count = n;
+                }
+            } else if arg == "-c" || arg == "--bytes" {
+                if let Some(val) = iter.next()
+                    && let Ok(n) = val.parse::<usize>()
+                {
+                    byte_count = Some(n);
                 }
             } else if !arg.starts_with('-') {
                 files.push(arg.as_str());
             }
         }
 
+        if let Some(count) = byte_count {
+            let write_prefix = |data: &[u8], ctx: &mut ExecutionContext| {
+                ctx.write_stdout(&data[..data.len().min(count)]);
+            };
+
+            if files.is_empty() {
+                if let Some(data) = ctx.take_stdin() {
+                    write_prefix(&data, ctx);
+                }
+                return Ok(0);
+            }
+
+            for path_str in files {
+                let path = resolve_path(ctx, path_str);
+                match fs::read(&path) {
+                    Ok(data) => write_prefix(&data, ctx),
+                    Err(e) => {
+                        ctx.write_stderr(
+                            format!("esh: head: cannot read '{}': {}\n", path_str, e).as_bytes(),
+                        );
+                        return Ok(1);
+                    }
+                }
+            }
+            return Ok(0);
+        }
+
         let process_text = |text: &str, ctx: &mut ExecutionContext| {
             for (idx, line) in text.lines().enumerate() {
-                if idx >= count {
+                if idx >= line_count {
                     break;
                 }
                 ctx.write_stdout(format!("{}\n", line).as_bytes());

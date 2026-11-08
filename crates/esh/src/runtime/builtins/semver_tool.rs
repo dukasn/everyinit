@@ -28,7 +28,7 @@ pub fn semver<'a>(
         }
 
         let first = args[0].as_str();
-        if first == "-v" || first == "--validate" || first == "validate" {
+        if first == "-v" || first == "--validate" {
             if args.len() < 2 {
                 ctx.write_stderr(b"esh: semver: missing version argument\n");
                 return Ok(1);
@@ -39,7 +39,7 @@ pub fn semver<'a>(
             } else {
                 Ok(1)
             }
-        } else if first == "-c" || first == "--compare" || first == "compare" {
+        } else if first == "-c" || first == "--compare" {
             if args.len() < 4 {
                 ctx.write_stderr(b"esh: semver -c: usage: semver -c <ver1> <op> <ver2>\n");
                 return Ok(1);
@@ -73,7 +73,7 @@ pub fn semver<'a>(
             };
 
             if matched { Ok(0) } else { Ok(1) }
-        } else if first == "-b" || first == "--bump" || first == "bump" {
+        } else if first == "-b" || first == "--bump" {
             if args.len() < 3 {
                 ctx.write_stderr(
                     b"esh: semver -b: usage: semver -b <patch|minor|major> <version>\n",
@@ -126,7 +126,7 @@ pub fn semver<'a>(
 
             ctx.write_stdout(format!("{}\n", v).as_bytes());
             Ok(0)
-        } else if first == "-g" || first == "--get" || first == "get" {
+        } else if first == "-g" || first == "--get" {
             if args.len() < 3 {
                 ctx.write_stderr(
                     b"esh: semver -g: usage: semver -g <major|minor|patch|pre|build> <version>\n",

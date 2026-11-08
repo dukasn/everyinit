@@ -1,0 +1,35 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+assert [ "$#" -eq 2 ] "usage: find-merged-candidate.esh <before-sha> <after-sha>"
+BEFORE="$1"
+AFTER="$2"
+if echo "$BEFORE" | grep -Eq '^0+$'; then COMMITS=$(git rev-list "$AFTER"); else COMMITS=$(git rev-list "$AFTER" "^$BEFORE"); fi
+TAG=""
+COMMIT=""
+for CANDIDATE in $(git tag --list 'v*'); do
+  if echo "$CANDIDATE" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+    TARGET=$(git rev-parse "${CANDIDATE}^{commit}")
+    if echo "$COMMITS" | grep -Eq "^${TARGET}$"; then
+      assert [ -z "$TAG" ] "main update contains multiple release tags: $TAG, $CANDIDATE"
+      TAG="$CANDIDATE"
+      COMMIT="$TARGET"
+    fi
+  fi
+done
+if test -n "$TAG"; then FOUND=true; VERSION="${TAG#v}"; else FOUND=false; VERSION=""; fi
+echo "{\"found\":$FOUND,\"tag\":\"$TAG\",\"version\":\"$VERSION\",\"commit\":\"$COMMIT\"}"
+if test -n "$GITHUB_OUTPUT"; then printf 'found=%s\ntag=%s\nversion=%s\ncommit=%s\n' "$FOUND" "$TAG" "$VERSION" "$COMMIT" >> "$GITHUB_OUTPUT"; fi

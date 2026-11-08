@@ -182,11 +182,11 @@ impl ExecutionStage {
                         join_res.map_err(|e| ExecError::JoinError(e.to_string()))?;
 
                     // Merge child outputs
-                    if let Some(out) = child_ctx.get_captured_stdout() {
-                        ctx.write_stdout(out.as_bytes());
+                    if let Some(out) = child_ctx.get_captured_stdout_bytes() {
+                        ctx.write_stdout(&out);
                     }
-                    if let Some(err) = child_ctx.get_captured_stderr() {
-                        ctx.write_stderr(err.as_bytes());
+                    if let Some(err) = child_ctx.get_captured_stderr_bytes() {
+                        ctx.write_stderr(&err);
                     }
 
                     let exit_code = res?;
@@ -387,8 +387,16 @@ impl ExecutionStage {
                 let items: Vec<String> = if let Some(w_list) = words {
                     let mut expanded = Vec::new();
                     for w in w_list {
+                        if let Some(items) = expand_for_array(w, ctx) {
+                            expanded.extend(items);
+                            continue;
+                        }
                         let val = expand_word(w, ctx).await?;
-                        expanded.push(val);
+                        if matches!(w.parts.as_slice(), [PlanWordPart::CommandSub(_)]) {
+                            expanded.extend(val.lines().map(str::to_owned));
+                        } else {
+                            expanded.push(val);
+                        }
                     }
                     expanded
                 } else {
@@ -558,13 +566,13 @@ async fn execute_pipeline(
         statuses.push(status);
 
         if !is_last {
-            current_input = step_ctx.get_captured_stdout().map(|s| s.into_bytes());
+            current_input = step_ctx.get_captured_stdout_bytes();
         } else {
-            if let Some(out) = step_ctx.get_captured_stdout() {
-                ctx.write_stdout(out.as_bytes());
+            if let Some(out) = step_ctx.get_captured_stdout_bytes() {
+                ctx.write_stdout(&out);
             }
-            if let Some(err) = step_ctx.get_captured_stderr() {
-                ctx.write_stderr(err.as_bytes());
+            if let Some(err) = step_ctx.get_captured_stderr_bytes() {
+                ctx.write_stderr(&err);
             }
             // Propagate lastpipe state (scopes, env vars, interactive events)
             ctx.adopt_lastpipe_state(step_ctx);
@@ -580,6 +588,21 @@ async fn execute_pipeline(
     }
 
     Ok(0)
+}
+
+fn expand_for_array(word: &PlanWord, ctx: &ExecutionContext) -> Option<Vec<String>> {
+    let expression = match word.parts.as_slice() {
+        [PlanWordPart::Variable(expression)] => expression.as_str(),
+        [PlanWordPart::DoubleQuoted(content)] => content
+            .strip_prefix("${")
+            .and_then(|content| content.strip_suffix('}'))?,
+        _ => return None,
+    };
+    let name = expression.strip_suffix("[@]")?;
+    ctx.get_shell_val(name).map(|value| match value {
+        crate::runtime::context::ShellValue::Array(items) => items.clone(),
+        _ => vec![value.get_subscript("@").unwrap_or_default()],
+    })
 }
 
 async fn execute_plan_node(node: &PlanNode, ctx: &mut ExecutionContext) -> Result<i32, ExecError> {
@@ -671,8 +694,8 @@ async fn execute_plan_node(node: &PlanNode, ctx: &mut ExecutionContext) -> Resul
         call_ctx.enable_capture();
         let res =
             dispatch_node_target(&node.target, &node.raw_name, &expanded_args, &mut call_ctx).await;
-        let out = call_ctx.get_captured_stdout().unwrap_or_default();
-        let err = call_ctx.get_captured_stderr().unwrap_or_default();
+        let out = call_ctx.get_captured_stdout_bytes().unwrap_or_default();
+        let err = call_ctx.get_captured_stderr_bytes().unwrap_or_default();
         (res, Some(out), Some(err))
     } else {
         let res = dispatch_node_target(&node.target, &node.raw_name, &expanded_args, ctx).await;
@@ -681,8 +704,8 @@ async fn execute_plan_node(node: &PlanNode, ctx: &mut ExecutionContext) -> Resul
 
     // 4. Apply output redirections
     if has_output_redirs {
-        let out_bytes = captured_out.unwrap_or_default().into_bytes();
-        let err_bytes = captured_err.unwrap_or_default().into_bytes();
+        let out_bytes = captured_out.unwrap_or_default();
+        let err_bytes = captured_err.unwrap_or_default();
 
         let mut stdout_redirected = false;
         let mut stderr_redirected = false;

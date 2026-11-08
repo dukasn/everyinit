@@ -276,9 +276,9 @@ pub fn crypto<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        if args.first().map(String::as_str) != Some("verify") {
+        if args.first().map(String::as_str) != Some("--verify") {
             ctx.write_stderr(
-                b"esh: crypto: usage: crypto verify --pubkey <key.pem> --sig <signature> <file>\n",
+                b"esh: crypto: usage: crypto --verify --pubkey <key.pem> --sig <signature> <file>\n",
             );
             return Ok(2);
         }
@@ -294,13 +294,13 @@ pub fn crypto<'a>(
             } else if !arg.starts_with('-') && file.is_none() {
                 file = Some(arg.as_str());
             } else {
-                ctx.write_stderr(b"esh: crypto: usage: crypto verify --pubkey <key.pem> --sig <signature> <file>\n");
+                ctx.write_stderr(b"esh: crypto: usage: crypto --verify --pubkey <key.pem> --sig <signature> <file>\n");
                 return Ok(2);
             }
         }
         let (Some(public_key), Some(signature), Some(file)) = (public_key, signature, file) else {
             ctx.write_stderr(
-                b"esh: crypto: usage: crypto verify --pubkey <key.pem> --sig <signature> <file>\n",
+                b"esh: crypto: usage: crypto --verify --pubkey <key.pem> --sig <signature> <file>\n",
             );
             return Ok(2);
         };
@@ -440,10 +440,8 @@ pub fn base64<'a>(
 
         let mut iter = args.iter().peekable();
         while let Some(arg) = iter.next() {
-            if arg == "-d" || arg == "-D" || arg == "--decode" || arg == "decode" {
+            if arg == "-d" || arg == "-D" || arg == "--decode" {
                 decode = true;
-            } else if arg == "encode" {
-                decode = false;
             } else if arg == "-f" || arg == "--file" {
                 if let Some(f) = iter.next() {
                     operands.push(f.as_str());

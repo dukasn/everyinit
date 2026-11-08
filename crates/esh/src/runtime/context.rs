@@ -564,10 +564,18 @@ impl ExecutionContext {
             .map(|m| String::from_utf8_lossy(&m.lock()).to_string())
     }
 
+    pub fn get_captured_stdout_bytes(&self) -> Option<Vec<u8>> {
+        self.captured_stdout.as_ref().map(|m| m.lock().clone())
+    }
+
     pub fn get_captured_stderr(&self) -> Option<String> {
         self.captured_stderr
             .as_ref()
             .map(|m| String::from_utf8_lossy(&m.lock()).to_string())
+    }
+
+    pub fn get_captured_stderr_bytes(&self) -> Option<Vec<u8>> {
+        self.captured_stderr.as_ref().map(|m| m.lock().clone())
     }
 
     pub fn write_stdout(&mut self, data: &[u8]) {

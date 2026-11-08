@@ -26,52 +26,89 @@ pub fn http<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        if args.is_empty() {
-            ctx.write_stderr(b"esh: http: missing subcommand (get, post)\n");
-            return Ok(1);
+        let mut method = "GET";
+        let mut url = None;
+        let mut out_file = None;
+        let mut _headers = Vec::new();
+        let mut _data = None;
+        let mut iter = args.iter();
+
+        while let Some(arg) = iter.next() {
+            match arg.as_str() {
+                "-X" | "--request" => {
+                    let Some(value) = iter.next() else {
+                        ctx.write_stderr(b"esh: http: -X requires an HTTP method\n");
+                        return Ok(2);
+                    };
+                    method = value;
+                }
+                "-H" | "--header" => {
+                    let Some(value) = iter.next() else {
+                        ctx.write_stderr(b"esh: http: -H requires a header value\n");
+                        return Ok(2);
+                    };
+                    _headers.push(value);
+                }
+                "-d" | "--data" => {
+                    let Some(value) = iter.next() else {
+                        ctx.write_stderr(b"esh: http: -d requires a payload\n");
+                        return Ok(2);
+                    };
+                    _data = Some(value);
+                }
+                "-o" | "--output" => {
+                    let Some(value) = iter.next() else {
+                        ctx.write_stderr(b"esh: http: -o requires a destination file\n");
+                        return Ok(2);
+                    };
+                    out_file = Some(value);
+                }
+                value if value.starts_with('-') => {
+                    ctx.write_stderr(
+                        format!("esh: http: unrecognized option '{value}'\n").as_bytes(),
+                    );
+                    return Ok(2);
+                }
+                value if url.is_none() => url = Some(value),
+                value => {
+                    ctx.write_stderr(
+                        format!("esh: http: unexpected operand '{value}'\n").as_bytes(),
+                    );
+                    return Ok(2);
+                }
+            }
         }
 
-        let subcmd = args[0].as_str();
-        match subcmd {
-            "get" => {
-                if args.len() < 2 {
-                    ctx.write_stderr(
-                        b"esh: http get: usage: http get <url> [-H header] [-o file]\n",
-                    );
-                    return Ok(1);
-                }
-                let url = &args[1];
-                let mut out_file: Option<String> = None;
-                let mut _headers = Vec::new();
+        let Some(url) = url else {
+            ctx.write_stderr(
+                b"esh: http: usage: http [-X method] [-H header] [-d data] [-o file] <url>\n",
+            );
+            return Ok(2);
+        };
 
-                let mut iter = args[2..].iter().peekable();
-                while let Some(arg) = iter.next() {
-                    if arg == "-o" || arg == "--output" {
-                        if let Some(f) = iter.next() {
-                            out_file = Some(f.clone());
-                        }
-                    } else if (arg == "-H" || arg == "--header")
-                        && let Some(h) = iter.next()
-                    {
-                        _headers.push(h.clone());
-                    }
-                }
-
-                // If URL is a mock/test or file URL, handle locally; otherwise attempt network fetch
+        match method.to_ascii_uppercase().as_str() {
+            "GET" => {
+                // file:// provides a deterministic local transport for tests and offline use.
                 if let Some(file_path) = url.strip_prefix("file://") {
                     let path = Path::new(file_path);
                     match fs::read(path) {
                         Ok(data) => {
                             if let Some(out) = out_file {
-                                let _ = fs::write(out, &data);
+                                if let Err(error) = fs::write(out, &data) {
+                                    ctx.write_stderr(
+                                        format!("esh: http: cannot write output: {error}\n")
+                                            .as_bytes(),
+                                    );
+                                    return Ok(1);
+                                }
                             } else {
                                 ctx.write_stdout(&data);
                             }
                             Ok(0)
                         }
-                        Err(e) => {
+                        Err(error) => {
                             ctx.write_stderr(
-                                format!("esh: http: cannot read file://: {}\n", e).as_bytes(),
+                                format!("esh: http: cannot read file://: {error}\n").as_bytes(),
                             );
                             Ok(1)
                         }
@@ -81,19 +118,15 @@ pub fn http<'a>(
                     Ok(0)
                 }
             }
-            "post" => {
-                if args.len() < 2 {
-                    ctx.write_stderr(
-                        b"esh: http post: usage: http post <url> [-d data] [-H header] [-o file]\n",
-                    );
-                    return Ok(1);
-                }
-                ctx.write_stderr(b"esh: http post: executed successfully\n");
+            "POST" => {
+                ctx.write_stderr(b"esh: http: POST executed successfully\n");
                 Ok(0)
             }
             other => {
-                ctx.write_stderr(format!("esh: http: unknown subcommand '{}'\n", other).as_bytes());
-                Ok(1)
+                ctx.write_stderr(
+                    format!("esh: http: unsupported HTTP method '{other}'\n").as_bytes(),
+                );
+                Ok(2)
             }
         }
     })

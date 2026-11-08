@@ -42,12 +42,25 @@ async fn crypto_verify_accepts_the_rfc8032_ed25519_vector() {
     assert_eq!(
         engine
             .eval_str(
-                "crypto verify --pubkey key.pem --sig signature message",
+                "crypto --verify --pubkey key.pem --sig signature message",
                 &mut ctx
             )
             .await
             .unwrap(),
         0
+    );
+
+    let mut legacy_ctx = ExecutionContext::new();
+    legacy_ctx.set_cwd(tmp.path()).unwrap();
+    assert_eq!(
+        engine
+            .eval_str(
+                "crypto verify --pubkey key.pem --sig signature message",
+                &mut legacy_ctx,
+            )
+            .await
+            .unwrap(),
+        2
     );
 }
 

@@ -13,7 +13,42 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use esh::{Engine, ExecutionContext};
+use std::fs;
+use tempfile::tempdir;
 use tokio::net::TcpListener;
+
+#[tokio::test]
+async fn http_uses_curl_style_request_options() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("response.txt");
+    fs::write(&source, "local response").unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let url = format!("file://{}", source.display());
+    let code = engine
+        .eval_str(&format!("http -X GET {url}"), &mut ctx)
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "local response");
+
+    let mut legacy_ctx = ExecutionContext::new();
+    legacy_ctx.enable_capture();
+    let code = engine
+        .eval_str(&format!("http get {url}"), &mut legacy_ctx)
+        .await
+        .unwrap();
+    assert_eq!(code, 2);
+    assert!(
+        legacy_ctx
+            .get_captured_stderr()
+            .unwrap()
+            .contains("unexpected operand")
+    );
+}
 
 #[tokio::test]
 async fn test_wait_port_success_and_timeout() {

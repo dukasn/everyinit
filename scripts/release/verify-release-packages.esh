@@ -1,0 +1,93 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+DIRECTORY="${1:-target/release-archives}"
+VERSION="${2:-$RELEASE_VERSION}"
+TARGET="${RELEASE_TARGET:-x86_64-unknown-linux-musl}"
+if test -n "$3"; then TARGET="$3"; fi
+assert [ -n "$VERSION" ] "usage: verify-release-packages.esh [target-dir] <version> [target]"
+assert [ -d "$DIRECTORY" ] "release artifact directory is missing: $DIRECTORY"
+ROOT=$(pwd)
+
+EVIN_DEB=""
+EVIN_DEB_COUNT=0
+for CANDIDATE in $(glob "$DIRECTORY/evin_${VERSION}-*_amd64.deb"); do
+  EVIN_DEB="$CANDIDATE"
+  EVIN_DEB_COUNT=$((EVIN_DEB_COUNT + 1))
+done
+assert [ "$EVIN_DEB_COUNT" -eq 1 ] "expected exactly one evin deb package for $VERSION"
+EVIN_DEB_NAME=$(basename "$EVIN_DEB")
+assert "echo '$EVIN_DEB_NAME' | grep -Eq '^evin_${VERSION}-[1-9][0-9]*_amd64\\.deb$'" -- "evin deb package must use a positive revision"
+
+ESH_DEB=""
+ESH_DEB_COUNT=0
+for CANDIDATE in $(glob "$DIRECTORY/esh_${VERSION}-*_amd64.deb"); do
+  ESH_DEB="$CANDIDATE"
+  ESH_DEB_COUNT=$((ESH_DEB_COUNT + 1))
+done
+assert [ "$ESH_DEB_COUNT" -eq 1 ] "expected exactly one esh deb package for $VERSION"
+ESH_DEB_NAME=$(basename "$ESH_DEB")
+assert "echo '$ESH_DEB_NAME' | grep -Eq '^esh_${VERSION}-[1-9][0-9]*_amd64\\.deb$'" -- "esh deb package must use a positive revision"
+
+EVIN_ARCH=""
+EVIN_ARCH_COUNT=0
+for CANDIDATE in $(glob "$DIRECTORY/evin-${VERSION}-*-x86_64.pkg.tar.zst"); do
+  EVIN_ARCH="$CANDIDATE"
+  EVIN_ARCH_COUNT=$((EVIN_ARCH_COUNT + 1))
+done
+assert [ "$EVIN_ARCH_COUNT" -eq 1 ] "expected exactly one evin arch package for $VERSION"
+EVIN_ARCH_NAME=$(basename "$EVIN_ARCH")
+assert "echo '$EVIN_ARCH_NAME' | grep -Eq '^evin-${VERSION}-[1-9][0-9]*-x86_64\\.pkg\\.tar\\.zst$'" -- "evin arch package must use a positive revision"
+
+ESH_ARCH=""
+ESH_ARCH_COUNT=0
+for CANDIDATE in $(glob "$DIRECTORY/esh-${VERSION}-*-x86_64.pkg.tar.zst"); do
+  ESH_ARCH="$CANDIDATE"
+  ESH_ARCH_COUNT=$((ESH_ARCH_COUNT + 1))
+done
+assert [ "$ESH_ARCH_COUNT" -eq 1 ] "expected exactly one esh arch package for $VERSION"
+ESH_ARCH_NAME=$(basename "$ESH_ARCH")
+assert "echo '$ESH_ARCH_NAME' | grep -Eq '^esh-${VERSION}-[1-9][0-9]*-x86_64\\.pkg\\.tar\\.zst$'" -- "esh arch package must use a positive revision"
+FILES=("evin-v${VERSION}-${TARGET}.tar.gz" "esh-v${VERSION}-${TARGET}.tar.gz" "$EVIN_DEB_NAME" "$ESH_DEB_NAME" "$EVIN_ARCH_NAME" "$ESH_ARCH_NAME" "everyinit-${VERSION}.vsix" SHA256SUMS SHA256SUMS.sig release-key.pub)
+for FILE in "${FILES[@]}"; do
+  assert [ -s "$DIRECTORY/$FILE" ] "required release artifact is missing or empty: $DIRECTORY/$FILE"
+done
+
+assert [ "$(head -c 8 "$EVIN_DEB" | base64)" = "ITxhcmNoPgo=" ] "$(basename "$EVIN_DEB") does not match Debian package magic"
+assert [ "$(head -c 8 "$ESH_DEB" | base64)" = "ITxhcmNoPgo=" ] "$(basename "$ESH_DEB") does not match Debian package magic"
+assert [ "$(head -c 4 "$EVIN_ARCH" | base64)" = "KLUv/Q==" ] "$(basename "$EVIN_ARCH") does not match zstd package magic"
+assert [ "$(head -c 4 "$ESH_ARCH" | base64)" = "KLUv/Q==" ] "$(basename "$ESH_ARCH") does not match zstd package magic"
+assert [ "$(head -c 4 "$DIRECTORY/everyinit-${VERSION}.vsix" | base64)" = "UEsDBA==" ] "VSIX does not match ZIP magic"
+assert [ "$(head -c 2 "$DIRECTORY/evin-v${VERSION}-${TARGET}.tar.gz" | base64)" = "H4s=" ] "evin archive does not match gzip magic"
+assert [ "$(head -c 2 "$DIRECTORY/esh-v${VERSION}-${TARGET}.tar.gz" | base64)" = "H4s=" ] "esh archive does not match gzip magic"
+
+cd "$DIRECTORY"
+for FILE in "${FILES[@]}"; do
+  if test "$FILE" != SHA256SUMS; then
+    if test "$FILE" != SHA256SUMS.sig; then
+      if test "$FILE" != release-key.pub; then
+        assert "grep -Fq '  $FILE' SHA256SUMS" -- "artifact $FILE is missing from SHA256SUMS"
+      fi
+    fi
+  fi
+done
+sha256sum -c SHA256SUMS
+crypto --verify --pubkey release-key.pub --sig SHA256SUMS.sig SHA256SUMS
+PINNED_KEY=$(cat "$ROOT/infra/get/release-key.pub")
+RELEASE_KEY=$(cat release-key.pub)
+if test "$PINNED_KEY" = "$RELEASE_KEY"; then KEY_KIND="official pinned release key"; else KEY_KIND="rehearsal key"; fi
+echo "Verified all ${#FILES[@]} release artifacts, magic formats, checksums, and Ed25519 signature ($KEY_KIND) for v$VERSION."

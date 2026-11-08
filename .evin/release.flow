@@ -305,7 +305,7 @@ tasks:
     steps:
       - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
       - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
-      - run: node scripts/release/verify-release-packages.mjs target/release-archives "$RELEASE_VERSION" "$RELEASE_TARGET"
+      - run: cargo run --locked -p esh -- scripts/release/verify-release-packages.esh target/release-archives "$RELEASE_VERSION" "$RELEASE_TARGET"
 
   tag-verify:
     stage: Publish

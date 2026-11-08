@@ -62,6 +62,15 @@ async fn test_semver_cli() {
     assert!(output.contains("valid semver"));
     assert!(output.contains("comparison passed"));
     assert!(output.contains("next patch is 1.2.4"));
+
+    let mut legacy_ctx = ExecutionContext::new();
+    assert_eq!(
+        engine
+            .eval_str("semver bump patch 1.2.3", &mut legacy_ctx)
+            .await
+            .unwrap(),
+        1
+    );
 }
 
 #[tokio::test]
