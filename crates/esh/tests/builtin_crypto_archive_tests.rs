@@ -65,6 +65,32 @@ async fn crypto_verify_accepts_the_rfc8032_ed25519_vector() {
 }
 
 #[tokio::test]
+async fn crypto_generates_signs_and_exports_ed25519_keys() {
+    let tmp = tempdir().unwrap();
+    fs::write(tmp.path().join("message"), "signed content\n").unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    assert_eq!(
+        engine
+            .eval_str(
+                "crypto --generate --private private.pem --public public.pem\ncrypto --sign --key private.pem message > signature\ncrypto --public-key --key private.pem > exported.pem\ncrypto --verify --pubkey public.pem --sig signature message\ncrypto --verify --pubkey exported.pem --sig signature message",
+                &mut ctx,
+            )
+            .await
+            .unwrap(),
+        0
+    );
+    assert!(
+        fs::read_to_string(tmp.path().join("private.pem"))
+            .unwrap()
+            .starts_with("-----BEGIN PRIVATE KEY-----\n")
+    );
+    assert_eq!(fs::read(tmp.path().join("signature")).unwrap().len(), 64);
+}
+
+#[tokio::test]
 async fn test_hash_and_base64() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
