@@ -1,0 +1,125 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -eq 4 ] "usage: verify-distribution.esh <evin|esh> <version> <target> <artifact-root>"
+NAME="$1"
+VERSION="$2"
+TARGET="$3"
+ARTIFACT_ROOT="$4"
+case "$NAME" in
+  evin|esh)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "invalid release version: $VERSION"
+assert [ "$TARGET" = x86_64-unknown-linux-musl ] "unsupported release target: $TARGET"
+
+ARCHIVE_DIRECTORY="$ARTIFACT_ROOT/github"
+PACKAGE_DIRECTORY="$ARTIFACT_ROOT/packages"
+TARBALL="$ARCHIVE_DIRECTORY/$NAME-v$VERSION-$TARGET.tar.gz"
+DEB="$(glob "$PACKAGE_DIRECTORY/${NAME}_${VERSION}-*_amd64.deb")"
+APK="$(glob "$PACKAGE_DIRECTORY/${NAME}-${VERSION}-r*.apk")"
+ARCH="$(glob "$PACKAGE_DIRECTORY/${NAME}-${VERSION}-*-x86_64.pkg.tar.zst")"
+assert [ "$(printf '%s\n' "$DEB" | wc -l)" -eq 1 ] "expected exactly one $NAME DEB for $VERSION"
+assert [ "$(printf '%s\n' "$APK" | wc -l)" -eq 1 ] "expected exactly one $NAME APK for $VERSION"
+assert [ "$(printf '%s\n' "$ARCH" | wc -l)" -eq 1 ] "expected exactly one $NAME Arch for $VERSION"
+for ARTIFACT in "$TARBALL" "$DEB" "$APK" "$ARCH"; do
+  assert [ -s "$ARTIFACT" ] "required distribution artifact is missing or empty: $ARTIFACT"
+done
+
+TEMPORARY_DIRECTORY="$(mktemp -d)"
+RELEASE_DIRECTORY="$NAME-v$VERSION-$TARGET"
+TAR_EXPECTED="$TEMPORARY_DIRECTORY/tar.expected"
+NATIVE_EXPECTED="$TEMPORARY_DIRECTORY/native.expected"
+printf '%s\n' "$RELEASE_DIRECTORY/bin/$NAME" "$RELEASE_DIRECTORY/LICENSE" "$RELEASE_DIRECTORY/THIRD_PARTY_NOTICES.md" > "$TAR_EXPECTED"
+printf '%s\n' "usr/bin/$NAME" "usr/share/licenses/$NAME/LICENSE" "usr/share/doc/$NAME/THIRD_PARTY_NOTICES.md" > "$NATIVE_EXPECTED"
+for LICENSE in $(glob "LICENSES/**"); do
+  if ! test -f "$LICENSE"; then continue; fi
+  RELATIVE="$(path -r "$LICENSE" LICENSES)"
+  printf '%s\n' "$RELEASE_DIRECTORY/LICENSES/$RELATIVE" >> "$TAR_EXPECTED"
+  printf '%s\n' "usr/share/licenses/$NAME/LICENSES/$RELATIVE" >> "$NATIVE_EXPECTED"
+done
+sort "$TAR_EXPECTED" > "$TAR_EXPECTED.sorted"
+sort "$NATIVE_EXPECTED" > "$NATIVE_EXPECTED.sorted"
+
+tar -tzf "$TARBALL" | grep -v '/$' | sort > "$TEMPORARY_DIRECTORY/tar.actual"
+assert "diff -q '$TAR_EXPECTED.sorted' '$TEMPORARY_DIRECTORY/tar.actual'" -- "$TARBALL has an unexpected file list"
+mkdir -p "$TEMPORARY_DIRECTORY/tar"
+tar -xzf "$TARBALL" -C "$TEMPORARY_DIRECTORY/tar"
+assert [ -x "$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/bin/$NAME" ] "$TARBALL does not mark bin/$NAME executable"
+assert "cmp -s '$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/bin/$NAME' 'target/$TARGET/release/$NAME'" -- "$TARBALL does not contain the built $NAME binary"
+assert "cmp -s '$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/LICENSE' LICENSE" -- "$TARBALL contains unexpected or stale contents for LICENSE"
+assert "cmp -s '$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/THIRD_PARTY_NOTICES.md' THIRD_PARTY_NOTICES.md" -- "$TARBALL contains unexpected or stale contents for THIRD_PARTY_NOTICES.md"
+for LICENSE in $(glob "LICENSES/**"); do
+  if ! test -f "$LICENSE"; then continue; fi
+  RELATIVE="$(path -r "$LICENSE" LICENSES)"
+  assert "cmp -s '$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/LICENSES/$RELATIVE' '$LICENSE'" -- "$TARBALL contains unexpected or stale contents for LICENSES/$RELATIVE"
+done
+
+DEB_VERSION="$(dpkg-deb -f "$DEB" Version)"
+assert [ "$(dpkg-deb -f "$DEB" Package)" = "$NAME" ] "$DEB has incorrect DEB package identity"
+case "$DEB_VERSION" in
+  "$VERSION"-*)
+    ;;
+  *)
+    echo "$DEB has incorrect DEB package version" >&2
+    exit 1
+    ;;
+esac
+mkdir -p "$TEMPORARY_DIRECTORY/deb"
+dpkg-deb -x "$DEB" "$TEMPORARY_DIRECTORY/deb"
+find "$TEMPORARY_DIRECTORY/deb" -type f -printf '%P\n' | sort > "$TEMPORARY_DIRECTORY/deb.actual"
+assert "diff -q '$NATIVE_EXPECTED.sorted' '$TEMPORARY_DIRECTORY/deb.actual'" -- "$DEB has an unexpected file list"
+
+mkdir -p "$TEMPORARY_DIRECTORY/apk"
+tar -xzf "$APK" -C "$TEMPORARY_DIRECTORY/apk"
+printf '%s\n' .PKGINFO > "$TEMPORARY_DIRECTORY/apk.expected"
+cat "$NATIVE_EXPECTED.sorted" >> "$TEMPORARY_DIRECTORY/apk.expected"
+sort "$TEMPORARY_DIRECTORY/apk.expected" > "$TEMPORARY_DIRECTORY/apk.expected.sorted"
+find "$TEMPORARY_DIRECTORY/apk" -type f -printf '%P\n' | sort > "$TEMPORARY_DIRECTORY/apk.actual"
+assert "diff -q '$TEMPORARY_DIRECTORY/apk.expected.sorted' '$TEMPORARY_DIRECTORY/apk.actual'" -- "$APK has an unexpected file list"
+assert "grep -Fq 'pkgname = $NAME' '$TEMPORARY_DIRECTORY/apk/.PKGINFO'" -- "$APK has incorrect package identity"
+assert "grep -Fq 'license = GPL-3.0-only' '$TEMPORARY_DIRECTORY/apk/.PKGINFO'" -- "$APK has incorrect package license metadata"
+
+mkdir -p "$TEMPORARY_DIRECTORY/arch"
+zstd --decompress --stdout "$ARCH" | tar -x -C "$TEMPORARY_DIRECTORY/arch"
+printf '%s\n' .PKGINFO .MTREE > "$TEMPORARY_DIRECTORY/arch.expected"
+cat "$NATIVE_EXPECTED.sorted" >> "$TEMPORARY_DIRECTORY/arch.expected"
+sort "$TEMPORARY_DIRECTORY/arch.expected" > "$TEMPORARY_DIRECTORY/arch.expected.sorted"
+find "$TEMPORARY_DIRECTORY/arch" -type f -printf '%P\n' | sort > "$TEMPORARY_DIRECTORY/arch.actual"
+assert "diff -q '$TEMPORARY_DIRECTORY/arch.expected.sorted' '$TEMPORARY_DIRECTORY/arch.actual'" -- "$ARCH has an unexpected file list"
+assert "grep -Fq 'pkgname = $NAME' '$TEMPORARY_DIRECTORY/arch/.PKGINFO'" -- "$ARCH has incorrect package identity"
+assert "grep -Fq 'license = GPL-3.0-only' '$TEMPORARY_DIRECTORY/arch/.PKGINFO'" -- "$ARCH has incorrect package license metadata"
+
+for ROOT in "$TEMPORARY_DIRECTORY/deb" "$TEMPORARY_DIRECTORY/apk" "$TEMPORARY_DIRECTORY/arch"; do
+  assert [ -x "$ROOT/usr/bin/$NAME" ] "$ROOT does not mark usr/bin/$NAME executable"
+  assert "cmp -s '$ROOT/usr/bin/$NAME' 'target/$TARGET/release/$NAME'" -- "$ROOT does not contain the built $NAME binary"
+  assert "cmp -s '$ROOT/usr/share/licenses/$NAME/LICENSE' LICENSE" -- "$ROOT contains unexpected or stale contents for LICENSE"
+  assert "cmp -s '$ROOT/usr/share/doc/$NAME/THIRD_PARTY_NOTICES.md' THIRD_PARTY_NOTICES.md" -- "$ROOT contains unexpected or stale contents for THIRD_PARTY_NOTICES.md"
+  for LICENSE in $(glob "LICENSES/**"); do
+    if ! test -f "$LICENSE"; then continue; fi
+    RELATIVE="$(path -r "$LICENSE" LICENSES)"
+    assert "cmp -s '$ROOT/usr/share/licenses/$NAME/LICENSES/$RELATIVE' '$LICENSE'" -- "$ROOT contains unexpected or stale contents for LICENSES/$RELATIVE"
+  done
+done
+
+for ARTIFACT in "$TARBALL" "$DEB" "$APK" "$ARCH"; do sha256sum "$ARTIFACT" >> "$TEMPORARY_DIRECTORY/SHA256SUMS"; done
+sha256sum -c "$TEMPORARY_DIRECTORY/SHA256SUMS"
+rm -rf "$TEMPORARY_DIRECTORY"
+echo "Verified $NAME distribution artifacts, embedded licenses, and checksums for $VERSION"

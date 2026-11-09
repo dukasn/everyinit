@@ -1,0 +1,216 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ -n "$GITHUB_REPOSITORY" ] "GITHUB_REPOSITORY is required"
+assert [ -n "$GITHUB_TOKEN" ] "GITHUB_TOKEN is required"
+API_BASE="${GITHUB_API_URL:-https://api.github.com}"
+while test "${API_BASE%/}" != "$API_BASE"; do API_BASE="${API_BASE%/}"; done
+TEMPORARY_DIRECTORY="$(mktemp -d)"
+RELEASE_FILE="$TEMPORARY_DIRECTORY/release.json"
+
+get_release() {
+  REF="$1"
+  RELEASE_STATUS="$(curl -sS -o "$RELEASE_FILE" -w '%{http_code}' -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' "$API_BASE/repos/$GITHUB_REPOSITORY/releases/tags/$REF")"
+  case "$RELEASE_STATUS" in
+    200)
+      RELEASE_EXISTS=true
+      ;;
+    404)
+      RELEASE_EXISTS=false
+      ;;
+    *)
+      cat "$RELEASE_FILE" >&2
+      echo "GitHub API GET releases/tags/$REF failed ($RELEASE_STATUS)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+request_json() {
+  METHOD="$1"
+  PATH="$2"
+  PAYLOAD="$3"
+  OUTPUT="$4"
+  curl -fsS -X "$METHOD" -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' -H 'Content-Type: application/json' --data-binary "@$PAYLOAD" "$API_BASE$PATH" -o "$OUTPUT"
+}
+
+snapshot() {
+  STATE_PATH=.evin/actions/ci/remote-state.v1.json
+  ENTRIES="$TEMPORARY_DIRECTORY/releases.ndjson"
+  touch "$ENTRIES"
+  PAGE=1
+  while true; do
+    PAGE_FILE="$TEMPORARY_DIRECTORY/releases-$PAGE.json"
+    curl -fsS -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' "$API_BASE/repos/$GITHUB_REPOSITORY/releases?per_page=100&page=$PAGE" -o "$PAGE_FILE"
+    PAGE_COUNT="$(jq 'length' "$PAGE_FILE")"
+    if test "$PAGE_COUNT" -eq 0; then break; fi
+    for ENCODED in $(jq -r '.[] | @base64' "$PAGE_FILE"); do
+      printf '%s' "$ENCODED" | base64 --decode > "$TEMPORARY_DIRECTORY/release-entry.json"
+      jq -j '.body // ""' "$TEMPORARY_DIRECTORY/release-entry.json" > "$TEMPORARY_DIRECTORY/body.txt"
+      BODY_SHA256="$(sha256sum "$TEMPORARY_DIRECTORY/body.txt" | cut -d ' ' -f 1)"
+      jq -c --arg body_sha256 "$BODY_SHA256" '{tag:.tag_name,title:(.name // .tag_name),is_draft:.draft,is_prerelease:.prerelease,body_sha256:$body_sha256} + (if .published_at then {published_at:.published_at} else {} end) + {assets:[.assets[] | {name:.name,size_bytes:.size} + (if (.digest|type) == "string" then {sha256:(.digest | sub("^sha256:"; ""))} else {} end)]}' "$TEMPORARY_DIRECTORY/release-entry.json" >> "$ENTRIES"
+    done
+    if test "$PAGE_COUNT" -lt 100; then break; fi
+    PAGE=$((PAGE + 1))
+  done
+  mkdir -p .evin/actions/ci
+  jq -s --arg repository "$GITHUB_REPOSITORY" '{"$schema":"https://everyinit.dev/schemas/v1/ci-remote-state.json",v:1,platform:"github",repository:$repository,releases:.}' "$ENTRIES" > "$STATE_PATH"
+  echo "Captured $(jq -s 'length' "$ENTRIES") GitHub releases for $GITHUB_REPOSITORY"
+}
+
+apply_plan() {
+  PLAN="$1"
+  assert [ -f "$PLAN" ] "Evin CI plan is missing: $PLAN"
+  assert "jq -e '.v == 1 and (.plan | type == \"array\")' '$PLAN' >/dev/null" -- "Unsupported Evin CI plan: $PLAN"
+  for ENCODED in $(jq -r '.plan[] | @base64' "$PLAN"); do
+    ACTION="$TEMPORARY_DIRECTORY/action.json"
+    printf '%s' "$ENCODED" | base64 --decode > "$ACTION"
+    CODE="$(jq -r '.code' "$ACTION")"
+    REF="$(jq -r '.ref' "$ACTION")"
+    case "$CODE" in
+      SYNC_OK)
+        ;;
+      REL_INIT)
+        get_release "$REF"
+        if test "$RELEASE_EXISTS" = false; then
+          NOTES_SOURCE="$(jq -r '.notes_src // empty' "$ACTION")"
+          if test -n "$NOTES_SOURCE"; then NOTES="$(cat "$NOTES_SOURCE")"; else NOTES=""; fi
+          jq -n --arg tag "$REF" --arg commit "$(jq -r '.commit' "$ACTION")" --arg title "$(jq -r '.title // .ref' "$ACTION")" --arg body "$NOTES" --argjson draft "$(jq -r '.flags.draft // false' "$ACTION")" --argjson prerelease "$(jq -r '.flags.prerelease // false' "$ACTION")" '{tag_name:$tag,target_commitish:$commit,name:$title,body:$body,draft:$draft,prerelease:$prerelease}' > "$TEMPORARY_DIRECTORY/payload.json"
+          request_json POST "/repos/$GITHUB_REPOSITORY/releases" "$TEMPORARY_DIRECTORY/payload.json" "$RELEASE_FILE"
+        fi
+        ;;
+      REL_MUT)
+        get_release "$REF"
+        assert [ "$RELEASE_EXISTS" = true ] "Cannot update missing GitHub release $REF"
+        RELEASE_ID="$(json -g id "$RELEASE_FILE")"
+        jq -n --arg title "$(jq -r '.title // .ref' "$ACTION")" --argjson draft "$(jq -r '.flags.draft // false' "$ACTION")" --argjson prerelease "$(jq -r '.flags.prerelease // false' "$ACTION")" '{name:$title,draft:$draft,prerelease:$prerelease}' > "$TEMPORARY_DIRECTORY/payload.json"
+        request_json PATCH "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" "$TEMPORARY_DIRECTORY/payload.json" "$RELEASE_FILE"
+        ;;
+      REL_NOTES_SYNC)
+        get_release "$REF"
+        assert [ "$RELEASE_EXISTS" = true ] "Cannot update notes for missing GitHub release $REF"
+        RELEASE_ID="$(json -g id "$RELEASE_FILE")"
+        NOTES_SOURCE="$(jq -r '.notes_src // empty' "$ACTION")"
+        assert [ -f "$NOTES_SOURCE" ] "release notes are missing: $NOTES_SOURCE"
+        jq -Rs '{body:.}' "$NOTES_SOURCE" > "$TEMPORARY_DIRECTORY/payload.json"
+        request_json PATCH "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" "$TEMPORARY_DIRECTORY/payload.json" "$RELEASE_FILE"
+        ;;
+      REL_RETARGET)
+        get_release "$REF"
+        assert [ "$RELEASE_EXISTS" = true ] "Cannot retarget missing GitHub release $REF"
+        RELEASE_ID="$(json -g id "$RELEASE_FILE")"
+        jq -n --arg commit "$(jq -r '.commit' "$ACTION")" '{target_commitish:$commit}' > "$TEMPORARY_DIRECTORY/payload.json"
+        request_json PATCH "/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" "$TEMPORARY_DIRECTORY/payload.json" "$RELEASE_FILE"
+        ;;
+      REL_PRUNE)
+        get_release "$REF"
+        if test "$RELEASE_EXISTS" = true; then
+          RELEASE_ID="$(json -g id "$RELEASE_FILE")"
+          curl -fsS -X DELETE -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' "$API_BASE/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
+        fi
+        ;;
+      ART_PUT)
+        get_release "$REF"
+        assert [ "$RELEASE_EXISTS" = true ] "Cannot upload asset to missing GitHub release $REF"
+        DEST="$(jq -r '.dest' "$ACTION")"
+        SOURCE="$(jq -r '.src' "$ACTION")"
+        assert [ -f "$SOURCE" ] "release asset is missing: $SOURCE"
+        ASSET_ID="$(jq -r --arg dest "$DEST" '.assets[] | select(.name == $dest) | .id' "$RELEASE_FILE")"
+        if test -n "$ASSET_ID"; then curl -fsS -X DELETE -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' "$API_BASE/repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID"; fi
+        UPLOAD_URL="$(json -g upload_url "$RELEASE_FILE")"
+        UPLOAD_URL="${UPLOAD_URL%%\{*}"
+        curl -fsS -X POST -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' -H 'Content-Type: application/octet-stream' --data-binary "@$SOURCE" --get --data-urlencode "name=$DEST" "$UPLOAD_URL" > "$TEMPORARY_DIRECTORY/upload.json"
+        get_release "$REF"
+        ;;
+      ART_PRUNE)
+        get_release "$REF"
+        if test "$RELEASE_EXISTS" = true; then
+          DEST="$(jq -r '.dest' "$ACTION")"
+          ASSET_ID="$(jq -r --arg dest "$DEST" '.assets[] | select(.name == $dest) | .id' "$RELEASE_FILE")"
+          if test -n "$ASSET_ID"; then curl -fsS -X DELETE -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' "$API_BASE/repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID"; fi
+        fi
+        ;;
+      *)
+        echo "Unsupported Evin CI plan action: $CODE" >&2
+        exit 1
+        ;;
+    esac
+  done
+  echo "Applied $(jq -r '.delta_count' "$PLAN") Evin CI changes from $PLAN"
+}
+
+format_size() {
+  awk "BEGIN { printf \"%.2f MiB\", $1 / (1024 * 1024) }"
+}
+
+summary() {
+  TAG="$1"
+  get_release "$TAG"
+  assert [ "$RELEASE_EXISTS" = true ] "GitHub release $TAG is missing after reconciliation"
+  VERSION="${TAG#v}"
+  SUMMARY_FILE="$TEMPORARY_DIRECTORY/summary.md"
+  printf '## Linux release %s\n\n| Component | Built and verified formats | GitHub Release assets |\n| --- | --- | --- |\n' "$TAG" > "$SUMMARY_FILE"
+  for BINARY in evin esh; do
+    ARCHIVE="crates/$BINARY/dist/github/$BINARY-v$VERSION-x86_64-unknown-linux-musl.tar.gz"
+    assert [ -f "$ARCHIVE" ] "Expected one $BINARY tar.gz for $TAG"
+    BUILT="$(basename "$ARCHIVE") ($(format_size "$(stat -c %s "$ARCHIVE")")"
+    PUBLISHED=""
+    for FILE in "$ARCHIVE" $(glob "crates/$BINARY/dist/packages/*"); do
+      if ! test -f "$FILE"; then continue; fi
+      NAME="$(basename "$FILE")"
+      REMOTE_SIZE="$(jq -r --arg name "$NAME" '.assets[] | select(.name == $name) | .size' "$RELEASE_FILE")"
+      if test -n "$REMOTE_SIZE"; then PUBLISHED="$PUBLISHED$NAME ($(format_size "$REMOTE_SIZE"))<br>"; fi
+      case "$NAME" in
+        *.deb|*.apk|*.pkg.tar.zst)
+          BUILT="$BUILT<br>$NAME ($(format_size "$(stat -c %s "$FILE")"))"
+          ;;
+      esac
+    done
+    if test -z "$PUBLISHED"; then PUBLISHED=None; else PUBLISHED="${PUBLISHED%<br>}"; fi
+    printf '| %s | %s | %s |\n' "$BINARY" "$BUILT" "$PUBLISHED" >> "$SUMMARY_FILE"
+  done
+  VSCODE="$(glob 'editors/vscode/dist/github/*.vsix')"
+  if test -f "$VSCODE"; then
+    NAME="$(basename "$VSCODE")"
+    PUBLISHED="$(jq -r --arg name "$NAME" '.assets[] | select(.name == $name) | .size' "$RELEASE_FILE")"
+    if test -n "$PUBLISHED"; then PUBLISHED="$NAME ($(format_size "$PUBLISHED"))"; else PUBLISHED=None; fi
+    printf '| vscode | %s (%s) | %s |\n' "$NAME" "$(format_size "$(stat -c %s "$VSCODE")")" "$PUBLISHED" >> "$SUMMARY_FILE"
+  fi
+  printf '\nAll release artifacts are cryptographically signed with Ed25519; checksum manifests and signatures are attached to the release.\n' >> "$SUMMARY_FILE"
+  if test -n "$GITHUB_STEP_SUMMARY"; then cat "$SUMMARY_FILE" >> "$GITHUB_STEP_SUMMARY"; else cat "$SUMMARY_FILE"; fi
+}
+
+COMMAND="$1"
+ARGUMENT="$2"
+case "$COMMAND" in
+  snapshot)
+    snapshot
+    ;;
+  apply)
+    assert [ "$#" -eq 2 ] "usage: github-ci.esh snapshot|apply <plan-file>|summary <tag>"
+    apply_plan "$ARGUMENT"
+    ;;
+  summary)
+    assert [ "$#" -eq 2 ] "usage: github-ci.esh snapshot|apply <plan-file>|summary <tag>"
+    summary "$ARGUMENT"
+    ;;
+  *)
+    echo "usage: github-ci.esh snapshot|apply <plan-file>|summary <tag>" >&2
+    exit 1
+    ;;
+esac
+rm -rf "$TEMPORARY_DIRECTORY"

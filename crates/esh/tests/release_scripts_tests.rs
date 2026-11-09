@@ -614,6 +614,51 @@ async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
     );
 }
 
+#[tokio::test]
+async fn github_ci_snapshot_writes_the_reconciler_state() {
+    let temp = tempdir().unwrap();
+    let bin = temp.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let curl = bin.join("curl");
+    fs::write(
+        &curl,
+        "#!/bin/sh\nout=\nurl=\nwhile test \"$#\" -gt 0; do\n  if test \"$1\" = -o; then out=$2; shift 2; continue; fi\n  url=$1\n  shift\ndone\ncase \"$url\" in\n  *page=1) printf '%s' '[{\"tag_name\":\"v1.2.3\",\"name\":\"Release 1.2.3\",\"draft\":false,\"prerelease\":true,\"body\":\"release notes\",\"published_at\":\"2026-01-02T03:04:05Z\",\"assets\":[{\"name\":\"evin.tar.gz\",\"size\":12,\"digest\":\"sha256:deadbeef\"}]}]' > \"$out\" ;;\n  *) printf '%s' '[]' > \"$out\" ;;\nesac\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_env(
+        "PATH",
+        format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+    );
+    ctx.set_env("GITHUB_REPOSITORY", "everyinit/test");
+    ctx.set_env("GITHUB_TOKEN", "token");
+    ctx.set_env("GITHUB_API_URL", "https://api.example.test");
+    ctx.set_positional_args(vec!["github-ci.esh".to_string(), "snapshot".to_string()]);
+    let code = engine
+        .eval_file(
+            &repository_root().join("scripts/release/github-ci.esh"),
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
+    let state =
+        fs::read_to_string(temp.path().join(".evin/actions/ci/remote-state.v1.json")).unwrap();
+    assert!(state.contains("\"repository\": \"everyinit/test\""));
+    assert!(state.contains("\"tag\": \"v1.2.3\""));
+    assert!(state.contains("\"sha256\": \"deadbeef\""));
+    assert!(state.contains("03fffb8510e0e948bc68ba8efb893d63695f7dd5ec998f6710d9635afee14b53"));
+}
+
 const RELEASE_VERSION: &str = "0.2.2";
 const RELEASE_TARGET: &str = "x86_64-unknown-linux-musl";
 
