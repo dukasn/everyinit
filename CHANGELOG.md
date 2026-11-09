@@ -1,6 +1,28 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.4]
+
+### Bug Fixes
+
+- **esh:** extract tar streams from stdin (f8ee15b)
+- **release:** inspect complete APK payloads (ec154dc)
+- **esh:** verify distribution archives (635e8d0)
+- **release:** update package script paths (1fc4627)
+
+### Features
+
+- **esh:** add Ed25519 signing support (d4a4a4b)
+- **esh:** migrate release verification to native scripts (c63dce6)
+- **esh:** verify Ed25519 signatures (dc8881e)
+- **esh:** add checksum and text utilities (56f3e99)
+
+### Refactoring
+
+- **release:** organize ESH automation (6d1536d)
+- **release:** simplify ESH control flow (bbcb8f6)
+- **release:** simplify package manifest checks (1f2127f)
+
 ## [v0.2.3]
 
 ### Bug Fixes

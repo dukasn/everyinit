@@ -1,7 +1,7 @@
 #!evin/v1
 workspace:
   name: main
-  version: "0.2.3"
+  version: "0.2.4"
   rules: ".evin/gitrules.flow"
   install_hint: "cargo install --path crates/evin"
   hook_runner:
