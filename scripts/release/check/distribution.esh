@@ -88,7 +88,7 @@ find "$TEMPORARY_DIRECTORY/deb" -type f -printf '%P\n' | sort > "$TEMPORARY_DIRE
 assert "diff -q '$NATIVE_EXPECTED.sorted' '$TEMPORARY_DIRECTORY/deb.actual'" -- "$DEB has an unexpected file list"
 
 mkdir -p "$TEMPORARY_DIRECTORY/apk"
-tar -xzf "$APK" -C "$TEMPORARY_DIRECTORY/apk"
+gzip --decompress --stdout "$APK" | tar --ignore-zeros -x -C "$TEMPORARY_DIRECTORY/apk"
 printf '%s\n' .PKGINFO > "$TEMPORARY_DIRECTORY/apk.expected"
 cat "$NATIVE_EXPECTED.sorted" >> "$TEMPORARY_DIRECTORY/apk.expected"
 sort "$TEMPORARY_DIRECTORY/apk.expected" > "$TEMPORARY_DIRECTORY/apk.expected.sorted"
