@@ -12,8 +12,8 @@ tasks:
     needs: [release:rehearsal-start]
     steps:
       - run: cargo build --release --locked --target "$RELEASE_TARGET" -p evin
-      - run: cargo run --locked -p esh -- scripts/release/verify-binary.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
-      - run: cargo run --locked -p esh -- scripts/release/stage.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" crates/evin/dist/staging
+      - run: cargo run --locked -p esh -- scripts/release/check/binary.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/package/stage.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" crates/evin/dist/staging
 
   cloudflare:
     stage: Publish
@@ -40,7 +40,7 @@ tasks:
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs: [cloudflare]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" crates/evin/dist/github
+      - run: cargo run --locked -p esh -- scripts/release/check/archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" crates/evin/dist/github
 
   native:
     stage: Publish
@@ -160,7 +160,7 @@ tasks:
     env: [RELEASE_VERSION]
     needs: [native]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-native-artifacts.esh evin "$RELEASE_VERSION" crates/evin/dist/packages
+      - run: cargo run --locked -p esh -- scripts/release/check/native-artifacts.esh evin "$RELEASE_VERSION" crates/evin/dist/packages
 
   github:
     stage: Publish
@@ -184,4 +184,4 @@ tasks:
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs: [verify]
     steps:
-      - run: node scripts/release/verify-distribution.mjs evin "$RELEASE_VERSION" "$RELEASE_TARGET" crates/evin/dist
+      - run: cargo run --locked -p esh -- scripts/release/check/distribution.esh evin "$RELEASE_VERSION" "$RELEASE_TARGET" crates/evin/dist

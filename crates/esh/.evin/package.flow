@@ -12,8 +12,8 @@ tasks:
     needs: [release:rehearsal-start]
     steps:
       - run: cargo build --release --locked --target "$RELEASE_TARGET" -p esh
-      - run: cargo run --locked -p esh -- scripts/release/verify-binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
-      - run: cargo run --locked -p esh -- scripts/release/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/staging
+      - run: cargo run --locked -p esh -- scripts/release/check/binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/package/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/staging
 
   cloudflare:
     stage: Publish
@@ -40,7 +40,7 @@ tasks:
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs: [cloudflare]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/github
+      - run: cargo run --locked -p esh -- scripts/release/check/archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/github
 
   native:
     stage: Publish
@@ -160,7 +160,7 @@ tasks:
     env: [RELEASE_VERSION]
     needs: [native]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-native-artifacts.esh esh "$RELEASE_VERSION" crates/esh/dist/packages
+      - run: cargo run --locked -p esh -- scripts/release/check/native-artifacts.esh esh "$RELEASE_VERSION" crates/esh/dist/packages
 
   github:
     stage: Publish
@@ -184,4 +184,4 @@ tasks:
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs: [verify]
     steps:
-      - run: node scripts/release/verify-distribution.mjs esh "$RELEASE_VERSION" "$RELEASE_TARGET" crates/esh/dist
+      - run: cargo run --locked -p esh -- scripts/release/check/distribution.esh esh "$RELEASE_VERSION" "$RELEASE_TARGET" crates/esh/dist
