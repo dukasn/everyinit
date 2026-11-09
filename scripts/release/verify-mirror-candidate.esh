@@ -1,0 +1,82 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -ge 3 ] "usage: verify-mirror-candidate.esh <unstable|canary> <version> <commit> [--check-pointer]"
+assert [ "$#" -le 4 ] "usage: verify-mirror-candidate.esh <unstable|canary> <version> <commit> [--check-pointer]"
+CHANNEL="$1"
+VERSION="$2"
+COMMIT="$3"
+POINTER_FLAG="$4"
+case "$CHANNEL" in
+  unstable|canary)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "a valid release version is required"
+assert "echo '$COMMIT' | grep -Eq '^[0-9a-f]{40,64}$'" -- "candidate commit is required"
+if test -n "$POINTER_FLAG" && test "$POINTER_FLAG" != --check-pointer; then
+  echo "usage: verify-mirror-candidate.esh <unstable|canary> <version> <commit> [--check-pointer]" >&2
+  exit 1
+fi
+
+BASE_URL="${RELEASE_BASE_URL:-https://dl.everyinit.dev}"
+while test "${BASE_URL%/}" != "$BASE_URL"; do BASE_URL="${BASE_URL%/}"; done
+TARGET=x86_64-unknown-linux-musl
+TEMPORARY_DIRECTORY="$(mktemp -d)"
+for BINARY in evin esh; do
+  ROOT_URL="$BASE_URL/$BINARY/$CHANNEL/v$VERSION"
+  RELEASE="$TEMPORARY_DIRECTORY/$BINARY-release.json"
+  CHECKSUMS="$TEMPORARY_DIRECTORY/$BINARY-SHA256SUMS"
+  SIGNATURE_TEXT="$TEMPORARY_DIRECTORY/$BINARY-SHA256SUMS.sig"
+  SIGNATURE="$TEMPORARY_DIRECTORY/$BINARY-SHA256SUMS.raw.sig"
+  FILENAME="$BINARY-v$VERSION-$TARGET.tar.gz"
+  ARCHIVE="$TEMPORARY_DIRECTORY/$FILENAME"
+  curl -fsSL --max-redirs 0 "$ROOT_URL/release.json" -o "$RELEASE"
+  assert [ "$(json -g name "$RELEASE")" = "$BINARY" ] "$BINARY release metadata does not match candidate identity"
+  assert [ "$(json -g version "$RELEASE")" = "$VERSION" ] "$BINARY release metadata does not match candidate identity"
+  assert [ "$(json -g channel "$RELEASE")" = "$CHANNEL" ] "$BINARY release metadata does not match candidate identity"
+  assert [ "$(json -g git_commit "$RELEASE")" = "$COMMIT" ] "$BINARY release metadata has the wrong source commit"
+  curl -fsSL --max-redirs 0 "$ROOT_URL/SHA256SUMS" -o "$CHECKSUMS"
+  curl -fsSL --max-redirs 0 "$ROOT_URL/SHA256SUMS.sig" -o "$SIGNATURE_TEXT"
+  base64 --decode "$SIGNATURE_TEXT" > "$SIGNATURE"
+  crypto --verify --pubkey infra/get/release-key.pub --sig "$SIGNATURE" "$CHECKSUMS"
+  curl -fsSL --max-redirs 0 "$ROOT_URL/$FILENAME" -o "$ARCHIVE"
+  DIGEST="$(sha256sum "$ARCHIVE" | cut -d ' ' -f 1)"
+  if ! test "$(cat "$CHECKSUMS")" = "$DIGEST  $FILENAME"; then
+    echo "$BINARY archive does not match its signed checksum manifest" >&2
+    exit 1
+  fi
+  assert [ "$(json -g artifacts[0].filename "$RELEASE")" = "$FILENAME" ] "$BINARY release metadata does not describe the fetched archive"
+  assert [ "$(json -g artifacts[0].sha256 "$RELEASE")" = "$DIGEST" ] "$BINARY release metadata does not describe the fetched archive"
+  mkdir -p "crates/$BINARY/dist/github"
+  cp "$ARCHIVE" "crates/$BINARY/dist/github/$FILENAME"
+done
+
+if test "$POINTER_FLAG" = --check-pointer; then
+  POINTER="$TEMPORARY_DIRECTORY/$CHANNEL.json"
+  curl -fsSL --max-redirs 0 "$BASE_URL/$CHANNEL.json?verify=$(date -u +%s)" -o "$POINTER"
+  assert [ "$(json -g channel "$POINTER")" = "$CHANNEL" ] "$CHANNEL pointer does not identify $VERSION at $COMMIT"
+  assert [ "$(json -g version "$POINTER")" = "$VERSION" ] "$CHANNEL pointer does not identify $VERSION at $COMMIT"
+  assert [ "$(json -g git_commit "$POINTER")" = "$COMMIT" ] "$CHANNEL pointer does not identify $VERSION at $COMMIT"
+  for BINARY in evin esh; do
+    assert [ "$(json -g "binaries.$BINARY.version" "$POINTER")" = "$VERSION" ] "$CHANNEL pointer does not include $BINARY $VERSION"
+  done
+fi
+rm -rf "$TEMPORARY_DIRECTORY"
+echo "Verified public $CHANNEL artifacts for Evin and ESH at $VERSION"

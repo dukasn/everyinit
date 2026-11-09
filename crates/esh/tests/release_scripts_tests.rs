@@ -554,6 +554,66 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
     assert!(!uploads.contains("channels/unstable.json"));
 }
 
+#[tokio::test]
+async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
+    let temp = tempdir().unwrap();
+    let remote = temp.path().join("remote");
+    fs::create_dir_all(temp.path().join("infra/get")).unwrap();
+    let key_pair = Ed25519KeyPair::from_pkcs8(
+        Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())
+            .unwrap()
+            .as_ref(),
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("infra/get/release-key.pub"),
+        ed25519_public_key_pem(key_pair.public_key().as_ref()),
+    )
+    .unwrap();
+    let commit = "0123456789abcdef0123456789abcdef01234567";
+    for binary in ["evin", "esh"] {
+        let directory = remote.join(format!("{binary}/unstable/v1.2.3"));
+        fs::create_dir_all(&directory).unwrap();
+        let filename = format!("{binary}-v1.2.3-x86_64-unknown-linux-musl.tar.gz");
+        let archive = format!("{binary} archive").into_bytes();
+        let digest = format!("{:x}", Sha256::digest(&archive));
+        let manifest = format!("{digest}  {filename}\n");
+        fs::write(directory.join(&filename), archive).unwrap();
+        fs::write(directory.join("SHA256SUMS"), &manifest).unwrap();
+        fs::write(
+            directory.join("SHA256SUMS.sig"),
+            format!(
+                "{}\n",
+                BASE64.encode(key_pair.sign(manifest.as_bytes()).as_ref())
+            ),
+        )
+        .unwrap();
+        fs::write(
+            directory.join("release.json"),
+            format!(
+                "{{\"name\":\"{binary}\",\"version\":\"1.2.3\",\"channel\":\"unstable\",\"git_commit\":\"{commit}\",\"artifacts\":[{{\"filename\":\"{filename}\",\"sha256\":\"{digest}\"}}]}}\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    let base_url = format!("file://{}", remote.display());
+    let (code, output, error) = run_script_with_env(
+        "verify-mirror-candidate.esh",
+        temp.path(),
+        &["unstable", "1.2.3", commit],
+        &[("RELEASE_BASE_URL", &base_url)],
+    )
+    .await;
+    assert_eq!(code, 0, "{error}");
+    assert!(output.contains("Verified public unstable artifacts"));
+    assert!(
+        temp.path()
+            .join("crates/esh/dist/github/esh-v1.2.3-x86_64-unknown-linux-musl.tar.gz")
+            .is_file()
+    );
+}
+
 const RELEASE_VERSION: &str = "0.2.2";
 const RELEASE_TARGET: &str = "x86_64-unknown-linux-musl";
 
