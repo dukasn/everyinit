@@ -21,14 +21,12 @@ if echo "$BEFORE" | grep -Eq '^0+$'; then COMMITS=$(git rev-list "$AFTER"); else
 TAG=""
 COMMIT=""
 for CANDIDATE in $(git tag --list 'v*'); do
-  if echo "$CANDIDATE" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-    TARGET=$(git rev-parse "${CANDIDATE}^{commit}")
-    if echo "$COMMITS" | grep -Eq "^${TARGET}$"; then
-      assert [ -z "$TAG" ] "main update contains multiple release tags: $TAG, $CANDIDATE"
-      TAG="$CANDIDATE"
-      COMMIT="$TARGET"
-    fi
-  fi
+  if ! echo "$CANDIDATE" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then continue; fi
+  TARGET=$(git rev-parse "${CANDIDATE}^{commit}")
+  if ! echo "$COMMITS" | grep -Eq "^${TARGET}$"; then continue; fi
+  assert [ -z "$TAG" ] "main update contains multiple release tags: $TAG, $CANDIDATE"
+  TAG="$CANDIDATE"
+  COMMIT="$TARGET"
 done
 if test -n "$TAG"; then FOUND=true; VERSION="${TAG#v}"; else FOUND=false; VERSION=""; fi
 echo "{\"found\":$FOUND,\"tag\":\"$TAG\",\"version\":\"$VERSION\",\"commit\":\"$COMMIT\"}"

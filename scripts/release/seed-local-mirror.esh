@@ -24,24 +24,20 @@ HAS_PREVIEW=false
 for ROOT; do
   assert [ -d "$ROOT" ] "$ROOT is missing; generate release metadata before seeding local R2"
   for FILE in $(glob "$ROOT/**"); do
-    if test -f "$FILE"; then
-      KEY=$(path -r "$FILE" "$ROOT")
-      PREVIEW=false
-      case "$KEY" in
-        */unstable/*|channels/unstable.json)
-          PREVIEW=true
-          ;;
-      esac
-      if test "$PREVIEW" = true; then
+    if ! test -f "$FILE"; then continue; fi
+    KEY=$(path -r "$FILE" "$ROOT")
+    case "$KEY" in
+      */unstable/*|channels/unstable.json)
         BUCKET="everyinit-preview-artifacts"
         HAS_PREVIEW=true
-      else
+        ;;
+      *)
         BUCKET="everyinit-artifacts"
         HAS_ARTIFACTS=true
-      fi
-      corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE" --local --config "$CONFIG"
-      COUNT=$((COUNT + 1))
-    fi
+        ;;
+    esac
+    corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE" --local --config "$CONFIG"
+    COUNT=$((COUNT + 1))
   done
 done
 

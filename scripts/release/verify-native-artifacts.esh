@@ -19,12 +19,14 @@ assert [ "$#" -eq 3 ] "usage: verify-native-artifacts.esh <evin|esh> <version> <
 PACKAGE="$1"
 VERSION="$2"
 ARTIFACT_ROOT="$3"
-if test "$PACKAGE" != "evin"; then
-  if test "$PACKAGE" != "esh"; then
+case "$PACKAGE" in
+  evin|esh)
+    ;;
+  *)
     echo "unsupported release package: $PACKAGE" >&2
     exit 1
-  fi
-fi
+    ;;
+esac
 assert [ -n "$VERSION" ] "release version must not be empty"
 
 DEB=$(glob "$ARTIFACT_ROOT/${PACKAGE}_${VERSION}-*_amd64.deb")

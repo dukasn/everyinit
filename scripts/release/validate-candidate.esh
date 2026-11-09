@@ -48,15 +48,9 @@ assert "git show '$EXPECTED_COMMIT:CHANGELOG.md' | grep -Eq '^## \\[v$VERSION\\]
 
 PREVIOUS_TAG=""
 for CANDIDATE in $(git tag --list 'v*' --merged "$PREVIOUS_TAGS_BASE"); do
-  if echo "$CANDIDATE" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-    if test "$CANDIDATE" != "$TAG"; then
-      if test -z "$PREVIOUS_TAG"; then
-        PREVIOUS_TAG="$CANDIDATE"
-      else
-        if semver -c "${CANDIDATE#v}" '>' "${PREVIOUS_TAG#v}"; then PREVIOUS_TAG="$CANDIDATE"; fi
-      fi
-    fi
-  fi
+  if ! echo "$CANDIDATE" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then continue; fi
+  if test "$CANDIDATE" = "$TAG"; then continue; fi
+  if test -z "$PREVIOUS_TAG" || semver -c "${CANDIDATE#v}" '>' "${PREVIOUS_TAG#v}"; then PREVIOUS_TAG="$CANDIDATE"; fi
 done
 if test -n "$PREVIOUS_TAG"; then
   assert "semver -c '$VERSION' '>' '${PREVIOUS_TAG#v}'" -- "$TAG must advance beyond previous release $PREVIOUS_TAG"
