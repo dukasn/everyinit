@@ -20,7 +20,7 @@ use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::{Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use tar::{Archive as TarArchive, Builder as TarBuilder};
 
@@ -48,6 +48,7 @@ pub fn tar<'a>(
         let mut create = false;
         let mut extract = false;
         let mut gzip = false;
+        let mut ignore_zeros = false;
         let mut archive_file: Option<&str> = None;
         let mut dest_dir = ctx.cwd().to_path_buf();
         let mut operands = Vec::new();
@@ -82,6 +83,8 @@ pub fn tar<'a>(
                 extract = true;
             } else if arg == "--gzip" {
                 gzip = true;
+            } else if arg == "--ignore-zeros" {
+                ignore_zeros = true;
             } else if arg == "-C" || arg == "--directory" {
                 if let Some(d) = iter.next() {
                     dest_dir = resolve_path(ctx, d);
@@ -95,15 +98,13 @@ pub fn tar<'a>(
             }
         }
 
-        let archive_path_str = match archive_file.or_else(|| operands.first().copied()) {
-            Some(f) => f,
-            None => {
-                ctx.write_stderr(b"esh: tar: missing archive file operand\n");
-                return Ok(1);
-            }
-        };
+        let archive_path_str = archive_file.or_else(|| operands.first().copied());
 
         if create {
+            let Some(archive_path_str) = archive_path_str else {
+                ctx.write_stderr(b"esh: tar: missing archive file operand\n");
+                return Ok(1);
+            };
             let sources = if archive_file.is_some() {
                 &operands[..]
             } else if operands.len() > 1 {
@@ -159,40 +160,57 @@ pub fn tar<'a>(
             Ok(0)
         } else if extract
             || (!create
-                && (archive_path_str.ends_with(".tar")
-                    || archive_path_str.ends_with(".tar.gz")
-                    || archive_path_str.ends_with(".tgz")))
+                && archive_path_str.is_some_and(|path| {
+                    path.ends_with(".tar") || path.ends_with(".tar.gz") || path.ends_with(".tgz")
+                }))
         {
-            let archive_path = resolve_path(ctx, archive_path_str);
-            if !archive_path.is_file() {
-                ctx.write_stderr(
-                    format!("esh: tar: file '{}' not found\n", archive_path_str).as_bytes(),
-                );
-                return Ok(1);
-            }
-
             let _ = fs::create_dir_all(&dest_dir);
-            let file = match File::open(&archive_path) {
-                Ok(f) => f,
-                Err(e) => {
+            if let Some(archive_path_str) = archive_path_str {
+                let archive_path = resolve_path(ctx, archive_path_str);
+                if !archive_path.is_file() {
                     ctx.write_stderr(
-                        format!("esh: tar: cannot open '{}': {}\n", archive_path_str, e).as_bytes(),
+                        format!("esh: tar: file '{}' not found\n", archive_path_str).as_bytes(),
                     );
                     return Ok(1);
                 }
-            };
 
-            let is_gz =
-                gzip || archive_path_str.ends_with(".tar.gz") || archive_path_str.ends_with(".tgz");
-            if is_gz {
-                let gz = GzDecoder::new(file);
-                let mut tar = TarArchive::new(gz);
-                if let Err(e) = tar.unpack(&dest_dir) {
-                    ctx.write_stderr(format!("esh: tar: extraction error: {}\n", e).as_bytes());
-                    return Ok(1);
+                let file = match File::open(&archive_path) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        ctx.write_stderr(
+                            format!("esh: tar: cannot open '{}': {}\n", archive_path_str, e)
+                                .as_bytes(),
+                        );
+                        return Ok(1);
+                    }
+                };
+
+                let is_gz = gzip
+                    || archive_path_str.ends_with(".tar.gz")
+                    || archive_path_str.ends_with(".tgz");
+                if is_gz {
+                    let gz = GzDecoder::new(file);
+                    let mut tar = TarArchive::new(gz);
+                    tar.set_ignore_zeros(ignore_zeros);
+                    if let Err(e) = tar.unpack(&dest_dir) {
+                        ctx.write_stderr(format!("esh: tar: extraction error: {}\n", e).as_bytes());
+                        return Ok(1);
+                    }
+                } else {
+                    let mut tar = TarArchive::new(file);
+                    tar.set_ignore_zeros(ignore_zeros);
+                    if let Err(e) = tar.unpack(&dest_dir) {
+                        ctx.write_stderr(format!("esh: tar: extraction error: {}\n", e).as_bytes());
+                        return Ok(1);
+                    }
                 }
             } else {
-                let mut tar = TarArchive::new(file);
+                let Some(input) = ctx.take_stdin() else {
+                    ctx.write_stderr(b"esh: tar: missing archive file operand\n");
+                    return Ok(1);
+                };
+                let mut tar = TarArchive::new(Cursor::new(input));
+                tar.set_ignore_zeros(ignore_zeros);
                 if let Err(e) = tar.unpack(&dest_dir) {
                     ctx.write_stderr(format!("esh: tar: extraction error: {}\n", e).as_bytes());
                     return Ok(1);

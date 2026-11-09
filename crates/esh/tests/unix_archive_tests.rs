@@ -54,6 +54,44 @@ async fn test_unix_tar_czf_and_xzf() {
 }
 
 #[tokio::test]
+async fn test_unix_tar_extracts_concatenated_archives_from_stdin() {
+    let tmp = tempdir().unwrap();
+    let first = tmp.path().join("first.tar");
+    let second = tmp.path().join("second.tar");
+    let extract_dir = tmp.path().join("extracted");
+
+    for (archive, name, contents) in [
+        (&first, "first.txt", b"first".as_slice()),
+        (&second, "second.txt", b"second".as_slice()),
+    ] {
+        let file = fs::File::create(archive).unwrap();
+        let mut builder = tar::Builder::new(file);
+        let mut header = tar::Header::new_gnu();
+        header.set_size(contents.len() as u64);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append_data(&mut header, name, contents).unwrap();
+        builder.finish().unwrap();
+    }
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let _ = ctx.set_cwd(tmp.path());
+
+    let code = engine
+        .eval_str(
+            "cat first.tar second.tar | tar --ignore-zeros -x -C ./extracted",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(code, 0);
+    assert_eq!(fs::read(extract_dir.join("first.txt")).unwrap(), b"first");
+    assert_eq!(fs::read(extract_dir.join("second.txt")).unwrap(), b"second");
+}
+
+#[tokio::test]
 async fn test_unix_zip_and_unzip() {
     let tmp = tempdir().unwrap();
     let src_dir = tmp.path().join("dist");
