@@ -222,6 +222,32 @@ pub fn format_c_style(fmt: &str, args: &[String]) -> String {
     out
 }
 
+fn format_argument_count(fmt: &str) -> usize {
+    let unescaped_fmt = unescape_string(fmt);
+    let mut chars = unescaped_fmt.chars().peekable();
+    let mut count = 0;
+
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            continue;
+        }
+        if chars.peek() == Some(&'%') {
+            chars.next();
+            continue;
+        }
+
+        count += 1;
+        while let Some(&specifier) = chars.peek() {
+            chars.next();
+            if matches!(specifier, 's' | 'd' | 'i' | 'f' | 'x' | 'X' | 'c' | 'b') {
+                break;
+            }
+        }
+    }
+
+    count
+}
+
 pub fn echo<'a>(
     args: &'a [String],
     ctx: &'a mut ExecutionContext,
@@ -299,7 +325,14 @@ pub fn printf<'a>(
         }
         let fmt = &args[0];
         let rest = &args[1..];
-        let output = format_c_style(fmt, rest);
+        let argument_count = format_argument_count(fmt);
+        let output = if argument_count == 0 || rest.is_empty() {
+            format_c_style(fmt, rest)
+        } else {
+            rest.chunks(argument_count)
+                .map(|chunk| format_c_style(fmt, chunk))
+                .collect()
+        };
         ctx.write_stdout(output.as_bytes());
         Ok(0)
     })

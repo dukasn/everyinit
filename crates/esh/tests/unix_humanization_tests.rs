@@ -91,6 +91,30 @@ async fn test_echo_formatting_table_csv() {
 }
 
 #[tokio::test]
+async fn test_printf_repeats_its_format_for_remaining_arguments() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let code = engine
+        .eval_str(
+            r#"
+                printf '%s\n' alpha beta gamma
+                printf '%s:%s\n' one two three
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "alpha\nbeta\ngamma\none:two\nthree:\n"
+    );
+}
+
+#[tokio::test]
 async fn test_arithmetic_expansion() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();

@@ -58,10 +58,10 @@ done
 sort "$TAR_EXPECTED" > "$TAR_EXPECTED.sorted"
 sort "$NATIVE_EXPECTED" > "$NATIVE_EXPECTED.sorted"
 
-tar -tzf "$TARBALL" | grep -v '/$' | sort > "$TEMPORARY_DIRECTORY/tar.actual"
-assert "diff -q '$TAR_EXPECTED.sorted' '$TEMPORARY_DIRECTORY/tar.actual'" -- "$TARBALL has an unexpected file list"
 mkdir -p "$TEMPORARY_DIRECTORY/tar"
 tar -xzf "$TARBALL" -C "$TEMPORARY_DIRECTORY/tar"
+find "$TEMPORARY_DIRECTORY/tar" -type f -printf '%P\n' | sort > "$TEMPORARY_DIRECTORY/tar.actual"
+assert "diff -q '$TAR_EXPECTED.sorted' '$TEMPORARY_DIRECTORY/tar.actual'" -- "$TARBALL has an unexpected file list"
 assert [ -x "$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/bin/$NAME" ] "$TARBALL does not mark bin/$NAME executable"
 assert "cmp -s '$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/bin/$NAME' 'target/$TARGET/release/$NAME'" -- "$TARBALL does not contain the built $NAME binary"
 assert "cmp -s '$TEMPORARY_DIRECTORY/tar/$RELEASE_DIRECTORY/LICENSE' LICENSE" -- "$TARBALL contains unexpected or stale contents for LICENSE"
