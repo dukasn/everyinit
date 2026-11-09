@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 set -e
 
-assert [ "$#" -eq 4 ] "usage: verify-archive.esh <package> <target-triple> <version> <archive-root>"
+assert [ "$#" -eq 4 ] "usage: archive.esh <package> <target-triple> <version> <archive-root>"
 PACKAGE="$1"
 TARGET="$2"
 VERSION="$3"

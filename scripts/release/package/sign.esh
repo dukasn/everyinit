@@ -15,7 +15,7 @@
 
 set -e
 
-assert [ "$#" -le 2 ] "usage: sign-packages.esh [target-directory] [version]"
+assert [ "$#" -le 2 ] "usage: sign.esh [target-directory] [version]"
 RELEASE_DIRECTORY="${1:-target/release-archives}"
 assert [ -d "$RELEASE_DIRECTORY" ] "release package directory is missing: $RELEASE_DIRECTORY"
 PACKAGE_LIST="$(mktemp)"

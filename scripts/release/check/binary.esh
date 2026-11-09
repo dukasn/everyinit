@@ -15,7 +15,7 @@
 
 set -e
 
-assert [ "$#" -eq 3 ] "usage: verify-binary.esh <evin|esh> <target-triple> <version>"
+assert [ "$#" -eq 3 ] "usage: binary.esh <evin|esh> <target-triple> <version>"
 PACKAGE="$1"
 TARGET="$2"
 VERSION="$3"

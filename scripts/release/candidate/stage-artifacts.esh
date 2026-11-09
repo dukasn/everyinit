@@ -15,17 +15,22 @@
 
 set -e
 
-assert [ "$#" -eq 2 ] "usage: verify-changelog.esh <generated-changelog> <version>"
-CHANGELOG="$1"
+assert [ "$#" -eq 2 ] "usage: stage-artifacts.esh <artifact-root> <version>"
+ARTIFACT_ROOT="$1"
 VERSION="$2"
-
-assert [ -f "$CHANGELOG" ] "generated changelog is missing: $CHANGELOG"
-assert "grep -Eq '^# Changelog\s*$' '$CHANGELOG'" -- "${CHANGELOG} is missing the root Changelog heading"
+assert [ -d "$ARTIFACT_ROOT" ] "candidate artifact root is missing: $ARTIFACT_ROOT"
 if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
   echo "release version is not supported: $VERSION" >&2
   exit 1
 fi
-ESCAPED_VERSION=$(str -r . '\.' "$VERSION")
-assert "grep -Eq '^## \[v${ESCAPED_VERSION}\]$' '$CHANGELOG'" -- "${CHANGELOG} is missing the generated section for v${VERSION}"
 
-echo "Verified generated changelog section for v$VERSION"
+for BINARY in evin esh; do
+  FILENAME="${BINARY}-v${VERSION}-x86_64-unknown-linux-musl.tar.gz"
+  PATTERN="$ARTIFACT_ROOT/**/$FILENAME"
+  assert [ "$(glob "$PATTERN" | wc -l)" -eq 1 ] "expected exactly one $FILENAME in candidate artifacts"
+  ARCHIVE=$(glob "$PATTERN")
+  assert [ -f "$ARCHIVE" ] "candidate artifact is not a regular file: $ARCHIVE"
+  OUTPUT="crates/$BINARY/dist/github/$FILENAME"
+  mkdir -p "$(dirname "$OUTPUT")"
+  cp "$ARCHIVE" "$OUTPUT"
+done

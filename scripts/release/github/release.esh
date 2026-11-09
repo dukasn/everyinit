@@ -201,15 +201,15 @@ case "$COMMAND" in
     snapshot
     ;;
   apply)
-    assert [ "$#" -eq 2 ] "usage: github-ci.esh snapshot|apply <plan-file>|summary <tag>"
+    assert [ "$#" -eq 2 ] "usage: release.esh snapshot|apply <plan-file>|summary <tag>"
     apply_plan "$ARGUMENT"
     ;;
   summary)
-    assert [ "$#" -eq 2 ] "usage: github-ci.esh snapshot|apply <plan-file>|summary <tag>"
+    assert [ "$#" -eq 2 ] "usage: release.esh snapshot|apply <plan-file>|summary <tag>"
     summary "$ARGUMENT"
     ;;
   *)
-    echo "usage: github-ci.esh snapshot|apply <plan-file>|summary <tag>" >&2
+    echo "usage: release.esh snapshot|apply <plan-file>|summary <tag>" >&2
     exit 1
     ;;
 esac

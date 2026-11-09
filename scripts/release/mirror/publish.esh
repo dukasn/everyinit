@@ -15,8 +15,8 @@
 
 set -e
 
-assert [ "$#" -ge 3 ] "usage: publish-mirror.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
-assert [ "$#" -le 4 ] "usage: publish-mirror.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
+assert [ "$#" -ge 3 ] "usage: publish.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
+assert [ "$#" -le 4 ] "usage: publish.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
 CHANNEL="$1"
 VERSION="$2"
 MODE="$3"

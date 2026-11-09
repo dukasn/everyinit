@@ -19,7 +19,7 @@ DIRECTORY="${1:-target/release-archives}"
 VERSION="${2:-$RELEASE_VERSION}"
 TARGET="${RELEASE_TARGET:-x86_64-unknown-linux-musl}"
 if test -n "$3"; then TARGET="$3"; fi
-assert [ -n "$VERSION" ] "usage: verify-release-packages.esh [target-dir] <version> [target]"
+assert [ -n "$VERSION" ] "usage: release-packages.esh [target-dir] <version> [target]"
 assert [ -d "$DIRECTORY" ] "release artifact directory is missing: $DIRECTORY"
 ROOT=$(pwd)
 

@@ -15,8 +15,8 @@
 
 set -e
 
-assert [ "$#" -ge 4 ] "usage: validate-candidate.esh <tag> <version> <commit> <base-commit> [previous-tags-base]"
-assert [ "$#" -le 5 ] "usage: validate-candidate.esh <tag> <version> <commit> <base-commit> [previous-tags-base]"
+assert [ "$#" -ge 4 ] "usage: validate.esh <tag> <version> <commit> <base-commit> [previous-tags-base]"
+assert [ "$#" -le 5 ] "usage: validate.esh <tag> <version> <commit> <base-commit> [previous-tags-base]"
 REQUESTED_TAG="$1"
 REQUESTED_VERSION="$2"
 EXPECTED_COMMIT="$3"

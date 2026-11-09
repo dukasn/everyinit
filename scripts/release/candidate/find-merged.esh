@@ -14,7 +14,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 set -e
-assert [ "$#" -eq 2 ] "usage: find-merged-candidate.esh <before-sha> <after-sha>"
+assert [ "$#" -eq 2 ] "usage: find-merged.esh <before-sha> <after-sha>"
 BEFORE="$1"
 AFTER="$2"
 if echo "$BEFORE" | grep -Eq '^0+$'; then COMMITS=$(git rev-list "$AFTER"); else COMMITS=$(git rev-list "$AFTER" "^$BEFORE"); fi

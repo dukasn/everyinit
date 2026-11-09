@@ -17,14 +17,14 @@ tasks:
     description: "Check JavaScript and infrastructure configuration formatting"
     cwd: .
     steps:
-      - run: corepack npm exec -- oxfmt --check package.json infra/.oxlintrc.json infra/get/tsconfig.json infra/mirror/tsconfig.json infra/get/src/index.ts infra/mirror/src/index.ts scripts/release/metadata.mjs scripts/release/channel-manifest.mjs scripts/release/publish-mirror.mjs scripts/release/validate-candidate.mjs scripts/release/verify-changelog.mjs scripts/release/verify-mirror-candidate.mjs scripts/release/stage-candidate-artifacts.mjs scripts/release/find-merged-candidate.mjs scripts/release/seed-local-mirror.mjs scripts/release/github-ci.mjs scripts/release/sign-packages.mjs scripts/release/verify-release-packages.mjs scripts/release/verify-release-packages.test.mjs
+      - run: corepack npm exec -- oxfmt --check package.json infra/.oxlintrc.json infra/get/tsconfig.json infra/mirror/tsconfig.json infra/get/src/index.ts infra/mirror/src/index.ts
 
   lint:
     stage: Check
-    description: "Lint Cloudflare Workers and release JavaScript with Oxlint"
+    description: "Lint Cloudflare Worker sources with Oxlint"
     cwd: .
     steps:
-      - run: corepack npm exec -- oxlint --config infra/.oxlintrc.json --deny-warnings infra/get/src/index.ts infra/mirror/src/index.ts scripts/release/metadata.mjs scripts/release/channel-manifest.mjs scripts/release/publish-mirror.mjs scripts/release/validate-candidate.mjs scripts/release/verify-changelog.mjs scripts/release/verify-mirror-candidate.mjs scripts/release/stage-candidate-artifacts.mjs scripts/release/find-merged-candidate.mjs scripts/release/seed-local-mirror.mjs scripts/release/github-ci.mjs scripts/release/sign-packages.mjs scripts/release/verify-release-packages.mjs scripts/release/verify-release-packages.test.mjs
+      - run: corepack npm exec -- oxlint --config infra/.oxlintrc.json --deny-warnings infra/get/src/index.ts infra/mirror/src/index.ts
 
   typecheck:
     stage: Check
@@ -51,4 +51,4 @@ tasks:
     cwd: .
     needs: [infra:quality:build]
     steps:
-      - run: node --test scripts/release/verify-release-packages.test.mjs
+      - run: cargo test --locked -p esh --test release_scripts_tests

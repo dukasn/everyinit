@@ -19,14 +19,14 @@ SNAPSHOT="target/release-rehearsal/source-status.before"
 CURRENT="target/release-rehearsal/source-status.after"
 
 if test "$1" = "--snapshot"; then
-  assert [ "$#" -eq 1 ] "usage: verify-rehearsal-clean.esh [--snapshot]"
+  assert [ "$#" -eq 1 ] "usage: rehearsal-clean.esh [--snapshot]"
   mkdir -p target/release-rehearsal
   git status --porcelain > "$SNAPSHOT"
   echo "Captured source status before distribution rehearsal"
   exit 0
 fi
 
-assert [ "$#" -eq 0 ] "usage: verify-rehearsal-clean.esh [--snapshot]"
+assert [ "$#" -eq 0 ] "usage: rehearsal-clean.esh [--snapshot]"
 assert [ -f "$SNAPSHOT" ] "missing distribution rehearsal source-status snapshot"
 git status --porcelain > "$CURRENT"
 if diff "$SNAPSHOT" "$CURRENT"; then

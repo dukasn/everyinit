@@ -480,7 +480,7 @@ tasks:
   doctor:
     description: "Release doctor check"
     steps:
-      - run: cargo run -p esh -- scripts/release/doctor.esh
+      - run: cargo run -p esh -- scripts/release/check/doctor.esh
 "#;
         let parsed = <NamespaceFlow as evin_flow::YamlDocument>::from_str(flow, None).unwrap();
         assert_eq!(parsed.namespace.name, "release");

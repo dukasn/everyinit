@@ -77,7 +77,7 @@ async fn verify_changelog_requires_the_requested_generated_section() {
     .unwrap();
 
     let (code, output, error) = run_script(
-        "verify-changelog.esh",
+        "check/changelog.esh",
         temp.path(),
         &["CHANGELOG.md", "1.2.3"],
     )
@@ -86,7 +86,7 @@ async fn verify_changelog_requires_the_requested_generated_section() {
     assert!(output.contains("Verified generated changelog section for v1.2.3"));
 
     let (code, _, error) = run_script(
-        "verify-changelog.esh",
+        "check/changelog.esh",
         temp.path(),
         &["CHANGELOG.md", "1.2.4"],
     )
@@ -112,7 +112,7 @@ async fn workspace_version_requires_matching_release_versions() {
     )
     .unwrap();
 
-    let (code, output, error) = run_script("workspace-version.esh", temp.path(), &[]).await;
+    let (code, output, error) = run_script("check/workspace-version.esh", temp.path(), &[]).await;
     assert_eq!(code, 0, "{error}");
     assert_eq!(output, "1.2.3\n");
 }
@@ -138,7 +138,7 @@ async fn stage_candidate_artifacts_finds_archives_recursively() {
 
     let artifact_arg = artifacts.to_string_lossy().to_string();
     let (code, _, error) = run_script(
-        "stage-candidate-artifacts.esh",
+        "candidate/stage-artifacts.esh",
         temp.path(),
         &[&artifact_arg, "1.2.3"],
     )
@@ -201,7 +201,7 @@ async fn find_merged_candidate_reports_a_single_new_release_tag() {
     let after = git(temp.path(), &["rev-parse", "HEAD"]);
 
     let (code, output, error) =
-        run_script("find-merged-candidate.esh", temp.path(), &[&before, &after]).await;
+        run_script("candidate/find-merged.esh", temp.path(), &[&before, &after]).await;
     assert_eq!(code, 0, "{error}");
     assert_eq!(
         output,
@@ -259,7 +259,7 @@ async fn validate_candidate_accepts_the_next_annotated_release_tag() {
     let candidate = git(temp.path(), &["rev-parse", "HEAD"]);
 
     let (code, output, error) = run_script(
-        "validate-candidate.esh",
+        "candidate/validate.esh",
         temp.path(),
         &["auto", "auto", &candidate, &base],
     )
@@ -307,14 +307,11 @@ async fn seed_local_mirror_uploads_each_file_to_its_local_bucket() {
     );
     ctx.set_env("SEED_LOG", log.to_str().unwrap());
     let mirror_arg = mirror.to_str().unwrap();
-    ctx.set_positional_args(vec![
-        "seed-local-mirror.esh".to_string(),
-        mirror_arg.to_string(),
-    ]);
+    ctx.set_positional_args(vec!["seed-local.esh".to_string(), mirror_arg.to_string()]);
 
     let code = engine
         .eval_file(
-            &repository_root().join("scripts/release/seed-local-mirror.esh"),
+            &repository_root().join("scripts/release/mirror/seed-local.esh"),
             &mut ctx,
         )
         .await
@@ -354,7 +351,7 @@ async fn sign_packages_creates_a_sorted_ephemeral_manifest() {
     .unwrap();
 
     let (code, output, error) = run_script(
-        "sign-packages.esh",
+        "package/sign.esh",
         temp.path(),
         &[packages.to_str().unwrap(), "1.2.3"],
     )
@@ -433,7 +430,7 @@ async fn metadata_and_channel_manifest_publish_signed_release_pointers() {
     let key = key.to_str().unwrap();
     for binary in ["evin", "esh"] {
         let (code, _, error) = run_script_with_env(
-            "metadata.esh",
+            "mirror/metadata.esh",
             temp.path(),
             &[
                 binary,
@@ -453,7 +450,7 @@ async fn metadata_and_channel_manifest_publish_signed_release_pointers() {
     }
 
     let (code, output, error) = run_script_with_env(
-        "channel-manifest.esh",
+        "mirror/channel-manifest.esh",
         temp.path(),
         &["unstable", "1.2.3", "x86_64-unknown-linux-musl", "mirror"],
         &[("RELEASE_COMMIT", commit)],
@@ -533,7 +530,7 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
     );
     ctx.set_env("PUBLISH_LOG", log.to_str().unwrap());
     ctx.set_positional_args(vec![
-        "publish-mirror.esh".to_string(),
+        "publish.esh".to_string(),
         "unstable".to_string(),
         "1.2.3".to_string(),
         "objects".to_string(),
@@ -541,7 +538,7 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
     ]);
     let code = engine
         .eval_file(
-            &repository_root().join("scripts/release/publish-mirror.esh"),
+            &repository_root().join("scripts/release/mirror/publish.esh"),
             &mut ctx,
         )
         .await
@@ -599,7 +596,7 @@ async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
 
     let base_url = format!("file://{}", remote.display());
     let (code, output, error) = run_script_with_env(
-        "verify-mirror-candidate.esh",
+        "mirror/verify-candidate.esh",
         temp.path(),
         &["unstable", "1.2.3", commit],
         &[("RELEASE_BASE_URL", &base_url)],
@@ -642,10 +639,10 @@ async fn github_ci_snapshot_writes_the_reconciler_state() {
     ctx.set_env("GITHUB_REPOSITORY", "everyinit/test");
     ctx.set_env("GITHUB_TOKEN", "token");
     ctx.set_env("GITHUB_API_URL", "https://api.example.test");
-    ctx.set_positional_args(vec!["github-ci.esh".to_string(), "snapshot".to_string()]);
+    ctx.set_positional_args(vec!["release.esh".to_string(), "snapshot".to_string()]);
     let code = engine
         .eval_file(
-            &repository_root().join("scripts/release/github-ci.esh"),
+            &repository_root().join("scripts/release/github/release.esh"),
             &mut ctx,
         )
         .await
@@ -740,7 +737,7 @@ fn release_fixture(root: &Path, artifacts: &[(String, Vec<u8>)]) -> PathBuf {
 async fn verify_release_packages(root: &Path, directory: &Path) -> (i32, String, String) {
     let directory = directory.to_str().unwrap();
     run_script(
-        "verify-release-packages.esh",
+        "check/release-packages.esh",
         root,
         &[directory, RELEASE_VERSION, RELEASE_TARGET],
     )

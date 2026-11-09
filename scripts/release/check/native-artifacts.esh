@@ -15,7 +15,7 @@
 
 set -e
 
-assert [ "$#" -eq 3 ] "usage: verify-native-artifacts.esh <evin|esh> <version> <artifact-root>"
+assert [ "$#" -eq 3 ] "usage: native-artifacts.esh <evin|esh> <version> <artifact-root>"
 PACKAGE="$1"
 VERSION="$2"
 ARTIFACT_ROOT="$3"

@@ -8,13 +8,13 @@ tasks:
     stage: Publish
     description: "Report Linux musl release prerequisite availability"
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/doctor.esh
+      - run: cargo run --locked -p esh -- scripts/release/check/doctor.esh
 
   rehearsal-start:
     stage: Publish
     description: "Record repository status before generating the release rehearsal"
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-rehearsal-clean.esh --snapshot
+      - run: cargo run --locked -p esh -- scripts/release/check/rehearsal-clean.esh --snapshot
 
   changelog-rehearsal:
     stage: Publish
@@ -26,7 +26,7 @@ tasks:
         with:
           path: target/release-rehearsal/CHANGELOG.md
           version: "${env.RELEASE_VERSION}"
-      - run: cargo run --locked -p esh -- scripts/release/verify-changelog.esh target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/check/changelog.esh target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
 
   distribution-rehearsal:
     stage: Publish
@@ -38,7 +38,7 @@ tasks:
       - esh:package:distribution-verify
       - vscode:package:distribution-verify
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-rehearsal-clean.esh
+      - run: cargo run --locked -p esh -- scripts/release/check/rehearsal-clean.esh
 
   bump:
     stage: Publish
@@ -131,10 +131,10 @@ tasks:
       - run: rm -rf target/release-archives target/release-staging
       - run: mkdir -p target/release-archives target/release-staging
       - run: cargo build --release --locked --target "$RELEASE_TARGET" -p evin -p esh
-      - run: cargo run --locked -p esh -- scripts/release/verify-binary.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
-      - run: cargo run --locked -p esh -- scripts/release/verify-binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
-      - run: cargo run --locked -p esh -- scripts/release/stage.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
-      - run: cargo run --locked -p esh -- scripts/release/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
+      - run: cargo run --locked -p esh -- scripts/release/check/binary.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/check/binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/package/stage.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
+      - run: cargo run --locked -p esh -- scripts/release/package/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
 
   release-archives:
     stage: Publish
@@ -295,7 +295,7 @@ tasks:
       - release:release-native-packages
       - release:release-vscode
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/sign-packages.esh target/release-archives "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/package/sign.esh target/release-archives "$RELEASE_VERSION"
 
   release-archives-verify:
     stage: Publish
@@ -303,9 +303,9 @@ tasks:
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs: [release:release-sign]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
-      - run: cargo run --locked -p esh -- scripts/release/verify-archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
-      - run: cargo run --locked -p esh -- scripts/release/verify-release-packages.esh target/release-archives "$RELEASE_VERSION" "$RELEASE_TARGET"
+      - run: cargo run --locked -p esh -- scripts/release/check/archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
+      - run: cargo run --locked -p esh -- scripts/release/check/archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
+      - run: cargo run --locked -p esh -- scripts/release/check/release-packages.esh target/release-archives "$RELEASE_VERSION" "$RELEASE_TARGET"
 
   tag-verify:
     stage: Publish
@@ -314,14 +314,14 @@ tasks:
     needs:
       - test
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/verify-tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/check/tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
 
   candidate-validate:
     stage: Publish
     description: "Validate a tagged release candidate before it can merge"
     env: [RELEASE_BASE_SHA, RELEASE_COMMIT, RELEASE_TAG, RELEASE_VERSION]
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/validate-candidate.esh "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
+      - run: cargo run --locked -p esh -- scripts/release/candidate/validate.esh "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
 
   package-state:
     stage: Publish
@@ -381,7 +381,7 @@ tasks:
       - release:package-verify
       - infra:mirror:metadata
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh snapshot "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
@@ -391,8 +391,8 @@ tasks:
           notes_dir: .evin/actions/ci/notes/evin
           artifacts_dir: crates/evin/dist/github
           changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh apply .evin/actions/ci/evin-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh snapshot "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh apply .evin/actions/ci/evin-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
@@ -402,8 +402,8 @@ tasks:
           notes_dir: .evin/actions/ci/notes/esh
           artifacts_dir: crates/esh/dist/github
           changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh apply .evin/actions/ci/esh-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh snapshot "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh apply .evin/actions/ci/esh-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
@@ -413,8 +413,8 @@ tasks:
           notes_dir: .evin/actions/ci/notes/vscode
           artifacts_dir: editors/vscode/dist/github
           changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh apply .evin/actions/ci/vscode-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh summary "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh apply .evin/actions/ci/vscode-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh summary "$RELEASE_TAG"
 
   github-publish-prebuilt:
     stage: Publish
@@ -424,7 +424,7 @@ tasks:
       - infra:mirror:metadata-prebuilt
       - infra:mirror:publish-objects
     steps:
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh snapshot "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
@@ -434,8 +434,8 @@ tasks:
           notes_dir: .evin/actions/ci/notes/evin
           artifacts_dir: crates/evin/dist/github
           changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh apply .evin/actions/ci/evin-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh snapshot "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh apply .evin/actions/ci/evin-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
@@ -445,8 +445,8 @@ tasks:
           notes_dir: .evin/actions/ci/notes/esh
           artifacts_dir: crates/esh/dist/github
           changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh apply .evin/actions/ci/esh-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh snapshot "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh apply .evin/actions/ci/esh-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh snapshot "$RELEASE_TAG"
       - uses: evin/ci@v1
         with:
           tag: "${env.RELEASE_TAG}"
@@ -456,5 +456,5 @@ tasks:
           notes_dir: .evin/actions/ci/notes/vscode
           artifacts_dir: editors/vscode/dist/github
           changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh apply .evin/actions/ci/vscode-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/github-ci.esh summary "$RELEASE_TAG"
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh apply .evin/actions/ci/vscode-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/github/release.esh summary "$RELEASE_TAG"
