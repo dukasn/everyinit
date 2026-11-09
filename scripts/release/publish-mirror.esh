@@ -1,0 +1,104 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -ge 3 ] "usage: publish-mirror.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
+assert [ "$#" -le 4 ] "usage: publish-mirror.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
+CHANNEL="$1"
+VERSION="$2"
+MODE="$3"
+MIRROR_ROOT="${4:-dist/mirror}"
+case "$CHANNEL" in
+  unstable)
+    BUCKET=everyinit-preview-artifacts
+    ;;
+  canary)
+    BUCKET=everyinit-artifacts
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+case "$MODE" in
+  all|objects|pointers)
+    ;;
+  *)
+    echo "publish mode must be all, objects, or pointers" >&2
+    exit 1
+    ;;
+esac
+assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "a valid release version is required"
+assert [ -d "$MIRROR_ROOT" ] "mirror root is missing: $MIRROR_ROOT"
+
+for PATH in $(glob "$MIRROR_ROOT/**"); do
+  if ! test -f "$PATH"; then continue; fi
+  KEY="$(path -r "$PATH" "$MIRROR_ROOT")"
+  ROOT_NAME="${KEY%%/*}"
+  case "$ROOT_NAME" in
+    evin|esh|channels)
+      ;;
+    *)
+      echo "unexpected mirror object path $KEY" >&2
+      exit 1
+      ;;
+  esac
+done
+
+SOURCE_COMMIT=""
+for BINARY in evin esh; do
+  DIRECTORY="$MIRROR_ROOT/$BINARY/$CHANNEL/v$VERSION"
+  for FILE in release.json SHA256SUMS SHA256SUMS.sig "$BINARY-v$VERSION-x86_64-unknown-linux-musl.tar.gz"; do
+    assert [ -f "$DIRECTORY/$FILE" ] "$BINARY mirror metadata is missing $FILE"
+  done
+  RELEASE="$DIRECTORY/release.json"
+  assert [ "$(json -g name "$RELEASE")" = "$BINARY" ] "$BINARY release metadata does not match $CHANNEL $VERSION"
+  assert [ "$(json -g version "$RELEASE")" = "$VERSION" ] "$BINARY release metadata does not match $CHANNEL $VERSION"
+  assert [ "$(json -g channel "$RELEASE")" = "$CHANNEL" ] "$BINARY release metadata does not match $CHANNEL $VERSION"
+  COMMIT="$(json -g git_commit "$RELEASE")"
+  if test -n "$SOURCE_COMMIT"; then assert [ "$COMMIT" = "$SOURCE_COMMIT" ] "$CHANNEL channel pointer and both binary manifests must identify one source commit"; fi
+  SOURCE_COMMIT="$COMMIT"
+done
+
+POINTER="$MIRROR_ROOT/channels/$CHANNEL.json"
+assert [ -f "$POINTER" ] "$CHANNEL channel pointer is missing"
+assert [ "$(json -g channel "$POINTER")" = "$CHANNEL" ] "$CHANNEL channel pointer does not identify both binaries at $VERSION"
+assert [ "$(json -g version "$POINTER")" = "$VERSION" ] "$CHANNEL channel pointer does not identify both binaries at $VERSION"
+assert [ "$(json -g git_commit "$POINTER")" = "$SOURCE_COMMIT" ] "$CHANNEL channel pointer and both binary manifests must identify one source commit"
+for BINARY in evin esh; do
+  assert [ "$(json -g "binaries.$BINARY.version" "$POINTER")" = "$VERSION" ] "$CHANNEL channel pointer has an invalid $BINARY release URL"
+  assert [ "$(json -g "binaries.$BINARY.release_url" "$POINTER")" = "https://dl.everyinit.dev/$BINARY/$CHANNEL/v$VERSION/release.json" ] "$CHANNEL channel pointer has an invalid $BINARY release URL"
+done
+
+for PATH in $(glob "$MIRROR_ROOT/**"); do
+  if ! test -f "$PATH"; then continue; fi
+  KEY="$(path -r "$PATH" "$MIRROR_ROOT")"
+  KIND=""
+  case "$KEY" in
+    evin/$CHANNEL/v$VERSION/*|esh/$CHANNEL/v$VERSION/*)
+      KIND=objects
+      ;;
+    channels/$CHANNEL.json)
+      KIND=pointers
+      ;;
+    *)
+      continue
+      ;;
+  esac
+  if test "$MODE" != all && test "$MODE" != "$KIND"; then continue; fi
+  corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$PATH" --config infra/mirror/wrangler.toml
+done
+
+echo "Published $MODE for $CHANNEL $VERSION mirror objects for Evin and ESH"

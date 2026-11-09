@@ -34,7 +34,7 @@ tasks:
     env: [CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, RELEASE_CHANNEL, RELEASE_VERSION]
     needs: [infra:mirror:metadata-prebuilt]
     steps:
-      - run: node scripts/release/publish-mirror.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" objects dist/mirror
+      - run: cargo run --locked -p esh -- scripts/release/publish-mirror.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" objects dist/mirror
 
   publish-pointers:
     stage: Publish
@@ -43,7 +43,7 @@ tasks:
     env: [CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, RELEASE_CHANNEL, RELEASE_VERSION]
     needs: [release:github-publish-prebuilt]
     steps:
-      - run: node scripts/release/publish-mirror.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" pointers dist/mirror
+      - run: cargo run --locked -p esh -- scripts/release/publish-mirror.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" pointers dist/mirror
 
   seed:
     stage: Publish
@@ -59,4 +59,4 @@ tasks:
     cwd: .
     env: [CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, RELEASE_CHANNEL, RELEASE_VERSION]
     steps:
-      - run: node scripts/release/publish-mirror.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" all dist/mirror
+      - run: cargo run --locked -p esh -- scripts/release/publish-mirror.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" all dist/mirror

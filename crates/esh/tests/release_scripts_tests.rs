@@ -479,6 +479,81 @@ async fn metadata_and_channel_manifest_publish_signed_release_pointers() {
     );
 }
 
+#[tokio::test]
+async fn publish_mirror_uploads_only_the_requested_release_objects() {
+    let temp = tempdir().unwrap();
+    let mirror = temp.path().join("mirror");
+    for binary in ["evin", "esh"] {
+        let directory = mirror.join(format!("{binary}/unstable/v1.2.3"));
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(
+            directory.join(format!("{binary}-v1.2.3-x86_64-unknown-linux-musl.tar.gz")),
+            b"archive",
+        )
+        .unwrap();
+        fs::write(directory.join("SHA256SUMS"), "digest  archive\n").unwrap();
+        fs::write(directory.join("SHA256SUMS.sig"), "signature\n").unwrap();
+        fs::write(
+            directory.join("release.json"),
+            format!(
+                "{{\"name\":\"{binary}\",\"version\":\"1.2.3\",\"channel\":\"unstable\",\"git_commit\":\"0123456789abcdef0123456789abcdef01234567\"}}\n"
+            ),
+        )
+        .unwrap();
+    }
+    fs::create_dir_all(mirror.join("channels")).unwrap();
+    fs::write(
+        mirror.join("channels/unstable.json"),
+        "{\"channel\":\"unstable\",\"version\":\"1.2.3\",\"git_commit\":\"0123456789abcdef0123456789abcdef01234567\",\"binaries\":{\"evin\":{\"version\":\"1.2.3\",\"release_url\":\"https://dl.everyinit.dev/evin/unstable/v1.2.3/release.json\"},\"esh\":{\"version\":\"1.2.3\",\"release_url\":\"https://dl.everyinit.dev/esh/unstable/v1.2.3/release.json\"}}}\n",
+    )
+    .unwrap();
+
+    let bin = temp.path().join("bin");
+    fs::create_dir(&bin).unwrap();
+    let log = temp.path().join("corepack.log");
+    let corepack = bin.join("corepack");
+    fs::write(
+        &corepack,
+        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$PUBLISH_LOG\"\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&corepack, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_env(
+        "PATH",
+        format!("{}:{}", bin.display(), std::env::var("PATH").unwrap()),
+    );
+    ctx.set_env("PUBLISH_LOG", log.to_str().unwrap());
+    ctx.set_positional_args(vec![
+        "publish-mirror.esh".to_string(),
+        "unstable".to_string(),
+        "1.2.3".to_string(),
+        "objects".to_string(),
+        "mirror".to_string(),
+    ]);
+    let code = engine
+        .eval_file(
+            &repository_root().join("scripts/release/publish-mirror.esh"),
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
+    let uploads = fs::read_to_string(log).unwrap();
+    assert_eq!(uploads.lines().count(), 8);
+    assert!(uploads.contains("everyinit-preview-artifacts/evin/unstable/v1.2.3/release.json"));
+    assert!(uploads.contains("everyinit-preview-artifacts/esh/unstable/v1.2.3/SHA256SUMS.sig"));
+    assert!(!uploads.contains("channels/unstable.json"));
+}
+
 const RELEASE_VERSION: &str = "0.2.2";
 const RELEASE_TARGET: &str = "x86_64-unknown-linux-musl";
 
