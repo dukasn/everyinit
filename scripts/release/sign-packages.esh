@@ -1,0 +1,85 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -le 2 ] "usage: sign-packages.esh [target-directory] [version]"
+RELEASE_DIRECTORY="${1:-target/release-archives}"
+assert [ -d "$RELEASE_DIRECTORY" ] "release package directory is missing: $RELEASE_DIRECTORY"
+PACKAGE_LIST="$(mktemp)"
+for PATH in $(glob "$RELEASE_DIRECTORY/*"); do
+  FILE="$(basename "$PATH")"
+  case "$FILE" in
+    SHA256SUMS|SHA256SUMS.*|release-key.pub)
+      continue
+      ;;
+    *.tar.gz|*.deb|*.apk|*.pkg.tar.zst|*.vsix)
+      printf '%s\n' "$FILE" >> "$PACKAGE_LIST"
+      ;;
+  esac
+done
+PACKAGE_COUNT="$(wc -l "$PACKAGE_LIST" | cut -d ' ' -f 1)"
+assert [ "$PACKAGE_COUNT" -gt 0 ] "No release packages found to sign in $RELEASE_DIRECTORY"
+
+CHECKSUM_PATH="$RELEASE_DIRECTORY/SHA256SUMS"
+rm -f "$CHECKSUM_PATH"
+for FILE in $(sort "$PACKAGE_LIST"); do
+  DIGEST="$(sha256sum "$RELEASE_DIRECTORY/$FILE" | cut -d ' ' -f 1)"
+  printf '%s  %s\n' "$DIGEST" "$FILE" >> "$CHECKSUM_PATH"
+done
+
+PINNED_PUBLIC_KEY="$(cat infra/get/release-key.pub)"
+IS_EPHEMERAL=false
+KEY_FILE=""
+PUBLIC_KEY_FILE=""
+if test -n "$EVERYINIT_RELEASE_SIGNING_KEY"; then
+  KEY_FILE="$(mktemp)"
+  printf '%s\n' "$EVERYINIT_RELEASE_SIGNING_KEY" > "$KEY_FILE"
+elif test -n "$RELEASE_SIGNING_KEY"; then
+  KEY_FILE="$(mktemp)"
+  printf '%s\n' "$RELEASE_SIGNING_KEY" > "$KEY_FILE"
+elif test -n "$RELEASE_SIGNING_KEY_FILE"; then
+  KEY_FILE="$RELEASE_SIGNING_KEY_FILE"
+else
+  KEY_FILE="$(mktemp)"
+  PUBLIC_KEY_FILE="$(mktemp)"
+  crypto --generate --private "$KEY_FILE" --public "$PUBLIC_KEY_FILE"
+  IS_EPHEMERAL=true
+  echo "No EVERYINIT_RELEASE_SIGNING_KEY or RELEASE_SIGNING_KEY provided; signing with ephemeral Ed25519 key for rehearsal verification."
+fi
+
+if test -z "$PUBLIC_KEY_FILE"; then
+  PUBLIC_KEY_FILE="$(mktemp)"
+  crypto --public-key --key "$KEY_FILE" > "$PUBLIC_KEY_FILE"
+fi
+SIGNING_PUBLIC_KEY="$(cat "$PUBLIC_KEY_FILE")"
+if test "$IS_EPHEMERAL" != true && ! test "$SIGNING_PUBLIC_KEY" = "$PINNED_PUBLIC_KEY"; then
+  echo "Release signing key does not match infra/get/release-key.pub" >&2
+  exit 1
+fi
+crypto --sign --key "$KEY_FILE" "$CHECKSUM_PATH" > "$RELEASE_DIRECTORY/SHA256SUMS.sig"
+crypto --verify --pubkey "$PUBLIC_KEY_FILE" --sig "$RELEASE_DIRECTORY/SHA256SUMS.sig" "$CHECKSUM_PATH"
+base64 "$RELEASE_DIRECTORY/SHA256SUMS.sig" > "$RELEASE_DIRECTORY/SHA256SUMS.sig.b64"
+if test "$IS_EPHEMERAL" = true; then
+  printf '%s\n' "$SIGNING_PUBLIC_KEY" > "$RELEASE_DIRECTORY/release-key.pub"
+else
+  cp infra/get/release-key.pub "$RELEASE_DIRECTORY/release-key.pub"
+fi
+rm -f "$PUBLIC_KEY_FILE"
+if test "$IS_EPHEMERAL" = true || test "$KEY_FILE" != "$RELEASE_SIGNING_KEY_FILE"; then rm -f "$KEY_FILE"; fi
+
+echo "Generated and cryptographically signed SHA256SUMS for $PACKAGE_COUNT artifacts in $RELEASE_DIRECTORY:"
+for FILE in $(sort "$PACKAGE_LIST"); do echo "  - $FILE"; done
+rm -f "$PACKAGE_LIST"

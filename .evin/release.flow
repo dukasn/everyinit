@@ -295,7 +295,7 @@ tasks:
       - release:release-native-packages
       - release:release-vscode
     steps:
-      - run: node scripts/release/sign-packages.mjs target/release-archives "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/sign-packages.esh target/release-archives "$RELEASE_VERSION"
 
   release-archives-verify:
     stage: Publish

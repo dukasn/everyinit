@@ -1,0 +1,53 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -ge 3 ] "usage: channel-manifest.esh <unstable|canary> <version> <target> [mirror-root]"
+assert [ "$#" -le 4 ] "usage: channel-manifest.esh <unstable|canary> <version> <target> [mirror-root]"
+CHANNEL="$1"
+VERSION="$2"
+TARGET="$3"
+MIRROR_ROOT="${4:-dist/mirror}"
+case "$CHANNEL" in
+  unstable|canary)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "a valid release version is required"
+assert [ "$TARGET" = x86_64-unknown-linux-musl ] "unsupported release target $TARGET"
+
+RELEASE_BASE_URL="${RELEASE_BASE_URL:-https://dl.everyinit.dev}"
+while test "${RELEASE_BASE_URL%/}" != "$RELEASE_BASE_URL"; do RELEASE_BASE_URL="${RELEASE_BASE_URL%/}"; done
+SOURCE_COMMIT=""
+for BINARY in evin esh; do
+  RELEASE_PATH="$MIRROR_ROOT/$BINARY/$CHANNEL/v$VERSION/release.json"
+  assert [ -f "$RELEASE_PATH" ] "$BINARY release metadata is missing"
+  assert [ "$(json -g name "$RELEASE_PATH")" = "$BINARY" ] "$BINARY release metadata does not match $CHANNEL $VERSION"
+  assert [ "$(json -g channel "$RELEASE_PATH")" = "$CHANNEL" ] "$BINARY release metadata does not match $CHANNEL $VERSION"
+  assert [ "$(json -g version "$RELEASE_PATH")" = "$VERSION" ] "$BINARY release metadata does not match $CHANNEL $VERSION"
+  assert [ "$(json -g artifacts[0].target "$RELEASE_PATH")" = "$TARGET" ] "$BINARY release metadata does not describe the expected tar.gz target"
+  assert [ "$(json -g artifacts[0].filename "$RELEASE_PATH")" = "$BINARY-v$VERSION-$TARGET.tar.gz" ] "$BINARY release metadata does not describe the expected tar.gz target"
+  COMMIT="$(json -g git_commit "$RELEASE_PATH")"
+  if test -n "$RELEASE_COMMIT"; then assert [ "$COMMIT" = "$RELEASE_COMMIT" ] "$BINARY release metadata has an unexpected source commit"; fi
+  if test -n "$SOURCE_COMMIT"; then assert [ "$COMMIT" = "$SOURCE_COMMIT" ] "Evin and ESH metadata must identify the same source commit"; fi
+  SOURCE_COMMIT="$COMMIT"
+done
+
+mkdir -p "$MIRROR_ROOT/channels"
+printf '{\n  "channel": "%s",\n  "version": "%s",\n  "git_commit": "%s",\n  "binaries": {\n    "evin": {\n      "version": "%s",\n      "release_url": "%s/evin/%s/v%s/release.json"\n    },\n    "esh": {\n      "version": "%s",\n      "release_url": "%s/esh/%s/v%s/release.json"\n    }\n  }\n}\n' "$CHANNEL" "$VERSION" "$SOURCE_COMMIT" "$VERSION" "$RELEASE_BASE_URL" "$CHANNEL" "$VERSION" "$VERSION" "$RELEASE_BASE_URL" "$CHANNEL" "$VERSION" > "$MIRROR_ROOT/channels/$CHANNEL.json"
+echo "Generated the shared $CHANNEL channel pointer for Evin and ESH $VERSION"

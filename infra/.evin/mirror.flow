@@ -13,9 +13,9 @@ tasks:
       - evin:package:cloudflare-verify
       - esh:package:cloudflare-verify
     steps:
-      - run: node scripts/release/metadata.mjs evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github
-      - run: node scripts/release/metadata.mjs esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github
-      - run: node scripts/release/channel-manifest.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror
+      - run: cargo run --locked -p esh -- scripts/release/metadata.esh evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github
+      - run: cargo run --locked -p esh -- scripts/release/metadata.esh esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github
+      - run: cargo run --locked -p esh -- scripts/release/channel-manifest.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror
 
   metadata-prebuilt:
     stage: Publish
@@ -23,9 +23,9 @@ tasks:
     cwd: .
     env: [RELEASE_CHANNEL, RELEASE_COMMIT, RELEASE_BASE_URL, RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
     steps:
-      - run: node scripts/release/metadata.mjs evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github
-      - run: node scripts/release/metadata.mjs esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github
-      - run: node scripts/release/channel-manifest.mjs "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror
+      - run: cargo run --locked -p esh -- scripts/release/metadata.esh evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github
+      - run: cargo run --locked -p esh -- scripts/release/metadata.esh esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github
+      - run: cargo run --locked -p esh -- scripts/release/channel-manifest.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror
 
   publish-objects:
     stage: Publish
@@ -51,7 +51,7 @@ tasks:
     cwd: .
     needs: [infra:mirror:metadata]
     steps:
-      - run: node scripts/release/seed-local-mirror.mjs dist/mirror
+      - run: cargo run --locked -p esh -- scripts/release/seed-local-mirror.esh dist/mirror
 
   publish:
     stage: Publish

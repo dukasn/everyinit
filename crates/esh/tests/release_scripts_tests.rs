@@ -33,10 +33,22 @@ fn repository_root() -> PathBuf {
 }
 
 async fn run_script(script: &str, cwd: &Path, args: &[&str]) -> (i32, String, String) {
+    run_script_with_env(script, cwd, args, &[]).await
+}
+
+async fn run_script_with_env(
+    script: &str,
+    cwd: &Path,
+    args: &[&str],
+    env: &[(&str, &str)],
+) -> (i32, String, String) {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
     ctx.enable_capture();
     ctx.set_cwd(cwd).unwrap();
+    for (key, value) in env {
+        ctx.set_env(*key, *value);
+    }
     let mut positional = vec![script.to_string()];
     positional.extend(args.iter().map(|arg| (*arg).to_string()));
     ctx.set_positional_args(positional);
@@ -316,6 +328,155 @@ async fn seed_local_mirror_uploads_each_file_to_its_local_bucket() {
     assert!(uploads.contains("everyinit-preview-artifacts/evin/unstable/v1.2.3/release.json"));
     assert!(uploads.contains("everyinit-artifacts/channels/canary.json"));
     assert!(uploads.contains("--local --config infra/mirror/wrangler.toml"));
+}
+
+#[tokio::test]
+async fn sign_packages_creates_a_sorted_ephemeral_manifest() {
+    let temp = tempdir().unwrap();
+    let packages = temp.path().join("packages");
+    fs::create_dir_all(temp.path().join("infra/get")).unwrap();
+    fs::create_dir(&packages).unwrap();
+    fs::write(
+        temp.path().join("infra/get/release-key.pub"),
+        "placeholder\n",
+    )
+    .unwrap();
+    fs::write(packages.join("everyinit-1.2.3.vsix"), b"vsix").unwrap();
+    fs::write(
+        packages.join("esh-v1.2.3-x86_64-unknown-linux-musl.tar.gz"),
+        b"esh",
+    )
+    .unwrap();
+    fs::write(
+        packages.join("evin-v1.2.3-x86_64-unknown-linux-musl.tar.gz"),
+        b"evin",
+    )
+    .unwrap();
+
+    let (code, output, error) = run_script(
+        "sign-packages.esh",
+        temp.path(),
+        &[packages.to_str().unwrap(), "1.2.3"],
+    )
+    .await;
+    assert_eq!(code, 0, "{error}");
+    assert!(output.contains("for 3 artifacts"));
+    let manifest = fs::read_to_string(packages.join("SHA256SUMS")).unwrap();
+    let names = manifest
+        .lines()
+        .map(|line| line.split_whitespace().nth(1).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        [
+            "esh-v1.2.3-x86_64-unknown-linux-musl.tar.gz",
+            "everyinit-1.2.3.vsix",
+            "evin-v1.2.3-x86_64-unknown-linux-musl.tar.gz",
+        ]
+    );
+    assert_eq!(fs::read(packages.join("SHA256SUMS.sig")).unwrap().len(), 64);
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(temp.path()).unwrap();
+    assert_eq!(
+        engine
+            .eval_str(
+                "crypto --verify --pubkey packages/release-key.pub --sig packages/SHA256SUMS.sig packages/SHA256SUMS",
+                &mut ctx,
+            )
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[tokio::test]
+async fn metadata_and_channel_manifest_publish_signed_release_pointers() {
+    let temp = tempdir().unwrap();
+    fs::create_dir_all(temp.path().join("infra/get/src")).unwrap();
+    fs::create_dir_all(temp.path().join("archives")).unwrap();
+    fs::write(
+        temp.path()
+            .join("archives/evin-v1.2.3-x86_64-unknown-linux-musl.tar.gz"),
+        b"evin archive",
+    )
+    .unwrap();
+    fs::write(
+        temp.path()
+            .join("archives/esh-v1.2.3-x86_64-unknown-linux-musl.tar.gz"),
+        b"esh archive",
+    )
+    .unwrap();
+
+    let engine = Engine::new();
+    let mut key_context = ExecutionContext::new();
+    key_context.set_cwd(temp.path()).unwrap();
+    assert_eq!(
+        engine
+            .eval_str(
+                "crypto --generate --private release-key.pem --public infra/get/release-key.pub",
+                &mut key_context,
+            )
+            .await
+            .unwrap(),
+        0
+    );
+    fs::copy(
+        temp.path().join("infra/get/release-key.pub"),
+        temp.path().join("infra/get/src/installer.sh"),
+    )
+    .unwrap();
+
+    let commit = "0123456789abcdef0123456789abcdef01234567";
+    let key = temp.path().join("release-key.pem");
+    let key = key.to_str().unwrap();
+    for binary in ["evin", "esh"] {
+        let (code, _, error) = run_script_with_env(
+            "metadata.esh",
+            temp.path(),
+            &[
+                binary,
+                "unstable",
+                "1.2.3",
+                "x86_64-unknown-linux-musl",
+                "mirror",
+                "archives",
+            ],
+            &[
+                ("RELEASE_SIGNING_KEY_FILE", key),
+                ("RELEASE_COMMIT", commit),
+            ],
+        )
+        .await;
+        assert_eq!(code, 0, "{error}");
+    }
+
+    let (code, output, error) = run_script_with_env(
+        "channel-manifest.esh",
+        temp.path(),
+        &["unstable", "1.2.3", "x86_64-unknown-linux-musl", "mirror"],
+        &[("RELEASE_COMMIT", commit)],
+    )
+    .await;
+    assert_eq!(code, 0, "{error}");
+    assert!(output.contains("shared unstable channel pointer"));
+    let pointer = fs::read_to_string(temp.path().join("mirror/channels/unstable.json")).unwrap();
+    assert!(pointer.contains(commit));
+    assert!(pointer.contains("https://dl.everyinit.dev/esh/unstable/v1.2.3/release.json"));
+
+    let mut verify_context = ExecutionContext::new();
+    verify_context.set_cwd(temp.path()).unwrap();
+    assert_eq!(
+        engine
+            .eval_str(
+                "base64 --decode mirror/evin/unstable/v1.2.3/SHA256SUMS.sig > signature\ncrypto --verify --pubkey infra/get/release-key.pub --sig signature mirror/evin/unstable/v1.2.3/SHA256SUMS",
+                &mut verify_context,
+            )
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 const RELEASE_VERSION: &str = "0.2.2";

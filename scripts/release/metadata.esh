@@ -1,0 +1,74 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+assert [ "$#" -ge 4 ] "usage: metadata.esh <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root]"
+assert [ "$#" -le 6 ] "usage: metadata.esh <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root]"
+BINARY="$1"
+CHANNEL="$2"
+VERSION="$3"
+TARGET="$4"
+OUTPUT_ROOT="${5:-dist/mirror}"
+ARCHIVE_ROOT="$6"
+if test -z "$ARCHIVE_ROOT"; then ARCHIVE_ROOT="${RELEASE_ARCHIVE_ROOT:-dist}"; fi
+case "$BINARY" in
+  evin|esh)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+case "$CHANNEL" in
+  unstable|canary)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "a valid release version is required"
+assert [ "$TARGET" = x86_64-unknown-linux-musl ] "unsupported release target $TARGET"
+assert [ -n "$RELEASE_SIGNING_KEY_FILE" ] "RELEASE_SIGNING_KEY_FILE must point to the Ed25519 PKCS#8 private key"
+assert [ -f "$RELEASE_SIGNING_KEY_FILE" ] "release signing key is missing: $RELEASE_SIGNING_KEY_FILE"
+
+PINNED_PUBLIC_KEY="$(cat infra/get/release-key.pub)"
+SIGNING_PUBLIC_KEY="$(crypto --public-key --key "$RELEASE_SIGNING_KEY_FILE")"
+if ! test "$SIGNING_PUBLIC_KEY" = "$PINNED_PUBLIC_KEY"; then
+  echo "release signing key does not match infra/get/release-key.pub" >&2
+  exit 1
+fi
+if ! str --contains "$PINNED_PUBLIC_KEY" "$(cat infra/get/src/installer.sh)"; then
+  echo "installer Worker key does not match infra/get/release-key.pub" >&2
+  exit 1
+fi
+
+FILENAME="$BINARY-v$VERSION-$TARGET.tar.gz"
+ARCHIVE_PATH="$ARCHIVE_ROOT/$FILENAME"
+OUTPUT_DIRECTORY="$OUTPUT_ROOT/$BINARY/$CHANNEL/v$VERSION"
+assert [ -f "$ARCHIVE_PATH" ] "release archive not found: $ARCHIVE_PATH"
+DIGEST="$(sha256sum "$ARCHIVE_PATH" | cut -d ' ' -f 1)"
+if test -n "$RELEASE_COMMIT"; then COMMIT="$RELEASE_COMMIT"; else COMMIT="$(git rev-parse HEAD)"; fi
+assert "echo '$COMMIT' | grep -Eq '^[0-9a-f]{40,64}$'" -- "could not resolve release commit"
+SIZE="$(stat -c %s "$ARCHIVE_PATH")"
+
+mkdir -p "$OUTPUT_DIRECTORY"
+cp "$ARCHIVE_PATH" "$OUTPUT_DIRECTORY/$FILENAME"
+printf '%s  %s\n' "$DIGEST" "$FILENAME" > "$OUTPUT_DIRECTORY/SHA256SUMS"
+printf '{\n  "name": "%s",\n  "version": "%s",\n  "channel": "%s",\n  "released_at": "%s",\n  "git_commit": "%s",\n  "artifacts": [\n    {\n      "filename": "%s",\n      "os": "linux",\n      "arch": "x86_64",\n      "target": "%s",\n      "size": %s,\n      "sha256": "%s"\n    }\n  ]\n}\n' "$BINARY" "$VERSION" "$CHANNEL" "$(date -u +%Y-%m-%dT%H:%M:%S%.3fZ)" "$COMMIT" "$FILENAME" "$TARGET" "$SIZE" "$DIGEST" > "$OUTPUT_DIRECTORY/release.json"
+crypto --sign --key "$RELEASE_SIGNING_KEY_FILE" "$OUTPUT_DIRECTORY/SHA256SUMS" > "$OUTPUT_DIRECTORY/SHA256SUMS.raw.sig"
+crypto --verify --pubkey infra/get/release-key.pub --sig "$OUTPUT_DIRECTORY/SHA256SUMS.raw.sig" "$OUTPUT_DIRECTORY/SHA256SUMS"
+base64 "$OUTPUT_DIRECTORY/SHA256SUMS.raw.sig" > "$OUTPUT_DIRECTORY/SHA256SUMS.sig"
+rm -f "$OUTPUT_DIRECTORY/SHA256SUMS.raw.sig"
+echo "Generated signed $BINARY $VERSION metadata in $OUTPUT_DIRECTORY"
