@@ -1,0 +1,30 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -euo pipefail
+
+if ! echo "$RELEASE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+  echo 'Expected a full commit SHA' >&2
+  exit 1
+fi
+test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
+git fetch origin +refs/heads/main:refs/remotes/origin/main --tags
+git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+RUNS="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&head_sha=$RELEASE_COMMIT&per_page=100" --jq '.workflow_runs[]' | jq -s '[.[] | select(.head_sha == env.RELEASE_COMMIT and .head_branch == "main" and .event == "push")] | sort_by(.id) | last')"
+test "$(printf '%s\n' "$RUNS" | jq -r '.status')" = completed
+test "$(printf '%s\n' "$RUNS" | jq -r '.conclusion')" = success
+RUN_ID="$(printf '%s\n' "$RUNS" | jq -r '.id')"
+JOBS="$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" --jq '.jobs[]' | jq -s '.')"
+printf 'null\n' | jq -e 'all(["Linux validation (quality, tests, E2E, distribution)", "CI gate"][]; . as $name | any($jobs[]; .name == $name and .status == "completed" and .conclusion == "success"))' --argjson jobs "$JOBS" >/dev/null

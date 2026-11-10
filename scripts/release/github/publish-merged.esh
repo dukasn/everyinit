@@ -1,0 +1,58 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -euo pipefail
+
+RELEASE_VERSION="${RELEASE_VERSION:-${RELEASE_TAG#v}}"
+git config user.name 'github-actions[bot]'
+git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+  if [ "$(git cat-file -t "refs/tags/$RELEASE_TAG")" != tag ]; then
+    echo 'Existing release tag is not annotated' >&2
+    exit 1
+  fi
+  if [ "$(git rev-parse "refs/tags/$RELEASE_TAG^{}")" != "$RELEASE_COMMIT" ]; then
+    echo 'Release tag points to another commit; resolve manually' >&2
+    exit 1
+  fi
+else
+  git tag -a "$RELEASE_TAG" "$RELEASE_COMMIT" -m "Release $RELEASE_TAG"
+  git push origin "refs/tags/$RELEASE_TAG"
+fi
+RELEASES="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '[.[] | select(.tag_name == env.RELEASE_TAG)]')"
+COUNT="$(printf '%s\n' "$RELEASES" | jq 'length')"
+if [ "$COUNT" -ne 0 ]; then
+  if printf '%s\n' "$RELEASES" | jq -e 'length == 1 and .[0].draft == false and ([.[0].assets[].name] | index("evin-" + env.RELEASE_TAG + "-" + env.RELEASE_TARGET + ".tar.gz") != null and index("esh-" + env.RELEASE_TAG + "-" + env.RELEASE_TARGET + ".tar.gz") != null)' >/dev/null; then
+    echo 'Release already published with both assets; nothing to do.'
+    exit 0
+  fi
+  echo 'Existing draft or incomplete release: inspect and repair or remove it before retrying.' >&2
+  exit 1
+fi
+set --
+if [ -d target/release-archives ]; then
+  for FILE in $(glob "target/release-archives/*"); do
+    if [ -f "$FILE" ]; then
+      set -- "$@" "$FILE"
+    fi
+  done
+fi
+if [ "$#" -eq 0 ]; then
+  set -- \
+    "target/release-archives/evin-$RELEASE_TAG-$RELEASE_TARGET.tar.gz" \
+    "target/release-archives/esh-$RELEASE_TAG-$RELEASE_TARGET.tar.gz"
+fi
+gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes-file target/release-notes.md "$@"
+gh release edit "$RELEASE_TAG" --draft=false

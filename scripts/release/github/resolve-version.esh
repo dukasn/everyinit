@@ -1,0 +1,42 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -euo pipefail
+
+VERSION="$(grep -E '^version[[:space:]]*=' Cargo.toml | head -n 1 | cut -d '"' -f 2)"
+assert [ -n "$VERSION" ] "workspace version is missing from Cargo.toml"
+if [ -f .evin/workspace.flow ]; then
+  FLOW_VERSION="$(grep -E '^[[:space:]]+version:[[:space:]]*"' .evin/workspace.flow | head -n 1 | cut -d '"' -f 2)"
+  assert [ -n "$FLOW_VERSION" ] "workspace version is missing from .evin/workspace.flow"
+  assert [ "$VERSION" = "$FLOW_VERSION" ] "workspace versions do not match (Cargo.toml=$VERSION, .evin/workspace.flow=$FLOW_VERSION)"
+fi
+if [ -f editors/vscode/package.json ]; then
+  VSCODE_VERSION="$(json -g version editors/vscode/package.json)"
+  assert [ -n "$VSCODE_VERSION" ] "workspace version is missing from editors/vscode/package.json"
+  assert [ "$VERSION" = "$VSCODE_VERSION" ] "workspace versions do not match (Cargo.toml=$VERSION, editors/vscode/package.json=$VSCODE_VERSION)"
+fi
+if ! echo "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+  echo 'Invalid stable release version' >&2
+  exit 1
+fi
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+  echo "RELEASE_TAG=v$VERSION" >> "$GITHUB_ENV"
+fi
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+  echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+fi
+echo "$VERSION"

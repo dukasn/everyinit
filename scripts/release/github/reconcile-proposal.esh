@@ -1,0 +1,36 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -euo pipefail
+
+git fetch origin +refs/heads/main:refs/remotes/origin/main --tags
+if [ "$(git rev-parse origin/main)" != "$RELEASE_COMMIT" ]; then
+  echo 'Main advanced; its own CI run will maintain the proposal.'
+  exit 0
+fi
+git config user.name 'github-actions[bot]'
+git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+git config commit.gpgsign false
+git switch --force-create "$RELEASE_BRANCH" "$RELEASE_COMMIT"
+cargo evin-dev run release:propose
+git fetch origin +refs/heads/main:refs/remotes/origin/main
+if [ "$(git rev-parse origin/main)" != "$RELEASE_COMMIT" ]; then
+  PR="$(gh pr list --head "$RELEASE_BRANCH" --base main --state open --json number --jq '.[0].number // empty')"
+  if [ -n "$PR" ]; then
+    gh pr close "$PR" --comment "Main advanced during release reconciliation; the latest main run will recreate the proposal if appropriate."
+  fi
+  echo 'Main advanced during proposal reconciliation; retry after its CI completes.' >&2
+  exit 1
+fi

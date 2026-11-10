@@ -1,0 +1,52 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -euo pipefail
+
+git fetch origin +refs/heads/main:refs/remotes/origin/main --tags
+if [ "$(git rev-parse origin/main)" != "$RELEASE_COMMIT" ]; then
+  echo 'Main advanced; its own CI run will maintain the proposal.'
+  exit 0
+fi
+MERGES="$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=closed&base=main&per_page=100" --jq '.[]' | jq -sr '[.[] | select(.base.ref == "main" and .head.ref == env.RELEASE_BRANCH and .head.repo.full_name == env.GITHUB_REPOSITORY and .merged_at != null and .merge_commit_sha != null) | .merge_commit_sha] | unique[]')"
+if [ -z "$MERGES" ]; then
+  exit 0
+fi
+RELEASES="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.')"
+for MERGE in $(printf '%s\n' "$MERGES"); do
+  if ! git cat-file -e "$MERGE^{commit}"; then
+    echo "Cannot inspect merged release commit $MERGE" >&2
+    exit 1
+  fi
+  if ! git merge-base --is-ancestor "$MERGE" "$RELEASE_COMMIT"; then
+    continue
+  fi
+  VERSION="$(git show "$MERGE:Cargo.toml" | grep -E '^version[[:space:]]*=' | head -n 1 | cut -d '"' -f 2)"
+  if ! echo "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+    echo "Invalid version at merged release $MERGE" >&2
+    exit 1
+  fi
+  TAG="v$VERSION"
+  if ! git show-ref --verify --quiet "refs/tags/$TAG" ||
+     [ "$(git cat-file -t "refs/tags/$TAG")" != tag ] ||
+     [ "$(git rev-parse "refs/tags/$TAG^{}")" != "$MERGE" ]; then
+    echo "Merged release $MERGE is not tagged correctly as $TAG; retry Release for that SHA before proposing." >&2
+    exit 1
+  fi
+  if ! printf '%s\n' "$RELEASES" | jq -e --arg tag "$TAG" 'any(.[]; .tag_name == $tag and .draft == false and ([.assets[].name] | index("evin-" + $tag + "-" + env.RELEASE_TARGET + ".tar.gz") != null and index("esh-" + $tag + "-" + env.RELEASE_TARGET + ".tar.gz") != null))' >/dev/null; then
+    echo "Merged release $MERGE ($TAG) is not fully published; repair or retry it before proposing." >&2
+    exit 1
+  fi
+done

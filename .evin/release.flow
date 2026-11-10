@@ -113,6 +113,27 @@ tasks:
             update: gh pr edit "$EVIN_REVIEW_ID" --title "$EVIN_REVIEW_TITLE" --body-file "$EVIN_REVIEW_BODY_FILE"
             close: gh pr close "$EVIN_REVIEW_ID" --delete-branch --comment "Nothing left to release."
 
+  require-ci:
+    stage: Publish
+    description: "Require exact successful main push CI for the target release commit"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_COMMIT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/require-ci.esh
+
+  identify-proposal:
+    stage: Publish
+    description: "Check whether the target main commit is a merged release proposal"
+    env: [GH_TOKEN, GITHUB_OUTPUT, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/identify-proposal.esh
+
+  resolve-version:
+    stage: Publish
+    description: "Resolve the verified stable workspace release version and tag"
+    env: [GITHUB_ENV, GITHUB_OUTPUT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/resolve-version.esh
+
   release-notes:
     stage: Publish
     description: "Export the merged changelog section for the release"
@@ -122,6 +143,27 @@ tasks:
         with:
           section: "${env.RELEASE_TAG}"
           notes_path: target/release-notes.md
+
+  publish-merged:
+    stage: Publish
+    description: "Create or verify the annotated release tag and publish the GitHub Release"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_COMMIT, RELEASE_TAG, RELEASE_TARGET, RELEASE_VERSION]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/publish-merged.esh
+
+  audit-published:
+    stage: Publish
+    description: "Verify that all merged release commits on main are tagged and published"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT, RELEASE_TARGET]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/audit-published.esh
+
+  reconcile-proposal:
+    stage: Publish
+    description: "Maintain the automated release proposal branch and pull request"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/reconcile-proposal.esh
 
   release-stage:
     stage: Publish

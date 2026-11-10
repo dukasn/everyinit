@@ -1,0 +1,23 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -euo pipefail
+
+COUNT="$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$RELEASE_COMMIT/pulls?per_page=100" --jq '.[]' | jq -s '[.[] | select(.base.ref == "main" and .head.ref == env.RELEASE_BRANCH and .head.repo.full_name == env.GITHUB_REPOSITORY and .merged_at != null and .merge_commit_sha == env.RELEASE_COMMIT)] | length')"
+if [ "$COUNT" -gt 1 ]; then
+  echo 'Ambiguous release proposal' >&2
+  exit 1
+fi
+echo "merged=$COUNT" >> "$GITHUB_OUTPUT"
