@@ -1125,6 +1125,7 @@ dependencies = [
  "chrono",
  "clap",
  "console",
+ "esh",
  "evin-action-archive",
  "evin-action-changelog",
  "evin-action-ci",

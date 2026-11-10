@@ -12,11 +12,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use esh::{Engine, ExecutionContext};
 use serde_yaml::Value;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::ExitStatusExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn root() -> PathBuf {
@@ -27,7 +29,7 @@ fn flow(path: &str) -> Value {
     serde_yaml::from_str(&fs::read_to_string(root().join(path)).unwrap()).unwrap()
 }
 
-fn step(name: &str) -> String {
+fn workflow_step_run(name: &str) -> String {
     flow(".github/workflows/release.yml")["jobs"]["release"]["steps"]
         .as_sequence()
         .unwrap()
@@ -37,6 +39,24 @@ fn step(name: &str) -> String {
         .as_str()
         .unwrap()
         .to_owned()
+}
+
+fn step(name: &str) -> String {
+    let run = workflow_step_run(name);
+    if let Some(task) = run.trim().strip_prefix("cargo evin-dev run release:") {
+        let task_run = flow(".evin/release.flow")["tasks"][task]["steps"][0]["run"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        if let Some(script_path) = task_run
+            .trim()
+            .strip_prefix("cargo run --locked -p esh -- ")
+        {
+            return fs::read_to_string(root().join(script_path)).unwrap();
+        }
+        return task_run;
+    }
+    run
 }
 
 #[test]
@@ -98,6 +118,42 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         publication["if"].as_str(),
         Some("steps.proposal.outputs.merged == '1'")
     );
+    for (step_name, expected_task) in [
+        (
+            "Require exact successful main push CI",
+            "release:require-ci",
+        ),
+        (
+            "Identify merged release proposal",
+            "release:identify-proposal",
+        ),
+        ("Determine release version", "release:resolve-version"),
+        (
+            "Extract merged release notes with Evin",
+            "release:release-notes",
+        ),
+        (
+            "Build and verify release archives with Evin",
+            "release:release-archives-verify",
+        ),
+        (
+            "Tag and publish the merged release",
+            "release:publish-merged",
+        ),
+        (
+            "Require merged releases to be published before proposing",
+            "release:audit-published",
+        ),
+        (
+            "Maintain the release pull request",
+            "release:reconcile-proposal",
+        ),
+    ] {
+        assert_eq!(
+            workflow_step_run(step_name),
+            format!("cargo evin-dev run {expected_task}")
+        );
+    }
     let identity = step("Identify merged release proposal");
     for value in [
         ".merge_commit_sha == env.RELEASE_COMMIT",
@@ -293,19 +349,48 @@ fi
             self.dir.join("bin").display(),
             std::env::var("PATH").unwrap()
         );
-        Command::new("bash")
-            .args(["-e", "-o", "pipefail", "-c", script])
-            .current_dir(&self.work)
-            .env("PATH", path)
-            .env("GH_TEST_DIR", &self.dir)
-            .env("GITHUB_REPOSITORY", "owner/repo")
-            .env("RELEASE_COMMIT", &self.sha)
-            .env("RELEASE_BRANCH", "automation/release")
-            .env("RELEASE_TAG", "v0.1.0")
-            .env("RELEASE_TARGET", "x86_64-unknown-linux-musl")
-            .env("GITHUB_OUTPUT", self.dir.join("output"))
-            .output()
-            .unwrap()
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let engine = Engine::new();
+            let mut ctx = ExecutionContext::new();
+            ctx.enable_capture();
+            ctx.set_cwd(&self.work).unwrap();
+            ctx.set_env("PATH", path);
+            ctx.set_env("GH_TEST_DIR", self.dir.to_string_lossy().as_ref());
+            ctx.set_env("GITHUB_REPOSITORY", "owner/repo");
+            ctx.set_env("RELEASE_COMMIT", &self.sha);
+            ctx.set_env("RELEASE_BRANCH", "automation/release");
+            ctx.set_env("RELEASE_TAG", "v0.1.0");
+            ctx.set_env("RELEASE_TARGET", "x86_64-unknown-linux-musl");
+            ctx.set_env(
+                "GITHUB_OUTPUT",
+                self.dir.join("output").to_string_lossy().as_ref(),
+            );
+            ctx.set_env(
+                "GITHUB_ENV",
+                self.dir.join("env").to_string_lossy().as_ref(),
+            );
+            let code = match engine.eval_str(script, &mut ctx).await {
+                Ok(code) => code,
+                Err(err) => {
+                    let mut stderr = ctx.get_captured_stderr_bytes().unwrap_or_default();
+                    stderr.extend_from_slice(format!("{err}\n").as_bytes());
+                    return std::process::Output {
+                        status: ExitStatus::from_raw(1 << 8),
+                        stdout: ctx.get_captured_stdout_bytes().unwrap_or_default(),
+                        stderr,
+                    };
+                }
+            };
+            std::process::Output {
+                status: ExitStatus::from_raw((code & 0xff) << 8),
+                stdout: ctx.get_captured_stdout_bytes().unwrap_or_default(),
+                stderr: ctx.get_captured_stderr_bytes().unwrap_or_default(),
+            }
+        })
     }
 }
 
@@ -561,9 +646,12 @@ fn proposal_waits_for_merged_release_tag_and_complete_publication() {
     );
     fs::write(repo.dir.join("pulls"), "[]").unwrap();
     fs::write(repo.dir.join("releases"), "[]").unwrap();
+    let initial = repo.run(&script);
     assert!(
-        repo.run(&script).status.success(),
-        "initial release may be proposed"
+        initial.status.success(),
+        "initial release may be proposed: stdout={} stderr={}",
+        String::from_utf8_lossy(&initial.stdout),
+        String::from_utf8_lossy(&initial.stderr)
     );
 
     fs::write(repo.dir.join("pulls"), pull).unwrap();
@@ -642,7 +730,12 @@ fi
     fs::write(repo.dir.join("advance-main"), "").unwrap();
     let raced = repo.run(&script);
     assert!(!raced.status.success());
-    assert!(String::from_utf8_lossy(&raced.stderr).contains("Main advanced during proposal"));
+    assert!(
+        String::from_utf8_lossy(&raced.stderr).contains("Main advanced during proposal"),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&raced.stdout),
+        String::from_utf8_lossy(&raced.stderr)
+    );
     let calls = fs::read_to_string(repo.dir.join("calls")).unwrap();
     assert!(calls.contains("pr close 1 --comment"));
 }
@@ -691,4 +784,72 @@ fn tag_and_publication_are_idempotent_and_reject_partial_or_conflicting_state() 
         !repo.run(&script).status.success(),
         "tag pointing to another commit must be rejected"
     );
+}
+
+#[test]
+fn release_version_resolution_requires_matching_stable_workspace_version() {
+    let repo = Repo::new();
+    let script = step("Determine release version");
+    fs::create_dir_all(repo.work.join(".evin")).unwrap();
+    fs::create_dir_all(repo.work.join("editors/vscode")).unwrap();
+    fs::write(
+        repo.work.join(".evin/workspace.flow"),
+        "workspace:\n  version: \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.work.join("editors/vscode/package.json"),
+        "{\"version\": \"0.1.0\"}\n",
+    )
+    .unwrap();
+    fs::write(repo.dir.join("env"), "").unwrap();
+    fs::write(repo.dir.join("output"), "").unwrap();
+
+    let ok = repo.run(&script);
+    assert!(
+        ok.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ok.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(repo.dir.join("env")).unwrap(),
+        "RELEASE_VERSION=0.1.0\nRELEASE_TAG=v0.1.0\n"
+    );
+    assert_eq!(
+        fs::read_to_string(repo.dir.join("output")).unwrap(),
+        "version=0.1.0\ntag=v0.1.0\n"
+    );
+
+    fs::write(
+        repo.work.join(".evin/workspace.flow"),
+        "workspace:\n  version: \"0.2.0\"\n",
+    )
+    .unwrap();
+    let mismatch = repo.run(&script);
+    assert!(
+        !mismatch.status.success(),
+        "mismatched workspace version must be rejected"
+    );
+
+    fs::write(
+        repo.work.join("Cargo.toml"),
+        "[workspace.package]\nversion = \"0.1.0-alpha.1\"\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.work.join(".evin/workspace.flow"),
+        "workspace:\n  version: \"0.1.0-alpha.1\"\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.work.join("editors/vscode/package.json"),
+        "{\"version\": \"0.1.0-alpha.1\"}\n",
+    )
+    .unwrap();
+    let prerelease = repo.run(&script);
+    assert!(
+        !prerelease.status.success(),
+        "prerelease version must be rejected by stable release resolution"
+    );
+    assert!(String::from_utf8_lossy(&prerelease.stderr).contains("Invalid stable release version"));
 }
