@@ -72,12 +72,12 @@ jobs:
           version=$(cargo run --locked -p esh -- scripts/release/check/workspace-version.esh)
           echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
       - name: Rehearse changelog and every package format without publishing
-        run: cargo evin-dev run release:distribution-rehearsal
+        run: cargo evin-dev run --verbose release:distribution-rehearsal
       - name: Build and verify all release packages and signatures
         env:
           EVERYINIT_RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY || secrets.RELEASE_SIGNING_KEY }}
-        run: cargo evin-dev run release:release-archives-verify
+        run: cargo evin-dev run --verbose release:release-archives-verify
       - name: Upload distribution packages
         uses: actions/upload-artifact@v4
         with:

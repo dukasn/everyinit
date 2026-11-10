@@ -45,10 +45,10 @@ jobs:
           targets: x86_64-unknown-linux-musl
       - uses: Swatinem/rust-cache@v2
       - name: Require exact successful main push CI
-        run: cargo evin-dev run release:require-ci
+        run: cargo evin-dev run --verbose release:require-ci
       - name: Identify merged release proposal
         id: proposal
-        run: cargo evin-dev run release:identify-proposal
+        run: cargo evin-dev run --verbose release:identify-proposal
       - name: Install release packaging tools
         if: steps.proposal.outputs.merged == '1'
         run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
@@ -67,20 +67,20 @@ jobs:
           npm --prefix editors/vscode ci
       - name: Determine release version
         if: steps.proposal.outputs.merged == '1'
-        run: cargo evin-dev run release:resolve-version
+        run: cargo evin-dev run --verbose release:resolve-version
       - name: Extract merged release notes with Evin
         if: steps.proposal.outputs.merged == '1'
-        run: cargo evin-dev run release:release-notes
+        run: cargo evin-dev run --verbose release:release-notes
       - name: Build and verify release archives with Evin
         if: steps.proposal.outputs.merged == '1'
         env:
           EVERYINIT_RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY || secrets.RELEASE_SIGNING_KEY }}
-        run: cargo evin-dev run release:release-archives-verify
+        run: cargo evin-dev run --verbose release:release-archives-verify
       - name: Tag and publish the merged release
         if: steps.proposal.outputs.merged == '1'
-        run: cargo evin-dev run release:publish-merged
+        run: cargo evin-dev run --verbose release:publish-merged
       - name: Require merged releases to be published before proposing
-        run: cargo evin-dev run release:audit-published
+        run: cargo evin-dev run --verbose release:audit-published
       - name: Maintain the release pull request
-        run: cargo evin-dev run release:reconcile-proposal
+        run: cargo evin-dev run --verbose release:reconcile-proposal

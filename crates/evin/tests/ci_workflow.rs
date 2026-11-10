@@ -45,8 +45,14 @@ fn ci_runs_full_validation_and_gate_on_pushes_and_pull_requests() {
         .filter_map(|step| step["run"].as_str())
         .collect::<Vec<_>>()
         .join("\n");
-    for target in ["quality", "test", "e2e", "release:distribution-rehearsal"] {
-        assert!(commands.contains(&format!("cargo evin-dev run {target}")));
+    for command in [
+        "cargo evin-dev run quality",
+        "cargo evin-dev run test",
+        "cargo evin-dev run e2e",
+        "cargo evin-dev run --verbose release:distribution-rehearsal",
+        "cargo evin-dev run --verbose release:release-archives-verify",
+    ] {
+        assert!(commands.contains(command), "missing command: {command}");
     }
 
     let gate = &jobs["ci-gate"];

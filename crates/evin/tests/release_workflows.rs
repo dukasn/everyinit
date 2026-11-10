@@ -43,7 +43,11 @@ fn workflow_step_run(name: &str) -> String {
 
 fn step(name: &str) -> String {
     let run = workflow_step_run(name);
-    if let Some(task) = run.trim().strip_prefix("cargo evin-dev run release:") {
+    let trimmed = run.trim();
+    if let Some(task) = trimmed
+        .strip_prefix("cargo evin-dev run --verbose release:")
+        .or_else(|| trimmed.strip_prefix("cargo evin-dev run release:"))
+    {
         let task_run = flow(".evin/release.flow")["tasks"][task]["steps"][0]["run"]
             .as_str()
             .unwrap()
@@ -151,7 +155,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     ] {
         assert_eq!(
             workflow_step_run(step_name),
-            format!("cargo evin-dev run {expected_task}")
+            format!("cargo evin-dev run --verbose {expected_task}")
         );
     }
     let identity = step("Identify merged release proposal");
