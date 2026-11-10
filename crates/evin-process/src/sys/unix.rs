@@ -56,7 +56,7 @@ pub(crate) fn spawn(spec: &ProcessSpec) -> Result<SpawnedProcess, ProcessError> 
 
     let spawn_context =
         configure_command(&mut command, spec.mode).map_err(ProcessError::Supervision)?;
-    let mut child = command.spawn().map_err(|source| ProcessError::Spawn {
+    let mut child = spawn_command(&mut command).map_err(|source| ProcessError::Spawn {
         program: spec.program.to_string_lossy().into_owned(),
         source,
     })?;
@@ -77,6 +77,24 @@ pub(crate) fn spawn(spec: &ProcessSpec) -> Result<SpawnedProcess, ProcessError> 
         stdout,
         stderr,
     })
+}
+
+fn spawn_command(command: &mut Command) -> io::Result<Child> {
+    let mut attempts = 0_u32;
+    loop {
+        match command.spawn() {
+            Ok(child) => return Ok(child),
+            // On Unix, pre_exec forces fork+exec. If another thread forks
+            // while a freshly written executable descriptor is being closed,
+            // the kernel can briefly return ETXTBSY until the sibling child
+            // completes execve.
+            Err(error) if error.raw_os_error() == Some(libc::ETXTBSY) && attempts < 25 => {
+                attempts += 1;
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+            Err(error) => return Err(error),
+        }
+    }
 }
 
 pub(crate) fn configure_command(
