@@ -523,6 +523,16 @@ impl<'a> Lexer<'a> {
                         }
                         continue;
                     }
+                    if c == b'\'' {
+                        self.advance();
+                        while !self.is_eof() && self.bytes[self.offset] != b'\'' {
+                            self.advance();
+                        }
+                        if !self.is_eof() {
+                            self.advance();
+                        }
+                        continue;
+                    }
                     if c == b'"' {
                         self.advance();
                         while !self.is_eof() && self.bytes[self.offset] != b'"' {

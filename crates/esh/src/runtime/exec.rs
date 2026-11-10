@@ -591,6 +591,15 @@ async fn execute_pipeline(
 }
 
 fn expand_for_array(word: &PlanWord, ctx: &ExecutionContext) -> Option<Vec<String>> {
+    if matches!(
+        word.parts.as_slice(),
+        [PlanWordPart::Variable(name)] if name == "@"
+    ) || matches!(
+        word.parts.as_slice(),
+        [PlanWordPart::DoubleQuoted(content)] if content == "$@" || content == "${@}"
+    ) {
+        return Some(ctx.positional_args().to_vec());
+    }
     let expression = match word.parts.as_slice() {
         [PlanWordPart::Variable(expression)] => expression.as_str(),
         [PlanWordPart::DoubleQuoted(content)] => content
@@ -634,6 +643,9 @@ async fn execute_plan_node(node: &PlanNode, ctx: &mut ExecutionContext) -> Resul
     }
 
     // 2. Apply command-scoped assignments
+    if node.raw_name == "=" {
+        ctx.set_last_exit(0);
+    }
     for asgn in &node.assignments {
         if let Some(array_vals) = &asgn.array_values {
             let mut items = Vec::new();
@@ -663,12 +675,16 @@ async fn execute_plan_node(node: &PlanNode, ctx: &mut ExecutionContext) -> Resul
     }
 
     if node.raw_name == "=" {
-        return Ok(0);
+        return Ok(ctx.last_exit());
     }
 
     // 3. Expand arguments
     let mut expanded_args = Vec::new();
     for arg in &node.args {
+        if let Some(items) = expand_for_array(arg, ctx) {
+            expanded_args.extend(items);
+            continue;
+        }
         let val = expand_word(arg, ctx).await?;
         expanded_args.push(val);
     }
@@ -714,16 +730,36 @@ async fn execute_plan_node(node: &PlanNode, ctx: &mut ExecutionContext) -> Resul
             let target_path = expand_word(&redir.target, ctx).await?;
             let target = StreamTarget::from_redirection(redir.op, &target_path, ctx.cwd())?;
 
-            match redir.op {
-                RedirectionOp::RedirectOut | RedirectionOp::RedirectAppend => {
+            match (&redir.op, &target) {
+                (
+                    RedirectionOp::RedirectOut
+                    | RedirectionOp::RedirectAppend
+                    | RedirectionOp::RedirectStderr
+                    | RedirectionOp::RedirectStderrAppend,
+                    StreamTarget::Stderr,
+                ) => {
+                    ctx.write_stderr(&out_bytes);
+                    stdout_redirected = true;
+                }
+                (RedirectionOp::RedirectOut | RedirectionOp::RedirectAppend, _) => {
                     target.write_data(&out_bytes)?;
                     stdout_redirected = true;
                 }
-                RedirectionOp::RedirectStderr | RedirectionOp::RedirectStderrAppend => {
+                (RedirectionOp::RedirectStderr | RedirectionOp::RedirectStderrAppend, _) => {
                     target.write_data(&err_bytes)?;
                     stderr_redirected = true;
                 }
-                RedirectionOp::RedirectAll | RedirectionOp::RedirectAllAppend => {
+                (
+                    RedirectionOp::RedirectAll | RedirectionOp::RedirectAllAppend,
+                    StreamTarget::Stdout,
+                ) => {
+                    let mut combined = out_bytes.clone();
+                    combined.extend_from_slice(&err_bytes);
+                    ctx.write_stdout(&combined);
+                    stdout_redirected = true;
+                    stderr_redirected = true;
+                }
+                (RedirectionOp::RedirectAll | RedirectionOp::RedirectAllAppend, _) => {
                     let mut combined = out_bytes.clone();
                     combined.extend_from_slice(&err_bytes);
                     target.write_data(&combined)?;
@@ -816,6 +852,17 @@ async fn dispatch_node_target(
         }
 
         CommandTarget::External(bin_path) => {
+            let resolved_bin = if !raw_name.contains('/')
+                && !(cfg!(windows) && raw_name.contains('\\'))
+                && let Some(path_var) = ctx.env_vars().get("PATH")
+            {
+                std::env::split_paths(path_var)
+                    .map(|dir| dir.join(raw_name))
+                    .find(|candidate| candidate.is_file())
+                    .unwrap_or_else(|| bin_path.clone())
+            } else {
+                bin_path.clone()
+            };
             let input_data = ctx.take_stdin();
             let stdin_is_piped = input_data.is_some();
             let capture = ctx.is_capturing();
@@ -824,7 +871,7 @@ async fn dispatch_node_target(
             } else {
                 ProcessMode::InteractiveForeground
             };
-            let mut spec = ProcessSpec::new(bin_path, ctx.cwd(), mode)
+            let mut spec = ProcessSpec::new(resolved_bin, ctx.cwd(), mode)
                 .args(args.iter().map(String::as_str))
                 .environment(EnvironmentPolicy::InheritAndOverride, ctx.env_vars());
             spec.stdin = match input_data {
@@ -895,7 +942,11 @@ pub async fn expand_word(word: &PlanWord, ctx: &mut ExecutionContext) -> Result<
                     let mut sub_ctx = ctx.clone_isolated();
                     sub_ctx.enable_capture();
 
-                    plan.execute(&mut sub_ctx).await?;
+                    let sub_status = plan.execute(&mut sub_ctx).await?;
+                    ctx.set_last_exit(sub_status);
+                    if let Some(err) = sub_ctx.get_captured_stderr_bytes() {
+                        ctx.write_stderr(&err);
+                    }
 
                     let stdout = sub_ctx.get_captured_stdout().unwrap_or_default();
                     let trimmed = stdout.trim_end_matches(&['\r', '\n'][..]);
@@ -1225,6 +1276,16 @@ pub async fn expand_double_quoted(
                         i += 2;
                         continue;
                     }
+                    if c == b'\'' {
+                        i += 1;
+                        while i < bytes.len() && bytes[i] != b'\'' {
+                            i += 1;
+                        }
+                        if i < bytes.len() {
+                            i += 1;
+                        }
+                        continue;
+                    }
                     if c == b'"' {
                         i += 1;
                         while i < bytes.len() && bytes[i] != b'"' {
@@ -1266,7 +1327,11 @@ pub async fn expand_double_quoted(
                 let mut sub_ctx = ctx.clone_isolated();
                 sub_ctx.enable_capture();
 
-                plan.execute(&mut sub_ctx).await?;
+                let sub_status = plan.execute(&mut sub_ctx).await?;
+                ctx.set_last_exit(sub_status);
+                if let Some(err) = sub_ctx.get_captured_stderr_bytes() {
+                    ctx.write_stderr(&err);
+                }
 
                 let stdout = sub_ctx.get_captured_stdout().unwrap_or_default();
                 let trimmed = stdout.trim_end_matches(&['\r', '\n'][..]);

@@ -213,3 +213,29 @@ async fn test_runtime_pipeline_stream() {
     assert_eq!(status, 0);
     assert_eq!(ctx.get_captured_stdout().unwrap(), "done\n");
 }
+
+#[tokio::test]
+async fn test_stderr_redirection_positional_expansion_and_command_sub_quotes() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let script = r#"
+        set --
+        set -- "$@" "first arg"
+        set -- "$@" "second arg"
+        VAL="$(printf 'version = "1.2.3"\n' | cut -d '"' -f 2)"
+        printf '%s\n' "$@" "$VAL"
+        echo "diagnostic message" >&2
+    "#;
+    let status = engine
+        .eval_str(script, &mut ctx)
+        .await
+        .expect("eval failed");
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "first arg\nsecond arg\n1.2.3\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "diagnostic message\n");
+}
