@@ -142,8 +142,11 @@ async fn main() {
         return;
     }
     let dry_run = cli.dry_run;
-    let verbose = cli.verbose;
-    let debug_enabled = cli.debug || std::env::var("EVIN_LOG").as_deref() == Ok("debug");
+    let (verbose, debug_enabled) = resolve_verbosity_flags(
+        &cli,
+        std::env::var("EVIN_LOG").ok().as_deref(),
+        std::env::var("RUNNER_DEBUG").ok().as_deref(),
+    );
     let presentation_mode = evin_ui::mode::Mode::resolve(dry_run, debug_enabled);
     let pipeline_mode = if dry_run {
         evin_action_sdk::PipelineMode::DryRun
@@ -311,7 +314,7 @@ async fn main() {
         let flags = vec![
             "debug=true".to_string(),
             format!("dry_run={}", cli.dry_run),
-            format!("verbose={}", cli.verbose),
+            format!("verbose={verbose}"),
         ];
         let _ = tx.send(crate::events::PipelineEvent::Footer {
             command: exec_cmd,
@@ -324,6 +327,26 @@ async fn main() {
     if !success {
         std::process::exit(1);
     }
+}
+
+fn is_truthy_env(value: Option<&str>) -> bool {
+    value.is_some_and(|raw| {
+        let trimmed = raw.trim();
+        trimmed == "1" || trimmed.eq_ignore_ascii_case("true")
+    })
+}
+
+fn resolve_verbosity_flags(
+    cli: &Cli,
+    env_log: Option<&str>,
+    runner_debug: Option<&str>,
+) -> (bool, bool) {
+    let runner_debug_enabled = is_truthy_env(runner_debug);
+    let verbose = cli.verbose || runner_debug_enabled;
+    let debug_enabled = cli.debug
+        || runner_debug_enabled
+        || env_log.is_some_and(|raw| raw.trim().eq_ignore_ascii_case("debug"));
+    (verbose, debug_enabled)
 }
 
 async fn run_config_command_pipeline(
@@ -475,7 +498,7 @@ async fn run_config_command_pipeline(
             flags: vec![
                 "debug=true".into(),
                 format!("dry_run={}", cli.dry_run),
-                format!("verbose={}", cli.verbose),
+                format!("verbose={verbose}"),
             ],
         });
     }
@@ -492,5 +515,20 @@ mod tests {
     fn check_selectors_are_mutually_exclusive() {
         assert!(Cli::try_parse_from(["evin", "check", "--workspace", "verify"]).is_err());
         assert!(Cli::try_parse_from(["evin", "check", "--module", "docs", "docs:verify"]).is_err());
+    }
+
+    #[test]
+    fn runner_debug_enables_both_verbose_and_debug() {
+        let cli = Cli::try_parse_from(["evin", "run", "test"]).unwrap();
+        assert_eq!(resolve_verbosity_flags(&cli, None, None), (false, false));
+        assert_eq!(
+            resolve_verbosity_flags(&cli, Some("debug"), None),
+            (false, true)
+        );
+        assert_eq!(resolve_verbosity_flags(&cli, None, Some("1")), (true, true));
+        assert_eq!(
+            resolve_verbosity_flags(&cli, None, Some("true")),
+            (true, true)
+        );
     }
 }
