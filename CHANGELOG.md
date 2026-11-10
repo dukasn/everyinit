@@ -1,6 +1,26 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.5]
+
+### Bug Fixes
+
+- **process:** retry Unix process spawn on transient ETXTBSY (2ee2179)
+- **esh:** support stderr redirection and positional arg expansion (9062602)
+
+### Features
+
+- **evin:** enable debug and verbose output when RUNNER_DEBUG is set (9e817d2)
+- **release:** add GitHub release orchestration ESH tasks (a789779)
+
+### Other Changes
+
+- **release:** run release and distribution tasks with --verbose (e16deec)
+
+### Refactoring
+
+- **release:** delegate GitHub release workflow steps to Evin (07af68d)
+
 ## [v0.2.4]
 
 ### Bug Fixes
