@@ -622,7 +622,8 @@ fn embedded_catalog_enriches_action_hover() {
     assert!(
         hover["result"]["contents"]["value"]
             .as_str()
-            .is_some_and(|value| value.contains("Build a documentation site or tooling catalog.")),
+            .is_some_and(|value| value
+                .contains("Compile, serve, and validate static project documentation.")),
         "{hover}"
     );
 }
@@ -1082,7 +1083,7 @@ fn stale_action_hover_keeps_catalog_prose_and_warning() {
         .unwrap();
     let hover = bodies(output).pop().unwrap();
     let value = hover["result"]["contents"]["value"].as_str().unwrap();
-    assert!(value.contains("Build a documentation site or tooling catalog."));
+    assert!(value.contains("Compile, serve, and validate static project documentation."));
     assert!(value.contains("Stale local fact"));
 }
 

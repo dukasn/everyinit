@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generator": "docs-generator@0.2.5",
+  "generator": "catalog-generator@0.2.5",
   "generated_at": "1970-01-01T00:00:00+00:00",
   "symbols": {
     "GitRules": {
@@ -183,6 +183,16 @@
       "hover_plaintext": "package: <package-id>\n\nArchive package (action.evin/archive@v1.with.package): Select the package to archive.\n\nThe package ID selects declared package metadata.",
       "terminal_ansi": "\u001b[1;36mpackage: <package-id>\u001b[0m\n\n\u001b[1mArchive package\u001b[0m (action.evin/archive@v1.with.package): Select the package to archive.\n\nThe package ID selects declared package metadata."
     },
+    "action.evin/catalog@v1": {
+      "name": "action.evin/catalog@v1",
+      "synopsis": "uses: evin/catalog@v1",
+      "summary": "Compile documentation symbols and keywords into a tooling catalog.",
+      "category": "action",
+      "handler": "",
+      "hover_markdown": "```flow\nuses: evin/catalog@v1\n```\n\n**Catalog action** (`action.evin/catalog@v1`): Compile documentation symbols and keywords into a tooling catalog.\n\nConfigure this action with a `with:` mapping.",
+      "hover_plaintext": "uses: evin/catalog@v1\n\nCatalog action (action.evin/catalog@v1): Compile documentation symbols and keywords into a tooling catalog.\n\nConfigure this action with a with: mapping.",
+      "terminal_ansi": "\u001b[1;36muses: evin/catalog@v1\u001b[0m\n\n\u001b[1mCatalog action\u001b[0m (action.evin/catalog@v1): Compile documentation symbols and keywords into a tooling catalog.\n\nConfigure this action with a \u001b[33mwith:\u001b[0m mapping."
+    },
     "action.evin/changelog@v1": {
       "name": "action.evin/changelog@v1",
       "synopsis": "uses: evin/changelog@v1",
@@ -226,12 +236,12 @@
     "action.evin/docs@v1": {
       "name": "action.evin/docs@v1",
       "synopsis": "uses: evin/docs@v1",
-      "summary": "Build a documentation site or tooling catalog.",
+      "summary": "Compile, serve, and validate static project documentation.",
       "category": "action",
       "handler": "",
-      "hover_markdown": "```flow\nuses: evin/docs@v1\n```\n\n**Documentation action** (`action.evin/docs@v1`): Build a documentation site or tooling catalog.\n\nConfigure this action with a `with:` mapping.",
-      "hover_plaintext": "uses: evin/docs@v1\n\nDocumentation action (action.evin/docs@v1): Build a documentation site or tooling catalog.\n\nConfigure this action with a with: mapping.",
-      "terminal_ansi": "\u001b[1;36muses: evin/docs@v1\u001b[0m\n\n\u001b[1mDocumentation action\u001b[0m (action.evin/docs@v1): Build a documentation site or tooling catalog.\n\nConfigure this action with a \u001b[33mwith:\u001b[0m mapping."
+      "hover_markdown": "```flow\nuses: evin/docs@v1\n```\n\n**Documentation action** (`action.evin/docs@v1`): Compile, serve, and validate static project documentation.\n\nConfigure this action with a `with:` mapping.",
+      "hover_plaintext": "uses: evin/docs@v1\n\nDocumentation action (action.evin/docs@v1): Compile, serve, and validate static project documentation.\n\nConfigure this action with a with: mapping.",
+      "terminal_ansi": "\u001b[1;36muses: evin/docs@v1\u001b[0m\n\n\u001b[1mDocumentation action\u001b[0m (action.evin/docs@v1): Compile, serve, and validate static project documentation.\n\nConfigure this action with a \u001b[33mwith:\u001b[0m mapping."
     },
     "action.evin/git-release@v1": {
       "name": "action.evin/git-release@v1",

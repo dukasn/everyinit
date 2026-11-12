@@ -117,19 +117,9 @@ $topbar-enabled: false !default;
      * never briefly exposes the drawer before client state is applied. */
     .app-layout.sidebar-closed aside.sidebar,
     body[data-page-kind="start"] .app-layout:not(.sidebar-open) aside.sidebar,
-    body[data-page-kind="metrics"] .app-layout:not(.sidebar-open) aside.sidebar {
-        width: 0;
-        border-right-color: transparent;
-        transform: translateX(-100%);
-        visibility: hidden;
-    }
 
     .app-layout.sidebar-closed aside.sidebar > *,
     body[data-page-kind="start"] .app-layout:not(.sidebar-open) aside.sidebar > *,
-    body[data-page-kind="metrics"] .app-layout:not(.sidebar-open) aside.sidebar > * {
-        opacity: 0;
-        pointer-events: none;
-    }
 
     .app-layout.sidebar-open .sidebar-backdrop,
     .sidebar-backdrop { display: none; }

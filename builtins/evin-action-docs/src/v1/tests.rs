@@ -23,6 +23,7 @@ fn defaults_are_build_friendly() {
     assert_eq!(config.asset_dir, "assets");
     assert_eq!(config.out, "dist/docs");
     assert_eq!(config.theme, "matter");
+    assert_eq!(config.bundle, BundleMode::Separated);
     assert!(!config.strict_filenames);
     assert!(config.minify.unwrap_or(config.mode == DocsMode::Build));
 }
@@ -105,6 +106,14 @@ fn site_url_is_required_and_site_settings_are_validated() {
             .unwrap();
     let error = validate_config(Some(&invalid)).unwrap_err();
     assert!(error.message.contains("site_url"));
+}
+
+#[test]
+fn bundle_mode_rejects_unrecognized_strings() {
+    let invalid =
+        evin_flow::parse_yaml("site_url: https://example.com/\nbundle: almost-single-file\n")
+            .unwrap();
+    assert!(evin_flow::de::from_spanned_value::<DocsConfig>(invalid).is_err());
 }
 
 #[test]
@@ -574,196 +583,6 @@ fn bundled_styles_keep_ui_colors_in_the_token_layer() {
 }
 
 #[test]
-fn lsp_target_builds_catalog_json() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let docs_dir = temp_dir.path().join("docs");
-    std::fs::create_dir_all(&docs_dir).unwrap();
-
-    let echo_rst = "echo\n====\n\n:synopsis: echo [args...]\n:summary: Print text\n:category: flow\n:handler: builtins::echo\n\nPrints strings.\n";
-    std::fs::write(docs_dir.join("echo.rst"), echo_rst).unwrap();
-
-    let out_json = temp_dir.path().join("assets/builtins-catalog.json");
-    let config = DocsConfig {
-        target: DocsTarget::Lsp,
-        source_dir: docs_dir.to_str().unwrap().to_string(),
-        out: out_json.to_str().unwrap().to_string(),
-        ..DocsConfig::default()
-    };
-
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
-        temp_dir.path(),
-    ));
-    let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
-    let mut stats = DocsDebugStats::default();
-    let site_ast = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
-    let fs = evin_action_sdk::fs::WorkspaceFs::new(
-        temp_dir.path().to_path_buf(),
-        temp_dir.path().to_path_buf(),
-        evin_action_sdk::PipelineMode::Normal,
-        logger.clone(),
-    );
-    let out_path = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
-
-    assert!(out_path.exists());
-    let raw = std::fs::read_to_string(&out_path).unwrap();
-    let catalog: evin_catalog::CatalogExport = serde_json::from_str(&raw).unwrap();
-    assert_eq!(catalog.version, 1);
-    assert!(catalog.symbols.contains_key("echo"));
-    let echo_meta = &catalog.symbols["echo"];
-    assert_eq!(echo_meta.synopsis, "echo [args...]");
-    assert_eq!(echo_meta.summary, "Print text");
-    assert_eq!(echo_meta.binding, "builtins::echo");
-    assert!(echo_meta.hover_markdown.contains("Prints strings."));
-    assert!(echo_meta.terminal_ansi.contains("Prints strings."));
-
-    let first = std::fs::read_to_string(&out_path).unwrap();
-    lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
-    assert_eq!(std::fs::read_to_string(&out_path).unwrap(), first);
-}
-
-#[test]
-fn lsp_target_builds_flow_catalog_from_configuration_references() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
-    let docs_dir = workspace_root.join("docs/reference");
-    let temp_dir = tempfile::tempdir().unwrap();
-    let out_json = temp_dir.path().join("catalog/flow.json");
-    let config = DocsConfig {
-        target: DocsTarget::Lsp,
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        include: vec![
-            "20.workspace-configuration.4500.md".into(),
-            "30.module-configuration.4510.md".into(),
-            "35.namespace-configuration.4515.md".into(),
-            "40.environment-configuration.4520.md".into(),
-            "50.git-rules-configuration.4530.md".into(),
-        ],
-        out: out_json.to_string_lossy().to_string(),
-        ..DocsConfig::default()
-    };
-
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
-        workspace_root,
-    ));
-    let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
-    let mut stats = DocsDebugStats::default();
-    let site_ast = parse_docs(workspace_root, &config, &logger, &mut stats).unwrap();
-    let fs = evin_action_sdk::fs::WorkspaceFs::new(
-        temp_dir.path().to_path_buf(),
-        temp_dir.path().to_path_buf(),
-        evin_action_sdk::PipelineMode::Normal,
-        logger.clone(),
-    );
-
-    let out_path = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
-
-    assert_eq!(out_path, out_json);
-    let raw = std::fs::read_to_string(&out_path).unwrap();
-    let catalog = evin_catalog::CatalogExport::from_json(&raw).unwrap();
-    let tasks = &catalog.symbols["workspace.tasks"];
-    assert!(tasks.binding.is_empty());
-    assert!(tasks.hover_markdown.starts_with("```flow\ntasks:"));
-    assert!(
-        tasks
-            .hover_markdown
-            .contains("**Task definitions** (`workspace.tasks`):")
-    );
-    assert!(catalog.symbols.contains_key("GitRules.releases"));
-    assert!(out_path.parent().unwrap().is_dir());
-}
-
-#[test]
-fn lsp_catalog_dry_run_never_writes_the_physical_output() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let docs_dir = temp_dir.path().join("docs");
-    std::fs::create_dir_all(&docs_dir).unwrap();
-    std::fs::write(
-        docs_dir.join("echo.rst"),
-        "echo\n====\n\n:synopsis: echo\n:summary: Print text\n:category: flow\n:handler: builtins::echo\n",
-    )
-    .unwrap();
-    let config = DocsConfig {
-        target: DocsTarget::Lsp,
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: "assets/catalog.json".to_string(),
-        ..DocsConfig::default()
-    };
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
-        temp_dir.path(),
-    ));
-    let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
-    let fs = evin_action_sdk::fs::WorkspaceFs::new(
-        temp_dir.path().to_path_buf(),
-        temp_dir.path().to_path_buf(),
-        evin_action_sdk::PipelineMode::DryRun,
-        logger.clone(),
-    );
-    let mut stats = DocsDebugStats::default();
-    let site_ast = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
-
-    let output = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
-
-    assert!(!output.exists());
-    assert!(fs.exists("assets/catalog.json"));
-}
-
-#[test]
-fn generate_esh_builtins_catalog_json_from_markdown_reference() {
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir.parent().unwrap().parent().unwrap();
-    let esh_dir = workspace_root.join("docs/reference/esh");
-    let temp_dir = tempfile::tempdir().unwrap();
-
-    let out_json = temp_dir.path().join("builtins-catalog.json");
-    let config = DocsConfig {
-        target: DocsTarget::Lsp,
-        source_dir: esh_dir.to_str().unwrap().to_string(),
-        include: vec!["100.runtime-reference.3010.md".to_string()],
-        out: out_json.to_str().unwrap().to_string(),
-        ..DocsConfig::default()
-    };
-
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
-        workspace_root,
-    ));
-    let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
-    let mut stats = DocsDebugStats::default();
-    let site_ast = parse_docs(workspace_root, &config, &logger, &mut stats).unwrap();
-    let fs = evin_action_sdk::fs::WorkspaceFs::new(
-        temp_dir.path().to_path_buf(),
-        temp_dir.path().to_path_buf(),
-        evin_action_sdk::PipelineMode::Normal,
-        logger.clone(),
-    );
-    let out_path = lsp::build_lsp_catalog(&fs, &config, &site_ast, &logger).unwrap();
-
-    assert!(out_path.exists());
-    let raw = std::fs::read_to_string(&out_path).unwrap();
-    let catalog: evin_catalog::CatalogExport = serde_json::from_str(&raw).unwrap();
-    assert_eq!(catalog.version, 1);
-    assert!(
-        catalog.symbols.len() >= 60,
-        "Expected >=60 symbols, found {}",
-        catalog.symbols.len()
-    );
-    assert!(
-        catalog.keywords.len() >= 10,
-        "Expected >=10 keywords, found {}",
-        catalog.keywords.len()
-    );
-
-    let embedded_path = workspace_root.join("crates/esh/assets/builtins-catalog.json");
-    let embedded_raw = std::fs::read_to_string(embedded_path).unwrap();
-    let embedded: evin_catalog::CatalogExport = serde_json::from_str(&embedded_raw).unwrap();
-    assert_eq!(catalog.symbols, embedded.symbols);
-    assert_eq!(catalog.keywords, embedded.keywords);
-}
-
-#[test]
 fn visual_gallery_fixture_parses_validates_and_renders_markdown_components() {
     let temp_dir = tempfile::tempdir().unwrap();
     let docs_dir = temp_dir.path().join("docs");
@@ -884,7 +703,11 @@ fn mermaid_is_offline_in_separated_and_single_file_bundles() {
             source_dir: docs_dir.to_string_lossy().to_string(),
             out: temp_dir.path().join(bundle).to_string_lossy().to_string(),
             site_url: "https://example.com/".to_string(),
-            bundle: bundle.to_string(),
+            bundle: if bundle == "single-file" {
+                BundleMode::SingleFile
+            } else {
+                BundleMode::Separated
+            },
             ..DocsConfig::default()
         };
         let mut stats = DocsDebugStats::default();
@@ -906,7 +729,7 @@ fn mermaid_is_offline_in_separated_and_single_file_bundles() {
 }
 
 #[test]
-fn docs_build_executes_and_renders_terminal_tapes() {
+fn tape_fences_render_as_static_code_without_running_shell_commands() {
     let temp_dir = tempfile::tempdir().unwrap();
     let docs_dir = temp_dir.path().join("docs");
     std::fs::create_dir_all(&docs_dir).unwrap();
@@ -936,26 +759,12 @@ fn docs_build_executes_and_renders_terminal_tapes() {
     let site = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
     let output = render_docs(temp_dir.path(), &config, &site, &logger, &mut stats).unwrap();
     let page = std::fs::read_to_string(output.join("tape/index.html")).unwrap();
-    let css = std::fs::read_to_string(output.join("assets/theme.css")).unwrap();
-
-    assert!(page.contains("terminal-tape-svg"));
-    assert!(page.contains("prefers-reduced-motion"));
-    assert!(page.contains("tape-heading"));
     assert!(page.contains("Build proof"));
     assert!(page.contains("ESH"));
-    assert!(page.contains("data-action=\"tape:toggle-playback\""));
-    assert!(page.contains("data-action=\"tape:copy\""));
-    assert!(page.contains("data-tape-duration-ms"));
-    assert!(page.contains("requestAnimationFrame"));
-    assert!(page.contains("icon-player-pause"));
-    assert!(page.contains("rel=\"preload\" href=\"../assets/fonts/IBMPlexMono-Regular.woff2\""));
-    assert!(page.contains("<template class=\"tape-copy-script\">pwd\n</template>"));
-    assert!(!page.contains("tape-window-controls"));
-    assert!(css.contains(".terminal-tape"));
-    assert!(css.contains("font-family:'IBM Plex Mono'"));
-    for font in &tape_fonts::FONTS {
-        assert!(output.join("assets/fonts").join(font.filename).is_file());
-    }
+    assert!(page.contains("pwd"));
+    assert!(!page.contains("terminal-tape-svg"));
+    assert!(!page.contains("data-action=\"tape:toggle-playback\""));
+    assert!(!output.join("assets/fonts").exists());
     assert!(!default_icons().contains("player-pause"));
 }
 
@@ -1129,7 +938,7 @@ fn custom_extension_brand_assets_render_in_output() {
 
     let index_html = std::fs::read_to_string(output.join("index.html")).unwrap();
 
-    // Custom logo rendered in topbar and start footer
+    // Custom logo rendered in the site header.
     assert!(
         index_html.contains("id=\"acme-logo\""),
         "custom logo SVG must be rendered in index.html"
@@ -1138,14 +947,7 @@ fn custom_extension_brand_assets_render_in_output() {
         index_html.contains("brand-logo-custom"),
         "custom logo class must be present"
     );
-    assert!(
-        index_html.contains("<footer"),
-        "footer must be rendered when authored"
-    );
-    assert!(
-        index_html.contains("start-footer-logo brand-logo-custom"),
-        "footer logo must use custom logo"
-    );
+    assert!(!index_html.contains("<footer"));
 
     // Custom favicon was used
     let favicon_svg = std::fs::read_to_string(output.join("assets/favicons/favicon.svg")).unwrap();
@@ -1153,142 +955,4 @@ fn custom_extension_brand_assets_render_in_output() {
         favicon_svg.contains("acme-favicon"),
         "favicon should match custom extension favicon"
     );
-}
-
-#[test]
-fn test_metrics_config_validation() {
-    let yaml_bad = "metrics: false\nmetrics_budget_kb: 110\nsite_url: 'https://example.com'";
-    let val_bad = evin_flow::parse_yaml(yaml_bad).unwrap();
-    let err = validate_config(Some(&val_bad));
-    assert!(err.is_err());
-    assert!(
-        err.unwrap_err()
-            .message
-            .contains("metrics_budget_kb requires metrics")
-    );
-
-    let yaml_good = "metrics: true\nmetrics_budget_kb: 110\nsite_url: 'https://example.com'";
-    let val_good = evin_flow::parse_yaml(yaml_good).unwrap();
-    assert!(validate_config(Some(&val_good)).is_ok());
-
-    let yaml_no_budget = "metrics: true\nsite_url: 'https://example.com'";
-    let val_no_budget = evin_flow::parse_yaml(yaml_no_budget).unwrap();
-    assert!(validate_config(Some(&val_no_budget)).is_ok());
-}
-
-#[test]
-fn declared_metrics_page_requires_dev_metadata_and_uses_its_slug() {
-    let metrics_page = |dev_only: bool| ast::DocPage {
-        slug: "metrics".to_string(),
-        source_path: "90.metrics.md".to_string(),
-        format: DocFormat::Markdown,
-        metadata: HashMap::from([
-            ("page_kind".to_string(), serde_json::json!("metrics")),
-            ("dev_only".to_string(), serde_json::json!(dev_only)),
-        ]),
-        reference: None,
-        toc: vec![],
-        ast: vec![],
-    };
-    let site = DocSiteAst {
-        version: "1.0".to_string(),
-        title: Some("Docs".to_string()),
-        reference_prefix: "REF".to_string(),
-        pages: vec![metrics_page(true)],
-    };
-    let config = DocsConfig {
-        mode: DocsMode::Serve,
-        metrics: true,
-        ..DocsConfig::default()
-    };
-    assert_eq!(
-        metrics_page_route(&site, &config).unwrap(),
-        Some("/metrics".to_string())
-    );
-
-    let no_metrics = DocsConfig {
-        mode: DocsMode::Serve,
-        ..DocsConfig::default()
-    };
-    assert!(metrics_page_route(&site, &no_metrics).is_err());
-
-    let invalid = DocSiteAst {
-        pages: vec![metrics_page(false)],
-        ..site.clone()
-    };
-    assert!(metrics_page_route(&invalid, &config).is_err());
-
-    let static_config = DocsConfig {
-        mode: DocsMode::Build,
-        metrics: true,
-        ..DocsConfig::default()
-    };
-    assert_eq!(metrics_page_route(&site, &static_config).unwrap(), None);
-
-    let public_component = DocSiteAst {
-        pages: vec![ast::DocPage {
-            slug: "public".to_string(),
-            source_path: "guide/10.public.md".to_string(),
-            format: DocFormat::Markdown,
-            metadata: HashMap::new(),
-            reference: None,
-            toc: vec![],
-            ast: vec![evin_doc::ast::DocNode::Directive {
-                name: "metrics-budget".to_string(),
-                args: vec![],
-                body: vec![],
-            }],
-        }],
-        ..site
-    };
-    assert!(validate_metrics_pages(&public_component, &static_config).is_err());
-}
-
-#[tokio::test]
-async fn test_metrics_build_emission_and_budget_gate() {
-    let temp_dir = tempfile::tempdir().unwrap();
-    let docs_dir = temp_dir.path().join("docs");
-    std::fs::create_dir_all(&docs_dir).unwrap();
-    std::fs::write(
-        docs_dir.join("index.md"),
-        "# Test docs\n\nA valid start page.\n\n## Explore\n\n- [Hello](/hello) — Hello page.\n",
-    )
-    .unwrap();
-    std::fs::write(docs_dir.join("hello.md"), "# Hello\n\nHello content.\n").unwrap();
-
-    // 1. Build with metrics enabled and generous budget -> passes and writes metrics.json
-    let config_pass = DocsConfig {
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: temp_dir
-            .path()
-            .join("out_pass")
-            .to_string_lossy()
-            .to_string(),
-        site_url: "https://example.com/".to_string(),
-        metrics: true,
-        metrics_budget_kb: Some(500),
-        ..DocsConfig::default()
-    };
-    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
-        temp_dir.path(),
-    ));
-    let logger = evin_action_sdk::Logger::new("docs".to_string(), tx.clone(), secrets.clone());
-    let mut stats = DocsDebugStats::default();
-    let site = parse_docs(temp_dir.path(), &config_pass, &logger, &mut stats).unwrap();
-    let out_pass = render_docs(temp_dir.path(), &config_pass, &site, &logger, &mut stats).unwrap();
-
-    let report = metrics::generate_report(&out_pass, &config_pass).unwrap();
-    let written = metrics::write_report(&out_pass, &report).unwrap();
-    assert!(written.is_file());
-    assert_eq!(report.budget_status, metrics::BudgetStatus::Pass);
-
-    // 2. Report with tiny budget (e.g. 1 KB) -> reports BudgetStatus::Fail
-    let config_fail = DocsConfig {
-        metrics: true,
-        metrics_budget_kb: Some(1),
-        ..config_pass.clone()
-    };
-    let report_fail = metrics::generate_report(&out_pass, &config_fail).unwrap();
-    assert_eq!(report_fail.budget_status, metrics::BudgetStatus::Fail);
 }

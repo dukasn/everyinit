@@ -526,13 +526,13 @@ fn topbar_shell_slot_must_be_present_once_when_enabled() {
 }
 
 #[test]
-fn document_title_uses_the_site_name_for_the_start_page() {
+fn every_page_title_includes_the_site_name() {
     assert_eq!(
-        HtmlRenderer::document_title("EVIN", "EVIN Documentation", true),
-        "EVIN Documentation"
+        HtmlRenderer::document_title("EVIN", "EVIN Documentation"),
+        "EVIN — EVIN Documentation"
     );
     assert_eq!(
-        HtmlRenderer::document_title("Get started", "EVIN Documentation", false),
+        HtmlRenderer::document_title("Get started", "EVIN Documentation"),
         "Get started — EVIN Documentation"
     );
 }
@@ -668,219 +668,6 @@ fn outline_slots_are_empty_for_pages_without_headings() {
     let html = pages.get("guide/index.html").unwrap();
 
     assert_eq!(html, "<main></main>");
-}
-
-#[test]
-fn start_page_uses_specialized_semantic_markup() {
-    let site = DocSiteAst {
-        version: "1.0".to_string(),
-        title: Some("Docs".to_string()),
-        reference_prefix: "REF".to_string(),
-        pages: vec![
-            DocPage {
-                slug: "index".to_string(),
-                source_path: "index.md".to_string(),
-                format: DocFormat::Markdown,
-                metadata: HashMap::new(),
-                reference: None,
-                toc: vec![TocEntry {
-                    level: 2,
-                    text: "Get started".to_string(),
-                    anchor: "get-started".to_string(),
-                }],
-                ast: vec![],
-            },
-            DocPage {
-                slug: "guide".to_string(),
-                source_path: "guide.md".to_string(),
-                format: DocFormat::Markdown,
-                metadata: HashMap::new(),
-                reference: None,
-                toc: vec![],
-                ast: vec![],
-            },
-        ],
-    };
-    let model = StartPageModel {
-        title: "Docs".to_string(),
-        lead: "A concise introduction.".to_string(),
-        search_prompts: vec![],
-        topbar: None,
-        presentation: None,
-        spotlight: Some(crate::v1::start_page::StartPageSpotlight {
-            after_sections: 1,
-            content: crate::v1::presentation::Spotlight {
-                variant: "holo".to_string(),
-                badge: Some("New".to_string()),
-                title: "Build <safely>".to_string(),
-                description: "A focused invitation.".to_string(),
-                action: crate::v1::presentation::PresentationAction {
-                    label: "Start now".to_string(),
-                    href: "/guide".to_string(),
-                },
-            },
-        }),
-        features: vec![crate::v1::start_page::StartPageFeature {
-            after_sections: 0,
-            title: "Inspect the runtime".to_string(),
-            description: vec![InlineNode::Text {
-                content: "Use the portable shell.".to_string(),
-            }],
-            actions: vec![crate::v1::start_page::StartPageFeatureAction {
-                label: "Read the guide".to_string(),
-                destination: FooterDestination::Internal("guide".to_string()),
-            }],
-            aside: StartPageFeatureAside::Code {
-                language: Some("esh".to_string()),
-                title: None,
-                code: "echo feature".to_string(),
-            },
-        }],
-        sections: vec![crate::v1::start_page::StartPageSection {
-            title: "Get started".to_string(),
-            paragraphs: vec![vec![
-                InlineNode::Text {
-                    content: "Learn the ".to_string(),
-                },
-                InlineNode::Link {
-                    href: "guide".to_string(),
-                    title: None,
-                    content: "essentials".to_string(),
-                    code: false,
-                },
-            ]],
-            media: Some(StartPageMedia {
-                kind: MediaKind::Image,
-                src: "https://example.com/guide.png".to_string(),
-                alt: "Guide overview".to_string(),
-                title: Some("Guide image".to_string()),
-                poster: None,
-            }),
-            cards: vec![crate::v1::start_page::StartPageCard {
-                title: "Guide".to_string(),
-                description: "Learn the essentials.".to_string(),
-                target_slug: "guide".to_string(),
-            }],
-        }],
-        footer: None,
-    };
-    let shell = "<body data-page-kind=\"<page-kind></page-kind>\"><breadcrumbs></breadcrumbs><inline-toc></inline-toc><content></content><pagination></pagination><toc-rail></toc-rail><document-toc></document-toc></body>";
-    let registry = ComponentRegistry::load_from_layout(&LAYOUTS_DIR, "matter", None);
-    let pages = HtmlRenderer::render_site(
-        &site,
-        shell,
-        "",
-        "",
-        "",
-        &registry,
-        false,
-        false,
-        None,
-        None,
-        None,
-        Some(&model),
-        &seo(&site),
-    );
-    let html = pages.get("index.html").unwrap();
-    assert!(html.contains("data-page-kind=\"start\""));
-    assert!(html.contains("class=\"start-page\""));
-    assert!(!html.contains("start-hero-ornaments"));
-    assert!(html.contains("aria-label=\"Documentation topics\""));
-    assert!(html.contains("class=\"start-card-collection\""));
-    assert!(html.contains("class=\"start-section-layout has-media\""));
-    assert!(html.contains("class=\"start-section-media\""));
-    assert!(html.contains("src=\"https://example.com/guide.png\""));
-    assert!(html.contains("href=\"./guide/index.html\">essentials</a>"));
-    assert!(html.contains("aria-labelledby=\"start-card-1-1-title start-card-1-1-description\""));
-    assert!(html.contains("href=\"./guide/index.html\""));
-    assert!(html.contains("class=\"start-spotlight presentation-surface presentation--spotlight"));
-    assert!(html.contains("data-presentation-variant=\"holo\""));
-    assert!(html.contains("data-presentation-role=\"spotlight\""));
-    assert!(html.contains("data-presentation-scale=\"feature\""));
-    assert!(html.contains("Build &lt;safely&gt;"));
-    assert!(html.contains("href=\"./guide/index.html\">"));
-    assert!(html.contains("class=\"start-feature start-feature--right\""));
-    assert!(html.contains("Inspect the runtime"));
-    assert!(html.contains("class=\"start-feature-action\""));
-    assert!(html.contains("echo"));
-    assert!(html.contains("feature"));
-    assert!(!html.contains("Home"));
-    assert!(!html.contains("toc-rail"));
-    assert!(!html.contains("inline-toc"));
-    assert!(!html.contains("compact-toc"));
-}
-
-#[test]
-fn start_page_renders_optional_footer_component_with_safe_external_links() {
-    let site = DocSiteAst {
-        version: "1.0".to_string(),
-        title: Some("Docs".to_string()),
-        reference_prefix: "REF".to_string(),
-        pages: vec![DocPage {
-            slug: "index".to_string(),
-            source_path: "index.md".to_string(),
-            format: DocFormat::Markdown,
-            metadata: HashMap::new(),
-            reference: None,
-            toc: vec![],
-            ast: vec![],
-        }],
-    };
-    let model = StartPageModel {
-        title: "Docs".to_string(),
-        lead: "A concise introduction.".to_string(),
-        search_prompts: vec![],
-        topbar: None,
-        presentation: None,
-        spotlight: None,
-        features: vec![],
-        sections: vec![crate::v1::start_page::StartPageSection {
-            title: "Get started".to_string(),
-            paragraphs: vec![],
-            media: None,
-            cards: vec![],
-        }],
-        footer: Some(crate::v1::start_page::StartPageFooter {
-            description: "A fuller project description.".to_string(),
-            columns: vec![crate::v1::start_page::StartPageFooterColumn {
-                title: "Project".to_string(),
-                links: vec![crate::v1::start_page::StartPageFooterLink {
-                    title: "Source".to_string(),
-                    description: Some("Browse the source.".to_string()),
-                    destination: crate::v1::start_page::FooterDestination::External(
-                        "https://example.com/source".to_string(),
-                    ),
-                }],
-            }],
-        }),
-    };
-    let registry = ComponentRegistry::load_from_layout(&LAYOUTS_DIR, "matter", None);
-    let pages = HtmlRenderer::render_site(
-        &site,
-        "<body><content></content></body>",
-        "",
-        "",
-        "",
-        &registry,
-        false,
-        false,
-        None,
-        None,
-        None,
-        Some(&model),
-        &seo(&site),
-    );
-    let html = pages.get("index.html").unwrap();
-
-    assert!(html.contains("<footer class=\"start-footer\""));
-    assert!(html.contains("class=\"start-footer-layout\""));
-    assert!(html.contains("class=\"start-footer-column\""));
-    assert!(
-        html.contains("href=\"https://example.com/source\" target=\"_blank\" rel=\"noreferrer\"")
-    );
-    assert!(!html.contains("rel=\"noreferrer\"\""));
-    assert!(html.contains("Browse the source."));
-    assert!(html.contains("A fuller project description."));
 }
 
 #[test]
@@ -1162,7 +949,7 @@ fn test_dynamic_css_tree_shaking_precision() {
     };
 
     let registry = ComponentRegistry::load_from_layout(&LAYOUTS_DIR, "matter", None);
-    let used = HtmlRenderer::collect_site_used_components(&plain_site, None);
+    let used = HtmlRenderer::collect_site_used_components(&plain_site);
 
     // Heading and paragraph are used
     assert!(used.contains("heading"));
@@ -1220,7 +1007,7 @@ fn test_dynamic_js_tree_shaking_precision() {
     };
 
     let registry = ComponentRegistry::load_from_layout(&LAYOUTS_DIR, "matter", None);
-    let used = HtmlRenderer::collect_site_used_components(&plain_site, None);
+    let used = HtmlRenderer::collect_site_used_components(&plain_site);
 
     let emitted_js = registry.collect_js(&used);
     // Without code blocks, diagrams, or start page, optional JS MUST be empty
@@ -1261,7 +1048,7 @@ fn test_dynamic_js_tree_shaking_precision() {
         }],
     };
 
-    let rich_used = HtmlRenderer::collect_site_used_components(&rich_site, None);
+    let rich_used = HtmlRenderer::collect_site_used_components(&rich_site);
     assert!(rich_used.contains("code_block"));
     assert!(rich_used.contains("diagram_mermaid"));
     assert!(!rich_used.contains("start_page"));
@@ -1293,11 +1080,12 @@ fn test_dynamic_js_tree_shaking_precision() {
             }],
         }],
     };
-    let tape_used = HtmlRenderer::collect_site_used_components(&tape_site, None);
+    let tape_used = HtmlRenderer::collect_site_used_components(&tape_site);
     let tape_js = registry.collect_js(&tape_used);
-    assert!(tape_used.contains("tape"));
-    assert!(tape_js.contains("tape:toggle-playback"));
-    assert!(tape_js.contains("tape:copy"));
+    assert!(tape_used.contains("code_block"));
+    assert!(!tape_used.contains("tape"));
+    assert!(!tape_js.contains("tape:toggle-playback"));
+    assert!(!tape_js.contains("tape:copy"));
 }
 
 #[test]

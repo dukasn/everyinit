@@ -50,7 +50,7 @@ const App = (() => {
         if (drawerOpen) $('#sidebar')?.removeAttribute('inert');
         else $('#sidebar')?.setAttribute('inert', '');
 
-        if (!modal && !['start', 'metrics'].includes(body.dataset.pageKind)) {
+        if (!modal && body.dataset.pageKind !== 'start') {
             localStorage.setItem('m3-docs-persistent-drawer', drawerOpen ? 'open' : 'closed');
         }
 
@@ -815,7 +815,7 @@ const App = (() => {
             const nextMode = isModal() ? 'modal' : 'persistent';
             if (nextMode !== currentMode) {
                 currentMode = root.dataset.drawerMode = nextMode;
-                setDrawer(isModal() ? false : (!['start', 'metrics'].includes(body.dataset.pageKind) ? drawerOpen : false));
+                setDrawer(isModal() ? false : (body.dataset.pageKind !== 'start' ? drawerOpen : false));
             }
         };
         window.addEventListener('resize', () => {

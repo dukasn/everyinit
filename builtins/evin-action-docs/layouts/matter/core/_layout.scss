@@ -171,8 +171,7 @@ body.modal-drawer-open main.content { overflow: hidden; }
     white-space: nowrap;
 }
 
-body[data-page-kind="start"],
-body[data-page-kind="metrics"] {
+body[data-page-kind="start"] {
     .breadcrumbs,
     .inline-toc,
     .toc-rail,

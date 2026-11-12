@@ -12,11 +12,8 @@ tasks:
     description: "Generate the tracked Evin configuration catalog intentionally"
     needs: [main:build]
     steps:
-      - uses: evin/docs@v1
+      - uses: evin/catalog@v1
         with:
-          target: lsp
-          title: "${site_title}"
-          site_url: "${site_url}"
           source_dir: docs/reference
           include:
             - 20.workspace-configuration.4500.md
@@ -25,6 +22,7 @@ tasks:
             - 40.environment-configuration.4520.md
             - 50.git-rules-configuration.4530.md
             - actions/10.documentation-action.5100.md
+            - actions/15.catalog-action.5170.md
             - actions/20.archive-action.5110.md
             - actions/30.changelog-action.5120.md
             - actions/40.git-release-action.5130.md
@@ -38,11 +36,8 @@ tasks:
     description: "Generate the tracked ESH runtime catalog intentionally"
     needs: [main:build]
     steps:
-      - uses: evin/docs@v1
+      - uses: evin/catalog@v1
         with:
-          target: lsp
-          title: "${site_title}"
-          site_url: "${site_url}"
           source_dir: docs/reference/esh
           include: [100.runtime-reference.3010.md]
           out: crates/esh/assets/builtins-catalog.json
@@ -60,8 +55,6 @@ tasks:
           site_url: "${site_url}"
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
-          metrics: true
-          metrics_budget_kb: 110
 
   test-responsive:
     stage: Docs
@@ -95,5 +88,3 @@ tasks:
           site_url: "${site_url}"
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
-          metrics: true
-          metrics_budget_kb: 110

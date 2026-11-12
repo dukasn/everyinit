@@ -31,17 +31,13 @@ image = { workspace = true }
 ravif = { workspace = true }
 rayon = { workspace = true }
 evin-doc = { workspace = true }
-evin-catalog = { workspace = true }
 esh = { workspace = true }
 svgbob = { workspace = true }
 merman = { workspace = true }
 unicode-width = { workspace = true }
 latex2mathml = { workspace = true }
-portable-pty = { workspace = true }
 base64 = { workspace = true }
-sha2 = { workspace = true }
 flate2 = { workspace = true }
-brotli = { workspace = true }
 tempfile = { workspace = true }
 
 [dev-dependencies]

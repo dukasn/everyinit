@@ -105,6 +105,10 @@ pub(crate) fn builtin_actions()
             Arc::new(evin_action_review_request::ReviewRequestAction),
         ),
         ("evin/docs@v1", Arc::new(evin_action_docs::DocsAction)),
+        (
+            "evin/catalog@v1",
+            Arc::new(evin_action_catalog::CatalogAction),
+        ),
         ("evin/ci@v1", Arc::new(evin_action_ci::CiAction)),
     ]
     .into_iter()

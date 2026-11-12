@@ -15,13 +15,11 @@
 use crate::v1::assets::ResolvedAssets;
 use crate::v1::ast::{DocNode, DocPage, DocSiteAst, InlineNode, MediaKind};
 use crate::v1::seo::SeoCatalog;
-use crate::v1::start_page::{
-    FooterDestination, StartPageFeatureAside, StartPageMedia, StartPageModel, StartPageSpotlight,
-};
+use crate::v1::start_page::{StartPageMedia, StartPageModel};
 use crate::v1::templates::ComponentRegistry;
 use crate::v1::topbar::Topbar;
 use evin_doc::analysis::{Visitor, walk_nodes};
-use evin_doc::{SiteIndex, SourceResolver, TapeRuntime, TapeScript, push_escaped_html};
+use evin_doc::{SiteIndex, SourceResolver, TapeRuntime, push_escaped_html};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -1034,7 +1032,7 @@ impl<'a> PreparedRenderContext<'a> {
             let prompts = start_page
                 .map(|page| page.search_prompts.clone())
                 .unwrap_or_else(|| {
-                    crate::v1::start_page::DEFAULT_SEARCH_PROMPTS
+                    ["Search documentation", "Search by title or content"]
                         .iter()
                         .map(|prompt| (*prompt).to_string())
                         .collect()
@@ -1112,14 +1110,6 @@ struct ComponentCollector<'a> {
     used: &'a mut HashSet<String>,
 }
 
-fn component_template_name(name: &str) -> String {
-    if name.trim().replace('_', "-").starts_with("metrics-") {
-        name.trim().replace('-', "_")
-    } else {
-        name.to_string()
-    }
-}
-
 impl Visitor for ComponentCollector<'_> {
     fn visit_node(&mut self, node: &DocNode) {
         match node {
@@ -1133,7 +1123,7 @@ impl Visitor for ComponentCollector<'_> {
                 self.used.insert("code_block".to_string());
             }
             DocNode::Tape { .. } => {
-                self.used.insert("tape".to_string());
+                self.used.insert("code_block".to_string());
             }
             DocNode::Diagram { kind, .. } => match kind {
                 evin_doc::ast::DiagramKind::Mermaid => {
@@ -1174,13 +1164,7 @@ impl Visitor for ComponentCollector<'_> {
                 if name == "contents" || name == "local-toc" || name == "toctree" {
                     self.used.insert("toc_block".to_string());
                 } else {
-                    let component_name = component_template_name(name);
-                    if component_name.starts_with("metrics_") {
-                        self.used.insert("metrics_runtime".to_string());
-                        // Metric data panes use Matter's native code-surface controls.
-                        self.used.insert("code_block".to_string());
-                    }
-                    self.used.insert(component_name);
+                    self.used.insert(name.to_string());
                     self.used.insert("callout".to_string());
                 }
             }
@@ -1316,7 +1300,7 @@ impl HtmlRenderer {
         single_file: bool,
         theme_color: Option<&str>,
         background_color: Option<&str>,
-        start_page: Option<&StartPageModel>,
+        _start_page: Option<&StartPageModel>,
         seo: &SeoCatalog,
         serve_mode: bool,
     ) -> String {
@@ -1326,29 +1310,13 @@ impl HtmlRenderer {
             .and_then(|v| v.as_str())
             .unwrap_or(&page.slug);
 
-        let is_metrics_page = crate::v1::is_metrics_page(page);
-        let is_start_page = (page.slug == "index" && start_page.is_some()) || is_metrics_page;
-        let full_title = if is_metrics_page {
-            format!("Metrics — {site_title}")
-        } else {
-            Self::document_title(page_title, site_title, is_start_page)
-        };
+        let full_title = Self::document_title(page_title, site_title);
         let mut used_components = HashSet::new();
-
-        if is_start_page {
-            used_components.insert("start_page".to_string());
-            if is_metrics_page {
-                used_components.insert("metrics_page".to_string());
-            }
-        } else if site_ast.pages.len() > 1 {
+        if site_ast.pages.len() > 1 {
             used_components.insert("pagination".to_string());
         }
 
-        let content_html = if page.slug == "index"
-            && let Some(sp) = start_page
-        {
-            Self::render_start_page(sp, context, registry, &mut used_components)
-        } else {
+        let content_html = {
             let mut content_html = String::with_capacity(4096);
             // Editor-catalog cards are folded and collected at the end of the page.
             let mut catalog_html = String::new();
@@ -1377,33 +1345,10 @@ impl HtmlRenderer {
             if page.reference.is_some() {
                 content_html.push_str(&Self::render_reference_relations(context, page));
             }
-            if is_metrics_page {
-                let (hero_html, sections_html) =
-                    if let Some(end_idx) = content_html.find("</header>") {
-                        let split_idx = end_idx + "</header>".len();
-                        (&content_html[..split_idx], &content_html[split_idx..])
-                    } else {
-                        ("", content_html.as_str())
-                    };
-                registry.render(
-                    "metrics_page",
-                    &[
-                        ("hero", hero_html),
-                        ("sections", sections_html),
-                        ("content", &content_html),
-                    ],
-                    &mut used_components,
-                )
-            } else {
-                content_html
-            }
+            content_html
         };
 
-        let toc_html = if is_start_page {
-            String::new()
-        } else {
-            Self::render_toc(page)
-        };
+        let toc_html = Self::render_toc(page);
         let inline_toc_html = if toc_html.is_empty() {
             String::new()
         } else {
@@ -1426,11 +1371,7 @@ impl HtmlRenderer {
             )
         };
         let home_href = Self::compute_relative_href(&page.slug, "index");
-        let breadcrumbs_html = if is_start_page {
-            String::new()
-        } else {
-            Self::render_breadcrumbs(site_ast, page)
-        };
+        let breadcrumbs_html = Self::render_breadcrumbs(site_ast, page);
 
         let page_description = page
             .metadata
@@ -1541,7 +1482,7 @@ impl HtmlRenderer {
             ));
         }
 
-        if !is_start_page && let Some(idx) = context.index.page_position(&page.slug) {
+        if let Some(idx) = context.index.page_position(&page.slug) {
             let pages = &context.site.pages;
             if idx > 0
                 && let Some(prev) = pages.get(idx - 1)
@@ -1563,21 +1504,7 @@ impl HtmlRenderer {
 
         let meta_html = meta_tags.join("\n    ");
 
-        let json_ld = if is_start_page {
-            let mut schema = serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "WebSite",
-                "name": site_title,
-                "url": seo_page.canonical_url,
-            });
-            if !page_description.is_empty() {
-                schema["description"] = serde_json::Value::String(page_description.to_string());
-            }
-            format!(
-                "<script type=\"application/ld+json\">\n{}\n</script>",
-                serde_json::to_string_pretty(&schema).unwrap_or_default()
-            )
-        } else {
+        let json_ld = {
             let mut schema = serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "TechArticle",
@@ -1614,27 +1541,10 @@ impl HtmlRenderer {
         };
 
         let nav_html = Self::render_nav_for_context(context, &page.slug);
-        let pagination_html = if is_start_page {
-            String::new()
-        } else {
-            Self::render_pagination_for_context(context, &page.slug)
-        };
+        let pagination_html = Self::render_pagination_for_context(context, &page.slug);
         let depth_prefix = Self::compute_relative_prefix(&page.slug);
         let assets_prefix = format!("{}assets/", depth_prefix);
-        let font_preloads = if !single_file
-            && used_components.contains("tape")
-            && shell_template.uses(ShellSlot::FontPreloads)
-        {
-            crate::v1::tape_fonts::used_by_markup(&content_html)
-                .into_iter()
-                .map(|font| format!(
-                    "<link rel=\"preload\" href=\"{}fonts/{}\" as=\"font\" type=\"font/woff2\" crossorigin>",
-                    assets_prefix, font.filename
-                ))
-                .collect()
-        } else {
-            String::new()
-        };
+        let font_preloads = String::new();
         let page_search_js = if single_file {
             search_js_code.to_string()
         } else if shell_template.uses(ShellSlot::SearchJs) {
@@ -1703,7 +1613,7 @@ impl HtmlRenderer {
             search_js: &page_search_js,
             component_js: &component_js_code,
             live_reload: live_reload_code,
-            page_kind: if is_start_page { "start" } else { "document" },
+            page_kind: "document",
             page_language: &seo_page.language,
             json_ld: &json_ld,
         };
@@ -1711,143 +1621,8 @@ impl HtmlRenderer {
         shell_template.render(&slots)
     }
 
-    /// Render a live developer route through the selected documentation shell.
-    /// The route deliberately uses the normal start-page page kind so it inherits
-    /// layout behavior instead of carrying a second shell or theme.
-    #[allow(clippy::too_many_arguments)]
-    pub fn render_workbench_shell(
-        shell_html: &str,
-        site_title: &str,
-        site_brand: &str,
-        brand_logo: &str,
-        icons_sprite: &str,
-        content: &str,
-        topbar: Option<&Topbar>,
-        topbar_scope: &str,
-        registry: &ComponentRegistry,
-        language: &str,
-        live_reload: bool,
-    ) -> String {
-        let shell_template = ShellTemplate::parse(shell_html);
-        let mut used_components = HashSet::new();
-        let topbar_html = topbar
-            .map(|setting| {
-                Self::render_workbench_topbar(setting, topbar_scope, registry, &mut used_components)
-            })
-            .unwrap_or_default();
-        let search_js = if shell_template.uses(ShellSlot::SearchJs) {
-            "<script src=\"/assets/app.js\" defer></script>"
-        } else {
-            ""
-        };
-        let css = "<link rel=\"preload\" href=\"/assets/theme.css\" as=\"style\">\n<link rel=\"stylesheet\" href=\"/assets/theme.css\" onload=\"document.documentElement.classList.add('theme-ready')\">";
-        let live_reload = if live_reload && shell_template.uses(ShellSlot::LiveReload) {
-            "<script>(function(){try{const source=new EventSource('/__evin_reload');source.addEventListener('reload',function(){window.location.reload();});}catch(_){}})();</script>"
-        } else {
-            ""
-        };
-        let title = format!("Metrics — {site_title}");
-        let slots = PageSlots {
-            title: &title,
-            site_title,
-            site_brand,
-            brand_logo,
-            home_href: "/",
-            meta: "<meta name=\"robots\" content=\"noindex, nofollow\">",
-            favicons: "",
-            font_preloads: "",
-            icons_sprite,
-            topbar: &topbar_html,
-            assets_prefix: "/assets/",
-            depth_prefix: "",
-            css,
-            nav: "",
-            breadcrumbs: "",
-            content,
-            toc: "",
-            inline_toc: "",
-            toc_rail: "",
-            document_toc: "",
-            pagination: "",
-            search_data: "",
-            search_js,
-            component_js: "",
-            live_reload,
-            page_kind: "start",
-            page_language: language,
-            json_ld: "",
-        };
-        shell_template.render(&slots)
-    }
-
-    fn render_workbench_topbar(
-        topbar: &Topbar,
-        scope: &str,
-        registry: &ComponentRegistry,
-        used_components: &mut HashSet<String>,
-    ) -> String {
-        let mut surface_open = String::from(
-            "<section class=\"docs-topbar topbar presentation-surface presentation--topbar presentation-scale-compact topbar--",
-        );
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str(" presentation-surface--");
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str("\" data-presentation-variant=\"");
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str("\" data-presentation-role=\"topbar\" data-presentation-scale=\"compact\" data-topbar-variant=\"");
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str("\" data-topbar-scope=\"");
-        Self::escape_into(&mut surface_open, scope);
-        surface_open.push('"');
-        if let Some(id) = &topbar.id {
-            surface_open.push_str(" data-topbar-id=\"");
-            Self::escape_into(&mut surface_open, id);
-            surface_open.push('"');
-        }
-        surface_open.push_str(" role=\"status\" aria-label=\"Site announcement\">");
-        let mut content = String::from("<div class=\"topbar-content\">");
-        if let Some(badge) = &topbar.badge {
-            content.push_str("<span class=\"topbar-badge presentation-badge\">");
-            Self::escape_into(&mut content, badge);
-            content.push_str("</span>");
-        }
-        content.push_str("<p class=\"topbar-message\"><span class=\"topbar-message-track\">");
-        Self::escape_into(&mut content, &topbar.message);
-        content.push_str("</span></p>");
-        if let Some(action) = &topbar.action {
-            content.push_str("<a class=\"topbar-action presentation-action\" href=\"");
-            Self::escape_into(&mut content, &action.href);
-            content.push('"');
-            if action.href.starts_with("https://") {
-                content.push_str(" target=\"_blank\" rel=\"noreferrer\"");
-            }
-            content.push_str("><span>");
-            Self::escape_into(&mut content, &action.label);
-            content.push_str("</span><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg></a>");
-        }
-        content.push_str("</div>");
-        if topbar.dismissible {
-            content.push_str("<button class=\"topbar-close\" type=\"button\" aria-label=\"Dismiss announcement\" data-action=\"topbar:dismiss\"><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-x\"></use></svg></button>");
-        }
-        registry.render(
-            "presentation",
-            &[
-                ("surface_open", &surface_open),
-                ("surface_close", "</section>"),
-                ("layer_one_classes", "topbar-layer topbar-layer-one"),
-                ("layer_two_classes", "topbar-layer topbar-layer-two"),
-                ("content", &content),
-            ],
-            used_components,
-        )
-    }
-
-    fn document_title(page_title: &str, site_title: &str, is_start_page: bool) -> String {
-        if is_start_page {
-            site_title.to_string()
-        } else {
-            format!("{page_title} — {site_title}")
-        }
+    fn document_title(page_title: &str, site_title: &str) -> String {
+        format!("{page_title} — {site_title}")
     }
 
     fn render_topbar(
@@ -1914,424 +1689,6 @@ impl HtmlRenderer {
             ],
             used_components,
         )
-    }
-
-    fn render_start_page(
-        start_page: &StartPageModel,
-        context: &PreparedRenderContext<'_>,
-        registry: &ComponentRegistry,
-        used_components: &mut HashSet<String>,
-    ) -> String {
-        let mut html = String::from("<div class=\"start-page\">\n<header class=\"start-hero\">\n");
-        html.push_str("<div class=\"start-hero-content\">\n<p class=\"start-eyebrow\">Documentation</p>\n<h1>");
-        Self::escape_into(&mut html, &start_page.title);
-        html.push_str("</h1>\n<p class=\"start-lead\">");
-        Self::escape_into(&mut html, &start_page.lead);
-        html.push_str("</p>\n</div>\n</header>\n<div class=\"start-sections\" aria-label=\"Documentation topics\">\n");
-        if let Some(spotlight) = &start_page.spotlight
-            && spotlight.after_sections == 0
-        {
-            Self::render_start_spotlight(&mut html, spotlight, context, registry, used_components);
-        }
-        Self::render_start_features(&mut html, start_page, 0, context, registry, used_components);
-        for (index, section) in start_page.sections.iter().enumerate() {
-            let heading_id = format!("start-section-{}", index + 1);
-            html.push_str("<section class=\"start-section\" aria-labelledby=\"");
-            html.push_str(&heading_id);
-            html.push_str("\">\n<h2 id=\"");
-            html.push_str(&heading_id);
-            html.push_str("\">");
-            Self::escape_into(&mut html, &section.title);
-            html.push_str("</h2>\n<div class=\"start-section-layout");
-            if section.media.is_some() {
-                html.push_str(" has-media");
-            }
-            html.push_str("\"><div class=\"start-section-content\">\n");
-            if !section.paragraphs.is_empty() {
-                html.push_str("<div class=\"start-section-description\">");
-                for paragraph in &section.paragraphs {
-                    html.push_str("<p>");
-                    for inline in paragraph {
-                        Self::render_start_page_inline(inline, context, &mut html);
-                    }
-                    html.push_str("</p>");
-                }
-                html.push_str("</div>\n");
-            }
-            html.push_str("<div class=\"start-card-collection\"><div class=\"start-card-grid\" role=\"list\">\n");
-            for (card_index, card) in section.cards.iter().enumerate() {
-                let title_id = format!("start-card-{}-{}-title", index + 1, card_index + 1);
-                let description_id =
-                    format!("start-card-{}-{}-description", index + 1, card_index + 1);
-                html.push_str("<a class=\"start-card\" role=\"listitem\" aria-labelledby=\"");
-                html.push_str(&title_id);
-                html.push(' ');
-                html.push_str(&description_id);
-                html.push_str("\" href=\"");
-                html.push_str(&Self::compute_relative_href("index", &card.target_slug));
-                html.push_str(
-                    "\">\n<span class=\"start-card-copy\"><span class=\"start-card-title\" id=\"",
-                );
-                html.push_str(&title_id);
-                html.push_str("\">");
-                Self::escape_into(&mut html, &card.title);
-                html.push_str("</span><span class=\"start-card-description\" id=\"");
-                html.push_str(&description_id);
-                html.push_str("\">");
-                Self::escape_into(&mut html, &card.description);
-                html.push_str("</span></span><svg class=\"docs-icon start-card-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg>\n</a>\n");
-            }
-            html.push_str("</div></div>\n</div>");
-            if let Some(media) = &section.media {
-                Self::render_start_section_media(&mut html, media, context);
-            }
-            html.push_str("</div>\n</section>\n");
-            if let Some(spotlight) = &start_page.spotlight
-                && spotlight.after_sections == index + 1
-            {
-                Self::render_start_spotlight(
-                    &mut html,
-                    spotlight,
-                    context,
-                    registry,
-                    used_components,
-                );
-            }
-            Self::render_start_features(
-                &mut html,
-                start_page,
-                index + 1,
-                context,
-                registry,
-                used_components,
-            );
-        }
-        html.push_str("</div>\n");
-        if let Some(footer) = &start_page.footer {
-            let mut columns = String::new();
-            for (column_index, column) in footer.columns.iter().enumerate() {
-                let heading_id = format!("start-footer-column-{}", column_index + 1);
-                columns.push_str("<section class=\"start-footer-column\" aria-labelledby=\"");
-                columns.push_str(&heading_id);
-                columns.push_str("\"><h3 id=\"");
-                columns.push_str(&heading_id);
-                columns.push_str("\">");
-                Self::escape_into(&mut columns, &column.title);
-                columns.push_str("</h3><ul>");
-                for link in &column.links {
-                    let (href, external_attributes) = match &link.destination {
-                        crate::v1::start_page::FooterDestination::Internal(slug) => {
-                            (Self::compute_relative_href("index", slug), "")
-                        }
-                        crate::v1::start_page::FooterDestination::External(href) => {
-                            (href.clone(), " target=\"_blank\" rel=\"noreferrer\"")
-                        }
-                    };
-                    columns.push_str("<li><a href=\"");
-                    columns.push_str(&Self::escape_html(&href));
-                    columns.push('"');
-                    columns.push_str(external_attributes);
-                    columns.push('>');
-                    Self::escape_into(&mut columns, &link.title);
-                    columns.push_str("</a>");
-                    if let Some(description) = &link.description {
-                        columns.push_str("<span class=\"start-footer-link-description\">");
-                        Self::escape_into(&mut columns, description);
-                        columns.push_str("</span>");
-                    }
-                    columns.push_str("</li>");
-                }
-                columns.push_str("</ul></section>");
-            }
-            let footer_html = registry.render(
-                "footer",
-                &[
-                    ("title", &start_page.title),
-                    ("logo", &context.footer_brand_logo_html),
-                    ("description", &footer.description),
-                    ("columns", &columns),
-                ],
-                used_components,
-            );
-            html.push_str(&footer_html);
-        }
-        html.push_str("</div>\n");
-        html
-    }
-
-    fn render_start_spotlight(
-        html: &mut String,
-        spotlight: &StartPageSpotlight,
-        context: &PreparedRenderContext<'_>,
-        registry: &ComponentRegistry,
-        used_components: &mut HashSet<String>,
-    ) {
-        let mut surface_open = String::from(
-            "<section class=\"start-spotlight presentation-surface presentation--spotlight presentation-scale-feature topbar--",
-        );
-        Self::escape_into(&mut surface_open, &spotlight.content.variant);
-        surface_open.push_str(" presentation-surface--");
-        Self::escape_into(&mut surface_open, &spotlight.content.variant);
-        surface_open.push_str("\" data-presentation-variant=\"");
-        Self::escape_into(&mut surface_open, &spotlight.content.variant);
-        surface_open.push_str("\" data-presentation-role=\"spotlight\" data-presentation-scale=\"feature\" aria-labelledby=\"start-spotlight-title\">");
-
-        let mut content = String::from("<div class=\"start-spotlight-content\">");
-        if let Some(badge) = &spotlight.content.badge {
-            content.push_str("<span class=\"start-spotlight-badge presentation-badge\">");
-            Self::escape_into(&mut content, badge);
-            content.push_str("</span>");
-        }
-        content.push_str("<h2 id=\"start-spotlight-title\">");
-        Self::escape_into(&mut content, &spotlight.content.title);
-        content.push_str("</h2><p>");
-        Self::escape_into(&mut content, &spotlight.content.description);
-        content.push_str("</p>");
-        let href = Self::resolve_rendered_href(context, "index", &spotlight.content.action.href);
-        content.push_str("<a class=\"start-spotlight-action presentation-action\" href=\"");
-        Self::escape_into(&mut content, &href);
-        content.push('"');
-        if spotlight.content.action.href.starts_with("https://") {
-            content.push_str(" target=\"_blank\" rel=\"noreferrer\"");
-        }
-        content.push_str("><span>");
-        Self::escape_into(&mut content, &spotlight.content.action.label);
-        content.push_str("</span><svg class=\"docs-icon\" aria-hidden=\"true\"><use href=\"#icon-arrow-right\"></use></svg></a></div>");
-        html.push_str(&registry.render(
-            "presentation",
-            &[
-                ("surface_open", &surface_open),
-                ("surface_close", "</section>"),
-                ("layer_one_classes", ""),
-                ("layer_two_classes", ""),
-                ("content", &content),
-            ],
-            used_components,
-        ));
-        html.push('\n');
-    }
-
-    fn render_start_features(
-        html: &mut String,
-        start_page: &StartPageModel,
-        after_sections: usize,
-        context: &PreparedRenderContext<'_>,
-        registry: &ComponentRegistry,
-        used_components: &mut HashSet<String>,
-    ) {
-        for (feature_index, feature) in start_page.features.iter().enumerate() {
-            if feature.after_sections != after_sections {
-                continue;
-            }
-            let heading_id = format!("start-feature-{}-title", feature_index + 1);
-            let mut content = format!("<h2 id=\"{heading_id}\">");
-            Self::escape_into(&mut content, &feature.title);
-            content.push_str("</h2><p>");
-            for inline in &feature.description {
-                Self::render_start_page_inline(inline, context, &mut content);
-            }
-            content.push_str("</p><div class=\"start-feature-actions\">");
-            for (action_index, action) in feature.actions.iter().enumerate() {
-                let href = match &action.destination {
-                    FooterDestination::Internal(slug) => Self::compute_relative_href("index", slug),
-                    FooterDestination::External(href) => href.clone(),
-                };
-                content.push_str("<a class=\"start-feature-action");
-                if action_index == 1 {
-                    content.push_str(" start-feature-action--secondary");
-                }
-                content.push_str("\" href=\"");
-                Self::escape_into(&mut content, &href);
-                content.push('"');
-                if href.starts_with("https://") {
-                    content.push_str(" target=\"_blank\" rel=\"noreferrer\"");
-                }
-                content.push('>');
-                Self::escape_into(&mut content, &action.label);
-                content.push_str("</a>");
-            }
-            content.push_str("</div>");
-
-            let aside = match &feature.aside {
-                StartPageFeatureAside::Media(media) => {
-                    let mut media = media.clone();
-                    if media.kind == MediaKind::Image
-                        && let Some(url) = context.asset_url(&media.src, "index")
-                    {
-                        media.src = url;
-                    }
-                    let mut output = String::new();
-                    Self::render_media(&mut output, "start-feature-media", &media);
-                    output
-                }
-                StartPageFeatureAside::Code {
-                    language,
-                    title,
-                    code,
-                } => {
-                    let data_language = language
-                        .as_ref()
-                        .map(|language| {
-                            format!(" data-language=\"{}\"", Self::escape_html(language))
-                        })
-                        .unwrap_or_default();
-                    let (display_language, extension) =
-                        Self::format_language_details(language.as_deref());
-                    let display_title = title.as_deref().map(Self::escape_html).unwrap_or_default();
-                    let highlighted = context.highlighter.highlight(language.as_deref(), code);
-                    registry.render(
-                        "code_block",
-                        &[
-                            ("data_language", &data_language),
-                            ("display_title", &display_title),
-                            ("display_language", &display_language),
-                            ("extension", &extension),
-                            ("code", &highlighted),
-                        ],
-                        used_components,
-                    )
-                }
-                StartPageFeatureAside::Tape {
-                    script,
-                    config,
-                    rendered_svg,
-                } => {
-                    let svg = rendered_svg.as_deref().unwrap_or(
-                        "<p class=\"terminal-tape-error\">Terminal tape was not compiled.</p>",
-                    );
-                    let runtime_label = match config.runtime {
-                        TapeRuntime::Esh => "ESH",
-                        TapeRuntime::System => "System shell",
-                    };
-                    let copy_script = TapeScript::parse(script)
-                        .map(|script| script.to_shell_script())
-                        .unwrap_or_default();
-                    let copy_disabled = if copy_script.is_empty() {
-                        "disabled"
-                    } else {
-                        ""
-                    };
-                    let escaped_copy_script = Self::escape_html(&copy_script);
-                    registry.render(
-                        "tape",
-                        &[
-                            ("svg", svg),
-                            (
-                                "title",
-                                config.title.as_deref().unwrap_or("Terminal recording"),
-                            ),
-                            ("runtime_label", runtime_label),
-                            ("copy_script", &escaped_copy_script),
-                            ("copy_disabled", copy_disabled),
-                        ],
-                        used_components,
-                    )
-                }
-                StartPageFeatureAside::Diagram {
-                    kind,
-                    code,
-                    title,
-                    caption,
-                    alt,
-                    rendered_mermaid,
-                } => Self::render_diagram(
-                    kind,
-                    code,
-                    title.as_deref(),
-                    caption.as_deref(),
-                    alt.as_deref(),
-                    rendered_mermaid.as_ref(),
-                    registry,
-                    used_components,
-                ),
-            };
-            let placement = if feature_index % 2 == 0 {
-                "right"
-            } else {
-                "left"
-            };
-            html.push_str(&registry.render(
-                "start_feature",
-                &[
-                    ("heading_id", &heading_id),
-                    ("placement", placement),
-                    ("content", &content),
-                    ("aside", &aside),
-                ],
-                used_components,
-            ));
-            html.push('\n');
-        }
-    }
-
-    fn render_start_page_inline(
-        inline: &InlineNode,
-        context: &PreparedRenderContext<'_>,
-        out: &mut String,
-    ) {
-        let InlineNode::Link {
-            href,
-            title,
-            content,
-            code,
-        } = inline
-        else {
-            let root_page = context
-                .index
-                .page(context.site, "index")
-                .expect("start page exists");
-            let mut tracker = HashSet::new();
-            Self::render_inline(inline, root_page, context.site, context, &mut tracker, out);
-            return;
-        };
-
-        let href = context.index.resolve_alias(href).map_or_else(
-            || {
-                let route = href.trim_matches('/');
-                if context.index.contains_route(route) {
-                    Self::compute_relative_href("index", route)
-                } else {
-                    href.clone()
-                }
-            },
-            |target| {
-                let base = Self::compute_relative_href("index", target.slug);
-                target
-                    .anchor
-                    .map_or_else(|| base.clone(), |anchor| format!("{base}#{anchor}"))
-            },
-        );
-        out.push_str("<a href=\"");
-        Self::escape_into(out, &href);
-        out.push('"');
-        if let Some(title) = title {
-            out.push_str(" title=\"");
-            Self::escape_into(out, title);
-            out.push('"');
-        }
-        out.push('>');
-        if *code {
-            out.push_str("<code>");
-        }
-        Self::escape_into(out, content);
-        if *code {
-            out.push_str("</code>");
-        }
-        out.push_str("</a>");
-    }
-
-    fn render_start_section_media(
-        out: &mut String,
-        media: &StartPageMedia,
-        context: &PreparedRenderContext<'_>,
-    ) {
-        let mut projected = media.clone();
-        if projected.kind == MediaKind::Image
-            && let Some(url) = context.asset_url(&projected.src, "index")
-        {
-            projected.src = url;
-        }
-        Self::render_media(out, "start-section-media", &projected);
     }
 
     fn render_media(out: &mut String, class_name: &str, media: &StartPageMedia) {
@@ -2859,36 +2216,27 @@ impl HtmlRenderer {
                     );
                     out.push('\n');
                 }
-                DocNode::Tape {
-                    script,
-                    config,
-                    rendered_svg,
-                } => {
-                    let svg = rendered_svg.as_deref().unwrap_or(
-                        "<p class=\"terminal-tape-error\">Terminal tape was not compiled.</p>",
-                    );
-                    let title = config.title.as_deref().unwrap_or("Terminal recording");
-                    let runtime_label = match config.runtime {
-                        TapeRuntime::Esh => "ESH",
-                        TapeRuntime::System => "System shell",
+                DocNode::Tape { script, config, .. } => {
+                    let language = match config.runtime {
+                        TapeRuntime::Esh => Some("esh"),
+                        TapeRuntime::System => Some("bash"),
                     };
-                    let copy_script = TapeScript::parse(script)
-                        .map(|script| script.to_shell_script())
+                    let data_lang = format!(" data-language=\"{}\"", language.unwrap_or("text"));
+                    let (display_lang, extension) = Self::format_language_details(language);
+                    let title = config
+                        .title
+                        .as_deref()
+                        .map(Self::escape_html)
                         .unwrap_or_default();
-                    let copy_disabled = if copy_script.is_empty() {
-                        "disabled"
-                    } else {
-                        ""
-                    };
-                    let copy_script = Self::escape_html(&copy_script);
+                    let code = highlighter.highlight(language, script);
                     registry.render_to(
-                        "tape",
+                        "code_block",
                         &[
-                            ("svg", svg),
-                            ("title", title),
-                            ("runtime_label", runtime_label),
-                            ("copy_script", &copy_script),
-                            ("copy_disabled", copy_disabled),
+                            ("data_language", &data_lang),
+                            ("display_title", &title),
+                            ("display_language", &display_lang),
+                            ("extension", &extension),
+                            ("code", &code),
                         ],
                         used_tracker,
                         out,
@@ -3445,7 +2793,7 @@ impl HtmlRenderer {
                         );
                         out.push('\n');
                     } else {
-                        let template_name = component_template_name(name);
+                        let template_name = name.to_string();
                         if registry.has_component(&template_name) {
                             let arg_text = args.join(" ");
                             let mut body_html = String::new();
@@ -3614,22 +2962,12 @@ impl HtmlRenderer {
         }
     }
 
-    pub fn collect_site_used_components(
-        site_ast: &DocSiteAst,
-        start_page: Option<&StartPageModel>,
-    ) -> HashSet<String> {
+    pub fn collect_site_used_components(site_ast: &DocSiteAst) -> HashSet<String> {
         let mut used = HashSet::new();
-        if start_page.is_some() {
-            used.insert("start_page".to_string());
-        }
         if site_ast.pages.len() > 1 {
             used.insert("pagination".to_string());
         }
         for page in &site_ast.pages {
-            if crate::v1::is_metrics_page(page) {
-                used.insert("start_page".to_string());
-                used.insert("metrics_page".to_string());
-            }
             walk_nodes(&page.ast, &mut ComponentCollector { used: &mut used });
         }
         used

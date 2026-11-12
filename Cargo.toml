@@ -66,7 +66,6 @@ svgbob = "0.6.7"
 merman = { version = "=0.7.0", features = ["render"] }
 unicode-width = "0.2"
 latex2mathml = "0.2"
-portable-pty = "0.9"
 
 # Internal workspace dependencies
 evin-io = { path = "crates/evin-io" }
@@ -79,6 +78,7 @@ evin-action-version-bumper = { path = "builtins/evin-action-version-bumper" }
 evin-action-git-release = { path = "builtins/evin-action-git-release" }
 evin-action-review-request = { path = "builtins/evin-action-review-request" }
 evin-action-docs = { path = "builtins/evin-action-docs" }
+evin-action-catalog = { path = "builtins/evin-action-catalog" }
 evin-action-ci = { path = "builtins/evin-action-ci" }
 evin-ci = { path = "crates/evin-ci" }
 evin-config = { path = "crates/evin-config" }

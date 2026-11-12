@@ -20,7 +20,6 @@ pub mod favicon;
 pub mod fs;
 pub mod icons;
 pub mod js_minification;
-pub mod lsp;
 pub mod mermaid;
 pub mod presentation;
 pub mod reference;
@@ -31,13 +30,10 @@ pub mod seo;
 pub mod server;
 pub mod start_page;
 pub mod syntax;
-pub mod tape_executor;
-pub mod tape_fonts;
 pub mod templates;
 pub mod topbar;
 pub mod validator;
 
-pub mod metrics;
 pub mod resolver;
 
 use ast::{DocFormat, DocSiteAst};
@@ -72,9 +68,6 @@ fn default_asset_dir() -> String {
 fn default_theme() -> String {
     "matter".to_string()
 }
-fn default_bundle() -> String {
-    "separated".to_string()
-}
 fn default_validate_links() -> bool {
     true
 }
@@ -100,19 +93,26 @@ pub enum DocsMode {
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum DocsTarget {
+#[serde(rename_all = "kebab-case")]
+pub enum BundleMode {
     #[default]
-    Web,
-    Lsp,
+    Separated,
+    SingleFile,
+}
+
+impl BundleMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Separated => "separated",
+            Self::SingleFile => "single-file",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DocsConfig {
     pub site_url: String,
-    #[serde(default)]
-    pub target: DocsTarget,
     #[serde(default = "default_language")]
     pub language: String,
     #[serde(default)]
@@ -135,8 +135,8 @@ pub struct DocsConfig {
     pub theme: String,
     #[serde(default)]
     pub theme_overrides: HashMap<String, String>,
-    #[serde(default = "default_bundle")]
-    pub bundle: String,
+    #[serde(default)]
+    pub bundle: BundleMode,
     #[serde(default = "default_validate_links")]
     pub validate_links: bool,
     #[serde(default = "default_port")]
@@ -170,10 +170,6 @@ pub struct DocsConfig {
     #[serde(default)]
     pub diagnostic_search: bool,
     #[serde(default)]
-    pub metrics: bool,
-    #[serde(default)]
-    pub metrics_budget_kb: Option<u32>,
-    #[serde(default)]
     pub social_image: Option<String>,
     #[serde(default)]
     pub lastmod_fallback: bool,
@@ -183,7 +179,6 @@ impl Default for DocsConfig {
     fn default() -> Self {
         Self {
             site_url: String::new(),
-            target: DocsTarget::Web,
             language: default_language(),
             mode: DocsMode::Build,
             source_dir: default_source_dir(),
@@ -195,7 +190,7 @@ impl Default for DocsConfig {
             out: default_out(),
             theme: default_theme(),
             theme_overrides: HashMap::new(),
-            bundle: default_bundle(),
+            bundle: BundleMode::default(),
             validate_links: default_validate_links(),
             port: default_port(),
             host: false,
@@ -212,8 +207,6 @@ impl Default for DocsConfig {
             topbar: None,
             presentation: None,
             diagnostic_search: false,
-            metrics: false,
-            metrics_budget_kb: None,
             social_image: None,
             lastmod_fallback: false,
         }
@@ -331,130 +324,18 @@ pub fn validate_config(
             }
         })
         .and_then(|_| {
-            if config.target == DocsTarget::Lsp || config.site_url.contains("${") {
+            if config.site_url.contains("${") {
                 Ok(())
             } else if config.site_url.trim().is_empty() {
                 Err("site_url is required when target is web".to_string())
             } else {
                 seo::validate_site_settings(&config.site_url, &config.language).map(|_| ())
             }
-        })
-        .and_then(|_| {
-            if config.metrics_budget_kb.is_some() && !config.metrics {
-                Err("metrics_budget_kb requires metrics to be enabled".to_string())
-            } else {
-                Ok(())
-            }
         });
     validation.map_err(|message| evin_flow::ConfigError {
         message,
         span: None,
     })
-}
-
-const METRICS_PAGE_KIND: &str = "metrics";
-
-fn metadata_bool(page: &ast::DocPage, key: &str) -> bool {
-    page.metadata.get(key).and_then(|value| value.as_bool()) == Some(true)
-}
-
-pub(crate) fn is_metrics_page(page: &ast::DocPage) -> bool {
-    page.metadata
-        .get("page_kind")
-        .and_then(|value| value.as_str())
-        == Some(METRICS_PAGE_KIND)
-}
-
-fn is_dev_only_page(page: &ast::DocPage) -> bool {
-    metadata_bool(page, "dev_only")
-}
-
-fn directive_is_metric(name: &str) -> bool {
-    name.trim().replace('_', "-").starts_with("metrics-")
-}
-
-fn page_uses_metric_directive(nodes: &[evin_doc::ast::DocNode]) -> bool {
-    use evin_doc::ast::DocNode;
-    nodes.iter().any(|node| match node {
-        DocNode::Directive { name, body, .. } => {
-            directive_is_metric(name) || page_uses_metric_directive(body)
-        }
-        DocNode::Admonition { children, .. } | DocNode::LspSymbol { children, .. } => {
-            page_uses_metric_directive(children)
-        }
-        DocNode::List { items, .. } => items.iter().any(|item| page_uses_metric_directive(item)),
-        DocNode::TaskList { items } => items
-            .iter()
-            .any(|item| page_uses_metric_directive(&item.body)),
-        DocNode::DefinitionList { items } => items
-            .iter()
-            .any(|item| page_uses_metric_directive(&item.body)),
-        DocNode::OptionList { items } => items
-            .iter()
-            .any(|item| page_uses_metric_directive(&item.body)),
-        DocNode::FieldList { items } => items
-            .iter()
-            .any(|item| page_uses_metric_directive(&item.body)),
-        DocNode::Stepper { steps } => steps
-            .iter()
-            .any(|step| page_uses_metric_directive(&step.body)),
-        _ => false,
-    })
-}
-
-pub(crate) fn metrics_page_route(
-    site: &DocSiteAst,
-    config: &DocsConfig,
-) -> Result<Option<String>, evin_diagnostic::Diagnostic> {
-    let mut metrics_pages = site.pages.iter().filter(|page| is_metrics_page(page));
-    let Some(page) = metrics_pages.next() else {
-        return Ok(None);
-    };
-    if metrics_pages.next().is_some() {
-        return Err(evin_diagnostic::Diagnostic::new(
-            "Only one page may declare page_kind: metrics",
-            evin_diagnostic::IssueCode::new("invalid-metrics-page"),
-        ));
-    }
-    if !is_dev_only_page(page) {
-        return Err(evin_diagnostic::Diagnostic::new(
-            "page_kind: metrics requires dev_only: true",
-            evin_diagnostic::IssueCode::new("invalid-metrics-page"),
-        ));
-    }
-    if !config.metrics {
-        return Err(evin_diagnostic::Diagnostic::new(
-            "page_kind: metrics requires metrics: true",
-            evin_diagnostic::IssueCode::new("invalid-metrics-page"),
-        ));
-    }
-    if config.mode != DocsMode::Serve {
-        return Ok(None);
-    }
-    Ok(Some(format!("/{}", page.slug.trim_matches('/'))))
-}
-
-fn validate_metrics_pages(
-    site: &DocSiteAst,
-    config: &DocsConfig,
-) -> Result<(), evin_diagnostic::Diagnostic> {
-    let route = metrics_page_route(site, config)?;
-    for page in &site.pages {
-        if page_uses_metric_directive(&page.ast)
-            && config.mode == DocsMode::Build
-            && !is_metrics_page(page)
-        {
-            return Err(evin_diagnostic::Diagnostic::new(
-                format!(
-                    "Metric component directives are development-only; '{}' must declare page_kind: metrics and dev_only: true",
-                    page.source_path
-                ),
-                evin_diagnostic::IssueCode::new("invalid-metrics-page"),
-            ));
-        }
-    }
-    let _ = route;
-    Ok(())
 }
 
 pub(crate) fn parse_docs(
@@ -542,7 +423,6 @@ pub(crate) fn parse_docs(
     if config.strict_filenames {
         validate_strict_filenames(&site).map_err(doc_issue_to_diagnostic)?;
     }
-    validate_metrics_pages(&site, config)?;
     stats.pages = site.pages.len();
     stats.rst = site
         .pages
@@ -605,7 +485,7 @@ fn validate_strict_filenames(site: &DocSiteAst) -> Result<(), evin_doc::DocIssue
         let parent = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty());
-        if parent.is_none() && !(is_metrics_page(page) && is_dev_only_page(page)) {
+        if parent.is_none() {
             return Err(strict_filename_error(
                 &page.source_path,
                 "Only the root start page may live outside a documentation section",
@@ -784,12 +664,7 @@ pub(crate) fn render_docs(
     let static_site;
     let site_ast = if config.mode == DocsMode::Build {
         static_site = DocSiteAst {
-            pages: site_ast
-                .pages
-                .iter()
-                .filter(|page| !is_dev_only_page(page))
-                .cloned()
-                .collect(),
+            pages: site_ast.pages.to_vec(),
             ..site_ast.clone()
         };
         &static_site
@@ -798,7 +673,7 @@ pub(crate) fn render_docs(
     };
     let write_failures_before = stats.write_failures;
     stats.renders += 1;
-    stats.bundle = config.bundle.clone();
+    stats.bundle = config.bundle.as_str().to_string();
     stats.pages_written = 0;
     stats.assets_written = 0;
     let git_resolver = |source_path: &str| -> Option<String> {
@@ -846,31 +721,14 @@ pub(crate) fn render_docs(
             stats.emit_output(logger);
         })?;
     let mut rendered_site = site_ast.clone();
-    tape_executor::compile_site(&mut rendered_site, workspace_root).map_err(|message| {
-        evin_diagnostic::Diagnostic::new(
-            message.clone(),
-            evin_diagnostic::IssueCode::new("issue-docs-tape-failed").arg("error", message),
-        )
-    })?;
     mermaid::compile_site(&mut rendered_site).map_err(|message| {
         evin_diagnostic::Diagnostic::new(
             message.clone(),
             evin_diagnostic::IssueCode::new("issue-docs-mermaid-failed").arg("error", message),
         )
     })?;
-    let mut start_page = start_page::transform_with_assets_and_index(
-        &rendered_site,
-        &site_index,
-        &source_root,
-        Some(&resolved_assets),
-    )
-    .inspect_err(|_error| {
-        stats.emit_output(logger);
-    })?;
-    let presentation = start_page
-        .presentation
-        .as_ref()
-        .or(config.presentation.as_ref());
+    let start_page = start_page::StartPageModel::default();
+    let presentation = config.presentation.as_ref();
     if let Some(setting) = presentation {
         setting.validate(Some(&config.theme)).map_err(|message| {
             evin_diagnostic::Diagnostic::new(
@@ -879,7 +737,7 @@ pub(crate) fn render_docs(
             )
         })?;
     }
-    let topbar_setting = start_page.topbar.as_ref().or(config.topbar.as_ref());
+    let topbar_setting = config.topbar.as_ref();
     if let Some(setting) = topbar_setting {
         setting.validate(Some(&config.theme)).map_err(|message| {
             evin_diagnostic::Diagnostic::new(
@@ -888,12 +746,7 @@ pub(crate) fn render_docs(
             )
         })?;
     }
-    let topbar = resolve_topbar(
-        start_page.topbar.as_ref(),
-        config.topbar.as_ref(),
-        presentation,
-    )
-    .map_err(|message| {
+    let topbar = resolve_topbar(None, config.topbar.as_ref(), presentation).map_err(|message| {
         evin_diagnostic::Diagnostic::new(
             format!("Invalid topbar configuration: {message}"),
             evin_diagnostic::IssueCode::new("invalid-config"),
@@ -906,27 +759,6 @@ pub(crate) fn render_docs(
                 evin_diagnostic::IssueCode::new("invalid-config"),
             )
         })?;
-    }
-    if let Some(spotlight) = &start_page.spotlight {
-        let content = spotlight
-            .content
-            .resolve_variant(presentation)
-            .map_err(|message| {
-                evin_diagnostic::Diagnostic::new(
-                    format!("Invalid spotlight configuration: {message}"),
-                    evin_diagnostic::IssueCode::new("invalid-config"),
-                )
-            })?;
-        content.validate(Some(&config.theme)).map_err(|message| {
-            evin_diagnostic::Diagnostic::new(
-                format!("Invalid spotlight configuration: {message}"),
-                evin_diagnostic::IssueCode::new("invalid-config"),
-            )
-        })?;
-        start_page.spotlight = Some(start_page::StartPageSpotlight {
-            after_sections: spotlight.after_sections,
-            content,
-        });
     }
     if config.validate_links {
         evin_action_sdk::action_event!(logger, evin_action_sdk::activity::DocsAuditStarted {});
@@ -1028,9 +860,8 @@ pub(crate) fn render_docs(
         &config.theme,
         resources.layout_dir.as_deref(),
     );
-    let mut site_used_components =
-        HtmlRenderer::collect_site_used_components(&rendered_site, Some(&start_page));
-    if topbar.is_some() || start_page.spotlight.is_some() {
+    let mut site_used_components = HtmlRenderer::collect_site_used_components(&rendered_site);
+    if topbar.is_some() {
         site_used_components.insert("presentation".to_string());
     }
     let active_components_scss = registry.collect_css(&site_used_components);
@@ -1039,20 +870,17 @@ pub(crate) fn render_docs(
     if let Some(topbar) = &topbar {
         presentation_variants.insert(topbar.variant.clone());
     }
-    if let Some(spotlight) = &start_page.spotlight {
-        presentation_variants.insert(spotlight.content.variant.clone());
-    }
     let raw_css = topbar::configure_matter_scss(
         &raw_css,
         &config.theme,
         &presentation_variants,
         topbar.is_some(),
-        start_page.spotlight.is_some(),
+        false,
     );
 
     let is_production = config.minify.unwrap_or(config.mode == DocsMode::Build);
-    let single_file = config.bundle == "single-file";
-    let mut processed_css = CssOptimizer::process_with_components(
+    let single_file = config.bundle == BundleMode::SingleFile;
+    let processed_css = CssOptimizer::process_with_components(
         &raw_css,
         &active_components_scss,
         &config.theme_overrides,
@@ -1068,7 +896,6 @@ pub(crate) fn render_docs(
         );
         raw_css.clone()
     });
-    processed_css.push_str(&tape_fonts::css(single_file));
     let serve_enabled = config.mode == DocsMode::Serve;
     let site_title = site_ast.title.as_deref().unwrap_or("Documentation");
     let (favicon_assets, _) = favicon::FaviconPipeline::process(
@@ -1090,10 +917,7 @@ pub(crate) fn render_docs(
             stats.write_failures += 1;
         }
     }
-    let mut requested_icons = default_icons();
-    if site_used_components.contains("tape") {
-        requested_icons.extend(["player-play", "player-pause"].map(str::to_string));
-    }
+    let requested_icons = default_icons();
     let sprite_svg = icons::IconSpriteBuilder::build_sprite_sheet(
         &requested_icons,
         resources.icons_dir.as_deref(),
@@ -1164,9 +988,6 @@ pub(crate) fn render_docs(
         if std::fs::write(assets.join("theme.css"), processed_css).is_err() {
             stats.write_failures += 1;
         }
-        if tape_fonts::publish(&out_dir).is_err() {
-            stats.write_failures += 1;
-        }
         if std::fs::write(assets.join("app.js"), app_js).is_err() {
             stats.write_failures += 1;
         }
@@ -1198,9 +1019,6 @@ pub(crate) fn render_docs(
             let _ = std::fs::remove_file(out_dir.join("search.json"));
         }
     }
-    if single_file && tape_fonts::remove_published(&out_dir).is_err() {
-        stats.write_failures += 1;
-    }
     if let Ok(entries) = std::fs::read_dir(&out_dir) {
         for entry in entries.flatten() {
             let name = entry.file_name();
@@ -1230,11 +1048,6 @@ pub(crate) fn render_docs(
     let expected_assets = favicon_asset_count
         + 1
         + if single_file { 0 } else { 4 }
-        + if !single_file {
-            tape_fonts::FONTS.len()
-        } else {
-            0
-        }
         + discovery_files.len()
         + published_media;
     stats.assets_written =
@@ -1332,14 +1145,6 @@ pub async fn execute_with_invocation(
     let workspace_root = ctx.fs.workspace_root();
     let mut stats = DocsDebugStats::default();
     let site_ast = parse_docs(workspace_root, &config, &ctx.log, &mut stats)?;
-    if config.target == DocsTarget::Lsp {
-        let out_file = lsp::build_lsp_catalog(&ctx.fs, &config, &site_ast, &ctx.log)?;
-        ctx.state
-            .set_output("output_file", &out_file.to_string_lossy());
-        ctx.state
-            .set_output("symbol_count", &site_ast.pages.len().to_string());
-        return Ok(());
-    }
     if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
         let out_dir = if Path::new(&config.out).is_absolute() {
             PathBuf::from(&config.out)
@@ -1360,35 +1165,10 @@ pub async fn execute_with_invocation(
         return Ok(());
     }
     let out_dir = render_docs(workspace_root, &config, &site_ast, &ctx.log, &mut stats)?;
-    let metrics_route = metrics_page_route(&site_ast, &config)?;
     ctx.state
         .set_output("output_dir", &out_dir.to_string_lossy());
     ctx.state
         .set_output("page_count", &site_ast.pages.len().to_string());
-    if config.metrics && config.mode == DocsMode::Build {
-        let report = metrics::generate_report(&out_dir, &config).map_err(|e| {
-            evin_diagnostic::Diagnostic::new(
-                format!("Failed to collect documentation metrics: {e}"),
-                evin_diagnostic::IssueCode::new("issue-docs-metrics-generation-failed"),
-            )
-        })?;
-        metrics::write_report(&out_dir, &report).map_err(|e| {
-            evin_diagnostic::Diagnostic::new(
-                format!("Failed to write metrics.json: {e}"),
-                evin_diagnostic::IssueCode::new("issue-docs-metrics-write-failed"),
-            )
-        })?;
-        if report.budget_status == metrics::BudgetStatus::Fail {
-            let limit = report.frame0.budget_limit_bytes.unwrap_or(0);
-            return Err(evin_diagnostic::Diagnostic::new(
-                format!(
-                    "Documentation Frame-0 critical landing path size ({} B) exceeded configured budget ({} B)",
-                    report.frame0.gzip_bytes, limit
-                ),
-                evin_diagnostic::IssueCode::new("issue-docs-metrics-budget-exceeded"),
-            ));
-        }
-    }
     if config.mode == DocsMode::Serve {
         let host = resolve_serve_host(&config, invocation_flags);
         let binding = server::DevServer::bind(host, config.port).await?;
@@ -1402,7 +1182,6 @@ pub async fn execute_with_invocation(
             ctx.cancel_token.clone(),
             started,
             stats,
-            metrics_route,
         )
         .await?;
     }

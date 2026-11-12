@@ -1,0 +1,20 @@
+[package]
+license.workspace = true
+name = "evin-action-catalog"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+evin-action-sdk = { workspace = true }
+evin-diagnostic = { workspace = true }
+evin-doc = { workspace = true }
+evin-flow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }
