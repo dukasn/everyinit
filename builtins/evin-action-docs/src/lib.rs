@@ -21,57 +21,28 @@ use evin_action_sdk::{
     InvocationFlag, InvocationFlags, RunnerContext,
 };
 
-const INVOCATION_FLAGS: &[InvocationFlag] = &[InvocationFlag::new("host")];
 const DOCS_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
-    summary: "Compile, serve, and validate static project documentation.",
+    summary: "Parse, validate, and publish structured documentation data.",
     fields: &[
-        ActionFieldDescriptor {
-            path: "mode",
-            kind: ActionFieldKind::Enum(&["build", "serve"]),
-            required: false,
-            description: "Web build or preview mode.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "site_url",
-            kind: ActionFieldKind::String,
-            required: true,
-            description: "Canonical site URL.",
-            condition: None,
-        },
         ActionFieldDescriptor {
             path: "source_dir",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Documentation source directory.",
+            description: "Documentation source root.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "out",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Generated web site directory.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "language",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Documentation language.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "asset_dir",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Static asset directory.",
+            description: "Generated data package directory.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "include",
             kind: ActionFieldKind::List,
             required: false,
-            description: "Included documentation paths.",
+            description: "Included documentation selectors.",
             condition: None,
         },
         ActionFieldDescriptor {
@@ -82,326 +53,98 @@ const DOCS_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
+            path: "asset_dir",
+            kind: ActionFieldKind::String,
+            required: false,
+            description: "Source directory for referenced local media.",
+            condition: None,
+        },
+        ActionFieldDescriptor {
             path: "extract_frontmatter",
             kind: ActionFieldKind::Boolean,
             required: false,
-            description: "Extract page frontmatter.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "title",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Site title.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "bundle",
-            kind: ActionFieldKind::Enum(&["separated", "single-file"]),
-            required: false,
-            description: "Asset bundle strategy.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "validate_links",
-            kind: ActionFieldKind::Boolean,
-            required: false,
-            description: "Validate documentation links.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "port",
-            kind: ActionFieldKind::Integer,
-            required: false,
-            description: "Preview server port.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "host",
-            kind: ActionFieldKind::Boolean,
-            required: false,
-            description: "Expose the preview server to the network.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "layout_dir",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Custom layout directory.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "extensions_dir",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Documentation extensions directory.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "theme_color",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Browser theme color.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "background_color",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Browser background color.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "icon_dir",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Icon source directory.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "minify",
-            kind: ActionFieldKind::Boolean,
-            required: false,
-            description: "Minify generated assets.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "reference_prefix",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Reference-page URL prefix.",
+            description: "Extract page frontmatter metadata.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "strict_filenames",
             kind: ActionFieldKind::Boolean,
             required: false,
-            description: "Require strict documentation filenames.",
+            description: "Require ordered route-safe filenames.",
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "grammars",
-            kind: ActionFieldKind::List,
-            required: false,
-            description: "Additional syntax grammar files.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "appearance",
-            kind: ActionFieldKind::Object,
-            required: false,
-            description: "Documentation appearance tokens and assets.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "appearance.accent",
+            path: "reference_prefix",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Primary accent color in #RRGGBB format.",
+            description: "Formal reference identifier prefix.",
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "appearance.logo",
-            kind: ActionFieldKind::String,
+            path: "validate_links",
+            kind: ActionFieldKind::Boolean,
             required: false,
-            description: "Optional logo path.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "appearance.favicon",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Optional favicon path.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "appearance.font_sans",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "System font stack override for sans-serif text.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "appearance.font_mono",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "System font stack override for code.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "appearance.custom_css",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "CSS file appended in the overrides layer.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "version",
-            kind: ActionFieldKind::Object,
-            required: false,
-            description: "Version registry and current release.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "version.current",
-            kind: ActionFieldKind::String,
-            required: true,
-            description: "Version emitted by this invocation.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "version.latest",
-            kind: ActionFieldKind::String,
-            required: true,
-            description: "Latest version shown in the version switcher.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "version.manifest",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Version registry path relative to the output directory.",
+            description: "Validate document links and anchors.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "i18n",
             kind: ActionFieldKind::Object,
             required: false,
-            description: "Localized documentation sources and UI labels.",
+            description: "Locale inventory and default locale.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "i18n.default_locale",
             kind: ActionFieldKind::String,
-            required: true,
-            description: "Fallback locale and default source tree.",
+            required: false,
+            description: "Default documentation locale.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "i18n.locales",
             kind: ActionFieldKind::List,
-            required: true,
-            description: "Locales to compile.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "i18n.dictionaries_dir",
-            kind: ActionFieldKind::String,
             required: false,
-            description: "Directory containing locale UI dictionaries.",
+            description: "Locales included in the data package.",
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "serve",
-            kind: ActionFieldKind::Object,
+            path: "versions",
+            kind: ActionFieldKind::List,
             required: false,
-            description: "Preview server settings.",
+            description: "Version source directories to include.",
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "serve.host",
-            kind: ActionFieldKind::Boolean,
-            required: false,
-            description: "Expose the preview server to the network.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "serve.port",
-            kind: ActionFieldKind::Integer,
-            required: false,
-            description: "Preview server port.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "topbar",
-            kind: ActionFieldKind::Object,
-            required: false,
-            description: "Topbar configuration or false.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "topbar.id",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Topbar identifier.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "topbar.badge",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Topbar badge.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "topbar.message",
+            path: "versions.id",
             kind: ActionFieldKind::String,
             required: true,
-            description: "Topbar message.",
+            description: "Path-safe version identifier.",
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "topbar.action",
-            kind: ActionFieldKind::Object,
-            required: false,
-            description: "Topbar action.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "topbar.action.label",
-            kind: ActionFieldKind::String,
-            required: true,
-            description: "Topbar action label.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "topbar.action.href",
-            kind: ActionFieldKind::String,
-            required: true,
-            description: "Topbar action URL.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "topbar.dismissible",
-            kind: ActionFieldKind::Boolean,
-            required: false,
-            description: "Allow dismissing the topbar.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "diagnostic_search",
-            kind: ActionFieldKind::Boolean,
-            required: false,
-            description: "Include diagnostic search information.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "social_image",
+            path: "versions.source_dir",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Social sharing image.",
+            description: "Source root for this version.",
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "lastmod_fallback",
-            kind: ActionFieldKind::Boolean,
+            path: "latest_version",
+            kind: ActionFieldKind::String,
             required: false,
-            description: "Fallback for last-modified metadata.",
+            description: "Version whose routes omit a version prefix.",
             condition: None,
         },
     ],
     outputs: &[
         ActionOutputDescriptor {
-            name: "output_dir",
-            description: "Generated web output directory.",
+            name: "manifest_path",
+            description: "Generated route and content manifest.",
         },
         ActionOutputDescriptor {
             name: "page_count",
-            description: "Generated web page count.",
-        },
-        ActionOutputDescriptor {
-            name: "server_url",
-            description: "Preview server URL.",
+            description: "Number of generated page variants.",
         },
     ],
 };
@@ -413,15 +156,16 @@ impl Action for DocsAction {
     fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
         Some(&DOCS_DESCRIPTOR)
     }
+
     fn invocation_flags(&self) -> &'static [InvocationFlag] {
-        INVOCATION_FLAGS
+        &[]
     }
 
     fn validate_config(
         &self,
         with: Option<&evin_flow::SpannedValue>,
     ) -> Result<(), evin_flow::ConfigError> {
-        v1::validate_config(with)
+        v1::headless::validate_config(with)
     }
 
     async fn execute(
@@ -429,15 +173,15 @@ impl Action for DocsAction {
         ctx: &RunnerContext,
         with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
-        v1::execute(ctx, with).await
+        v1::headless::execute(ctx, with).await
     }
 
     async fn execute_with_invocation(
         &self,
         ctx: &RunnerContext,
         with: Option<evin_flow::SpannedValue>,
-        flags: &InvocationFlags,
+        _flags: &InvocationFlags,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
-        v1::execute_with_invocation(ctx, with, flags).await
+        v1::headless::execute(ctx, with).await
     }
 }

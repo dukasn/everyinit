@@ -74,12 +74,12 @@ tasks:
 
   quality:
     stage: Check
-    description: "Run Rust, browser documentation, Cloudflare infra, and editor extension quality checks"
+    description: "Run Rust, documentation data, Cloudflare infra, and editor extension quality checks"
     needs:
       - check
       - fmt
       - lint
-      - docs:verify
+      - docs:build
       - infra:quality:verify
       - vscode:verify
 

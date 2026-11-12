@@ -27,7 +27,7 @@ status-docs-watching-succeeded = Watching; last rebuild succeeded
 status-docs-watching-failed = Watching; last rebuild failed
 
 plan-docs-server = Start the documentation development server
-plan-docs-build = Generate the documentation site at { $output }
+plan-docs-build = Generate documentation data at { $output }
 plan-archive-unresolved = Create archive at { $path } (input files resolve during execution)
 plan-archive = Create archive from { $files } files at { $path }
 plan-changelog = Generate changelog at { $path } with sections { $sections }

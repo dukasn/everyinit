@@ -111,6 +111,14 @@ impl ResolvedAssets {
         self.entries.contains_key(source)
     }
 
+    /// Returns the generated asset paths referenced by this build.
+    pub fn manifest_entries(&self) -> BTreeMap<String, String> {
+        self.entries
+            .iter()
+            .map(|(source, asset)| (source.clone(), path_to_url(&asset.output_relative)))
+            .collect()
+    }
+
     pub fn is_root_relative_image(source: &str) -> bool {
         source.starts_with('/')
     }

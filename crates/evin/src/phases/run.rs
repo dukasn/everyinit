@@ -516,7 +516,7 @@ mod tests {
         resolver.add_task(docs_task(
             "docs:dependency",
             None,
-            "site_url: https://example.com\ntile: Docs\n",
+            "source_dir: docs\ntile: Docs\n",
         ));
         resolver.add_task(TaskObject {
             name: "docs:build".into(),
@@ -537,7 +537,7 @@ mod tests {
         resolver.add_task(docs_task(
             "docs:broken",
             None,
-            "site_url: https://example.com\ntile: Docs\n",
+            "source_dir: docs\ntile: Docs\n",
         ));
         resolver.add_task(TaskObject {
             name: "build".into(),

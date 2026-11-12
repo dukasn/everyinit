@@ -9,40 +9,17 @@ authors.workspace = true
 evin-diagnostic = { workspace = true }
 evin-flow = { workspace = true }
 evin-action-sdk = { workspace = true }
-evin-locales = { workspace = true }
 async-trait = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
-grass = { workspace = true }
-include_dir = { workspace = true }
-tokio = { workspace = true }
-tokio-util = { workspace = true }
-chrono = { workspace = true }
-syntect = { workspace = true }
-plist = { workspace = true }
+sha2 = { workspace = true }
 regex = { workspace = true }
 url = { workspace = true }
 unic-langid = { workspace = true }
-marked-yaml = { workspace = true }
-pulldown-cmark = { workspace = true }
-globset = { workspace = true }
 image = { workspace = true }
 ravif = { workspace = true }
 rayon = { workspace = true }
 evin-doc = { workspace = true }
-svgbob = { workspace = true }
-merman = { workspace = true }
 unicode-width = { workspace = true }
 latex2mathml = { workspace = true }
-base64 = { workspace = true }
-flate2 = { workspace = true }
 tempfile = { workspace = true }
-
-[dev-dependencies]
-criterion = { workspace = true }
-
-[[bench]]
-name = "publishing"
-harness = false

@@ -180,7 +180,7 @@ fn focused_run_ignores_an_unrelated_invalid_action() {
     let workspace = temp.path().join("workspace with spaces");
     write_workspace(
         &workspace,
-        "  selected:\n    stage: Test\n    run: printf ok > selected.txt\n  broken:\n    stage: Test\n    steps:\n      - uses: evin/docs@v1\n        with:\n          site_url: https://example.com\n          tile: Docs\n",
+        "  selected:\n    stage: Test\n    run: printf ok > selected.txt\n  broken:\n    stage: Test\n    steps:\n      - uses: evin/docs@v1\n        with:\n          source_dir: docs\n          tile: Docs\n",
     );
 
     let run = evin()

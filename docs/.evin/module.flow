@@ -2,9 +2,6 @@
 module:
   name: docs
 
-values:
-  site_title: "Everyinit — Evin & ESH"
-
 tasks:
   evin-catalog:
     stage: Docs
@@ -43,61 +40,18 @@ tasks:
 
   build:
     stage: Docs
-    description: "Generate the static documentation site and audit links"
+    description: "Generate framework-neutral documentation data and validate routes"
     needs: [main:build]
     on:
       hooks: [pre-commit]
     steps:
       - uses: evin/docs@v1
         with:
-          title: "${site_title}"
-          site_url: https://everyinit.dev/
+          source_dir: docs
+          out: dist/docs-data
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
-          appearance:
-            accent: "#2563eb"
-            logo: docs/.evin/docs/branding/logo.svg
-            favicon: docs/.evin/docs/branding/favicon.svg
-          grammars:
-            - docs/.evin/docs/grammars/flow.sublime-syntax
-            - docs/.evin/docs/grammars/esh.sublime-syntax
-
-  test-responsive:
-    stage: Docs
-    description: "Run Chromium documentation responsiveness checks"
-    cwd: .
-    needs: [build]
-    steps:
-      - run: npx playwright test
-
-  verify:
-    stage: Docs
-    description: "Build and validate documentation in Chromium"
-    needs: [test-responsive]
-
-  serve:
-    stage: Docs
-    description: "Serve the live-reloading documentation site"
-    needs: [main:build]
-    watch:
-      paths:
-        - crates/**
-        - builtins/**
-        - Cargo.toml
-        - Cargo.lock
-      debounce: 300ms
-    steps:
-      - uses: evin/docs@v1
-        with:
-          mode: serve
-          title: "${site_title}"
-          site_url: https://everyinit.dev/
-          exclude: [esh-posix-compatibility-report.md]
-          strict_filenames: true
-          appearance:
-            accent: "#2563eb"
-            logo: docs/.evin/docs/branding/logo.svg
-            favicon: docs/.evin/docs/branding/favicon.svg
-          grammars:
-            - docs/.evin/docs/grammars/flow.sublime-syntax
-            - docs/.evin/docs/grammars/esh.sublime-syntax
+          versions:
+            - id: v0.2.4
+              source_dir: docs
+          latest_version: v0.2.4

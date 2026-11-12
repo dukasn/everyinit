@@ -86,7 +86,7 @@ fn workspace(root: &Path) {
     std::fs::create_dir_all(root.join(".evin")).unwrap();
     std::fs::write(
         root.join(".evin/workspace.flow"),
-        "workspace: { name: app, version: 1.0.0 }\nstages: [Test]\nvalues: { artifact: dist }\ntasks:\n  build:\n    stage: Test\n    steps:\n      - uses: evin/docs@v1\n        with: { site_url: '${artifact}' }\n",
+        "workspace: { name: app, version: 1.0.0 }\nstages: [Test]\nvalues: { artifact: dist }\ntasks:\n  build:\n    stage: Test\n    steps:\n      - uses: evin/docs@v1\n        with: { source_dir: '${artifact}' }\n",
     )
     .unwrap();
     std::fs::write(
@@ -138,7 +138,7 @@ fn semantic_tokens_use_utf16_positions_and_clear_for_invalid_flow() {
     let mut server = EvinLspServer::default();
     initialize(&mut server, directory.path(), false);
     let document_uri = uri(directory.path(), ".evin/workspace.flow");
-    let text = "workspace: { name: \"🦀\", version: 1.0.0 }\nstages: [Test]\ntasks:\n  build:\n    stage: Test\n    description: \"build\"\n    on: { hooks: [pre-commit] }\n    needs: [build]\n    watch: { paths: [\"src/**/*.rs\"] }\n    presets: [ci]\n    steps:\n      - uses: evin/docs@v1\n        with: { site_url: \"${artifact}\" }\n";
+    let text = "workspace: { name: \"🦀\", version: 1.0.0 }\nstages: [Test]\ntasks:\n  build:\n    stage: Test\n    description: \"build\"\n    on: { hooks: [pre-commit] }\n    needs: [build]\n    watch: { paths: [\"src/**/*.rs\"] }\n    presets: [ci]\n    steps:\n      - uses: evin/docs@v1\n        with: { source_dir: \"${artifact}\" }\n";
     let open = json!({ "jsonrpc": "2.0", "method": "textDocument/didOpen", "params": { "textDocument": { "uri": document_uri, "version": 2, "text": text } } });
     server
         .handle_message(&open.to_string(), &mut Vec::new())

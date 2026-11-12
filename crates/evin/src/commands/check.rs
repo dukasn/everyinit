@@ -890,7 +890,7 @@ mod tests {
 
     #[test]
     fn invalid_action_options_are_located_under_their_manifest() {
-        let with = "site_url: https://example.com\ntile: Docs\n";
+        let with = "source_dir: docs\ntile: Docs\n";
         let typo_offset = with.find("tile").unwrap();
         let cfg = sample_config(vec![TaskObject {
             name: "publish".into(),
@@ -932,9 +932,7 @@ mod tests {
                 "evin/docs@v1".into(),
                 Span::default(),
             )),
-            with: Some(
-                evin_flow::parse_yaml("site_url: https://example.com\ntile: Docs\n").unwrap(),
-            ),
+            with: Some(evin_flow::parse_yaml("source_dir: docs\ntile: Docs\n").unwrap()),
         };
         let cfg = sample_config(vec![
             TaskObject {

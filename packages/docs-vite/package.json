@@ -1,0 +1,20 @@
+{
+  "name": "@everyinit/docs-vite",
+  "version": "0.1.0",
+  "description": "Vite integration for Evin's headless documentation data package",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    }
+  },
+  "files": ["index.js", "index.d.ts", "virtual.d.ts", "README.md"],
+  "peerDependencies": {
+    "vite": ">=6"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "GPL-3.0-only"
+}
