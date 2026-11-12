@@ -73,46 +73,55 @@ pub enum TokenKind<'a> {
     Whitespace(&'a str),
     Comment(&'a str),
     Word(&'a str),
+    HereDocDelimiter {
+        body: &'a str,
+        quoted: bool,
+        strip_tabs: bool,
+    },
     SingleQuoted(&'a str),
     DoubleQuoted(&'a str),
     Variable(&'a str),
     CommandSub(&'a str),
-    Pipe,                 // |
-    ParallelPipe,         // &|
-    AndIf,                // &&
-    OrIf,                 // ||
-    Semicolon,            // ;
-    Newline,              // \n
-    LBrace,               // {
-    RBrace,               // }
-    LParen,               // (
-    RParen,               // )
-    RedirectOut,          // >
-    RedirectAppend,       // >>
-    RedirectIn,           // <
-    RedirectHereDoc,      // <<
-    RedirectHereString,   // <<<
-    RedirectStderr,       // 2>
-    RedirectStderrAppend, // 2>>
-    RedirectAll,          // &>
-    RedirectAllAppend,    // &>>
-    Bang,                 // !
-    If,                   // if
-    Then,                 // then
-    Elif,                 // elif
-    Else,                 // else
-    Fi,                   // fi
-    For,                  // for
-    In,                   // in
-    While,                // while
-    Until,                // until
-    Do,                   // do
-    Done,                 // done
-    Case,                 // case
-    Esac,                 // esac
-    DoubleSemi,           // ;;
-    SemiAnd,              // ;&
-    DoubleSemiAnd,        // ;;&
+    Pipe,                   // |
+    ParallelPipe,           // &|
+    AndIf,                  // &&
+    OrIf,                   // ||
+    Semicolon,              // ;
+    Newline,                // \n
+    LBrace,                 // {
+    RBrace,                 // }
+    LParen,                 // (
+    RParen,                 // )
+    RedirectOut,            // >
+    RedirectClobber,        // >|
+    RedirectAppend,         // >>
+    RedirectIn,             // <
+    RedirectHereDoc,        // <<
+    RedirectHereDocStrip,   // <<-
+    RedirectHereString,     // <<<
+    RedirectStderr,         // 2>
+    RedirectStderrAppend,   // 2>>
+    RedirectStderrToStdout, // 2>&1
+    RedirectStdoutToStderr, // 1>&2
+    RedirectAll,            // &>
+    RedirectAllAppend,      // &>>
+    Bang,                   // !
+    If,                     // if
+    Then,                   // then
+    Elif,                   // elif
+    Else,                   // else
+    Fi,                     // fi
+    For,                    // for
+    In,                     // in
+    While,                  // while
+    Until,                  // until
+    Do,                     // do
+    Done,                   // done
+    Case,                   // case
+    Esac,                   // esac
+    DoubleSemi,             // ;;
+    SemiAnd,                // ;&
+    DoubleSemiAnd,          // ;;&
     Eof,
 }
 
@@ -129,6 +138,7 @@ impl<'a> fmt::Display for TokenKind<'a> {
             TokenKind::Whitespace(s) => write!(f, "{}", s),
             TokenKind::Comment(s) => write!(f, "{}", s),
             TokenKind::Word(s) => write!(f, "{}", s),
+            TokenKind::HereDocDelimiter { .. } => write!(f, "<here-document>"),
             TokenKind::SingleQuoted(s) => write!(f, "'{}'", s),
             TokenKind::DoubleQuoted(s) => write!(f, "\"{}\"", s),
             TokenKind::Variable(s) => write!(f, "${}", s),
@@ -144,12 +154,16 @@ impl<'a> fmt::Display for TokenKind<'a> {
             TokenKind::LParen => write!(f, "("),
             TokenKind::RParen => write!(f, ")"),
             TokenKind::RedirectOut => write!(f, ">"),
+            TokenKind::RedirectClobber => write!(f, ">|"),
             TokenKind::RedirectAppend => write!(f, ">>"),
             TokenKind::RedirectIn => write!(f, "<"),
             TokenKind::RedirectHereDoc => write!(f, "<<"),
+            TokenKind::RedirectHereDocStrip => write!(f, "<<-"),
             TokenKind::RedirectHereString => write!(f, "<<<"),
             TokenKind::RedirectStderr => write!(f, "2>"),
             TokenKind::RedirectStderrAppend => write!(f, "2>>"),
+            TokenKind::RedirectStderrToStdout => write!(f, "2>&1"),
+            TokenKind::RedirectStdoutToStderr => write!(f, "1>&2"),
             TokenKind::RedirectAll => write!(f, "&>"),
             TokenKind::RedirectAllAppend => write!(f, "&>>"),
             TokenKind::Bang => write!(f, "!"),

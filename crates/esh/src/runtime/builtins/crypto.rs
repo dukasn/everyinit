@@ -171,8 +171,54 @@ pub fn hash<'a>(
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
         if args.is_empty() {
-            ctx.write_stderr(b"esh: hash: usage: hash [-a|--algo sha256|sha512|md5|crc32] [--sha256] [--sha512] [--md5] [--crc32] [file|-]\n");
-            return Ok(1);
+            return Ok(0);
+        }
+        if args[0] == "-r" {
+            if args.len() == 1 {
+                return Ok(0);
+            }
+            ctx.write_stderr(b"esh: hash: -r does not accept utility operands\n");
+            return Ok(2);
+        }
+
+        let cryptographic_mode = args.iter().any(|arg| {
+            matches!(
+                arg.as_str(),
+                "-a" | "--algo"
+                    | "--algorithm"
+                    | "--sha256"
+                    | "--256"
+                    | "--sha512"
+                    | "--512"
+                    | "--md5"
+                    | "--crc32"
+            ) || arg.starts_with("--algo=")
+        });
+        if !cryptographic_mode {
+            let mut status = 0;
+            for name in args {
+                if name.starts_with('-') {
+                    ctx.write_stderr(
+                        format!(
+                            "esh: hash: unsupported option '{}': use -a for digests\n",
+                            name
+                        )
+                        .as_bytes(),
+                    );
+                    status = 2;
+                    continue;
+                }
+                if crate::planner::dispatch::resolve_builtin(name).is_some()
+                    || ctx.get_function(name).is_some()
+                    || crate::catalog::find_keyword(name).is_some()
+                    || crate::runtime::builtins::command::external_command_exists(name, ctx)
+                {
+                    continue;
+                }
+                ctx.write_stderr(format!("esh: hash: {name}: not found\n").as_bytes());
+                status = 1;
+            }
+            return Ok(status);
         }
 
         let mut algo = String::new();

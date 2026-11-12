@@ -43,9 +43,9 @@ esac
 assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "a valid release version is required"
 assert [ -d "$MIRROR_ROOT" ] "mirror root is missing: $MIRROR_ROOT"
 
-for PATH in $(glob "$MIRROR_ROOT/**"); do
-  if ! test -f "$PATH"; then continue; fi
-  KEY="$(path -r "$PATH" "$MIRROR_ROOT")"
+for FILE_PATH in $(glob "$MIRROR_ROOT/**"); do
+  if ! test -f "$FILE_PATH"; then continue; fi
+  KEY="$(path -r "$FILE_PATH" "$MIRROR_ROOT")"
   ROOT_NAME="${KEY%%/*}"
   case "$ROOT_NAME" in
     evin|esh|channels)
@@ -82,9 +82,9 @@ for BINARY in evin esh; do
   assert [ "$(json -g "binaries.$BINARY.release_url" "$POINTER")" = "https://dl.everyinit.dev/$BINARY/$CHANNEL/v$VERSION/release.json" ] "$CHANNEL channel pointer has an invalid $BINARY release URL"
 done
 
-for PATH in $(glob "$MIRROR_ROOT/**"); do
-  if ! test -f "$PATH"; then continue; fi
-  KEY="$(path -r "$PATH" "$MIRROR_ROOT")"
+for FILE_PATH in $(glob "$MIRROR_ROOT/**"); do
+  if ! test -f "$FILE_PATH"; then continue; fi
+  KEY="$(path -r "$FILE_PATH" "$MIRROR_ROOT")"
   KIND=""
   case "$KEY" in
     evin/$CHANNEL/v$VERSION/*|esh/$CHANNEL/v$VERSION/*)
@@ -98,7 +98,7 @@ for PATH in $(glob "$MIRROR_ROOT/**"); do
       ;;
   esac
   if test "$MODE" != all && test "$MODE" != "$KIND"; then continue; fi
-  corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$PATH" --config infra/mirror/wrangler.toml
+  corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE_PATH" --config infra/mirror/wrangler.toml
 done
 
 echo "Published $MODE for $CHANNEL $VERSION mirror objects for Evin and ESH"

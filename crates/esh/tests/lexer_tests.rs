@@ -69,6 +69,32 @@ fn test_lexer_simple_command() {
 }
 
 #[test]
+fn unterminated_here_document_is_a_lexical_error() {
+    let error = Lexer::new("cat <<EOF\npartial body\n")
+        .tokenize_all()
+        .expect_err("a missing here-document delimiter must be rejected");
+
+    assert!(error.to_string().contains("Unterminated here-document"));
+    assert!(error.to_string().contains("expected 'EOF'"));
+}
+
+#[test]
+fn here_document_delimiter_at_eof_without_line_ending_is_accepted() {
+    let tokens = Lexer::new("cat <<EOF\nbody\nEOF")
+        .tokenize_all()
+        .expect("ESH accepts a closing delimiter at EOF without a line ending");
+
+    assert!(tokens.iter().any(|token| matches!(
+        token.kind,
+        TokenKind::HereDocDelimiter {
+            body: "body\n",
+            quoted: false,
+            strip_tabs: false,
+        }
+    )));
+}
+
+#[test]
 fn test_lexer_operators_and_delimiters() {
     let script = "cargo build &| npm test && echo done || exit 1;";
     let tokens = Lexer::new(script)
@@ -162,8 +188,52 @@ fn test_lexer_comments_and_line_continuations() {
 }
 
 #[test]
+fn hash_inside_word_is_literal_but_word_initial_hash_starts_comment() {
+    let tokens = Lexer::new("echo value#suffix # trailing comment\n")
+        .tokenize_all()
+        .expect("tokenization failed");
+
+    let kinds: Vec<TokenKind> = tokens.into_iter().map(|token| token.kind).collect();
+    assert_eq!(
+        kinds,
+        vec![
+            TokenKind::Word("echo"),
+            TokenKind::Word("value#suffix"),
+            TokenKind::Newline,
+            TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn test_lexer_rejects_unstructured_background_operator() {
+    let error = Lexer::new("sleep 1 &")
+        .tokenize_all()
+        .expect_err("standalone '&' is outside the ESH command language");
+
+    assert!(error.message.contains("Unexpected single '&' operator"));
+}
+
+#[test]
+fn test_lexer_rejects_unsupported_descriptor_redirections() {
+    for script in [
+        "echo value 3>output",
+        "echo value 10>>output",
+        "echo value 2>&-",
+        "echo value 1>&-",
+        "echo value 0>output",
+        "cat <> file",
+    ] {
+        let error = Lexer::new(script)
+            .tokenize_all()
+            .expect_err("unsupported descriptor redirection should fail lexing");
+        assert!(error.message.contains("redirection"), "{error}");
+    }
+}
+
+#[test]
 fn test_lexer_redirections() {
-    let script = "cmd > out.txt 2> err.txt >> append.log < input.txt &> all.log &>> all_app.log";
+    let script = "cmd > out.txt 2> err.txt >&2 2>&1 1>&2 >> append.log < input.txt 0< stdin.txt 1> stdout2.txt 1>> append2.log 1>| force.txt &> all.log &>> all_app.log";
     let tokens = Lexer::new(script)
         .tokenize_all()
         .expect("tokenization failed");
@@ -177,10 +247,21 @@ fn test_lexer_redirections() {
             TokenKind::Word("out.txt"),
             TokenKind::RedirectStderr,
             TokenKind::Word("err.txt"),
+            TokenKind::RedirectStdoutToStderr,
+            TokenKind::RedirectStderrToStdout,
+            TokenKind::RedirectStdoutToStderr,
             TokenKind::RedirectAppend,
             TokenKind::Word("append.log"),
             TokenKind::RedirectIn,
             TokenKind::Word("input.txt"),
+            TokenKind::RedirectIn,
+            TokenKind::Word("stdin.txt"),
+            TokenKind::RedirectOut,
+            TokenKind::Word("stdout2.txt"),
+            TokenKind::RedirectAppend,
+            TokenKind::Word("append2.log"),
+            TokenKind::RedirectClobber,
+            TokenKind::Word("force.txt"),
             TokenKind::RedirectAll,
             TokenKind::Word("all.log"),
             TokenKind::RedirectAllAppend,

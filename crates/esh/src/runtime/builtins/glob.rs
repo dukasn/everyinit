@@ -29,6 +29,10 @@ pub fn glob<'a>(
 
         let mut matches = std::collections::BTreeSet::new();
         let cwd = ctx.cwd().to_path_buf();
+        let match_options = glob::MatchOptions {
+            require_literal_leading_dot: true,
+            ..glob::MatchOptions::new()
+        };
 
         for pat in args {
             let recursive_pattern = if pat.ends_with("/**") {
@@ -42,7 +46,7 @@ pub fn glob<'a>(
                 cwd.join(&recursive_pattern).to_string_lossy().to_string()
             };
 
-            match glob::glob(&full_pattern) {
+            match glob::glob_with(&full_pattern, match_options) {
                 Ok(entries) => {
                     for entry in entries.flatten() {
                         // Make path relative to cwd if possible for clean script consumption

@@ -12,6 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use esh::runtime::traits::ScopeManager;
 use esh::{Engine, ExecutionContext};
 
 #[tokio::test]
@@ -56,6 +57,36 @@ async fn test_local_scoping_and_functions() {
     let output = ctx.get_captured_stdout().unwrap();
     assert!(output.contains("Inside func: local=secret, global=mutated, arg1=first_arg"));
     assert!(output.contains("Outside func: local=, global=mutated"));
+}
+
+#[tokio::test]
+async fn nested_functions_resolve_and_update_the_nearest_dynamic_local() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let script = r#"
+        VALUE=root
+        inner() {
+            echo "inner-before=$VALUE"
+            VALUE=changed
+        }
+        outer() {
+            local VALUE=caller-local
+            inner
+            echo "outer-after=$VALUE"
+        }
+        outer
+        echo "root-after=$VALUE"
+    "#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "inner-before=caller-local\nouter-after=changed\nroot-after=root\n"
+    );
 }
 
 #[tokio::test]
@@ -119,4 +150,487 @@ async fn test_read_builtin_and_herestrings() {
     assert!(output.contains("FIRST=alpha, SECOND=beta, REST=gamma"));
     assert!(output.contains("SINGLE=single_line_payload"));
     assert!(output.contains("REPLY=standalone_line"));
+}
+
+#[tokio::test]
+async fn scalar_expansion_preserves_one_argument_without_splitting_or_globbing() {
+    let tmp = tempfile::tempdir().unwrap();
+    std::fs::write(tmp.path().join("alpha.txt"), "").unwrap();
+    std::fs::write(tmp.path().join("beta.txt"), "").unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let script = r#"
+        capture_args() {
+            echo "$#:<$1>"
+        }
+        VALUE="two words *.txt"
+        capture_args $VALUE
+        capture_args $(printf 'two words *.txt')
+        capture_args $(printf 'two words *.txt\n\n')
+        capture_args $(printf '')
+        ARGS=("two words" "*.txt")
+        capture_args "${ARGS[@]}"
+        for FILE in $(glob "*.txt"); do echo "glob=<$FILE>"; done
+    "#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "1:<two words *.txt>\n1:<two words *.txt>\n1:<two words *.txt>\n1:<>\n2:<two words>\nglob=<alpha.txt>\nglob=<beta.txt>\n"
+    );
+}
+
+#[tokio::test]
+async fn command_substitution_preserves_nul_bytes_in_shell_values() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "VALUE=$(printf 'left\\000right'); printf '<%s>\\n' \"$VALUE\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout_bytes().unwrap(), b"<left\0right>\n");
+}
+
+#[tokio::test]
+async fn backslash_quoting_preserves_escaped_characters_and_removes_line_continuations() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let script = "echo one\\ two; echo literal\\*; echo \"double\\\\q\"; echo left\\\nright";
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "one two\nliteral*\ndouble\\q\nleftright\n"
+    );
+}
+
+#[tokio::test]
+async fn positional_at_expands_to_arguments_but_iterates_separately_in_for() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_positional_args(vec![
+        "script.esh".to_string(),
+        "first value".to_string(),
+        "second".to_string(),
+    ]);
+
+    let script = r#"
+        capture_args() { echo "$#:<$1>"; }
+        capture_args "$@"
+        capture_args "$*"
+        IFS=:
+        capture_args "$*"
+        capture_args $*
+        RESULT=""
+        for ARG in "$@"; do
+            RESULT="${RESULT}[${ARG}]"
+        done
+        echo "$RESULT"
+    "#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "2:<first value>\n1:<first value second>\n1:<first value second>\n1:<first value second>\n[first value][second]\n"
+    );
+}
+
+#[tokio::test]
+async fn embedded_positional_at_remains_one_space_joined_scalar() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_positional_args(vec![
+        "script.esh".to_string(),
+        "first value".to_string(),
+        "second".to_string(),
+    ]);
+
+    let status = engine
+        .eval_str(
+            "capture_args() { echo \"$#:<$1>\"; }\ncapture_args \"pre$@post\"\ncapture_args prefix$@suffix\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "1:<prefirst value secondpost>\n1:<prefixfirst value secondsuffix>\n"
+    );
+}
+
+#[tokio::test]
+async fn positional_at_uses_one_scalar_in_assignments_and_redirections() {
+    let temp = tempfile::tempdir().unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(temp.path()).unwrap();
+
+    let status = engine
+        .eval_str(
+            "set -- 'first value' second\nIFS=:\nJOINED=\"$@\"\nprintf '<%s>\\n' \"$JOINED\"\nprintf payload >\"$@\"\ncat 'first value second'\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "<first value second>\npayload"
+    );
+    assert_eq!(
+        std::fs::read_to_string(temp.path().join("first value second")).unwrap(),
+        "payload"
+    );
+}
+
+#[tokio::test]
+async fn standalone_unquoted_at_expands_to_unsplit_positional_arguments() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_positional_args(vec![
+        "script.esh".to_string(),
+        "first value".to_string(),
+        "second".to_string(),
+    ]);
+
+    let status = engine
+        .eval_str(
+            "capture_args() { echo \"$#:<$1>:<$2>\"; }\ncapture_args $@\ncapture_args ${@:-fallback}\nset --\ncapture_args $@\ncapture_args ${@:-fallback}\ncapture_args ${@+fallback}\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "2:<first value>:<second>\n2:<first value>:<second>\n0:<>:<>\n1:<fallback>:<>\n0:<>:<>\n"
+    );
+}
+
+#[tokio::test]
+async fn special_parameter_lengths_distinguish_positional_count_from_count_length() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_positional_args(
+        std::iter::once("script.esh".to_string())
+            .chain((1..=10).map(|index| format!("arg{index}")))
+            .collect(),
+    );
+
+    assert_eq!(
+        engine
+            .eval_str("echo ${#@}:${#*}:${##}\n", &mut ctx)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "10:10:2\n");
+}
+
+#[tokio::test]
+async fn braced_positional_parameters_support_indices_above_nine() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let mut positional = vec!["script.esh".to_string()];
+    positional.extend((1..=10).map(|index| format!("arg{index}")));
+    positional[1] = "first".to_string();
+    positional[10] = "tenth".to_string();
+    ctx.set_positional_args(positional);
+
+    let status = engine
+        .eval_str(
+            r#"
+                echo "$10:${10}:${10:-fallback}"
+                inspect_tenth() { echo "${10}"; }
+                inspect_tenth "$@"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "first0:tenth:tenth\ntenth\n"
+    );
+}
+
+#[tokio::test]
+async fn command_prefix_assignments_are_visible_during_command_then_restored() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_env("ESH_PREFIX_TEST", "original");
+
+    let script = r#"
+        ESH_PREFIX_TEST=builtin echo "$ESH_PREFIX_TEST"
+        echo "$ESH_PREFIX_TEST"
+        ESH_PREFIX_TEST=external printenv ESH_PREFIX_TEST
+        echo "$ESH_PREFIX_TEST"
+        ESH_ASSIGN_ONLY=persist
+        echo "$ESH_ASSIGN_ONLY"
+    "#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "builtin\noriginal\nexternal\noriginal\npersist\n"
+    );
+    assert_eq!(ctx.get_var("ESH_PREFIX_TEST").as_deref(), Some("original"));
+    assert_eq!(ctx.get_var("ESH_ASSIGN_ONLY").as_deref(), Some("persist"));
+}
+
+#[tokio::test]
+async fn prefix_assignments_are_restored_after_loop_and_function_control_flow() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                TEMP=original
+                for ITEM in one two; do
+                    TEMP=break break
+                    echo unreachable-break
+                done
+                for ITEM in one two; do
+                    TEMP=continue continue
+                    echo unreachable-continue
+                done
+                leave() {
+                    TEMP=return return 7
+                    echo unreachable-return
+                }
+                leave
+                printf 'return=%s value=%s\n' "$?" "$TEMP"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "return=7 value=original\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn prefix_assignment_scope_cleans_up_after_functions_and_expansion_errors() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_env("ESH_PREFIX_SCOPE", "original");
+
+    let script = r#"
+        mutate() {
+            ESH_PREFIX_SCOPE=inside
+            echo "$ESH_PREFIX_SCOPE"
+        }
+        ESH_PREFIX_SCOPE=call mutate
+        echo "$ESH_PREFIX_SCOPE"
+        set -u
+        ESH_PREFIX_SCOPE=temporary echo "$ESH_MISSING"
+    "#;
+
+    let result = engine.eval_str(script, &mut ctx).await;
+
+    assert!(result.is_err());
+    assert_eq!(ctx.get_var("ESH_PREFIX_SCOPE").as_deref(), Some("original"));
+    assert_eq!(
+        ctx.env_vars().get("ESH_PREFIX_SCOPE").map(String::as_str),
+        Some("original")
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "inside\noriginal\n");
+}
+
+#[tokio::test]
+async fn prefix_assignments_restore_only_their_environment_bindings_after_export() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_env("ESH_PREFIX_EXPORT", "original");
+
+    let status = engine
+        .eval_str(
+            "ESH_PREFIX_EXPORT=temporary export ESH_PREFIX_EXPORT ESH_NEW_EXPORT=kept\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_var("ESH_PREFIX_EXPORT").as_deref(),
+        Some("original")
+    );
+    assert_eq!(
+        ctx.env_vars().get("ESH_PREFIX_EXPORT").map(String::as_str),
+        Some("original")
+    );
+    assert_eq!(ctx.get_var("ESH_NEW_EXPORT").as_deref(), Some("kept"));
+    assert_eq!(
+        ctx.env_vars().get("ESH_NEW_EXPORT").map(String::as_str),
+        Some("kept")
+    );
+
+    let status = engine
+        .eval_str(
+            "ESH_PREFIX_EXPORT=temporary export ESH_REDIRECT_EXPORT=kept > /dev/null\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_var("ESH_REDIRECT_EXPORT").as_deref(), Some("kept"));
+    assert_eq!(
+        ctx.env_vars()
+            .get("ESH_REDIRECT_EXPORT")
+            .map(String::as_str),
+        Some("kept")
+    );
+
+    let status = engine
+        .eval_str(
+            "ESH_TEMP_EXPORT=temporary export ESH_TEMP_EXPORT\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_var("ESH_TEMP_EXPORT"), None);
+    assert!(!ctx.env_vars().contains_key("ESH_TEMP_EXPORT"));
+}
+
+#[tokio::test]
+async fn later_prefix_assignments_expand_with_earlier_prefix_values() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_env("ESH_PREFIX_ORDER", "original");
+
+    let status = engine
+        .eval_str(
+            r#"ESH_PREFIX_ORDER=temporary ESH_PREFIX_COPY=$ESH_PREFIX_ORDER printf '<%s><%s>\n' "$ESH_PREFIX_ORDER" "$ESH_PREFIX_COPY"
+printf 'after=<%s><%s>\n' "$ESH_PREFIX_ORDER" "${ESH_PREFIX_COPY-unset}"
+"#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "<temporary><temporary>\nafter=<original><unset>\n"
+    );
+    assert_eq!(ctx.get_var("ESH_PREFIX_ORDER").as_deref(), Some("original"));
+    assert_eq!(ctx.get_var("ESH_PREFIX_COPY"), None);
+}
+
+#[tokio::test]
+async fn array_prefix_assignments_are_scoped_across_builtins_and_redirections() {
+    let tmp = tempfile::tempdir().unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+    ctx.set_env("ESH_PREFIX_EXPORTED_ARRAY", "environment value");
+    std::fs::write(tmp.path().join("input.txt"), "input value\n").unwrap();
+
+    let script = r#"
+        ESH_PREFIX_ARRAY=(original values)
+        ESH_PREFIX_ARRAY=(temporary command) echo "${ESH_PREFIX_ARRAY[@]}" > output.txt
+        ESH_PREFIX_EXPORTED_ARRAY=(temporary array) echo "${ESH_PREFIX_EXPORTED_ARRAY[@]}"
+        printenv ESH_PREFIX_EXPORTED_ARRAY
+        ESH_PREFIX_PATH=from-prefix.txt echo output > "$ESH_PREFIX_PATH"
+        ESH_INPUT_PATH=input.txt cat < "$ESH_INPUT_PATH" > input-result.txt
+        ESH_ASSIGN_REDIRECT=kept > assignment-only.txt
+        echo "${ESH_PREFIX_ARRAY[@]}"
+    "#;
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "temporary array\nenvironment value\noriginal values\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("output.txt")).unwrap(),
+        "temporary command\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("from-prefix.txt")).unwrap(),
+        "output\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("input-result.txt")).unwrap(),
+        "input value\n"
+    );
+    assert_eq!(ctx.get_var("ESH_ASSIGN_REDIRECT").as_deref(), Some("kept"));
+    assert_eq!(
+        std::fs::read(tmp.path().join("assignment-only.txt")).unwrap(),
+        b""
+    );
+    assert_eq!(
+        ctx.get_shell_val("ESH_PREFIX_ARRAY"),
+        Some(&esh::runtime::context::ShellValue::Array(vec![
+            "original".to_string(),
+            "values".to_string()
+        ]))
+    );
+    assert!(!ctx.env_vars().contains_key("ESH_PREFIX_ARRAY"));
+}
+
+#[tokio::test]
+async fn subshell_state_is_isolated_and_pipeline_adopts_last_stage_state() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let script = r#"
+        VALUE=outer
+        ( echo child; VALUE=subshell )
+        echo "$VALUE"
+        echo pipeline | VALUE=last
+        echo "$VALUE"
+    "#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "child\nouter\nlast\n");
 }

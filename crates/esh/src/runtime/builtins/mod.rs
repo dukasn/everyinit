@@ -13,6 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod archive;
+pub mod command;
 pub mod crypto;
 pub mod data;
 pub mod date_tool;
@@ -34,14 +35,15 @@ pub mod test_tool;
 pub mod text;
 
 pub use archive::{archive, tar, unarchive, unzip, zip};
+pub use command::{command, type_builtin};
 pub use crypto::{base64, crypto, hash, md5sum, sha256sum};
 pub use data::{json, yaml};
 pub use date_tool::date;
 pub use diff_tool::diff;
 pub use duration_tool::duration;
 pub use flow::{
-    assert, r#break, r#continue, declare, echo, exit, export, local, printf, read, retry, r#return,
-    set, shift, sleep, time, timeout, trap, wait,
+    assert, r#break, colon, r#continue, declare, dot, echo, exit, export, local, printf, read,
+    retry, r#return, set, shift, sleep, time, timeout, trap, unset, wait,
 };
 pub use fs::{cat, cd, cp, head, mkdir, mv, pwd, rm, stat, tail, touch};
 pub use getopts::getopts;
@@ -54,5 +56,5 @@ pub use semver_tool::semver;
 pub use str::str;
 pub use sys::{env, os, uname, which};
 pub use table_tool::{csv, table};
-pub use test_tool::test;
+pub use test_tool::{bracket_test, test};
 pub use text::{cut, grep, sort, tr, uniq, wc};

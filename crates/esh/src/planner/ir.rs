@@ -47,10 +47,14 @@ impl fmt::Debug for CommandTarget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlanWordPart {
     Literal(String),
+    HomeTilde,
     SingleQuoted(String),
     DoubleQuoted(String),
+    CaseQuoted(String),
+    CaseDoubleQuoted(String),
     Variable(String),
     CommandSub(String),
+    HereDocBody(String, bool, bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +103,9 @@ pub enum ExecutionStage {
     /// Atomic command or stream pipe: cmd1 | cmd2
     Pipeline(Vec<PlanNode>),
 
+    /// Pipeline that includes a compound-command stage.
+    PipelineStages(Vec<ExecutionStage>),
+
     /// Parallel join: task1 &| task2
     Parallel(Vec<ExecutionStage>),
 
@@ -123,6 +130,12 @@ pub enum ExecutionStage {
 
     /// Negation: ! pipeline
     Negation(Box<ExecutionStage>),
+
+    /// Compound command with command-level redirections.
+    Redirected {
+        inner: Box<ExecutionStage>,
+        redirections: Vec<PlanRedirection>,
+    },
 
     /// User function declaration: my_func() { ... }
     FunctionDef { name: String, plan: ExecutionPlan },

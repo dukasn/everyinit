@@ -173,6 +173,106 @@ async fn test_cancellation_terminates_the_external_process_group() {
 }
 
 #[cfg(unix)]
+#[tokio::test]
+async fn cancellation_terminates_external_process_tree_and_runs_int_then_exit_traps() {
+    let temp = tempfile::tempdir().unwrap();
+    let pid_file = temp.path().join("trapped-descendant.pid");
+    let token = CancellationToken::new();
+    let cancel = token.clone();
+    let pid_for_cancel = pid_file.clone();
+    let mut ctx = ExecutionContext::new().with_token(token);
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.enable_capture();
+
+    tokio::spawn(async move {
+        for _ in 0..200 {
+            if pid_for_cancel.exists() {
+                cancel.cancel();
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        cancel.cancel();
+    });
+
+    let script = "trap 'echo INT' INT; trap 'echo EXIT' EXIT; sh -c 'sleep 30 & echo $! > trapped-descendant.pid; wait'";
+    let status = tokio::time::timeout(Duration::from_secs(4), engine().eval_str(script, &mut ctx))
+        .await
+        .expect("cancellation with traps timed out")
+        .expect("eval failed");
+
+    assert_eq!(status, 130);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "INT\nEXIT\n");
+    let pid: i32 = std::fs::read_to_string(pid_file)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    for _ in 0..50 {
+        if unsafe { libc::kill(pid, 0) } == -1 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("descendant process {pid} survived trapped cancellation");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_parallel_join_cancellation_terminates_each_external_process_group() {
+    let temp = tempfile::tempdir().unwrap();
+    let pid_files = [temp.path().join("left.pid"), temp.path().join("right.pid")];
+    let token = CancellationToken::new();
+    let cancel = token.clone();
+    let watched_files = pid_files.clone();
+    let mut ctx = ExecutionContext::new().with_token(token);
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.enable_capture();
+
+    tokio::spawn(async move {
+        for _ in 0..200 {
+            if watched_files.iter().all(|path| path.exists()) {
+                cancel.cancel();
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        cancel.cancel();
+    });
+
+    let script = "sh -c 'sleep 30 & echo $! > left.pid; wait' &| sh -c 'sleep 30 & echo $! > right.pid; wait'";
+    let status = tokio::time::timeout(Duration::from_secs(4), engine().eval_str(script, &mut ctx))
+        .await
+        .expect("parallel process-tree cancellation timed out")
+        .expect("eval failed");
+    assert_eq!(status, 130);
+
+    let pids = pid_files
+        .iter()
+        .map(|path| {
+            std::fs::read_to_string(path)
+                .unwrap()
+                .trim()
+                .parse::<i32>()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    for pid in &pids {
+        for _ in 0..50 {
+            if unsafe { libc::kill(*pid, 0) } == -1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            unsafe { libc::kill(*pid, 0) },
+            -1,
+            "child process {pid} survived"
+        );
+    }
+}
+
+#[cfg(unix)]
 fn engine() -> Engine {
     Engine::new()
 }

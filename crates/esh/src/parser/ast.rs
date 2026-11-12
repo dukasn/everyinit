@@ -23,15 +23,19 @@ pub enum LogicalOp {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RedirectionOp {
-    RedirectOut,          // >
-    RedirectAppend,       // >>
-    RedirectIn,           // <
-    RedirectHereDoc,      // <<
-    RedirectHereString,   // <<<
-    RedirectStderr,       // 2>
-    RedirectStderrAppend, // 2>>
-    RedirectAll,          // &>
-    RedirectAllAppend,    // &>>
+    RedirectOut,            // >
+    RedirectClobber,        // >|
+    RedirectAppend,         // >>
+    RedirectIn,             // <
+    RedirectHereDoc,        // <<
+    RedirectHereDocStrip,   // <<-
+    RedirectHereString,     // <<<
+    RedirectStderr,         // 2>
+    RedirectStderrAppend,   // 2>>
+    RedirectStderrToStdout, // 2>&1
+    RedirectStdoutToStderr, // 1>&2
+    RedirectAll,            // &>
+    RedirectAllAppend,      // &>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +45,7 @@ pub enum WordPart<'a> {
     DoubleQuoted(&'a str),
     Variable(&'a str),
     CommandSub(&'a str),
+    HereDocBody(&'a str, bool, bool),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,6 +91,11 @@ pub enum ASTNode<'a> {
         name: Word<'a>,
         args: BumpVec<'a, Word<'a>>,
         assignments: BumpVec<'a, Assignment<'a>>,
+        redirections: BumpVec<'a, Redirection<'a>>,
+        span: Span,
+    },
+    RedirectedCompound {
+        inner: &'a ASTNode<'a>,
         redirections: BumpVec<'a, Redirection<'a>>,
         span: Span,
     },
@@ -159,6 +169,7 @@ impl<'a> ASTNode<'a> {
     pub fn span(&self) -> Span {
         match self {
             ASTNode::Command { span, .. } => *span,
+            ASTNode::RedirectedCompound { span, .. } => *span,
             ASTNode::Negation { span, .. } => *span,
             ASTNode::FunctionDeclaration { span, .. } => *span,
             ASTNode::Block { span, .. } => *span,

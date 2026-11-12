@@ -221,22 +221,26 @@ async fn test_shell_runner_redaction() {
         std::sync::Arc::new(secrets_provider),
     );
 
-    #[cfg(unix)]
-    let script = "echo 'Connecting with token my_top_secret_token_12345...'";
-    #[cfg(windows)]
-    let script = "echo 'Connecting with token my_top_secret_token_12345...'";
+    let script = "set -x; echo 'Connecting with token my_top_secret_token_12345...'; printf 'stderr token my_top_secret_token_12345...\\n' >&2";
 
     let _ = runner.run(&ctx, script, HashMap::new(), None).await;
 
-    let mut output = String::new();
+    let mut stdout = String::new();
+    let mut stderr = String::new();
     while let Ok(msg) = rx.try_recv() {
-        if let LogMessage::RawOutput { line, .. } = msg {
+        if let LogMessage::RawOutput { line, stream, .. } = msg {
+            let output = match stream {
+                evin_action_sdk::OutputStream::Stdout => &mut stdout,
+                evin_action_sdk::OutputStream::Stderr => &mut stderr,
+            };
             output.push_str(&line);
             output.push('\n');
         }
     }
 
-    assert!(output.contains("Connecting with token ***..."));
-    assert!(!output.contains("my_top_secret_token_12345"));
+    assert!(stdout.contains("Connecting with token ***..."), "{stdout}");
+    assert!(!stdout.contains("my_top_secret_token_12345"), "{stdout}");
+    assert!(stderr.contains("stderr token ***..."), "{stderr}");
+    assert!(!stderr.contains("my_top_secret_token_12345"), "{stderr}");
     let _ = std::fs::remove_dir_all(temp_dir);
 }

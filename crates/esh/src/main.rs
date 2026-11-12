@@ -78,6 +78,11 @@ async fn main() {
                 eprintln!("esh: -c requires a script argument");
                 std::process::exit(2);
             }
+            if args.len() >= 4 {
+                // Match `sh -c command_string command_name [argument ...]`:
+                // the first operand becomes $0 and the rest become $1... .
+                ctx.set_positional_args(args[3..].to_vec());
+            }
             match engine.eval_str(&args[2], &mut ctx).await {
                 Ok(code) => std::process::exit(code),
                 Err(e) => {

@@ -62,6 +62,58 @@ async fn test_for_loop_splits_standalone_command_substitution_by_line() {
 }
 
 #[tokio::test]
+async fn for_loop_line_lists_preserve_spaces_and_keep_quoted_or_scalar_values_whole() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let code = engine
+        .eval_str(
+            r#"
+                RESULT=""
+                for item in $(printf 'alpha beta\nsecond\n'); do
+                    RESULT="${RESULT}|${item}"
+                done
+                printf 'lines=<%s>\n' "$RESULT"
+
+                RESULT=""
+                for item in "$(printf 'left\nright\n')"; do
+                    RESULT="${RESULT}|${item}"
+                done
+                printf 'quoted=<%s>\n' "$RESULT"
+
+                VALUE=$(printf 'left\nright\n')
+                RESULT=""
+                for item in $VALUE; do
+                    RESULT="${RESULT}|${item}"
+                done
+                printf 'scalar=<%s>\n' "$RESULT"
+
+                RESULT=""
+                for item in $(printf 'first\n\nlast\n'); do
+                    RESULT="${RESULT}|${item}"
+                done
+                printf 'blank-line=<%s>\n' "$RESULT"
+
+                RESULT=none
+                for item in $(printf ''); do
+                    RESULT=unexpected
+                done
+                printf 'empty-output=<%s>\n' "$RESULT"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(code, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "lines=<|alpha beta|second>\nquoted=<|left\nright>\nscalar=<|left\nright>\nblank-line=<|first||last>\nempty-output=<none>\n"
+    );
+}
+
+#[tokio::test]
 async fn test_for_loop_expands_array_values_as_individual_items() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -132,6 +184,147 @@ async fn test_for_loop_break_and_continue() {
     assert_eq!(code, 0);
     let output = ctx.get_captured_stdout().unwrap();
     assert_eq!(output.trim(), "13");
+}
+
+#[tokio::test]
+async fn loop_control_clamps_excess_levels_and_rejects_invalid_levels() {
+    let engine = Engine::new();
+
+    let mut break_ctx = ExecutionContext::new();
+    break_ctx.enable_capture();
+    let break_status = engine
+        .eval_str(
+            "for outer in A B; do for inner in x y; do break 99; done; echo wrong; done; echo after-break\n",
+            &mut break_ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(break_status, 0);
+    assert_eq!(break_ctx.get_captured_stdout().unwrap(), "after-break\n");
+
+    let mut continue_ctx = ExecutionContext::new();
+    continue_ctx.enable_capture();
+    let continue_status = engine
+        .eval_str(
+            "TRACE=; for outer in A B; do for inner in x y; do TRACE=\"${TRACE}${outer}${inner}\"; continue 99; done; done; echo \"$TRACE\"; echo after-continue\n",
+            &mut continue_ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(continue_status, 0);
+    assert_eq!(
+        continue_ctx.get_captured_stdout().unwrap(),
+        "AxBx\nafter-continue\n"
+    );
+
+    for script in [
+        "for item in x; do break nope; done",
+        "for item in x; do continue 0; done",
+        "for item in x; do break 1 2; done",
+    ] {
+        let mut ctx = ExecutionContext::new();
+        ctx.enable_capture();
+        assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 2);
+        assert_ne!(ctx.get_captured_stderr().unwrap(), "");
+    }
+}
+
+#[tokio::test]
+async fn loop_control_outside_a_loop_returns_status_two() {
+    let engine = Engine::new();
+
+    for (script, expected) in [
+        (
+            "break",
+            "only meaningful in a `for', `while', or `until' loop",
+        ),
+        (
+            "continue",
+            "only meaningful in a `for', `while', or `until' loop",
+        ),
+    ] {
+        let mut ctx = ExecutionContext::new();
+        ctx.enable_capture();
+        assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 2);
+        assert!(
+            ctx.get_captured_stderr().unwrap().contains(expected),
+            "{script}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn return_is_function_scoped_and_exit_statuses_are_validated() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str("return 7", &mut ctx).await.unwrap(), 2);
+    assert!(!ctx.is_returning());
+
+    let status = engine
+        .eval_str(
+            "finish() { echo before; return 7; echo wrong; }; finish; echo after:$?\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "before\nafter:7\n");
+
+    for script in [
+        "exit nope",
+        "exit 1 2",
+        "exit 256",
+        "exit -1",
+        "finish() { return nope; }; finish",
+        "finish() { return 256; }; finish",
+        "finish() { return -1; }; finish",
+    ] {
+        let mut bad_ctx = ExecutionContext::new();
+        bad_ctx.enable_capture();
+        assert_eq!(engine.eval_str(script, &mut bad_ctx).await.unwrap(), 2);
+        assert!(!bad_ctx.is_exiting());
+        assert!(!bad_ctx.is_returning());
+    }
+
+    let mut range_ctx = ExecutionContext::new();
+    range_ctx.enable_capture();
+    let status = engine
+        .eval_str(
+            "exit 256\necho after-exit:$?\nfinish() { return -1; echo after-return:$?; }; finish\n",
+            &mut range_ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(status, 0);
+    assert_eq!(
+        range_ctx.get_captured_stdout().unwrap(),
+        "after-exit:2\nafter-return:2\n"
+    );
+    assert_eq!(
+        range_ctx.get_captured_stderr().unwrap(),
+        "esh: exit: status must be between 0 and 255\nesh: return: status must be between 0 and 255\n"
+    );
+
+    let mut boundary_ctx = ExecutionContext::new();
+    assert_eq!(
+        engine
+            .eval_str("exit 255", &mut boundary_ctx)
+            .await
+            .unwrap(),
+        255
+    );
+    assert!(boundary_ctx.is_exiting());
+
+    let mut return_boundary_ctx = ExecutionContext::new();
+    assert_eq!(
+        engine
+            .eval_str("finish() { return 255; }; finish", &mut return_boundary_ctx)
+            .await
+            .unwrap(),
+        255
+    );
 }
 
 #[tokio::test]
@@ -234,6 +427,140 @@ async fn test_case_pattern_matching() {
 }
 
 #[tokio::test]
+async fn case_patterns_support_posix_named_classes_and_negation() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                for item in ABx a2x 42x; do
+                    case "$item" in
+                        [[:alpha:]][!0-9]?)
+                            echo "$item:match"
+                            ;;
+                        *)
+                            echo "$item:no"
+                            ;;
+                    esac
+                done
+                case "*" in
+                    '*')
+                        echo "single-quoted literal"
+                        ;;
+                    *)
+                        echo "single-quoted wildcard"
+                        ;;
+                esac
+                case anything in
+                    "*")
+                        echo "double-quoted wildcard"
+                        ;;
+                    *)
+                        echo "double-quoted literal"
+                        ;;
+                esac
+                case "*" in
+                    \*)
+                        echo "escaped literal"
+                        ;;
+                    *)
+                        echo "escaped wildcard"
+                        ;;
+                esac
+                STAR="*"
+                case anything in
+                    $STAR)
+                        echo "unquoted expansion wildcard"
+                        ;;
+                    *)
+                        echo "unquoted expansion literal"
+                        ;;
+                esac
+                case anything in
+                    "$STAR")
+                        echo "quoted expansion wildcard"
+                        ;;
+                    *)
+                        echo "quoted expansion literal"
+                        ;;
+                esac
+                case a in
+                    [^b])
+                        echo "caret-negation extension"
+                        ;;
+                    *)
+                        echo "caret-literal behavior"
+                        ;;
+                esac
+                case '^' in
+                    [\^a])
+                        echo "escaped-caret-literal"
+                        ;;
+                    *)
+                        echo "escaped-caret-missed"
+                        ;;
+                esac
+                VALUE=abc
+                echo "caret-removal=${VALUE#[^b]}"
+                VALUE='^tail'
+                echo "escaped-caret-removal=${VALUE#[\^a]}"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "ABx:match\na2x:no\n42x:no\nsingle-quoted literal\ndouble-quoted literal\nescaped literal\nunquoted expansion wildcard\nquoted expansion literal\ncaret-negation extension\nescaped-caret-literal\ncaret-removal=bc\nescaped-caret-removal=tail\n"
+    );
+}
+
+#[tokio::test]
+async fn case_and_removal_patterns_use_ascii_named_classes_and_unicode_ranges() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                case 'é' in
+                    [[:alpha:]])
+                        echo nonascii-alpha
+                        ;;
+                    *)
+                        echo ascii-class
+                        ;;
+                esac
+                case 'å' in
+                    [à-å])
+                        echo unicode-range
+                        ;;
+                    *)
+                        echo missed-range
+                        ;;
+                esac
+                VALUE=ätail
+                printf '%s\n' "${VALUE#[à-å]}"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "ascii-class\nunicode-range\ntail\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
 async fn test_case_fallthrough_and_resume() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -262,4 +589,73 @@ async fn test_case_fallthrough_and_resume() {
     assert_eq!(code, 0);
     let output = ctx.get_captured_stdout().unwrap();
     assert_eq!(output.trim(), "AB");
+}
+
+#[tokio::test]
+async fn case_delimiters_can_follow_commands_on_the_same_line() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "case value in value) printf A;& value) printf B;; esac\ncase value in value) printf C;;& value) printf D;; esac\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "ABCD");
+}
+
+#[tokio::test]
+async fn esh_case_resume_next_rematches_following_patterns() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                RESULT=
+                case alpha in
+                    a*)
+                        RESULT=prefix
+                        ;;&
+                    al*)
+                        RESULT="$RESULT-matched"
+                        ;;&
+                    beta)
+                        RESULT=incorrect
+                        ;;
+                    *)
+                        RESULT="$RESULT-fallback"
+                        ;;
+                esac
+                printf '%s\n' "$RESULT"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "prefix-matched-fallback\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn esh_negated_pipeline_allows_a_line_break_after_bang() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine.eval_str("!\nfalse\n", &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 }

@@ -18,7 +18,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamTarget {
     Inherit,
     Null,
@@ -103,5 +103,40 @@ impl StreamTarget {
                 Ok(())
             }
         }
+    }
+
+    pub fn prepare_for_write(&self, noclobber: bool) -> Result<(), ExecError> {
+        let Self::File { path, append } = self else {
+            return Ok(());
+        };
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|e| {
+                ExecError::IoError(format!(
+                    "Cannot create parent directory for '{}': {}",
+                    path.display(),
+                    e
+                ))
+            })?;
+        }
+
+        let mut options = OpenOptions::new();
+        options.write(true);
+        if *append {
+            options.create(true).append(true);
+        } else if noclobber {
+            options.create_new(true);
+        } else {
+            options.create(true).truncate(true);
+        }
+        options.open(path).map_err(|e| {
+            let reason = if noclobber {
+                "Cannot overwrite existing target"
+            } else {
+                "Cannot open target"
+            };
+            ExecError::IoError(format!("{} '{}': {}", reason, path.display(), e))
+        })?;
+        Ok(())
     }
 }

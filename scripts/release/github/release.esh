@@ -42,10 +42,10 @@ get_release() {
 
 request_json() {
   METHOD="$1"
-  PATH="$2"
+  API_PATH="$2"
   PAYLOAD="$3"
   OUTPUT="$4"
-  curl -fsS -X "$METHOD" -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' -H 'Content-Type: application/json' --data-binary "@$PAYLOAD" "$API_BASE$PATH" -o "$OUTPUT"
+  curl -fsS -X "$METHOD" -H 'Accept: application/vnd.github+json' -H "Authorization: Bearer $GITHUB_TOKEN" -H 'X-GitHub-Api-Version: 2026-03-10' -H 'Content-Type: application/json' --data-binary "@$PAYLOAD" "$API_BASE$API_PATH" -o "$OUTPUT"
 }
 
 snapshot() {

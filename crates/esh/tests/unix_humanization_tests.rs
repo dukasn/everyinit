@@ -24,6 +24,7 @@ async fn test_date_and_duration() {
 
     let script = r#"
         date -u -d @1700000000 +%Y-%m-%d
+        date -u +%Z
         duration --human 134
         duration --human 500ms
         duration --human 3661
@@ -34,9 +35,95 @@ async fn test_date_and_duration() {
     let output = ctx.get_captured_stdout().unwrap();
     let lines: Vec<&str> = output.lines().collect();
     assert_eq!(lines[0], "2023-11-14");
-    assert_eq!(lines[1], "2m 14s");
-    assert_eq!(lines[2], "500ms");
-    assert_eq!(lines[3], "1h 1m 1s");
+    assert_eq!(lines[1], "UTC");
+    assert_eq!(lines[2], "2m 14s");
+    assert_eq!(lines[3], "500ms");
+    assert_eq!(lines[4], "1h 1m 1s");
+}
+
+#[tokio::test]
+async fn date_rejects_invalid_options_dates_and_clock_setting_operands() {
+    let engine = Engine::new();
+    for script in [
+        "date --unknown",
+        "date -d",
+        "date -d @not-a-number +%s",
+        "date not-a-format",
+        "date +%Y extra",
+    ] {
+        let mut ctx = ExecutionContext::new();
+        ctx.enable_capture();
+        assert_eq!(
+            engine.eval_str(script, &mut ctx).await.unwrap(),
+            2,
+            "{script}"
+        );
+        assert_eq!(ctx.get_captured_stdout().unwrap(), "", "{script}");
+        assert_ne!(ctx.get_captured_stderr().unwrap(), "", "{script}");
+    }
+}
+
+#[tokio::test]
+async fn date_posix_alternative_format_modifiers_fall_back_to_standard_forms() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "date -u -d @1700000000 +'%Ec|%EC|%Ex|%EX|%Ey|%EY|%Od|%Oe|%OH|%OI|%Om|%OM|%OS|%Ou|%OU|%OV|%Ow|%OW|%Oy'",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "Tue Nov 14 22:13:20 2023|20|11/14/23|22:13:20|23|2023|14|14|22|10|11|13|20|2|46|46|2|46|23\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn date_posix_format_conversions_match_the_c_locale() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "date -u -d @1700000000 +'%a|%A|%b|%B|%c|%C|%d|%D|%e|%h|%H|%I|%j|%m|%M|%n%p|%r|%R|%S|%t|%T|%u|%U|%V|%w|%W|%x|%X|%y|%Y|%z|%Z|%%'",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "Tue|Tuesday|Nov|November|Tue Nov 14 22:13:20 2023|20|14|11/14/23|14|Nov|22|10|318|11|13|\nPM|10:13:20 PM|22:13|20|\t|22:13:20|2|46|46|2|46|11/14/23|22:13:20|23|2023|+0000|UTC|%\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn date_invalid_format_directives_return_an_error_instead_of_panicking() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str("date -u -d @1700000000 +%Q\n", &mut ctx)
+        .await
+        .unwrap();
+
+    assert_eq!(status, 2);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(
+        ctx.get_captured_stderr().unwrap(),
+        "esh: date: invalid format string\n"
+    );
 }
 
 #[tokio::test]

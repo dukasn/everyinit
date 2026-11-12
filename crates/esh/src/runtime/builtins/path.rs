@@ -17,6 +17,7 @@ use crate::runtime::context::ExecutionContext;
 use crate::runtime::path_presentation::present;
 use crate::runtime::traits::BoxFuture;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 fn resolve_path(ctx: &ExecutionContext, path_str: &str) -> PathBuf {
     let p = Path::new(path_str);
@@ -27,25 +28,97 @@ fn resolve_path(ctx: &ExecutionContext, path_str: &str) -> PathBuf {
     }
 }
 
+fn canonicalize_path(path: &Path, allow_missing_leaf: bool) -> io::Result<PathBuf> {
+    match path.canonicalize() {
+        Ok(path) => Ok(path),
+        Err(error) if allow_missing_leaf && error.kind() == io::ErrorKind::NotFound => {
+            let path_text = path.as_os_str().to_string_lossy();
+            let trimmed = path_text.trim_end_matches(std::path::MAIN_SEPARATOR);
+            let lookup_path = if trimmed.is_empty() {
+                path
+            } else {
+                Path::new(trimmed)
+            };
+
+            match fs::symlink_metadata(lookup_path) {
+                Ok(metadata) if metadata.file_type().is_symlink() => {
+                    let target = fs::read_link(lookup_path)?;
+                    let target_path = if target.is_absolute() {
+                        target
+                    } else {
+                        lookup_path
+                            .parent()
+                            .unwrap_or_else(|| Path::new("."))
+                            .join(target)
+                    };
+                    canonicalize_path(&target_path, true)
+                }
+                Ok(_) => Err(error),
+                Err(metadata_error) if metadata_error.kind() == io::ErrorKind::NotFound => {
+                    let leaf = lookup_path.file_name().ok_or(error)?;
+                    let parent = lookup_path.parent().unwrap_or_else(|| Path::new("."));
+                    let canonical_parent = parent.canonicalize()?;
+                    Ok(canonical_parent.join(leaf))
+                }
+                Err(metadata_error) => Err(metadata_error),
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn posix_dirname(path: &str) -> String {
+    if path.is_empty() {
+        return ".".to_string();
+    }
+    if path == "//" || path.chars().all(|ch| ch == '/') {
+        return "/".to_string();
+    }
+
+    let trimmed = path.trim_end_matches('/');
+    let Some(separator) = trimmed.rfind('/') else {
+        return ".".to_string();
+    };
+    let parent = trimmed[..separator].trim_end_matches('/');
+    if parent.is_empty() {
+        "/".to_string()
+    } else {
+        parent.to_string()
+    }
+}
+
+fn posix_basename(path: &str) -> String {
+    if path.is_empty() {
+        return String::new();
+    }
+    if path == "//" || path.chars().all(|ch| ch == '/') {
+        return "/".to_string();
+    }
+
+    path.trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_string()
+}
+
 pub fn dirname<'a>(
     args: &'a [String],
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
+        let args = if args.first().is_some_and(|arg| arg == "--") {
+            &args[1..]
+        } else {
+            args
+        };
         if args.is_empty() {
             ctx.write_stderr(b"esh: dirname: missing operand\n");
             return Ok(1);
         }
 
         for path_str in args {
-            let p = Path::new(path_str);
-            let parent = p.parent().map(present).unwrap_or_else(|| ".".to_string());
-            let out = if parent.is_empty() {
-                ".".to_string()
-            } else {
-                parent
-            };
-            ctx.write_stdout(format!("{}\n", out).as_bytes());
+            ctx.write_stdout(format!("{}\n", posix_dirname(path_str)).as_bytes());
         }
         Ok(0)
     })
@@ -61,20 +134,37 @@ pub fn basename<'a>(
             return Ok(1);
         }
 
-        let mut suffix: Option<&str> = None;
+        let mut suffix = None;
+        let mut multiple = false;
         let mut operands = Vec::new();
+        let mut parsing_options = true;
+        let mut index = 0;
 
-        let mut iter = args.iter().peekable();
-        while let Some(arg) = iter.next() {
-            if arg == "-s" || arg == "--suffix" {
-                if let Some(s) = iter.next() {
-                    suffix = Some(s.as_str());
+        while index < args.len() {
+            let arg = args[index].as_str();
+            if parsing_options && arg == "--" {
+                parsing_options = false;
+            } else if parsing_options && (arg == "-a" || arg == "--multiple") {
+                multiple = true;
+            } else if parsing_options && (arg == "-s" || arg == "--suffix") {
+                index += 1;
+                if index == args.len() {
+                    ctx.write_stderr(b"esh: basename: option requires a suffix\n");
+                    return Ok(2);
                 }
-            } else if let Some(s) = arg.strip_prefix("--suffix=") {
-                suffix = Some(s);
-            } else if !arg.starts_with('-') || operands.is_empty() {
-                operands.push(arg.as_str());
+                suffix = Some(args[index].as_str());
+                multiple = true;
+            } else if parsing_options && let Some(value) = arg.strip_prefix("--suffix=") {
+                suffix = Some(value);
+                multiple = true;
+            } else if parsing_options && arg.starts_with('-') && arg != "-" {
+                ctx.write_stderr(format!("esh: basename: unknown option '{}'\n", arg).as_bytes());
+                return Ok(2);
+            } else {
+                parsing_options = false;
+                operands.push(arg);
             }
+            index += 1;
         }
 
         if operands.is_empty() {
@@ -82,27 +172,31 @@ pub fn basename<'a>(
             return Ok(1);
         }
 
-        let target = operands[0];
-        let explicit_suffix = if operands.len() > 1 && suffix.is_none() {
-            Some(operands[1])
-        } else {
-            suffix
-        };
-
-        let p = Path::new(target);
-        let mut name = p
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| target.to_string());
-
-        if let Some(s) = explicit_suffix
-            && name.ends_with(s)
-            && name.len() > s.len()
-        {
-            name.truncate(name.len() - s.len());
+        if !multiple && operands.len() > 2 {
+            ctx.write_stderr(b"esh: basename: too many operands\n");
+            return Ok(2);
         }
 
-        ctx.write_stdout(format!("{}\n", name).as_bytes());
+        let positional_suffix = if !multiple && operands.len() == 2 {
+            Some(operands[1])
+        } else {
+            None
+        };
+        let suffix = suffix.or(positional_suffix);
+
+        for target in operands
+            .iter()
+            .take(if multiple { operands.len() } else { 1 })
+        {
+            let mut name = posix_basename(target);
+            if let Some(value) = suffix
+                && name.ends_with(value)
+                && name.len() > value.len()
+            {
+                name.truncate(name.len() - value.len());
+            }
+            ctx.write_stdout(format!("{}\n", name).as_bytes());
+        }
         Ok(0)
     })
 }
@@ -112,26 +206,34 @@ pub fn realpath<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        if args.is_empty() {
-            ctx.write_stderr(b"esh: realpath: missing operand\n");
-            return Ok(1);
-        }
-
         let mut quiet = false;
         let mut rel_to: Option<&str> = None;
+        let mut allow_missing_leaf = false;
         let mut paths = Vec::new();
+        let mut options = true;
 
         let mut iter = args.iter().peekable();
         while let Some(arg) = iter.next() {
-            if arg == "-q" || arg == "--quiet" {
+            if options && arg == "--" {
+                options = false;
+            } else if options && (arg == "-q" || arg == "--quiet") {
                 quiet = true;
-            } else if arg == "--relative-to" {
-                if let Some(base) = iter.next() {
-                    rel_to = Some(base.as_str());
-                }
-            } else if let Some(base) = arg.strip_prefix("--relative-to=") {
+            } else if options && (arg == "-e" || arg == "-E") {
+                allow_missing_leaf = arg == "-E";
+            } else if options && arg == "--relative-to" {
+                let Some(base) = iter.next() else {
+                    ctx.write_stderr(b"esh: realpath: --relative-to requires a directory\n");
+                    return Ok(2);
+                };
+                rel_to = Some(base.as_str());
+            } else if options && let Some(base) = arg.strip_prefix("--relative-to=") {
                 rel_to = Some(base);
-            } else if !arg.starts_with('-') {
+            } else if options && arg.starts_with('-') {
+                ctx.write_stderr(
+                    format!("esh: realpath: unsupported option '{}'\n", arg).as_bytes(),
+                );
+                return Ok(2);
+            } else {
                 paths.push(arg.as_str());
             }
         }
@@ -141,15 +243,42 @@ pub fn realpath<'a>(
             return Ok(1);
         }
 
-        let all_ok = true;
+        let canonical_base = if let Some(base_str) = rel_to {
+            match resolve_path(ctx, base_str).canonicalize() {
+                Ok(base) => Some(base),
+                Err(error) => {
+                    if !quiet {
+                        ctx.write_stderr(
+                            format!("esh: realpath: cannot resolve '{}': {}\n", base_str, error)
+                                .as_bytes(),
+                        );
+                    }
+                    return Ok(1);
+                }
+            }
+        } else {
+            None
+        };
+
+        let mut all_ok = true;
         for path_str in paths {
             let target = resolve_path(ctx, path_str);
-            let canonical = target.canonicalize().unwrap_or(target);
+            let canonical = match canonicalize_path(&target, allow_missing_leaf) {
+                Ok(canonical) => canonical,
+                Err(error) => {
+                    all_ok = false;
+                    if !quiet {
+                        ctx.write_stderr(
+                            format!("esh: realpath: cannot resolve '{}': {}\n", path_str, error)
+                                .as_bytes(),
+                        );
+                    }
+                    continue;
+                }
+            };
 
-            if let Some(base_str) = rel_to {
-                let base = resolve_path(ctx, base_str);
-                let base_can = base.canonicalize().unwrap_or(base);
-                match pathdiff::diff_paths(&canonical, &base_can) {
+            if let Some(base) = canonical_base.as_ref() {
+                match pathdiff::diff_paths(&canonical, base) {
                     Some(rel) => {
                         ctx.write_stdout(format!("{}\n", present(&rel)).as_bytes());
                     }
@@ -162,7 +291,7 @@ pub fn realpath<'a>(
             }
         }
 
-        if all_ok || quiet { Ok(0) } else { Ok(1) }
+        Ok(if all_ok { 0 } else { 1 })
     })
 }
 

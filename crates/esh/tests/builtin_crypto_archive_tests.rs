@@ -110,6 +110,37 @@ async fn test_hash_and_base64() {
     assert!(output.contains("bXktc2VjcmV0LXRva2Vu"));
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn hash_supports_posix_command_location_forms_alongside_digest_options() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str("hash", &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(engine.eval_str("hash -r", &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        engine.eval_str("hash printf sh", &mut ctx).await.unwrap(),
+        0
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+
+    ctx.enable_capture();
+    assert_eq!(
+        engine
+            .eval_str("hash esh_missing_utility_12345", &mut ctx)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(
+        ctx.get_captured_stderr().unwrap(),
+        "esh: hash: esh_missing_utility_12345: not found\n"
+    );
+}
+
 #[tokio::test]
 async fn test_archive_and_unarchive_tar_and_zip() {
     let tmp = tempdir().unwrap();

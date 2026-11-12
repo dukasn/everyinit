@@ -69,8 +69,18 @@ fn lower_ast_node(node: &ASTNode<'_>) -> Result<ExecutionStage, ParseError> {
             let plan_node = lower_command(name, args, assignments, redirections, *span)?;
             Ok(ExecutionStage::Pipeline(vec![plan_node]))
         }
+        ASTNode::RedirectedCompound {
+            inner,
+            redirections,
+            ..
+        } => Ok(ExecutionStage::Redirected {
+            inner: Box::new(lower_ast_node(inner)?),
+            redirections: redirections.iter().map(lower_redirection).collect(),
+        }),
         ASTNode::Pipeline { stages, .. } => {
             let mut plan_nodes = Vec::new();
+            let mut lowered_stages = Vec::new();
+            let mut contains_compound_stage = false;
             for stage in stages {
                 match *stage {
                     ASTNode::Command {
@@ -81,15 +91,20 @@ fn lower_ast_node(node: &ASTNode<'_>) -> Result<ExecutionStage, ParseError> {
                         span,
                     } => {
                         let node = lower_command(name, args, assignments, redirections, *span)?;
+                        lowered_stages.push(ExecutionStage::Pipeline(vec![node.clone()]));
                         plan_nodes.push(node);
                     }
                     other => {
-                        let sub_stage = lower_ast_node(other)?;
-                        return Ok(sub_stage);
+                        contains_compound_stage = true;
+                        lowered_stages.push(lower_ast_node(other)?);
                     }
                 }
             }
-            Ok(ExecutionStage::Pipeline(plan_nodes))
+            if contains_compound_stage {
+                Ok(ExecutionStage::PipelineStages(lowered_stages))
+            } else {
+                Ok(ExecutionStage::Pipeline(plan_nodes))
+            }
         }
         ASTNode::ParallelPipeline { branches, .. } => {
             let mut branch_stages = Vec::new();
@@ -203,7 +218,7 @@ fn lower_ast_node(node: &ASTNode<'_>) -> Result<ExecutionStage, ParseError> {
             let plan_target = lower_word(target);
             let mut plan_arms = Vec::new();
             for arm in arms {
-                let patterns = arm.patterns.iter().map(lower_word).collect();
+                let patterns = arm.patterns.iter().map(lower_case_pattern_word).collect();
                 let body = match arm.body {
                     Some(b) => Some(Box::new(lower_ast_node(b)?)),
                     None => None,
@@ -262,12 +277,27 @@ fn lower_word(word: &Word<'_>) -> PlanWord {
     let parts = word
         .parts
         .iter()
-        .map(|p| match p {
-            WordPart::Literal(s) => PlanWordPart::Literal((*s).to_string()),
-            WordPart::SingleQuoted(s) => PlanWordPart::SingleQuoted((*s).to_string()),
-            WordPart::DoubleQuoted(s) => PlanWordPart::DoubleQuoted((*s).to_string()),
-            WordPart::Variable(s) => PlanWordPart::Variable((*s).to_string()),
-            WordPart::CommandSub(s) => PlanWordPart::CommandSub((*s).to_string()),
+        .enumerate()
+        .flat_map(|(index, p)| match p {
+            WordPart::Literal(s) if index == 0 && (*s == "~" || s.starts_with("~/")) => {
+                let mut lowered = vec![PlanWordPart::HomeTilde];
+                if s.len() > 1 {
+                    lowered.push(PlanWordPart::Literal(unescape_unquoted(&s[1..])));
+                }
+                lowered
+            }
+            WordPart::Literal(s) => vec![PlanWordPart::Literal(unescape_unquoted(s))],
+            WordPart::SingleQuoted(s) => vec![PlanWordPart::SingleQuoted((*s).to_string())],
+            WordPart::DoubleQuoted(s) => vec![PlanWordPart::DoubleQuoted((*s).to_string())],
+            WordPart::Variable(s) => vec![PlanWordPart::Variable((*s).to_string())],
+            WordPart::CommandSub(s) => vec![PlanWordPart::CommandSub((*s).to_string())],
+            WordPart::HereDocBody(body, quoted, strip_tabs) => {
+                vec![PlanWordPart::HereDocBody(
+                    (*body).to_string(),
+                    *quoted,
+                    *strip_tabs,
+                )]
+            }
         })
         .collect();
 
@@ -275,6 +305,76 @@ fn lower_word(word: &Word<'_>) -> PlanWord {
         parts,
         span: word.span,
     }
+}
+
+fn lower_case_pattern_word(word: &Word<'_>) -> PlanWord {
+    let parts = word
+        .parts
+        .iter()
+        .map(|part| match part {
+            WordPart::Literal(source) => PlanWordPart::Literal(escape_pattern_quoting(source)),
+            WordPart::SingleQuoted(value) => PlanWordPart::CaseQuoted((*value).to_string()),
+            WordPart::DoubleQuoted(value) => PlanWordPart::CaseDoubleQuoted((*value).to_string()),
+            WordPart::Variable(value) => PlanWordPart::Variable((*value).to_string()),
+            WordPart::CommandSub(value) => PlanWordPart::CommandSub((*value).to_string()),
+            WordPart::HereDocBody(body, quoted, strip_tabs) => {
+                PlanWordPart::HereDocBody((*body).to_string(), *quoted, *strip_tabs)
+            }
+        })
+        .collect();
+
+    PlanWord {
+        parts,
+        span: word.span,
+    }
+}
+
+fn escape_pattern_quoting(source: &str) -> String {
+    let mut result = String::with_capacity(source.len());
+    let mut chars = source.chars();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            result.push(ch);
+            continue;
+        }
+        match chars.next() {
+            Some('\n') => {}
+            Some('\r') if chars.clone().next() == Some('\n') => {
+                chars.next();
+            }
+            Some(escaped) => {
+                // Keep escapes that can change pattern meaning, including
+                // hyphens and negators when they occur inside bracket lists.
+                if matches!(escaped, '*' | '?' | '[' | ']' | '\\' | '-' | '!' | '^') {
+                    result.push('\\');
+                }
+                result.push(escaped);
+            }
+            None => result.push_str("\\\\"),
+        }
+    }
+    result
+}
+
+fn unescape_unquoted(source: &str) -> String {
+    let mut result = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            result.push(ch);
+            continue;
+        }
+
+        match chars.next() {
+            Some('\n') => {}
+            Some('\r') if chars.peek() == Some(&'\n') => {
+                chars.next();
+            }
+            Some(escaped) => result.push(escaped),
+            None => result.push('\\'),
+        }
+    }
+    result
 }
 
 fn lower_assignment(asgn: &Assignment<'_>) -> PlanAssignment {
@@ -309,6 +409,7 @@ fn word_to_raw_string(word: &Word<'_>) -> String {
             | WordPart::CommandSub(p) => {
                 s.push_str(p);
             }
+            WordPart::HereDocBody(body, _, _) => s.push_str(body),
         }
     }
     s

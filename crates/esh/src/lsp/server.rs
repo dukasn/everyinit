@@ -557,6 +557,9 @@ impl LspServer {
 
                 self.collect_ast_symbols(body, doc, symbols);
             }
+            ASTNode::RedirectedCompound { inner, .. } => {
+                self.collect_ast_symbols(inner, doc, symbols);
+            }
             ASTNode::StatementList { statements, .. }
             | ASTNode::Block { statements, .. }
             | ASTNode::Subshell { statements, .. } => {

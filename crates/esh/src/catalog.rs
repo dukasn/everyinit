@@ -104,7 +104,9 @@ mod tests {
         assert!(get_hover_doc("echo").unwrap().contains("```esh"));
         assert!(get_hover_doc_plain("if").is_some());
         assert!(get_ansi_doc("echo").is_some());
+        assert!(resolve_builtin(".").is_some());
         assert!(resolve_builtin("typeset").is_some());
+        assert!(resolve_builtin("unset").is_some());
         assert!(resolve_builtin("[").is_some());
         assert!(resolve_builtin("not-a-builtin").is_none());
     }

@@ -16,7 +16,11 @@ use crate::error::ExecError;
 use crate::planner::compiler::compile_script;
 use crate::runtime::context::{ExecutionContext, TrapSignal};
 use crate::runtime::traits::{BoxFuture, Executable, ScopeManager};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+const ESCAPED_PRINTF_PERCENT: char = '\u{f0000}';
+const PRINTF_BYTE_MARKER_BASE: u32 = 0xf1000;
 
 pub fn parse_duration(s: &str) -> Result<Duration, ExecError> {
     let s = s.trim();
@@ -30,27 +34,32 @@ pub fn parse_duration(s: &str) -> Result<Duration, ExecError> {
         let secs: f64 = num_str
             .parse()
             .map_err(|_| ExecError::Custom(format!("Invalid seconds duration: '{}'", s)))?;
-        return Ok(Duration::from_secs_f64(secs));
+        return checked_duration(secs, "seconds", s);
     }
     if let Some(num_str) = s.strip_suffix('m') {
         let mins: f64 = num_str
             .parse()
             .map_err(|_| ExecError::Custom(format!("Invalid minutes duration: '{}'", s)))?;
-        return Ok(Duration::from_secs_f64(mins * 60.0));
+        return checked_duration(mins * 60.0, "minutes", s);
     }
     if let Some(num_str) = s.strip_suffix('h') {
         let hours: f64 = num_str
             .parse()
             .map_err(|_| ExecError::Custom(format!("Invalid hours duration: '{}'", s)))?;
-        return Ok(Duration::from_secs_f64(hours * 3600.0));
+        return checked_duration(hours * 3600.0, "hours", s);
     }
     if let Ok(secs) = s.parse::<f64>() {
-        return Ok(Duration::from_secs_f64(secs));
+        return checked_duration(secs, "seconds", s);
     }
     Err(ExecError::Custom(format!(
         "Unrecognized duration format: '{}'",
         s
     )))
+}
+
+fn checked_duration(seconds: f64, unit: &str, original: &str) -> Result<Duration, ExecError> {
+    Duration::try_from_secs_f64(seconds)
+        .map_err(|_| ExecError::Custom(format!("Invalid {unit} duration: '{original}'")))
 }
 
 pub fn unescape_string(input: &str) -> String {
@@ -149,10 +158,84 @@ pub fn unescape_string(input: &str) -> String {
 }
 
 pub fn format_c_style(fmt: &str, args: &[String]) -> String {
-    let unescaped_fmt = unescape_string(fmt);
+    restore_printf_bytes_as_latin1(&format_c_style_with_status(fmt, args).0)
+}
+
+fn restore_printf_bytes_as_latin1(output: &str) -> String {
+    output
+        .chars()
+        .map(|ch| {
+            let code = ch as u32;
+            if (PRINTF_BYTE_MARKER_BASE + 0x80..=PRINTF_BYTE_MARKER_BASE + 0xff).contains(&code) {
+                char::from_u32(code - PRINTF_BYTE_MARKER_BASE).unwrap_or(ch)
+            } else {
+                ch
+            }
+        })
+        .collect()
+}
+
+fn printf_output_bytes(output: &str) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(output.len());
+    for ch in output.chars() {
+        let code = ch as u32;
+        if (PRINTF_BYTE_MARKER_BASE + 0x80..=PRINTF_BYTE_MARKER_BASE + 0xff).contains(&code) {
+            bytes.push((code - PRINTF_BYTE_MARKER_BASE) as u8);
+        } else {
+            let mut encoded = [0; 4];
+            bytes.extend_from_slice(ch.encode_utf8(&mut encoded).as_bytes());
+        }
+    }
+    bytes
+}
+
+fn collect_printf_spec(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<String> {
+    let mut spec = String::new();
+    while chars
+        .peek()
+        .is_some_and(|ch| matches!(ch, '-' | '+' | ' ' | '#' | '0'))
+    {
+        spec.push(chars.next().unwrap());
+    }
+    if chars.peek() == Some(&'*') {
+        spec.push(chars.next().unwrap());
+    } else {
+        while chars.peek().is_some_and(char::is_ascii_digit) {
+            spec.push(chars.next().unwrap());
+        }
+    }
+    if chars.peek() == Some(&'.') {
+        spec.push(chars.next().unwrap());
+        if chars.peek() == Some(&'*') {
+            spec.push(chars.next().unwrap());
+        } else {
+            while chars.peek().is_some_and(char::is_ascii_digit) {
+                spec.push(chars.next().unwrap());
+            }
+        }
+    }
+    if matches!(chars.peek(), Some('h' | 'l')) {
+        let modifier = chars.next().unwrap();
+        spec.push(modifier);
+        if chars.peek() == Some(&modifier) {
+            spec.push(chars.next().unwrap());
+        }
+    } else if chars
+        .peek()
+        .is_some_and(|ch| matches!(ch, 'j' | 'z' | 't' | 'L'))
+    {
+        spec.push(chars.next().unwrap());
+    }
+    spec.push(chars.next()?);
+    Some(spec)
+}
+
+fn format_c_style_with_status(fmt: &str, args: &[String]) -> (String, bool, Vec<String>) {
+    let unescaped_fmt = unescape_printf_format(fmt);
     let mut out = String::with_capacity(unescaped_fmt.len());
     let mut chars = unescaped_fmt.chars().peekable();
     let mut arg_idx = 0;
+    let mut diagnostics = Vec::new();
 
     while let Some(c) = chars.next() {
         if c == '%' {
@@ -162,68 +245,780 @@ pub fn format_c_style(fmt: &str, args: &[String]) -> String {
                 continue;
             }
 
-            let mut spec = String::new();
-            while let Some(&sc) = chars.peek() {
-                chars.next();
-                spec.push(sc);
-                if sc == 's'
-                    || sc == 'd'
-                    || sc == 'i'
-                    || sc == 'f'
-                    || sc == 'x'
-                    || sc == 'X'
-                    || sc == 'c'
-                    || sc == 'b'
-                {
-                    break;
+            let Some(spec) = collect_printf_spec(&mut chars) else {
+                diagnostics.push("esh: printf: incomplete format conversion\n".to_string());
+                break;
+            };
+
+            let mut parsed = parse_printf_spec(&spec);
+            if !matches!(
+                parsed.conversion,
+                's' | 'b'
+                    | 'c'
+                    | 'd'
+                    | 'i'
+                    | 'o'
+                    | 'u'
+                    | 'x'
+                    | 'X'
+                    | 'a'
+                    | 'A'
+                    | 'f'
+                    | 'F'
+                    | 'e'
+                    | 'E'
+                    | 'g'
+                    | 'G'
+            ) {
+                diagnostics.push(format!(
+                    "esh: printf: invalid conversion specifier %{}\n",
+                    parsed.conversion
+                ));
+                continue;
+            }
+            if parsed.width_from_arg {
+                let width = args.get(arg_idx).map_or(0, |value| {
+                    parse_printf_or_zero(value, true, false, &mut diagnostics)
+                });
+                arg_idx += 1;
+                if width < 0 {
+                    if !parsed.flags.contains('-') {
+                        parsed.flags.push('-');
+                    }
+                    parsed.width = Some(width.unsigned_abs().min(usize::MAX as u64) as usize);
+                } else {
+                    parsed.width = Some(width as usize);
                 }
             }
-
-            let type_char = spec.chars().last().unwrap_or('s');
+            if parsed.precision_from_arg {
+                let precision = args.get(arg_idx).map_or(0, |value| {
+                    parse_printf_or_zero(value, true, false, &mut diagnostics)
+                });
+                arg_idx += 1;
+                parsed.precision = (precision >= 0).then_some(precision as usize);
+            }
+            let arg_present = args.get(arg_idx).is_some();
             let arg_val = args.get(arg_idx).map(|s| s.as_str()).unwrap_or("");
             arg_idx += 1;
 
-            match type_char {
+            let formatted = match parsed.conversion {
                 's' => {
-                    out.push_str(arg_val);
+                    let value = parsed.precision.map_or_else(
+                        || arg_val.to_string(),
+                        |limit| arg_val.chars().take(limit).collect(),
+                    );
+                    apply_string_width(value, &parsed)
                 }
                 'b' => {
-                    out.push_str(&unescape_string(arg_val));
+                    let (value, stop) = unescape_printf_b(arg_val);
+                    if stop {
+                        let value = parsed
+                            .precision
+                            .map_or(value.clone(), |limit| value.chars().take(limit).collect());
+                        out.push_str(&apply_string_width(value, &parsed));
+                        return (out.replace(ESCAPED_PRINTF_PERCENT, "%"), true, diagnostics);
+                    }
+                    apply_string_width(
+                        parsed
+                            .precision
+                            .map_or(value.clone(), |limit| value.chars().take(limit).collect()),
+                        &parsed,
+                    )
                 }
-                'd' | 'i' => {
-                    let num: i64 = arg_val.trim().parse().unwrap_or(0);
-                    out.push_str(&num.to_string());
+                'd' | 'i' => format_integer(
+                    parse_printf_or_zero(arg_val, arg_present, false, &mut diagnostics),
+                    false,
+                    10,
+                    &parsed,
+                ),
+                'o' | 'u' | 'x' | 'X' => {
+                    let radix = match parsed.conversion {
+                        'o' => 8,
+                        'x' => 16,
+                        'X' => 16,
+                        _ => 10,
+                    };
+                    format_integer(
+                        parse_printf_or_zero(arg_val, arg_present, true, &mut diagnostics),
+                        true,
+                        radix,
+                        &parsed,
+                    )
                 }
-                'f' => {
-                    let num: f64 = arg_val.trim().parse().unwrap_or(0.0);
-                    out.push_str(&format!("{:.2}", num));
-                }
-                'x' => {
-                    let num: i64 = arg_val.trim().parse().unwrap_or(0);
-                    out.push_str(&format!("{:x}", num));
-                }
-                'X' => {
-                    let num: i64 = arg_val.trim().parse().unwrap_or(0);
-                    out.push_str(&format!("{:X}", num));
-                }
-                'c' => {
-                    if let Some(ch) = arg_val.chars().next() {
-                        out.push(ch);
+                'a' | 'A' | 'f' | 'F' | 'e' | 'E' | 'g' | 'G' => {
+                    let num: f64 = if !arg_present {
+                        0.0
+                    } else if let Some((value, valid)) = parse_printf_float(arg_val) {
+                        if float_operand_out_of_range(arg_val, value) {
+                            diagnostics.push(printf_range_diagnostic(arg_val));
+                        } else if !valid {
+                            diagnostics.push(printf_numeric_diagnostic(arg_val));
+                        }
+                        value
+                    } else {
+                        diagnostics.push(printf_numeric_diagnostic(arg_val));
+                        0.0
+                    };
+                    if matches!(parsed.conversion, 'a' | 'A') {
+                        format_hex_float(num, &parsed)
+                    } else {
+                        format_float(num, &parsed)
                     }
                 }
-                _ => {
-                    out.push_str(arg_val);
+                'c' => {
+                    apply_string_width(arg_val.chars().next().unwrap_or('\0').to_string(), &parsed)
                 }
-            }
+                _ => arg_val.to_string(),
+            };
+            out.push_str(&formatted);
         } else {
             out.push(c);
         }
     }
-    out
+    (out.replace(ESCAPED_PRINTF_PERCENT, "%"), false, diagnostics)
+}
+
+fn printf_numeric_diagnostic(value: &str) -> String {
+    format!("esh: printf: {value}: expected numeric value\n")
+}
+
+fn printf_range_diagnostic(value: &str) -> String {
+    format!("esh: printf: {value}: numeric result out of range\n")
+}
+
+fn parse_printf_or_zero(
+    value: &str,
+    present: bool,
+    unsigned: bool,
+    diagnostics: &mut Vec<String>,
+) -> i64 {
+    if !present {
+        return 0;
+    }
+    let (number, valid) = parse_printf_integer(value, unsigned);
+    if !valid {
+        diagnostics.push(printf_numeric_diagnostic(value));
+    }
+    number
+}
+
+fn parse_printf_float(value: &str) -> Option<(f64, bool)> {
+    let value = value.trim_start();
+    if let Ok(number) = value.parse::<f64>() {
+        return Some((number, true));
+    }
+    if let Some((number, end)) = parse_hex_printf_float(value) {
+        return Some((number, value[end..].is_empty()));
+    }
+    value
+        .char_indices()
+        .map(|(index, _)| index)
+        .chain(std::iter::once(value.len()))
+        .filter_map(|end| value[..end].parse::<f64>().ok().map(|number| (end, number)))
+        .max_by_key(|(end, _)| *end)
+        .map(|(end, number)| (number, value[end..].is_empty()))
+}
+
+fn float_operand_out_of_range(operand: &str, value: f64) -> bool {
+    let operand = operand.trim().trim_start_matches(['+', '-']);
+    if operand.to_ascii_lowercase().starts_with("inf")
+        || operand.to_ascii_lowercase().starts_with("nan")
+    {
+        return false;
+    }
+    if value.is_infinite() {
+        return true;
+    }
+
+    let mantissa = operand
+        .split_once(['e', 'E', 'p', 'P'])
+        .map_or(operand, |(mantissa, _)| mantissa);
+    let nonzero_mantissa = mantissa
+        .strip_prefix("0x")
+        .or_else(|| mantissa.strip_prefix("0X"))
+        .unwrap_or(mantissa)
+        .chars()
+        .filter_map(|ch| ch.to_digit(16))
+        .any(|digit| digit != 0);
+    nonzero_mantissa && (value == 0.0 || value.abs() < f64::MIN_POSITIVE)
+}
+
+fn parse_hex_printf_float(value: &str) -> Option<(f64, usize)> {
+    let bytes = value.as_bytes();
+    let mut index = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
+    let negative = bytes.first() == Some(&b'-');
+    if bytes.get(index) != Some(&b'0') || !matches!(bytes.get(index + 1), Some(b'x' | b'X')) {
+        return None;
+    }
+    index += 2;
+
+    let mut significand = 0.0;
+    let mut digits = 0usize;
+    while let Some(byte) = bytes.get(index).copied()
+        && let Some(digit) = (byte as char).to_digit(16)
+    {
+        significand = significand * 16.0 + f64::from(digit);
+        digits += 1;
+        index += 1;
+    }
+    if bytes.get(index) == Some(&b'.') {
+        index += 1;
+        let mut place = 1.0 / 16.0;
+        while let Some(byte) = bytes.get(index).copied()
+            && let Some(digit) = (byte as char).to_digit(16)
+        {
+            significand += f64::from(digit) * place;
+            place /= 16.0;
+            digits += 1;
+            index += 1;
+        }
+    }
+    if digits == 0 || !matches!(bytes.get(index), Some(b'p' | b'P')) {
+        return None;
+    }
+    index += 1;
+
+    let exponent_start = index;
+    if matches!(bytes.get(index), Some(b'+' | b'-')) {
+        index += 1;
+    }
+    let exponent_digits_start = index;
+    while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+        index += 1;
+    }
+    if index == exponent_digits_start {
+        return None;
+    }
+    let exponent_text = &value[exponent_start..index];
+    let exponent = exponent_text.parse::<i32>().unwrap_or_else(|_| {
+        if exponent_text.starts_with('-') {
+            i32::MIN
+        } else {
+            i32::MAX
+        }
+    });
+    let result = significand * 2.0f64.powi(exponent);
+    Some((if negative { -result } else { result }, index))
+}
+
+fn format_float(value: f64, spec: &PrintfSpec) -> String {
+    let conversion = spec.conversion;
+    let uppercase = matches!(conversion, 'F' | 'E' | 'G');
+    let precision = spec.precision.unwrap_or(6);
+    let mut formatted = if value.is_nan() {
+        if uppercase { "NAN" } else { "nan" }.to_string()
+    } else if value.is_infinite() {
+        if value.is_sign_negative() {
+            if uppercase { "-INF" } else { "-inf" }.to_string()
+        } else if uppercase {
+            "INF".to_string()
+        } else {
+            "inf".to_string()
+        }
+    } else {
+        match conversion {
+            'e' | 'E' => {
+                let mut output = normalize_exponent(format!("{value:.precision$e}"), uppercase);
+                if spec.flags.contains('#') && !output.contains('.') {
+                    let exponent = output.find(['e', 'E']).unwrap_or(output.len());
+                    output.insert(exponent, '.');
+                }
+                output
+            }
+            'g' | 'G' => {
+                format_general_float(value, precision, spec.flags.contains('#'), uppercase)
+            }
+            _ => {
+                let mut output = format!("{value:.precision$}");
+                if spec.flags.contains('#') && !output.contains('.') {
+                    output.push('.');
+                }
+                output
+            }
+        }
+    };
+
+    if value.is_nan() && value.is_sign_negative() {
+        formatted.insert(0, '-');
+    } else if !value.is_sign_negative() {
+        if spec.flags.contains('+') {
+            formatted.insert(0, '+');
+        } else if spec.flags.contains(' ') {
+            formatted.insert(0, ' ');
+        }
+    }
+    apply_numeric_width_with_zero(formatted, spec, !value.is_nan() && !value.is_infinite())
+}
+
+fn format_hex_float(value: f64, spec: &PrintfSpec) -> String {
+    let uppercase = spec.conversion == 'A';
+    let precision = spec.precision;
+    let negative = value.is_sign_negative();
+    let (body, prefix) = if value.is_nan() {
+        (if uppercase { "NAN" } else { "nan" }.to_string(), "")
+    } else if value.is_infinite() {
+        (if uppercase { "INF" } else { "inf" }.to_string(), "")
+    } else {
+        let bits = value.abs().to_bits();
+        let exponent_bits = ((bits >> 52) & 0x7ff) as i32;
+        let fraction = bits & ((1u64 << 52) - 1);
+        let (mut leading, mut exponent) = if bits == 0 {
+            ('0', 0)
+        } else if exponent_bits == 0 {
+            ('0', -1022)
+        } else {
+            ('1', exponent_bits - 1023)
+        };
+        let mut digits = format!("{fraction:013x}");
+        let count = precision.unwrap_or_else(|| digits.trim_end_matches('0').len());
+        if count < 13 {
+            let discarded = &digits[count..];
+            let first = discarded.as_bytes()[0];
+            let rest_nonzero = discarded.as_bytes()[1..].iter().any(|digit| *digit != b'0');
+            let previous_odd = if count == 0 {
+                leading == '1'
+            } else {
+                (digits.as_bytes()[count - 1] & 1) != 0
+            };
+            let round_up = first > b'8' || (first == b'8' && (rest_nonzero || previous_odd));
+            digits.truncate(count);
+            if round_up {
+                let mut bytes = digits.into_bytes();
+                let mut carry = true;
+                for byte in bytes.iter_mut().rev() {
+                    let digit = (*byte as char).to_digit(16).unwrap_or(0);
+                    if digit < 15 {
+                        *byte = b"0123456789abcdef"[(digit + 1) as usize];
+                        carry = false;
+                        break;
+                    }
+                    *byte = b'0';
+                }
+                if carry {
+                    // Rounding a normalized significand up changes 1.ffff to 2.0.
+                    // Keep the equivalent hexadecimal value by adjusting its exponent.
+                    if leading == '1' {
+                        exponent += 1;
+                    } else {
+                        leading = '1';
+                    }
+                    bytes = vec![b'0'; count];
+                }
+                digits = String::from_utf8(bytes).unwrap_or_default();
+            }
+        } else {
+            digits.push_str(&"0".repeat(count - 13));
+        }
+        let radix = if uppercase { 'P' } else { 'p' };
+        let marker = if uppercase { "0X" } else { "0x" };
+        let mantissa = if !digits.is_empty() || spec.flags.contains('#') {
+            format!(
+                "{leading}.{}",
+                if uppercase {
+                    digits.to_uppercase()
+                } else {
+                    digits
+                }
+            )
+        } else {
+            leading.to_string()
+        };
+        (format!("{mantissa}{radix}{exponent:+}"), marker)
+    };
+    let sign = if negative {
+        "-"
+    } else if spec.flags.contains('+') {
+        "+"
+    } else if spec.flags.contains(' ') {
+        " "
+    } else {
+        ""
+    };
+    let mut formatted = format!("{sign}{prefix}{body}");
+    let zero_padding = !value.is_nan() && !value.is_infinite();
+    if zero_padding && spec.flags.contains('0') && !spec.flags.contains('-') {
+        let padding = spec.width.unwrap_or(0).saturating_sub(formatted.len());
+        let sign_len = usize::from(formatted.starts_with(['-', '+', ' ']));
+        let prefix_end =
+            if formatted[sign_len..].starts_with("0x") || formatted[sign_len..].starts_with("0X") {
+                sign_len + 2
+            } else {
+                sign_len
+            };
+        formatted.insert_str(prefix_end, &"0".repeat(padding));
+    } else {
+        formatted = apply_numeric_width_with_zero(formatted, spec, zero_padding);
+    }
+    formatted
+}
+
+fn format_general_float(value: f64, precision: usize, alternate: bool, uppercase: bool) -> String {
+    let precision = precision.max(1);
+    let scientific = format!("{value:.digits$e}", digits = precision - 1);
+    let exponent = scientific
+        .split_once('e')
+        .and_then(|(_, exponent)| exponent.parse::<i32>().ok())
+        .unwrap_or(0);
+    let use_scientific = exponent < -4 || exponent >= precision as i32;
+
+    let mut output = if use_scientific {
+        normalize_exponent(scientific, uppercase)
+    } else {
+        let fractional_digits = (precision as i32 - exponent - 1).max(0) as usize;
+        format!("{value:.fractional_digits$}")
+    };
+    if !alternate {
+        if let Some((mantissa, exponent)) = output.split_once(['e', 'E']) {
+            let mut mantissa = mantissa.to_string();
+            trim_fractional_zeros(&mut mantissa);
+            let marker = if uppercase { 'E' } else { 'e' };
+            output = format!("{mantissa}{marker}{exponent}");
+        } else {
+            trim_fractional_zeros(&mut output);
+        }
+    } else if !output.contains('.') {
+        if let Some(exponent) = output.find(['e', 'E']) {
+            output.insert(exponent, '.');
+        } else {
+            output.push('.');
+        }
+    }
+    output
+}
+
+fn normalize_exponent(mut output: String, uppercase: bool) -> String {
+    if let Some((mantissa, exponent)) = output.split_once('e') {
+        let exponent = exponent.parse::<i32>().unwrap_or(0);
+        let marker = if uppercase { 'E' } else { 'e' };
+        output = format!("{mantissa}{marker}{exponent:+03}");
+    }
+    output
+}
+
+fn trim_fractional_zeros(output: &mut String) {
+    if !output.contains('.') {
+        return;
+    }
+    while output.ends_with('0') {
+        output.pop();
+    }
+    if output.ends_with('.') {
+        output.pop();
+    }
+}
+
+#[derive(Default)]
+struct PrintfSpec {
+    conversion: char,
+    flags: String,
+    length: String,
+    width: Option<usize>,
+    width_from_arg: bool,
+    precision: Option<usize>,
+    precision_from_arg: bool,
+}
+
+fn parse_printf_spec(spec: &str) -> PrintfSpec {
+    let mut chars = spec.chars().peekable();
+    let mut parsed = PrintfSpec {
+        conversion: spec.chars().last().unwrap_or('s'),
+        ..PrintfSpec::default()
+    };
+    while chars
+        .peek()
+        .is_some_and(|ch| matches!(ch, '-' | '+' | ' ' | '#' | '0'))
+    {
+        parsed.flags.push(chars.next().unwrap());
+    }
+    if chars.peek() == Some(&'*') {
+        chars.next();
+        parsed.width_from_arg = true;
+    } else {
+        let mut width = String::new();
+        while chars.peek().is_some_and(char::is_ascii_digit) {
+            width.push(chars.next().unwrap());
+        }
+        parsed.width = width.parse::<usize>().ok();
+    }
+    if chars.peek() == Some(&'.') {
+        chars.next();
+        if chars.peek() == Some(&'*') {
+            chars.next();
+            parsed.precision_from_arg = true;
+        } else {
+            let mut precision = String::new();
+            while chars.peek().is_some_and(char::is_ascii_digit) {
+                precision.push(chars.next().unwrap());
+            }
+            parsed.precision = Some(precision.parse::<usize>().unwrap_or(0));
+        }
+    }
+    if matches!(chars.peek(), Some('h' | 'l')) {
+        let modifier = chars.next().unwrap();
+        parsed.length.push(modifier);
+        if chars.peek() == Some(&modifier) {
+            parsed.length.push(chars.next().unwrap());
+        }
+    } else if chars
+        .peek()
+        .is_some_and(|ch| matches!(ch, 'j' | 'z' | 't' | 'L'))
+    {
+        parsed.length.push(chars.next().unwrap());
+    }
+    parsed
+}
+
+fn apply_string_width(mut value: String, spec: &PrintfSpec) -> String {
+    let padding = spec
+        .width
+        .unwrap_or(0)
+        .saturating_sub(value.chars().count());
+    if spec.flags.contains('-') {
+        value.extend(std::iter::repeat_n(' ', padding));
+        value
+    } else {
+        format!("{}{}", " ".repeat(padding), value)
+    }
+}
+
+fn apply_numeric_width(value: String, spec: &PrintfSpec) -> String {
+    apply_numeric_width_with_zero(value, spec, true)
+}
+
+fn apply_numeric_width_with_zero(value: String, spec: &PrintfSpec, zero_padding: bool) -> String {
+    let padding = spec.width.unwrap_or(0).saturating_sub(value.len());
+    if spec.flags.contains('-') {
+        format!("{value}{}", " ".repeat(padding))
+    } else if zero_padding && spec.flags.contains('0') {
+        let sign_len = usize::from(value.starts_with(['-', '+', ' ']));
+        format!(
+            "{}{}{}",
+            &value[..sign_len],
+            "0".repeat(padding),
+            &value[sign_len..]
+        )
+    } else {
+        format!("{}{}", " ".repeat(padding), value)
+    }
+}
+
+fn format_integer(value: i64, unsigned: bool, radix: u32, spec: &PrintfSpec) -> String {
+    let negative = !unsigned && value < 0;
+    let mut digits = if unsigned {
+        let magnitude = value as u64;
+        match radix {
+            8 => format!("{magnitude:o}"),
+            16 if spec.conversion == 'X' => format!("{magnitude:X}"),
+            16 => format!("{magnitude:x}"),
+            _ => magnitude.to_string(),
+        }
+    } else {
+        let magnitude = value.unsigned_abs();
+        match radix {
+            8 => format!("{magnitude:o}"),
+            16 if spec.conversion == 'X' => format!("{magnitude:X}"),
+            16 => format!("{magnitude:x}"),
+            _ => magnitude.to_string(),
+        }
+    };
+    if spec.precision == Some(0) && value == 0 {
+        digits.clear();
+    }
+    if let Some(precision) = spec.precision
+        && precision > digits.len()
+    {
+        digits = format!("{}{}", "0".repeat(precision - digits.len()), digits);
+    }
+    let prefix = if spec.flags.contains('#') {
+        match radix {
+            8 if !digits.starts_with('0') => "0",
+            16 if value != 0 && spec.conversion == 'X' => "0X",
+            16 if value != 0 => "0x",
+            _ => "",
+        }
+    } else {
+        ""
+    };
+    let sign = if negative {
+        "-"
+    } else if !unsigned && spec.flags.contains('+') {
+        "+"
+    } else if !unsigned && spec.flags.contains(' ') {
+        " "
+    } else {
+        ""
+    };
+    let value = format!("{sign}{prefix}{digits}");
+    if spec.precision.is_none() && spec.flags.contains('0') && !spec.flags.contains('-') {
+        let padding = spec.width.unwrap_or(0).saturating_sub(value.len());
+        return format!("{sign}{prefix}{}{digits}", "0".repeat(padding));
+    }
+    apply_numeric_width(value, spec)
+}
+
+fn unescape_printf_b(value: &str) -> (String, bool) {
+    let mut escaped = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            escaped.push(ch);
+            continue;
+        }
+        let Some(next) = chars.next() else {
+            escaped.push('\\');
+            break;
+        };
+        if next == 'c' {
+            return (unescape_string(&escaped), true);
+        }
+        if next == '0' {
+            let mut octal = String::new();
+            while octal.len() < 3
+                && chars
+                    .peek()
+                    .is_some_and(|digit| ('0'..='7').contains(digit))
+            {
+                octal.push(chars.next().unwrap());
+            }
+            let byte = u16::from_str_radix(&octal, 8).unwrap_or_default() as u8;
+            if byte >= 0x80 {
+                escaped.push(char::from_u32(PRINTF_BYTE_MARKER_BASE + u32::from(byte)).unwrap());
+            } else {
+                escaped.push(char::from(byte));
+            }
+        } else {
+            escaped.push('\\');
+            escaped.push(next);
+        }
+    }
+    (unescape_string(&escaped), false)
+}
+
+fn unescape_printf_format(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut chars = value.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            output.push(ch);
+            continue;
+        }
+        let Some(next) = chars.next() else {
+            output.push('\\');
+            break;
+        };
+        if ('0'..='7').contains(&next) {
+            let mut digits = String::from(next);
+            while digits.len() < 3
+                && chars
+                    .peek()
+                    .is_some_and(|digit| ('0'..='7').contains(digit))
+            {
+                digits.push(chars.next().unwrap());
+            }
+            let value = u32::from_str_radix(&digits, 8).unwrap_or_default();
+            // Check the encoded byte so values above 0xff that wrap to `%`
+            // remain literal instead of becoming format conversions.
+            let byte = value as u8;
+            if byte == b'%' {
+                output.push(ESCAPED_PRINTF_PERCENT);
+            } else {
+                // POSIX printf octal escapes emit a byte. Values above 0xff
+                // therefore wrap to their low eight bits instead of becoming
+                // UTF-8 encodings of a Unicode scalar.
+                let decoded = if byte >= 0x80 {
+                    char::from_u32(PRINTF_BYTE_MARKER_BASE + u32::from(byte)).unwrap()
+                } else {
+                    char::from(byte)
+                };
+                output.push(decoded);
+            }
+            continue;
+        }
+
+        let escaped = format!("\\{next}");
+        let decoded = unescape_string(&escaped);
+        if decoded == "%" {
+            output.push(ESCAPED_PRINTF_PERCENT);
+        } else {
+            output.push_str(&decoded);
+        }
+    }
+    output
+}
+
+fn parse_printf_integer(value: &str, unsigned: bool) -> (i64, bool) {
+    if let Some(quoted) = value.strip_prefix('\'').or_else(|| value.strip_prefix('"')) {
+        return quoted
+            .chars()
+            .next()
+            .map_or((0, false), |ch| (ch as i64, true));
+    }
+
+    let total_len = value.len();
+    let leading_len = total_len - value.trim_start().len();
+    let value = &value[leading_len..];
+    let (negative, value, sign_offset) = match value.as_bytes().first() {
+        Some(b'-') => (true, &value[1..], leading_len + 1),
+        Some(b'+') => (false, &value[1..], leading_len + 1),
+        _ => (false, value, leading_len),
+    };
+    let (radix, digits, digit_offset) = if let Some(hex) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        (16, hex, sign_offset + value.len() - hex.len())
+    } else if value.len() > 1 && value.starts_with('0') {
+        (8, &value[1..], sign_offset + 1)
+    } else {
+        (10, value, sign_offset)
+    };
+    let digit_count = digits
+        .char_indices()
+        .take_while(|(_, ch)| ch.is_digit(radix))
+        .map(|(index, ch)| index + ch.len_utf8())
+        .last()
+        .unwrap_or(0);
+    if digit_count == 0 {
+        return (0, false);
+    }
+    let number_digits = &digits[..digit_count];
+    let magnitude = u128::from_str_radix(number_digits, radix).unwrap_or(u128::MAX);
+    let lexical_valid = digit_offset + digit_count == total_len;
+    if unsigned {
+        let overflow = magnitude > u64::MAX as u128;
+        if overflow {
+            return (u64::MAX as i64, false);
+        }
+        let magnitude = magnitude.min(u64::MAX as u128) as u64;
+        let converted = if negative {
+            0u64.wrapping_sub(magnitude)
+        } else {
+            magnitude
+        };
+        (converted as i64, lexical_valid && !overflow)
+    } else {
+        let limit = if negative {
+            1u128 << 63
+        } else {
+            i64::MAX as u128
+        };
+        let overflow = magnitude > limit;
+        let magnitude = magnitude.min(limit);
+        let converted = if negative {
+            if magnitude == 1u128 << 63 {
+                i64::MIN
+            } else {
+                -(magnitude as i64)
+            }
+        } else {
+            magnitude as i64
+        };
+        (converted, lexical_valid && !overflow)
+    }
 }
 
 fn format_argument_count(fmt: &str) -> usize {
-    let unescaped_fmt = unescape_string(fmt);
+    let unescaped_fmt = unescape_printf_format(fmt);
     let mut chars = unescaped_fmt.chars().peekable();
     let mut count = 0;
 
@@ -236,12 +1031,31 @@ fn format_argument_count(fmt: &str) -> usize {
             continue;
         }
 
-        count += 1;
-        while let Some(&specifier) = chars.peek() {
-            chars.next();
-            if matches!(specifier, 's' | 'd' | 'i' | 'f' | 'x' | 'X' | 'c' | 'b') {
-                break;
-            }
+        let Some(spec) = collect_printf_spec(&mut chars) else {
+            break;
+        };
+        let parsed = parse_printf_spec(&spec);
+        if matches!(
+            parsed.conversion,
+            's' | 'b'
+                | 'c'
+                | 'd'
+                | 'i'
+                | 'o'
+                | 'u'
+                | 'x'
+                | 'X'
+                | 'a'
+                | 'A'
+                | 'f'
+                | 'F'
+                | 'e'
+                | 'E'
+                | 'g'
+                | 'G'
+        ) {
+            count +=
+                1 + usize::from(parsed.width_from_arg) + usize::from(parsed.precision_from_arg);
         }
     }
 
@@ -259,7 +1073,10 @@ pub fn echo<'a>(
 
         let mut iter = args.iter().peekable();
         while let Some(arg) = iter.peek() {
-            if *arg == "-n" {
+            if *arg == "--" {
+                iter.next();
+                break;
+            } else if *arg == "-n" {
                 iter.next();
                 newline = false;
             } else if *arg == "-e" {
@@ -302,11 +1119,7 @@ pub fn echo<'a>(
         };
 
         if newline {
-            if output.ends_with('\n') {
-                ctx.write_stdout(output.as_bytes());
-            } else {
-                ctx.write_stdout(format!("{}\n", output).as_bytes());
-            }
+            ctx.write_stdout(format!("{}\n", output).as_bytes());
         } else {
             ctx.write_stdout(output.as_bytes());
         }
@@ -321,21 +1134,51 @@ pub fn printf<'a>(
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
         if args.is_empty() {
-            return Ok(0);
+            ctx.write_stderr(b"esh: printf: missing format operand\n");
+            return Ok(2);
         }
         let fmt = &args[0];
         let rest = &args[1..];
         let argument_count = format_argument_count(fmt);
-        let output = if argument_count == 0 || rest.is_empty() {
-            format_c_style(fmt, rest)
+        let (output, diagnostics) = if argument_count == 0 || rest.is_empty() {
+            let (output, _, diagnostics) = format_c_style_with_status(fmt, rest);
+            (output, diagnostics)
         } else {
-            rest.chunks(argument_count)
-                .map(|chunk| format_c_style(fmt, chunk))
-                .collect()
+            let mut output = String::new();
+            let mut diagnostics = Vec::new();
+            for chunk in rest.chunks(argument_count) {
+                let (formatted, stop, mut chunk_diagnostics) =
+                    format_c_style_with_status(fmt, chunk);
+                output.push_str(&formatted);
+                diagnostics.append(&mut chunk_diagnostics);
+                if stop {
+                    break;
+                }
+            }
+            (output, diagnostics)
         };
-        ctx.write_stdout(output.as_bytes());
-        Ok(0)
+        ctx.write_stdout(&printf_output_bytes(&output));
+        for diagnostic in &diagnostics {
+            ctx.write_stderr(diagnostic.as_bytes());
+        }
+        Ok(i32::from(!diagnostics.is_empty()))
     })
+}
+
+fn parse_status_arg(name: &str, args: &[String]) -> Result<i32, String> {
+    if args.len() > 1 {
+        return Err(format!("{name}: expected zero or one integer argument"));
+    }
+    let Some(raw) = args.first() else {
+        return Ok(0);
+    };
+    let code = raw
+        .parse::<i32>()
+        .map_err(|_| format!("{name}: expected an integer status, got '{raw}'"))?;
+    if !(0..=255).contains(&code) {
+        return Err(format!("{name}: status must be between 0 and 255"));
+    }
+    Ok(code)
 }
 
 pub fn exit<'a>(
@@ -343,10 +1186,17 @@ pub fn exit<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        let code = args
-            .first()
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
+        let code = if args.is_empty() {
+            ctx.last_exit()
+        } else {
+            match parse_status_arg("exit", args) {
+                Ok(code) => code,
+                Err(message) => {
+                    ctx.write_stderr(format!("esh: {message}\n").as_bytes());
+                    return Ok(2);
+                }
+            }
+        };
         ctx.request_exit(code);
         Ok(code)
     })
@@ -357,13 +1207,44 @@ pub fn r#return<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        let code = args
-            .first()
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
+        if !ctx.in_function() && !ctx.in_source() {
+            ctx.write_stderr(b"esh: return: only meaningful in a function or sourced file\n");
+            return Ok(2);
+        }
+        let code = if args.is_empty() {
+            ctx.last_exit()
+        } else {
+            match parse_status_arg("return", args) {
+                Ok(code) => code,
+                Err(message) => {
+                    ctx.write_stderr(format!("esh: {message}\n").as_bytes());
+                    return Ok(2);
+                }
+            }
+        };
         ctx.request_return(code);
         Ok(code)
     })
+}
+
+fn parse_loop_levels(name: &str, args: &[String]) -> Result<usize, String> {
+    if args.len() > 1 {
+        return Err(format!(
+            "{name}: expected zero or one positive integer argument"
+        ));
+    }
+
+    let Some(raw) = args.first() else {
+        return Ok(1);
+    };
+    let digits = raw.strip_prefix('+').unwrap_or(raw);
+    let levels = digits
+        .parse::<usize>()
+        .map_err(|_| format!("{name}: expected a positive integer, got '{raw}'"))?;
+    if levels == 0 {
+        return Err(format!("{name}: loop level must be greater than zero"));
+    }
+    Ok(levels)
 }
 
 pub fn r#break<'a>(
@@ -371,14 +1252,16 @@ pub fn r#break<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        let levels = args
-            .first()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(1);
+        let levels = match parse_loop_levels("break", args) {
+            Ok(levels) => levels,
+            Err(message) => {
+                ctx.write_stderr(format!("esh: {message}\n").as_bytes());
+                return Ok(2);
+            }
+        };
         if !ctx.in_loop() {
-            return Err(ExecError::Custom(
-                "break: only meaningful in a `for', `while', or `until' loop".to_string(),
-            ));
+            ctx.write_stderr(b"esh: break: only meaningful in a `for', `while', or `until' loop\n");
+            return Ok(2);
         }
         ctx.trigger_break(levels);
         Ok(0)
@@ -390,14 +1273,18 @@ pub fn r#continue<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        let levels = args
-            .first()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(1);
+        let levels = match parse_loop_levels("continue", args) {
+            Ok(levels) => levels,
+            Err(message) => {
+                ctx.write_stderr(format!("esh: {message}\n").as_bytes());
+                return Ok(2);
+            }
+        };
         if !ctx.in_loop() {
-            return Err(ExecError::Custom(
-                "continue: only meaningful in a `for', `while', or `until' loop".to_string(),
-            ));
+            ctx.write_stderr(
+                b"esh: continue: only meaningful in a `for', `while', or `until' loop\n",
+            );
+            return Ok(2);
         }
         ctx.trigger_continue(levels);
         Ok(0)
@@ -409,15 +1296,124 @@ pub fn export<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
+        let args = args.iter();
+        if args.len() == 1 && args.as_slice()[0] == "-p" {
+            let mut names = ctx
+                .exported_var_names()
+                .filter(|name| is_shell_identifier(name))
+                .map(str::to_string)
+                .collect::<Vec<_>>();
+            names.sort_unstable();
+            let entries = names
+                .into_iter()
+                .map(|name| {
+                    let value = ctx.get_var(&name);
+                    (name, value)
+                })
+                .collect::<Vec<_>>();
+            for (name, value) in entries {
+                if let Some(value) = value {
+                    let quoted = value.replace('\'', "'\\''");
+                    ctx.write_stdout(format!("export {name}='{quoted}'\n").as_bytes());
+                } else {
+                    ctx.write_stdout(format!("export {name}\n").as_bytes());
+                }
+            }
+            return Ok(0);
+        }
+        let mut parsing_options = true;
         for arg in args {
-            if let Some((key, val)) = arg.split_once('=') {
-                ctx.set_env(key, val);
-            } else if let Some(val) = ctx.get_var(arg) {
-                ctx.set_env(arg, val);
+            if parsing_options && arg == "--" {
+                parsing_options = false;
+                continue;
+            }
+            if parsing_options && arg.starts_with('-') {
+                ctx.write_stderr(format!("esh: export: unsupported option: {arg}\n").as_bytes());
+                return Ok(2);
+            }
+            let (key, val) = if let Some((key, val)) = arg.split_once('=') {
+                (key, Some(val))
+            } else {
+                (arg.as_str(), None)
+            };
+            if !is_shell_identifier(key) {
+                ctx.write_stderr(format!("esh: export: invalid identifier: {key}\n").as_bytes());
+                return Ok(2);
+            }
+            if let Some(val) = val {
+                ctx.set_exported_var(key, val.to_string());
+            } else {
+                ctx.export_var(key);
             }
         }
         Ok(0)
     })
+}
+
+fn is_shell_identifier(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    matches!(bytes.next(), Some(b'A'..=b'Z' | b'a'..=b'z' | b'_'))
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+pub fn unset<'a>(
+    args: &'a [String],
+    ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async move {
+        let mut mode = None;
+        let mut names = Vec::new();
+        let mut parsing_options = true;
+        for arg in args {
+            if parsing_options && arg == "--" {
+                parsing_options = false;
+                continue;
+            }
+            if parsing_options && arg.starts_with('-') && arg.len() > 1 {
+                for option in arg[1..].chars() {
+                    let next_mode = match option {
+                        'f' => UnsetMode::Function,
+                        'v' => UnsetMode::Variable,
+                        _ => {
+                            ctx.write_stderr(
+                                format!("esh: unset: unsupported option '-{option}'\n").as_bytes(),
+                            );
+                            return Ok(2);
+                        }
+                    };
+                    if mode.is_some_and(|current| current != next_mode) {
+                        ctx.write_stderr(b"esh: unset: -f and -v cannot be combined\n");
+                        return Ok(2);
+                    }
+                    mode = Some(next_mode);
+                }
+                continue;
+            }
+            parsing_options = false;
+            names.push(arg.as_str());
+        }
+
+        let mode = mode.unwrap_or(UnsetMode::Variable);
+        let mut status = 0;
+        for name in names {
+            if !is_shell_identifier(name) {
+                ctx.write_stderr(format!("esh: unset: invalid identifier: {name}\n").as_bytes());
+                status = 2;
+                continue;
+            }
+            match mode {
+                UnsetMode::Variable => ctx.unset_var(name),
+                UnsetMode::Function => ctx.unset_function(name),
+            }
+        }
+        Ok(status)
+    })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum UnsetMode {
+    Variable,
+    Function,
 }
 
 pub fn shift<'a>(
@@ -425,13 +1421,119 @@ pub fn shift<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        let count = args
-            .first()
-            .and_then(|s| s.parse::<usize>().ok())
-            .unwrap_or(1);
+        if args.len() > 1 {
+            ctx.write_stderr(b"esh: shift: expected zero or one non-negative integer argument\n");
+            return Ok(2);
+        }
+        let count = if let Some(raw) = args.first() {
+            match raw.strip_prefix('+').unwrap_or(raw).parse::<usize>() {
+                Ok(count) => count,
+                Err(_) => {
+                    ctx.write_stderr(
+                        format!("esh: shift: expected a non-negative integer, got '{raw}'\n")
+                            .as_bytes(),
+                    );
+                    return Ok(2);
+                }
+            }
+        } else {
+            1
+        };
+        let available = ctx.positional_args().len();
+        if count > available {
+            ctx.write_stderr(
+                format!(
+                    "esh: shift: requested {count} positional parameters, but only {available} are set\n"
+                )
+                .as_bytes(),
+            );
+            return Ok(2);
+        }
         ctx.shift_positional_args(count);
         Ok(0)
     })
+}
+
+pub fn colon<'a>(
+    _args: &'a [String],
+    _ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async { Ok(0) })
+}
+
+pub fn dot<'a>(
+    args: &'a [String],
+    ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async move {
+        let Some(source_name) = args.first() else {
+            ctx.write_stderr(b"esh: .: expected a file operand\n");
+            return Ok(2);
+        };
+        let source_path = resolve_dot_path(source_name, ctx);
+        let source = match std::fs::read_to_string(&source_path) {
+            Ok(source) => source,
+            Err(error) => {
+                ctx.write_stderr(
+                    format!("esh: .: cannot read '{}': {error}\n", source_path.display())
+                        .as_bytes(),
+                );
+                return Ok(1);
+            }
+        };
+        let plan = match compile_script(&source) {
+            Ok(plan) => plan,
+            Err(error) => {
+                ctx.write_stderr(format!("esh: .: parse error: {error}\n").as_bytes());
+                return Ok(2);
+            }
+        };
+
+        let previous_args = ctx.positional_args_with_zero().to_vec();
+        if args.len() > 1 {
+            let mut source_args = vec![previous_args[0].clone()];
+            source_args.extend_from_slice(&args[1..]);
+            ctx.set_positional_args(source_args);
+        }
+
+        // A sourced file is its own `return` boundary, while all other shell
+        // state remains in the caller's execution context.
+        ctx.enter_source();
+        let result = plan.execute(ctx).await;
+        let return_code = ctx.take_return();
+        ctx.exit_source();
+        ctx.set_positional_args(previous_args);
+        match result {
+            Ok(status) => Ok(return_code.unwrap_or(status)),
+            Err(error) => Err(error),
+        }
+    })
+}
+
+fn resolve_dot_path(source_name: &str, ctx: &ExecutionContext) -> PathBuf {
+    let source_path = Path::new(source_name);
+    if source_path.is_absolute() || source_name.contains('/') {
+        return if source_path.is_absolute() {
+            source_path.to_path_buf()
+        } else {
+            ctx.cwd().join(source_path)
+        };
+    }
+
+    if let Some(path) = ctx.get_var("PATH") {
+        for directory in std::env::split_paths(&path) {
+            let directory = if directory.is_absolute() {
+                directory
+            } else {
+                ctx.cwd().join(directory)
+            };
+            let candidate = directory.join(source_path);
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    ctx.cwd().join(source_path)
 }
 
 pub fn set<'a>(
@@ -439,9 +1541,15 @@ pub fn set<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
+        if args == ["-"] {
+            ctx.options_mut().xtrace = false;
+            return Ok(0);
+        }
+
         let mut iter = args.iter().peekable();
         let mut positional = Vec::new();
         let mut parsing_flags = true;
+        let mut pending_options = ctx.options().clone();
 
         while let Some(arg) = iter.next() {
             if parsing_flags && arg == "--" {
@@ -449,45 +1557,55 @@ pub fn set<'a>(
                 continue;
             }
 
-            if parsing_flags
-                && (arg.starts_with('-') || arg.starts_with('+'))
-                && arg.len() > 1
-                && !arg.chars().nth(1).unwrap().is_ascii_digit()
-            {
+            if parsing_flags && (arg.starts_with('-') || arg.starts_with('+')) && arg.len() > 1 {
                 let enable = arg.starts_with('-');
                 let flag_chars: &str = &arg[1..];
 
                 if flag_chars == "o" {
                     if let Some(opt_name) = iter.next() {
-                        match opt_name.as_str() {
-                            "errexit" | "e" => ctx.options_mut().errexit = enable,
-                            "nounset" | "u" => ctx.options_mut().nounset = enable,
-                            "xtrace" | "x" => ctx.options_mut().xtrace = enable,
-                            "pipefail" => ctx.options_mut().pipefail = enable,
-                            "noglob" | "f" => ctx.options_mut().noglob = enable,
-                            "noclobber" | "C" => ctx.options_mut().noclobber = enable,
-                            _ => {}
+                        if !set_named_option(&mut pending_options, opt_name, enable) {
+                            ctx.write_stderr(
+                                format!("esh: set: unknown option '{opt_name}'\n").as_bytes(),
+                            );
+                            return Ok(2);
                         }
+                    } else if enable {
+                        ctx.write_stdout(format_set_options(&pending_options).as_bytes());
+                    } else {
+                        ctx.write_stdout(format_set_replay_options(&pending_options).as_bytes());
                     }
                     continue;
                 }
 
                 for ch in flag_chars.chars() {
-                    match ch {
-                        'e' => ctx.options_mut().errexit = enable,
-                        'u' => ctx.options_mut().nounset = enable,
-                        'x' => ctx.options_mut().xtrace = enable,
-                        'f' => ctx.options_mut().noglob = enable,
-                        'C' => ctx.options_mut().noclobber = enable,
-                        _ => {}
+                    if ch == 'o' {
+                        let Some(opt_name) = iter.next() else {
+                            ctx.write_stderr(b"esh: set: -o requires an option name\n");
+                            return Ok(2);
+                        };
+                        if !set_named_option(&mut pending_options, opt_name, enable) {
+                            ctx.write_stderr(
+                                format!("esh: set: unknown option '{opt_name}'\n").as_bytes(),
+                            );
+                            return Ok(2);
+                        }
+                        continue;
+                    }
+                    if !set_short_option(&mut pending_options, ch, enable) {
+                        ctx.write_stderr(format!("esh: set: unknown option '{ch}'\n").as_bytes());
+                        return Ok(2);
                     }
                 }
                 continue;
             }
 
+            if parsing_flags {
+                parsing_flags = false;
+            }
             positional.push(arg.clone());
         }
 
+        *ctx.options_mut() = pending_options;
         if !positional.is_empty() || args.iter().any(|a| a == "--") {
             ctx.set_positional_params(&positional);
         }
@@ -496,11 +1614,106 @@ pub fn set<'a>(
     })
 }
 
+fn set_short_option(
+    options: &mut crate::runtime::context::ShellOptions,
+    flag: char,
+    enable: bool,
+) -> bool {
+    match flag {
+        'a' => options.allexport = enable,
+        'e' => options.errexit = enable,
+        'u' => options.nounset = enable,
+        'x' => options.xtrace = enable,
+        'f' => options.noglob = enable,
+        'C' => options.noclobber = enable,
+        _ => return false,
+    }
+    true
+}
+
+fn set_named_option(
+    options: &mut crate::runtime::context::ShellOptions,
+    name: &str,
+    enable: bool,
+) -> bool {
+    match name {
+        "allexport" | "a" => options.allexport = enable,
+        "errexit" | "e" => options.errexit = enable,
+        "nounset" | "u" => options.nounset = enable,
+        "xtrace" | "x" => options.xtrace = enable,
+        "pipefail" => options.pipefail = enable,
+        "noglob" | "f" => options.noglob = enable,
+        "noclobber" | "C" => options.noclobber = enable,
+        _ => return false,
+    }
+    true
+}
+
+fn format_set_options(options: &crate::runtime::context::ShellOptions) -> String {
+    let names = [
+        "allexport",
+        "errexit",
+        "noglob",
+        "nounset",
+        "pipefail",
+        "xtrace",
+        "noclobber",
+    ];
+    names
+        .iter()
+        .map(|name| {
+            let enabled = match *name {
+                "allexport" => options.allexport,
+                "errexit" => options.errexit,
+                "noglob" => options.noglob,
+                "nounset" => options.nounset,
+                "pipefail" => options.pipefail,
+                "xtrace" => options.xtrace,
+                "noclobber" => options.noclobber,
+                _ => false,
+            };
+            format!("{name} {}\n", if enabled { "on" } else { "off" })
+        })
+        .collect()
+}
+
+fn format_set_replay_options(options: &crate::runtime::context::ShellOptions) -> String {
+    let names = [
+        "allexport",
+        "errexit",
+        "noglob",
+        "nounset",
+        "pipefail",
+        "xtrace",
+        "noclobber",
+    ];
+    names
+        .iter()
+        .map(|name| {
+            let enabled = match *name {
+                "allexport" => options.allexport,
+                "errexit" => options.errexit,
+                "noglob" => options.noglob,
+                "nounset" => options.nounset,
+                "pipefail" => options.pipefail,
+                "xtrace" => options.xtrace,
+                "noclobber" => options.noclobber,
+                _ => false,
+            };
+            format!("set {}o {name}\n", if enabled { "-" } else { "+" })
+        })
+        .collect()
+}
+
 pub fn sleep<'a>(
     args: &'a [String],
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
+        if args.len() > 1 {
+            ctx.write_stderr(b"esh: sleep: expected exactly one duration argument\n");
+            return Ok(2);
+        }
         if args.is_empty() {
             ctx.write_stderr(b"esh: sleep: missing duration argument (e.g. 500ms, 2s, 1m)\n");
             return Ok(1);
@@ -572,8 +1785,10 @@ pub fn retry<'a>(
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
         if args.is_empty() {
-            ctx.write_stderr(b"esh: retry: usage: retry [-n attempts] [-d delay] <command...>\n");
-            return Ok(1);
+            ctx.write_stderr(
+                b"esh: retry: usage: retry [-n attempts] [-d delay] [-b factor] [--] <command...>\n",
+            );
+            return Ok(2);
         }
 
         let mut attempts = 3usize;
@@ -581,35 +1796,77 @@ pub fn retry<'a>(
         let mut factor = 1.0f64;
         let mut cmd_start_idx = 0usize;
 
-        let mut iter = args.iter().enumerate().peekable();
-        while let Some((idx, arg)) = iter.next() {
-            if arg == "-n" || arg == "--attempts" {
-                if let Some((_, val)) = iter.next()
-                    && let Ok(n) = val.parse::<usize>()
-                {
-                    attempts = n;
-                }
-            } else if arg == "-d" || arg == "--delay" {
-                if let Some((_, val)) = iter.next()
-                    && let Ok(d) = parse_duration(val)
-                {
-                    delay = d;
-                }
-            } else if arg == "-b" || arg == "--backoff" {
-                if let Some((_, val)) = iter.next()
-                    && let Ok(f) = val.parse::<f64>()
-                {
-                    factor = f;
-                }
-            } else {
-                cmd_start_idx = idx;
+        let mut index = 0;
+        while index < args.len() {
+            let arg = &args[index];
+            if arg == "--" {
+                index += 1;
+                cmd_start_idx = index;
                 break;
             }
+            match arg.as_str() {
+                "-n" | "--attempts" => {
+                    index += 1;
+                    let Some(value) = args.get(index) else {
+                        ctx.write_stderr(b"esh: retry: -n requires a positive attempt count\n");
+                        return Ok(2);
+                    };
+                    attempts = match value.parse::<usize>() {
+                        Ok(count) if count > 0 => count,
+                        _ => {
+                            ctx.write_stderr(
+                                format!("esh: retry: invalid attempt count: {value}\n").as_bytes(),
+                            );
+                            return Ok(2);
+                        }
+                    };
+                }
+                "-d" | "--delay" => {
+                    index += 1;
+                    let Some(value) = args.get(index) else {
+                        ctx.write_stderr(b"esh: retry: -d requires a valid delay\n");
+                        return Ok(2);
+                    };
+                    delay = match parse_duration(value) {
+                        Ok(delay) => delay,
+                        Err(error) => {
+                            ctx.write_stderr(format!("esh: retry: {error}\n").as_bytes());
+                            return Ok(2);
+                        }
+                    };
+                }
+                "-b" | "--backoff" => {
+                    index += 1;
+                    let Some(value) = args.get(index) else {
+                        ctx.write_stderr(b"esh: retry: -b requires a finite non-negative factor\n");
+                        return Ok(2);
+                    };
+                    factor = match value.parse::<f64>() {
+                        Ok(factor) if factor.is_finite() && factor >= 0.0 => factor,
+                        _ => {
+                            ctx.write_stderr(
+                                format!("esh: retry: invalid backoff factor: {value}\n").as_bytes(),
+                            );
+                            return Ok(2);
+                        }
+                    };
+                }
+                _ if arg.starts_with('-') => {
+                    ctx.write_stderr(format!("esh: retry: unsupported option: {arg}\n").as_bytes());
+                    return Ok(2);
+                }
+                _ => {
+                    cmd_start_idx = index;
+                    break;
+                }
+            }
+            index += 1;
+            cmd_start_idx = index;
         }
 
         if cmd_start_idx >= args.len() {
             ctx.write_stderr(b"esh: retry: missing command to execute\n");
-            return Ok(1);
+            return Ok(2);
         }
 
         let sub_script = args[cmd_start_idx..].join(" ");
@@ -641,7 +1898,13 @@ pub fn retry<'a>(
 
             if attempt < attempts {
                 tokio::time::sleep(current_delay).await;
-                current_delay = Duration::from_secs_f64(current_delay.as_secs_f64() * factor);
+                match Duration::try_from_secs_f64(current_delay.as_secs_f64() * factor) {
+                    Ok(next_delay) => current_delay = next_delay,
+                    Err(_) => {
+                        ctx.write_stderr(b"esh: retry: backoff delay is out of range\n");
+                        return Ok(2);
+                    }
+                }
             }
         }
 
@@ -650,11 +1913,29 @@ pub fn retry<'a>(
 }
 
 pub fn wait<'a>(
-    _args: &'a [String],
-    _ctx: &'a mut ExecutionContext,
+    args: &'a [String],
+    ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
-        // Yield to allow background tokio tasks to make progress
+        // ESH has no fire-and-forget process jobs. Structured `&|` branches
+        // have already joined before execution reaches `wait`.
+        if let Some(invalid) = args.iter().find(|operand| {
+            operand.is_empty() || !operand.bytes().all(|byte| byte.is_ascii_digit())
+        }) {
+            ctx.write_stderr(
+                format!("esh: wait: unsupported process identifier '{invalid}'\n").as_bytes(),
+            );
+            return Ok(2);
+        }
+
+        if !args.is_empty() {
+            // Every syntactically valid PID is unknown to ESH's execution
+            // environment because it does not create asynchronous job PIDs.
+            return Ok(127);
+        }
+
+        // Yield cooperatively even though there are no pending jobs to wait
+        // for, matching the successful no-operand shell builtin contract.
         tokio::task::yield_now().await;
         Ok(0)
     })
@@ -666,41 +1947,75 @@ pub fn trap<'a>(
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
         if args.is_empty() {
-            ctx.write_stderr(b"esh: trap: usage: trap <handler_or_block> <SIGNAL>\n");
-            return Ok(1);
-        }
-
-        if args.len() == 1 {
-            if let Some(sig) = TrapSignal::parse(&args[0]) {
-                ctx.clear_trap(sig);
-                return Ok(0);
+            for signal in [TrapSignal::Exit, TrapSignal::Err, TrapSignal::Interrupt] {
+                if let Some(action) = ctx.get_trap_action(signal) {
+                    write_trap_listing(ctx, signal, &action);
+                }
             }
-            ctx.write_stderr(format!("esh: trap: unknown signal '{}'\n", args[0]).as_bytes());
-            return Ok(1);
-        }
-
-        let handler_str = &args[0];
-        let sig_str = &args[1];
-
-        let sig = match TrapSignal::parse(sig_str) {
-            Some(s) => s,
-            None => {
-                ctx.write_stderr(format!("esh: trap: unknown signal '{}'\n", sig_str).as_bytes());
-                return Ok(1);
-            }
-        };
-
-        if handler_str == "-" || handler_str.is_empty() {
-            ctx.clear_trap(sig);
             return Ok(0);
         }
 
-        let plan = compile_script(handler_str)
-            .map_err(|e| ExecError::Custom(format!("Invalid trap handler script: {}", e)))?;
+        let listing_signals: Option<Vec<TrapSignal>> =
+            args.iter().map(|value| TrapSignal::parse(value)).collect();
+        if let Some(signals) = listing_signals {
+            for signal in signals {
+                if let Some(action) = ctx.get_trap_action(signal) {
+                    write_trap_listing(ctx, signal, &action);
+                }
+            }
+            return Ok(0);
+        }
 
-        ctx.set_trap(sig, plan);
+        if args.len() < 2 {
+            ctx.write_stderr(b"esh: trap: usage: trap <action> <SIGNAL...>\n");
+            return Ok(2);
+        }
+        let handler_str = &args[0];
+        let mut signals = Vec::with_capacity(args.len() - 1);
+        for sig_str in &args[1..] {
+            match TrapSignal::parse(sig_str) {
+                Some(signal) => signals.push(signal),
+                None => {
+                    ctx.write_stderr(format!("esh: trap: unknown signal '{sig_str}'\n").as_bytes());
+                    return Ok(2);
+                }
+            }
+        }
+
+        if handler_str == "-" {
+            for signal in signals {
+                ctx.clear_trap(signal);
+            }
+            return Ok(0);
+        }
+
+        let plan = match compile_script(handler_str) {
+            Ok(plan) => plan,
+            Err(error) => {
+                ctx.write_stderr(
+                    format!("esh: trap: invalid handler script: {error}\n").as_bytes(),
+                );
+                return Ok(2);
+            }
+        };
+
+        for signal in signals {
+            // An empty action is an installed no-op handler (ignore), while `-`
+            // removes the handler and restores ESH's default behavior.
+            ctx.set_trap(signal, plan.clone(), handler_str.clone());
+        }
         Ok(0)
     })
+}
+
+fn write_trap_listing(ctx: &mut ExecutionContext, signal: TrapSignal, action: &str) {
+    let quoted = action.replace('\'', "'\\''");
+    let signal = match signal {
+        TrapSignal::Exit => "EXIT",
+        TrapSignal::Err => "ERR",
+        TrapSignal::Interrupt => "INT",
+    };
+    ctx.write_stdout(format!("trap '{}' {}\n", quoted, signal).as_bytes());
 }
 
 pub fn time<'a>(
@@ -838,36 +2153,57 @@ pub fn read<'a>(
         let mut positional_args = Vec::new();
 
         let mut iter = args.iter().peekable();
+        let mut parsing_options = true;
         while let Some(arg) = iter.next() {
+            if parsing_options && arg == "--" {
+                parsing_options = false;
+                continue;
+            }
+            if !parsing_options {
+                positional_args.push(arg.clone());
+                continue;
+            }
             match arg.as_str() {
                 "-r" => raw = true,
                 "-s" | "--silent" => is_secret = true,
                 "-c" | "--confirm" => is_confirm = true,
                 "--menu" => is_menu = true,
                 "-p" => {
-                    if let Some(p) = iter.next() {
-                        prompt = Some(p.as_str());
-                    }
+                    let Some(p) = iter.next() else {
+                        ctx.write_stderr(b"esh: read: -p requires a prompt\n");
+                        return Ok(2);
+                    };
+                    prompt = Some(p.as_str());
                 }
                 "-d" => {
-                    if let Some(d) = iter.next() {
-                        delimiter = d.bytes().next().unwrap_or(0);
-                    }
+                    let Some(d) = iter.next() else {
+                        ctx.write_stderr(b"esh: read: -d requires a delimiter\n");
+                        return Ok(2);
+                    };
+                    // POSIX.1-2024 defines an empty -d operand as a NUL
+                    // delimiter. ESH uses the first byte when the operand
+                    // contains multiple bytes, whose POSIX behavior is
+                    // unspecified.
+                    delimiter = d.as_bytes().first().copied().unwrap_or(0);
                 }
                 "-t" => {
-                    if let Some(t) = iter.next() {
-                        if let Ok(d) = parse_duration(t) {
-                            timeout_dur = Some(d);
-                        } else {
-                            ctx.write_stderr(b"esh: read: invalid timeout duration\n");
-                            return Ok(2);
-                        }
+                    let Some(t) = iter.next() else {
+                        ctx.write_stderr(b"esh: read: -t requires a duration\n");
+                        return Ok(2);
+                    };
+                    if let Ok(duration) = parse_duration(t) {
+                        timeout_dur = Some(duration);
+                    } else {
+                        ctx.write_stderr(b"esh: read: invalid timeout duration\n");
+                        return Ok(2);
                     }
                 }
                 "-m" | "--mask" => {
-                    if let Some(m) = iter.next() {
-                        mask_char = m.chars().next();
-                    }
+                    let Some(m) = iter.next().filter(|value| !value.is_empty()) else {
+                        ctx.write_stderr(b"esh: read: -m requires a mask character\n");
+                        return Ok(2);
+                    };
+                    mask_char = m.chars().next();
                 }
                 "-a" => {
                     if let Some(a) = iter.next() {
@@ -878,22 +2214,26 @@ pub fn read<'a>(
                     }
                 }
                 "--default" => {
-                    if let Some(d) = iter.next() {
-                        default_val = Some(d.clone());
-                    }
+                    let Some(d) = iter.next() else {
+                        ctx.write_stderr(b"esh: read: --default requires a value\n");
+                        return Ok(2);
+                    };
+                    default_val = Some(d.clone());
                 }
                 "--defaults" => {
-                    if let Some(d) = iter.next() {
-                        defaults_var = Some(d.clone());
-                    }
+                    let Some(d) = iter.next() else {
+                        ctx.write_stderr(b"esh: read: --defaults requires a variable name\n");
+                        return Ok(2);
+                    };
+                    defaults_var = Some(d.clone());
                 }
-                other if other.starts_with("-p") => {
+                other if other.starts_with("-p") && other.len() > 2 => {
                     prompt = Some(&other[2..]);
                 }
-                other if other.starts_with("-d") => {
+                other if other.starts_with("-d") && other.len() > 2 => {
                     delimiter = other[2..].bytes().next().unwrap_or(0);
                 }
-                other if other.starts_with("-t") => {
+                other if other.starts_with("-t") && other.len() > 2 => {
                     if let Ok(d) = parse_duration(&other[2..]) {
                         timeout_dur = Some(d);
                     } else {
@@ -901,7 +2241,7 @@ pub fn read<'a>(
                         return Ok(2);
                     }
                 }
-                other if other.starts_with("-m") => {
+                other if other.starts_with("-m") && other.len() > 2 => {
                     mask_char = other[2..].chars().next();
                 }
                 other if other.starts_with('-') && other.len() > 1 && !other.starts_with("--") => {
@@ -918,6 +2258,10 @@ pub fn read<'a>(
                             }
                         }
                     }
+                }
+                other if other.starts_with("--") => {
+                    ctx.write_stderr(format!("esh: read: unknown option '{other}'\n").as_bytes());
+                    return Ok(2);
                 }
                 _ => {
                     positional_args.push(arg.clone());
@@ -938,6 +2282,30 @@ pub fn read<'a>(
             ctx.write_stderr(b"esh: read: --default and --defaults are mutually exclusive\n");
             return Ok(2);
         }
+        if let Some(name) = array_target
+            .as_deref()
+            .filter(|name| !is_shell_identifier(name))
+        {
+            ctx.write_stderr(format!("esh: read: invalid identifier: {name}\n").as_bytes());
+            return Ok(2);
+        }
+        if let Some(name) = defaults_var
+            .as_deref()
+            .filter(|name| !is_shell_identifier(name))
+        {
+            ctx.write_stderr(format!("esh: read: invalid identifier: {name}\n").as_bytes());
+            return Ok(2);
+        }
+        if is_confirm || is_secret {
+            let target = positional_args
+                .first()
+                .map(String::as_str)
+                .unwrap_or("REPLY");
+            if !is_shell_identifier(target) {
+                ctx.write_stderr(format!("esh: read: invalid identifier: {target}\n").as_bytes());
+                return Ok(2);
+            }
+        }
 
         // ==========================================
         // 1. MENU MODE
@@ -949,14 +2317,6 @@ pub fn read<'a>(
             // Check if stdin has piped data for menu options
             let piped_stdin = ctx.take_stdin();
             if let Some(stdin_bytes) = piped_stdin {
-                let text = String::from_utf8_lossy(&stdin_bytes);
-                for line in text.lines() {
-                    let trimmed = line.trim();
-                    if !trimmed.is_empty() {
-                        menu_items.push((trimmed.to_string(), trimmed.to_string()));
-                    }
-                }
-
                 target_var = if let Some(ref arr_t) = array_target {
                     arr_t.clone()
                 } else if let Some(first_pos) = positional_args.first() {
@@ -964,6 +2324,20 @@ pub fn read<'a>(
                 } else {
                     "REPLY".to_string()
                 };
+                if !is_shell_identifier(&target_var) {
+                    ctx.set_stdin(stdin_bytes);
+                    ctx.write_stderr(
+                        format!("esh: read: invalid identifier: {target_var}\n").as_bytes(),
+                    );
+                    return Ok(2);
+                }
+                let text = String::from_utf8_lossy(&stdin_bytes);
+                for line in text.lines() {
+                    let trimmed = line.trim();
+                    if !trimmed.is_empty() {
+                        menu_items.push((trimmed.to_string(), trimmed.to_string()));
+                    }
+                }
             } else {
                 // Menu source is positional
                 let (source_spec, tgt) = if let Some(ref arr_t) = array_target {
@@ -983,6 +2357,12 @@ pub fn read<'a>(
                 };
 
                 target_var = tgt;
+                if !is_shell_identifier(&target_var) {
+                    ctx.write_stderr(
+                        format!("esh: read: invalid identifier: {target_var}\n").as_bytes(),
+                    );
+                    return Ok(2);
+                }
 
                 // Check if source_spec is variable or inline
                 if !source_spec.contains(' ')
@@ -1295,6 +2675,11 @@ pub fn read<'a>(
             positional_args
         };
 
+        if let Some(name) = var_names.iter().find(|name| !is_shell_identifier(name)) {
+            ctx.write_stderr(format!("esh: read: invalid identifier: {name}\n").as_bytes());
+            return Ok(2);
+        }
+
         let read_future = async {
             match ctx.take_stdin() {
                 Some(buf) => {
@@ -1313,6 +2698,7 @@ pub fn read<'a>(
                                     i += 2;
                                     continue;
                                 } else {
+                                    line_bytes.push(b'\\');
                                     line_bytes.push(next_b);
                                     i += 2;
                                     continue;
@@ -1330,92 +2716,503 @@ pub fn read<'a>(
                         i += 1;
                     }
 
-                    if !rest_bytes.is_empty() {
-                        ctx.set_stdin(rest_bytes);
-                    }
-
-                    let line_str = String::from_utf8_lossy(&line_bytes)
-                        .trim_end_matches('\r')
-                        .to_string();
-                    Ok(line_str)
-                }
-                None => {
-                    use tokio::io::AsyncBufReadExt;
-                    let stdin = tokio::io::stdin();
-                    let mut reader = tokio::io::BufReader::new(stdin);
-                    let mut line_bytes = Vec::new();
-                    let n = reader
-                        .read_until(delimiter, &mut line_bytes)
-                        .await
-                        .map_err(|e| ExecError::IoError(e.to_string()))?;
-                    if n == 0 {
+                    ctx.set_stdin(rest_bytes);
+                    if line_bytes.is_empty() && !found_delim {
                         return Err(ExecError::Custom("EOF".to_string()));
                     }
-                    if line_bytes.ends_with(&[delimiter]) {
-                        line_bytes.pop();
+                    Ok((
+                        String::from_utf8_lossy(&line_bytes).to_string(),
+                        found_delim,
+                        false,
+                    ))
+                }
+                None => {
+                    #[cfg(unix)]
+                    {
+                        // SAFETY: isatty only inspects the standard input fd.
+                        if unsafe { libc::isatty(libc::STDIN_FILENO) == 1 } {
+                            let (line, found, timed_out, rest) = read_tty_line_with_timeout(
+                                raw,
+                                delimiter,
+                                timeout_dur,
+                                ctx.token().clone(),
+                            )
+                            .await?;
+                            if !rest.is_empty() {
+                                ctx.set_stdin(rest);
+                            }
+                            Ok((line, found, timed_out))
+                        } else if let Some(timeout) = timeout_dur {
+                            read_stdin_line_with_timeout(raw, delimiter, timeout).await
+                        } else {
+                            let mut stdin = tokio::io::stdin();
+                            read_async_line(&mut stdin, raw, delimiter, None).await
+                        }
                     }
-                    let line_str = String::from_utf8_lossy(&line_bytes)
-                        .trim_end_matches(&['\r', '\n'][..])
-                        .to_string();
-                    Ok(line_str)
+                    #[cfg(not(unix))]
+                    {
+                        let mut stdin = tokio::io::stdin();
+                        read_async_line(&mut stdin, raw, delimiter, timeout_dur).await
+                    }
                 }
             }
         };
 
-        let line_res = if let Some(dur) = timeout_dur {
-            match tokio::time::timeout(dur, read_future).await {
-                Ok(res) => res,
-                Err(_) => return Ok(1), // Timeout
-            }
-        } else {
-            read_future.await
-        };
+        let line_res = read_future.await;
 
-        let line = match (line_res, default_val) {
-            (Ok(line), Some(default)) if line.is_empty() => default,
-            (Ok(line), _) => line,
-            (Err(_), Some(default)) => default,
+        let (line, found_delimiter, timed_out) = match (line_res, default_val) {
+            (Ok((line, found_delimiter, timed_out)), Some(default))
+                if line.is_empty() && !timed_out =>
+            {
+                (default, found_delimiter, false)
+            }
+            (Ok((line, found_delimiter, timed_out)), _) => (line, found_delimiter, timed_out),
+            (Err(_), Some(default)) => (default, true, false),
             (Err(_), None) => return Ok(1), // EOF or Error
         };
 
-        let ifs = ctx.get_var("IFS").unwrap_or_else(|| " \t\n".to_string());
-        let ifs_chars: Vec<char> = ifs.chars().collect();
-
-        if var_names.len() == 1 {
-            ctx.set_scoped_var(&var_names[0], line);
-        } else {
-            let mut words = Vec::new();
-            let mut current = String::new();
-            for c in line.chars() {
-                if ifs_chars.contains(&c) {
-                    if !current.is_empty() {
-                        words.push(std::mem::take(&mut current));
-                    }
-                } else {
-                    current.push(c);
-                }
-            }
-            if !current.is_empty() {
-                words.push(current);
-            }
-
-            for (idx, var) in var_names.iter().enumerate() {
-                if idx == var_names.len() - 1 {
-                    let remaining = if idx < words.len() {
-                        words[idx..].join(" ")
-                    } else {
-                        String::new()
-                    };
-                    ctx.set_scoped_var(var, remaining);
-                } else {
-                    let word = words.get(idx).cloned().unwrap_or_default();
-                    ctx.set_scoped_var(var, word);
-                }
-            }
+        if timed_out && line.is_empty() {
+            return Ok(1);
         }
 
-        Ok(0)
+        let ifs = ctx.get_var("IFS").unwrap_or_else(|| " \t\n".to_string());
+        for (var, value) in split_read_values(&line, &ifs, &var_names, raw) {
+            ctx.set_scoped_var(&var, value);
+        }
+
+        Ok(if found_delimiter && !timed_out { 0 } else { 1 })
     })
+}
+
+async fn read_async_line<R>(
+    reader: &mut R,
+    raw: bool,
+    delimiter: u8,
+    timeout: Option<std::time::Duration>,
+) -> Result<(String, bool, bool), ExecError>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    use tokio::io::AsyncReadExt;
+
+    let deadline = timeout.map(|duration| tokio::time::Instant::now() + duration);
+    let mut line_bytes = Vec::new();
+    let mut found_delimiter = false;
+    let mut escaping = false;
+    let mut timed_out = false;
+    let mut byte = [0u8; 1];
+
+    loop {
+        let count = if let Some(deadline) = deadline {
+            let now = tokio::time::Instant::now();
+            if now >= deadline {
+                timed_out = true;
+                break;
+            }
+            match tokio::time::timeout_at(deadline, reader.read(&mut byte)).await {
+                Ok(result) => result.map_err(|error| ExecError::IoError(error.to_string()))?,
+                Err(_) => {
+                    timed_out = true;
+                    break;
+                }
+            }
+        } else {
+            reader
+                .read(&mut byte)
+                .await
+                .map_err(|error| ExecError::IoError(error.to_string()))?
+        };
+
+        if count == 0 {
+            if escaping {
+                line_bytes.push(b'\\');
+            }
+            break;
+        }
+
+        let current = byte[0];
+        if !raw && escaping {
+            if current != b'\n' {
+                line_bytes.push(b'\\');
+                line_bytes.push(current);
+            }
+            escaping = false;
+        } else if !raw && current == b'\\' {
+            escaping = true;
+        } else if current == delimiter {
+            found_delimiter = true;
+            break;
+        } else {
+            line_bytes.push(current);
+        }
+    }
+
+    if line_bytes.is_empty() && !found_delimiter && !timed_out {
+        return Err(ExecError::Custom("EOF".to_string()));
+    }
+    if timed_out && escaping {
+        line_bytes.push(b'\\');
+    }
+
+    Ok((
+        String::from_utf8_lossy(&line_bytes).to_string(),
+        found_delimiter,
+        timed_out,
+    ))
+}
+
+#[cfg(unix)]
+async fn read_tty_line_with_timeout(
+    raw: bool,
+    delimiter: u8,
+    timeout: Option<std::time::Duration>,
+    token: tokio_util::sync::CancellationToken,
+) -> Result<(String, bool, bool, Vec<u8>), ExecError> {
+    tokio::task::spawn_blocking(move || read_tty_line_blocking(raw, delimiter, timeout, token))
+        .await
+        .map_err(|error| ExecError::IoError(error.to_string()))?
+}
+
+#[cfg(unix)]
+fn read_tty_line_blocking(
+    raw: bool,
+    delimiter: u8,
+    timeout: Option<std::time::Duration>,
+    token: tokio_util::sync::CancellationToken,
+) -> Result<(String, bool, bool, Vec<u8>), ExecError> {
+    use std::time::Instant;
+
+    let deadline = timeout.map(|duration| Instant::now() + duration);
+    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+    // SAFETY: termios points to writable storage for tcgetattr.
+    let canonical = unsafe {
+        libc::tcgetattr(libc::STDIN_FILENO, termios.as_mut_ptr()) == 0
+            && termios.assume_init().c_lflag & libc::ICANON != 0
+    };
+    let mut line = Vec::new();
+    let mut remainder = Vec::new();
+    let mut escaping = false;
+    let mut found_delimiter = false;
+    let mut buffer = [0u8; 4096];
+
+    loop {
+        if token.is_cancelled() {
+            return Err(ExecError::Custom("Terminal read cancelled".to_string()));
+        }
+        let wait_ms = if let Some(deadline) = deadline {
+            let now = Instant::now();
+            if now >= deadline {
+                if escaping {
+                    line.push(b'\\');
+                }
+                return Ok((
+                    String::from_utf8_lossy(&line).into_owned(),
+                    found_delimiter,
+                    true,
+                    remainder,
+                ));
+            }
+            deadline
+                .saturating_duration_since(now)
+                .as_millis()
+                .saturating_add(1)
+                .clamp(1, 50) as i32
+        } else {
+            50
+        };
+        let mut descriptor = libc::pollfd {
+            fd: libc::STDIN_FILENO,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        // SAFETY: descriptor points to one initialized pollfd for the call.
+        let ready = unsafe { libc::poll(&mut descriptor, 1, wait_ms) };
+        if ready == 0 {
+            continue;
+        }
+        if ready < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(ExecError::IoError(error.to_string()));
+        }
+
+        // SAFETY: buffer is writable and poll reported stdin readiness.
+        let count =
+            unsafe { libc::read(libc::STDIN_FILENO, buffer.as_mut_ptr().cast(), buffer.len()) };
+        if count < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(ExecError::IoError(error.to_string()));
+        }
+        if count == 0 {
+            break;
+        }
+
+        let count = count as usize;
+        let mut ended_line = false;
+        for (index, current) in buffer[..count].iter().copied().enumerate() {
+            if !raw && escaping {
+                if current != b'\n' {
+                    line.push(b'\\');
+                    line.push(current);
+                }
+                escaping = false;
+            } else if !raw && current == b'\\' {
+                escaping = true;
+            } else if current == delimiter {
+                found_delimiter = true;
+                remainder.extend_from_slice(&buffer[index + 1..count]);
+                break;
+            } else {
+                line.push(current);
+            }
+            if current == b'\n' {
+                ended_line = true;
+            }
+        }
+        if found_delimiter {
+            break;
+        }
+
+        // In canonical mode, VEOF after text makes read(2) return a short
+        // buffer without a newline. Enter completes a line with newline.
+        if canonical && count < buffer.len() && !ended_line {
+            if escaping {
+                line.push(b'\\');
+            }
+            break;
+        }
+    }
+
+    if line.is_empty() && !found_delimiter {
+        return Err(ExecError::Custom("EOF".to_string()));
+    }
+    Ok((
+        String::from_utf8_lossy(&line).into_owned(),
+        found_delimiter,
+        false,
+        remainder,
+    ))
+}
+
+#[cfg(unix)]
+async fn read_stdin_line_with_timeout(
+    raw: bool,
+    delimiter: u8,
+    timeout: std::time::Duration,
+) -> Result<(String, bool, bool), ExecError> {
+    tokio::task::spawn_blocking(move || read_stdin_line_blocking(raw, delimiter, timeout))
+        .await
+        .map_err(|error| ExecError::IoError(error.to_string()))?
+}
+
+#[cfg(unix)]
+fn read_stdin_line_blocking(
+    raw: bool,
+    delimiter: u8,
+    timeout: std::time::Duration,
+) -> Result<(String, bool, bool), ExecError> {
+    use std::time::Instant;
+
+    let deadline = Instant::now() + timeout;
+    let mut line_bytes = Vec::new();
+    let mut found_delimiter = false;
+    let mut escaping = false;
+    let mut byte = [0u8; 1];
+
+    loop {
+        let now = Instant::now();
+        if now >= deadline {
+            if escaping {
+                line_bytes.push(b'\\');
+            }
+            return Ok((
+                String::from_utf8_lossy(&line_bytes).to_string(),
+                found_delimiter,
+                true,
+            ));
+        }
+        let remaining = deadline.saturating_duration_since(now);
+        let timeout_ms = remaining
+            .as_millis()
+            .saturating_add(u128::from(
+                !remaining.subsec_nanos().is_multiple_of(1_000_000),
+            ))
+            .clamp(1, i32::MAX as u128) as i32;
+        let mut descriptor = libc::pollfd {
+            fd: libc::STDIN_FILENO,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        // SAFETY: descriptor points to one initialized pollfd for the duration
+        // of the call; the OS only reads its fd/events and writes revents.
+        let poll_result = unsafe { libc::poll(&mut descriptor, 1, timeout_ms) };
+        if poll_result == 0 {
+            if escaping {
+                line_bytes.push(b'\\');
+            }
+            return Ok((
+                String::from_utf8_lossy(&line_bytes).to_string(),
+                found_delimiter,
+                true,
+            ));
+        }
+        if poll_result < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(ExecError::IoError(error.to_string()));
+        }
+
+        // SAFETY: byte is a writable one-byte buffer and stdin is an open file
+        // descriptor. poll reported readiness before this synchronous read.
+        let count = unsafe { libc::read(libc::STDIN_FILENO, byte.as_mut_ptr().cast(), byte.len()) };
+        if count < 0 {
+            let error = std::io::Error::last_os_error();
+            if error.kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(ExecError::IoError(error.to_string()));
+        }
+        if count == 0 {
+            if escaping {
+                line_bytes.push(b'\\');
+            }
+            break;
+        }
+
+        let current = byte[0];
+        if !raw && escaping {
+            if current != b'\n' {
+                line_bytes.push(b'\\');
+                line_bytes.push(current);
+            }
+            escaping = false;
+        } else if !raw && current == b'\\' {
+            escaping = true;
+        } else if current == delimiter {
+            found_delimiter = true;
+            break;
+        } else {
+            line_bytes.push(current);
+        }
+    }
+
+    if line_bytes.is_empty() && !found_delimiter {
+        return Err(ExecError::Custom("EOF".to_string()));
+    }
+    Ok((
+        String::from_utf8_lossy(&line_bytes).to_string(),
+        found_delimiter,
+        false,
+    ))
+}
+
+fn split_read_values(line: &str, ifs: &str, names: &[String], raw: bool) -> Vec<(String, String)> {
+    let mut assignments = Vec::with_capacity(names.len());
+    if names.is_empty() {
+        return assignments;
+    }
+
+    let chars: Vec<char> = line.chars().collect();
+    let ifs_chars: Vec<char> = ifs.chars().collect();
+    let is_ifs = |ch: char| ifs_chars.contains(&ch);
+    let is_ifs_whitespace = |ch: char| is_ifs(ch) && matches!(ch, ' ' | '\t' | '\n');
+    let escaped = |index: usize| {
+        if raw {
+            return false;
+        }
+        let mut slashes = 0;
+        let mut cursor = index;
+        while cursor > 0 && chars[cursor - 1] == '\\' {
+            slashes += 1;
+            cursor -= 1;
+        }
+        slashes % 2 == 1
+    };
+    let unescape = |slice: &[char]| {
+        if raw {
+            return slice.iter().collect();
+        }
+        let mut result = String::new();
+        let mut cursor = 0;
+        while cursor < slice.len() {
+            if slice[cursor] == '\\' && cursor + 1 < slice.len() {
+                cursor += 1;
+            }
+            result.push(slice[cursor]);
+            cursor += 1;
+        }
+        result
+    };
+    let mut position = 0;
+
+    for name in names.iter().take(names.len().saturating_sub(1)) {
+        while position < chars.len() && is_ifs_whitespace(chars[position]) && !escaped(position) {
+            position += 1;
+        }
+
+        if position == chars.len() {
+            assignments.push((name.clone(), String::new()));
+            continue;
+        }
+
+        let mut consumed_delimiter = false;
+        if is_ifs(chars[position]) && !escaped(position) && !is_ifs_whitespace(chars[position]) {
+            assignments.push((name.clone(), String::new()));
+            position += 1;
+            consumed_delimiter = true;
+        } else {
+            let start = position;
+            while position < chars.len() && (!is_ifs(chars[position]) || escaped(position)) {
+                position += 1;
+            }
+            assignments.push((name.clone(), unescape(&chars[start..position])));
+        }
+
+        if !consumed_delimiter
+            && position < chars.len()
+            && is_ifs_whitespace(chars[position])
+            && !escaped(position)
+        {
+            while position < chars.len() && is_ifs_whitespace(chars[position]) && !escaped(position)
+            {
+                position += 1;
+            }
+            if position < chars.len()
+                && is_ifs(chars[position])
+                && !escaped(position)
+                && !is_ifs_whitespace(chars[position])
+            {
+                position += 1;
+            }
+        } else if !consumed_delimiter
+            && position < chars.len()
+            && is_ifs(chars[position])
+            && !escaped(position)
+        {
+            position += 1;
+        }
+        while position < chars.len() && is_ifs_whitespace(chars[position]) && !escaped(position) {
+            position += 1;
+        }
+    }
+
+    let last_name = names.last().unwrap();
+    while position < chars.len() && is_ifs_whitespace(chars[position]) && !escaped(position) {
+        position += 1;
+    }
+    let mut end = chars.len();
+    while end > position && is_ifs_whitespace(chars[end - 1]) && !escaped(end - 1) {
+        end -= 1;
+    }
+    assignments.push((last_name.clone(), unescape(&chars[position..end])));
+    assignments
 }
 
 fn parse_inline_menu_spec(spec: &str) -> Result<Vec<(String, String)>, String> {
@@ -1505,25 +3302,54 @@ pub fn declare<'a>(
         let mut is_assoc_map = false;
         let mut is_indexed_array = false;
         let mut is_export = false;
+        let mut parsing_options = true;
 
         let mut names_and_values = Vec::new();
 
         for arg in args {
-            if arg == "-A" {
-                is_assoc_map = true;
-            } else if arg == "-a" {
-                is_indexed_array = true;
-            } else if arg == "-x" {
-                is_export = true;
-            } else if arg == "-r" {
-                // Readonly marker
-            } else if !arg.starts_with('-') {
+            if parsing_options && arg == "--" {
+                parsing_options = false;
+                continue;
+            }
+            if parsing_options && arg.starts_with('-') {
+                let supported = match arg.as_str() {
+                    "-A" => {
+                        is_assoc_map = true;
+                        true
+                    }
+                    "-a" => {
+                        is_indexed_array = true;
+                        true
+                    }
+                    "-x" => {
+                        is_export = true;
+                        true
+                    }
+                    _ => false,
+                };
+                if !supported {
+                    ctx.write_stderr(
+                        format!("esh: declare: unsupported option '{arg}'\n").as_bytes(),
+                    );
+                    return Ok(2);
+                }
+            } else {
+                parsing_options = false;
                 names_and_values.push(arg.as_str());
             }
         }
 
+        if is_export && (is_assoc_map || is_indexed_array) {
+            ctx.write_stderr(b"esh: declare: -x cannot be combined with -a or -A\n");
+            return Ok(2);
+        }
+
         for item in names_and_values {
             if let Some((k, v)) = item.split_once('=') {
+                if !is_shell_identifier(k) {
+                    ctx.write_stderr(format!("esh: declare: invalid identifier: {k}\n").as_bytes());
+                    return Ok(2);
+                }
                 if is_assoc_map {
                     ctx.set_scoped_val(
                         k,
@@ -1535,12 +3361,19 @@ pub fn declare<'a>(
                         crate::runtime::context::ShellValue::Array(vec![v.to_string()]),
                     );
                 } else {
-                    ctx.set_scoped_var(k, v.to_string());
-                }
-                if is_export {
-                    ctx.set_env(k, v);
+                    if is_export {
+                        ctx.set_exported_var(k, v.to_string());
+                    } else {
+                        ctx.set_scoped_var(k, v.to_string());
+                    }
                 }
             } else {
+                if !is_shell_identifier(item) {
+                    ctx.write_stderr(
+                        format!("esh: declare: invalid identifier: {item}\n").as_bytes(),
+                    );
+                    return Ok(2);
+                }
                 if is_assoc_map {
                     ctx.set_scoped_val(
                         item,
@@ -1552,11 +3385,34 @@ pub fn declare<'a>(
                         crate::runtime::context::ShellValue::Array(Vec::new()),
                     );
                 } else {
-                    ctx.set_scoped_var(item, String::new());
+                    if is_export {
+                        ctx.export_var(item);
+                    } else {
+                        ctx.set_scoped_var(item, String::new());
+                    }
                 }
             }
         }
 
         Ok(0)
     })
+}
+
+#[cfg(test)]
+mod read_timeout_tests {
+    use super::read_async_line;
+    use std::time::Duration;
+    use tokio::io::AsyncWriteExt;
+
+    #[tokio::test]
+    async fn timed_read_returns_partial_input_without_consuming_it_as_a_complete_line() {
+        let (mut reader, mut writer) = tokio::io::duplex(32);
+        writer.write_all(b"partial").await.unwrap();
+
+        let result = read_async_line(&mut reader, true, b'\n', Some(Duration::from_millis(5)))
+            .await
+            .unwrap();
+
+        assert_eq!(result, ("partial".to_string(), false, true));
+    }
 }

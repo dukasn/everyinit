@@ -146,7 +146,15 @@ impl<'a> Parser<'a> {
             };
 
             // Detect FailFastBlock syntax: { try } || { catch }
-            if op == LogicalOp::Or && matches!(left, ASTNode::Block { .. }) {
+            let left_is_fail_fast_block = matches!(left, ASTNode::Block { .. })
+                || matches!(
+                    left,
+                    ASTNode::RedirectedCompound {
+                        inner,
+                        ..
+                    } if matches!(inner, ASTNode::Block { .. })
+                );
+            if op == LogicalOp::Or && left_is_fail_fast_block {
                 left = self.arena.alloc(ASTNode::FailFastBlock {
                     try_stage: left,
                     fallback: Some(right),
@@ -231,16 +239,46 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_command_or_block(&mut self) -> Result<&'a ASTNode<'a>, ParseError> {
-        match self.peek_kind() {
-            TokenKind::If => self.parse_if(),
-            TokenKind::For => self.parse_for(),
-            TokenKind::While => self.parse_while_or_until(false),
-            TokenKind::Until => self.parse_while_or_until(true),
-            TokenKind::Case => self.parse_case(),
-            TokenKind::LBrace => self.parse_block(),
-            TokenKind::LParen => self.parse_subshell(),
-            _ => self.parse_simple_command_or_func(),
+        let inner = match self.peek_kind() {
+            TokenKind::If => self.parse_if()?,
+            TokenKind::For => self.parse_for()?,
+            TokenKind::While => self.parse_while_or_until(false)?,
+            TokenKind::Until => self.parse_while_or_until(true)?,
+            TokenKind::Case => self.parse_case()?,
+            TokenKind::LBrace => self.parse_block()?,
+            TokenKind::LParen => self.parse_subshell()?,
+            TokenKind::Then
+            | TokenKind::Elif
+            | TokenKind::Else
+            | TokenKind::Fi
+            | TokenKind::In
+            | TokenKind::Do
+            | TokenKind::Done
+            | TokenKind::Esac => {
+                return Err(ParseError {
+                    message: format!("Unexpected reserved word {:?}", self.peek_kind()),
+                    span: self.current().span,
+                });
+            }
+            _ => return self.parse_simple_command_or_func(),
+        };
+
+        if !self.is_redirection_token(self.peek_kind()) {
+            return Ok(inner);
         }
+
+        let mut redirections = BumpVec::new_in(self.arena);
+        while self.is_redirection_token(self.peek_kind()) {
+            redirections.push(self.parse_redirection()?);
+        }
+        let span = inner
+            .span()
+            .merge(redirections.last().expect("one redirection parsed").span);
+        Ok(self.arena.alloc(ASTNode::RedirectedCompound {
+            inner,
+            redirections,
+            span,
+        }))
     }
 
     fn parse_if(&mut self) -> Result<&'a ASTNode<'a>, ParseError> {
@@ -292,7 +330,6 @@ impl<'a> Parser<'a> {
 
     fn parse_for(&mut self) -> Result<&'a ASTNode<'a>, ParseError> {
         let for_tok = self.expect(TokenKind::For)?;
-        self.skip_newlines();
 
         let var_tok = self.advance();
         let var_name = match var_tok.kind {
@@ -555,6 +592,29 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    fn parse_function_body(&mut self) -> Result<&'a ASTNode<'a>, ParseError> {
+        if matches!(
+            self.peek_kind(),
+            TokenKind::If
+                | TokenKind::For
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::Case
+                | TokenKind::LBrace
+                | TokenKind::LParen
+        ) {
+            self.parse_command_or_block()
+        } else {
+            Err(ParseError {
+                message: format!(
+                    "Expected compound command as function body, found {:?}",
+                    self.peek_kind()
+                ),
+                span: self.current().span,
+            })
+        }
+    }
+
     fn parse_simple_command_or_func(&mut self) -> Result<&'a ASTNode<'a>, ParseError> {
         // Check for function declaration: `func_name() { ... }` or `function func_name { ... }` or `function func_name() { ... }`
         if let TokenKind::Word(word) = self.peek_kind() {
@@ -584,7 +644,7 @@ impl<'a> Parser<'a> {
                 self.advance(); // consume '('
                 self.advance(); // consume ')'
                 self.skip_terminators();
-                let body = self.parse_block()?;
+                let body = self.parse_function_body()?;
                 let span = name_tok.span.merge(body.span());
                 return Ok(self
                     .arena
@@ -725,6 +785,21 @@ impl<'a> Parser<'a> {
                 redirections,
                 span,
             }))
+        } else if !redirections.is_empty() {
+            // A redirection-only simple command applies its redirects and
+            // succeeds without dispatching a command.
+            let mut name_parts = BumpVec::new_in(self.arena);
+            name_parts.push(WordPart::Literal("="));
+            Ok(self.arena.alloc(ASTNode::Command {
+                name: Word {
+                    parts: name_parts,
+                    span: start_span,
+                },
+                args,
+                assignments,
+                redirections,
+                span,
+            }))
         } else {
             Err(ParseError {
                 message: format!(
@@ -740,12 +815,16 @@ impl<'a> Parser<'a> {
         matches!(
             kind,
             TokenKind::RedirectOut
+                | TokenKind::RedirectClobber
                 | TokenKind::RedirectAppend
                 | TokenKind::RedirectIn
                 | TokenKind::RedirectHereDoc
+                | TokenKind::RedirectHereDocStrip
                 | TokenKind::RedirectHereString
                 | TokenKind::RedirectStderr
                 | TokenKind::RedirectStderrAppend
+                | TokenKind::RedirectStderrToStdout
+                | TokenKind::RedirectStdoutToStderr
                 | TokenKind::RedirectAll
                 | TokenKind::RedirectAllAppend
         )
@@ -755,12 +834,16 @@ impl<'a> Parser<'a> {
         let op_tok = self.advance();
         let op = match op_tok.kind {
             TokenKind::RedirectOut => RedirectionOp::RedirectOut,
+            TokenKind::RedirectClobber => RedirectionOp::RedirectClobber,
             TokenKind::RedirectAppend => RedirectionOp::RedirectAppend,
             TokenKind::RedirectIn => RedirectionOp::RedirectIn,
             TokenKind::RedirectHereDoc => RedirectionOp::RedirectHereDoc,
+            TokenKind::RedirectHereDocStrip => RedirectionOp::RedirectHereDocStrip,
             TokenKind::RedirectHereString => RedirectionOp::RedirectHereString,
             TokenKind::RedirectStderr => RedirectionOp::RedirectStderr,
             TokenKind::RedirectStderrAppend => RedirectionOp::RedirectStderrAppend,
+            TokenKind::RedirectStderrToStdout => RedirectionOp::RedirectStderrToStdout,
+            TokenKind::RedirectStdoutToStderr => RedirectionOp::RedirectStdoutToStderr,
             TokenKind::RedirectAll => RedirectionOp::RedirectAll,
             TokenKind::RedirectAllAppend => RedirectionOp::RedirectAllAppend,
             _ => unreachable!(),
@@ -797,6 +880,29 @@ impl<'a> Parser<'a> {
                 break;
             }
 
+            let reserved_word = match self.peek_kind() {
+                TokenKind::If => Some("if"),
+                TokenKind::Then => Some("then"),
+                TokenKind::Elif => Some("elif"),
+                TokenKind::Else => Some("else"),
+                TokenKind::Fi => Some("fi"),
+                TokenKind::For => Some("for"),
+                TokenKind::In => Some("in"),
+                TokenKind::While => Some("while"),
+                TokenKind::Until => Some("until"),
+                TokenKind::Do => Some("do"),
+                TokenKind::Done => Some("done"),
+                TokenKind::Case => Some("case"),
+                TokenKind::Esac => Some("esac"),
+                _ => None,
+            };
+            if let Some(word) = reserved_word {
+                let tok = self.advance();
+                parts.push(WordPart::Literal(word));
+                last_span = tok.span;
+                continue;
+            }
+
             match self.peek_kind() {
                 TokenKind::Word(s) => {
                     let tok = self.advance();
@@ -823,6 +929,20 @@ impl<'a> Parser<'a> {
                     parts.push(WordPart::CommandSub(s));
                     last_span = tok.span;
                 }
+                TokenKind::Bang => {
+                    let tok = self.advance();
+                    parts.push(WordPart::Literal("!"));
+                    last_span = tok.span;
+                }
+                TokenKind::HereDocDelimiter {
+                    body,
+                    quoted,
+                    strip_tabs,
+                } => {
+                    let tok = self.advance();
+                    parts.push(WordPart::HereDocBody(body, quoted, strip_tabs));
+                    last_span = tok.span;
+                }
                 _ => break,
             }
         }
@@ -847,6 +967,9 @@ impl<'a> Parser<'a> {
                 | TokenKind::ParallelPipe
                 | TokenKind::AndIf
                 | TokenKind::OrIf
+                | TokenKind::DoubleSemi
+                | TokenKind::SemiAnd
+                | TokenKind::DoubleSemiAnd
                 | TokenKind::RBrace
                 | TokenKind::RParen
                 | TokenKind::Eof

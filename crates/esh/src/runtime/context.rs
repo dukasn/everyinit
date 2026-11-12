@@ -16,7 +16,7 @@ use crate::error::ExecError;
 use crate::planner::ir::ExecutionPlan;
 use crate::runtime::traits::ScopeManager;
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -33,7 +33,7 @@ impl TrapSignal {
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "ERR" | "ERROR" => Some(Self::Err),
-            "EXIT" => Some(Self::Exit),
+            "EXIT" | "0" => Some(Self::Exit),
             "INT" | "SIGINT" | "INTERRUPT" => Some(Self::Interrupt),
             _ => None,
         }
@@ -157,16 +157,23 @@ impl From<FxHashMap<String, String>> for ShellValue {
 #[derive(Clone, Default)]
 pub struct ScopeFrame {
     pub locals: FxHashMap<String, ShellValue>,
+    /// Names unset in this frame shadow values in outer scopes and the environment.
+    unset_vars: FxHashSet<String>,
     pub traps: FxHashMap<TrapSignal, ExecutionPlan>,
+    trap_actions: FxHashMap<TrapSignal, String>,
+    /// Environment bindings shadowed by local values in this scope.
+    exported_env_before: FxHashMap<String, (Option<String>, bool)>,
 }
 
 #[derive(Clone)]
 pub struct ExecutionContext {
     scopes: Vec<ScopeFrame>,
     env_vars: FxHashMap<String, String>,
+    exported_vars: FxHashSet<String>,
     cwd: PathBuf,
     positional_args: Vec<String>,
     last_exit: i32,
+    command_substitution_count: u64,
     fail_fast: bool,
     token: CancellationToken,
     failed_cmd: Option<String>,
@@ -177,7 +184,10 @@ pub struct ExecutionContext {
     stdin_buffer: Option<Vec<u8>>,
     functions: FxHashMap<String, ExecutionPlan>,
     in_trap: bool,
+    interrupt_trap_fired: bool,
     exec_depth: usize,
+    function_depth: usize,
+    source_depth: usize,
     exit_requested: Option<i32>,
     return_requested: Option<i32>,
     loop_depth: usize,
@@ -185,11 +195,18 @@ pub struct ExecutionContext {
     continue_requested: Option<usize>,
     options: ShellOptions,
     options_shielded: bool,
+    getopts_position: Option<(usize, usize)>,
     interactive_events: Option<std::collections::VecDeque<crossterm::event::Event>>,
+}
+
+pub(crate) struct RedirectCapture {
+    stdout: Option<Arc<Mutex<Vec<u8>>>>,
+    stderr: Option<Arc<Mutex<Vec<u8>>>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ShellOptions {
+    pub allexport: bool, // -a / -o allexport
     pub errexit: bool,   // -e / -o errexit
     pub nounset: bool,   // -u / -o nounset
     pub xtrace: bool,    // -x / -o xtrace
@@ -210,15 +227,18 @@ impl ExecutionContext {
         for (k, v) in env::vars() {
             env_map.insert(k, v);
         }
+        let exported_vars = env_map.keys().cloned().collect();
 
         let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
         Self {
             scopes: vec![ScopeFrame::default()],
             env_vars: env_map,
+            exported_vars,
             cwd,
             positional_args: vec!["esh".to_string()],
             last_exit: 0,
+            command_substitution_count: 0,
             fail_fast: false,
             token: CancellationToken::new(),
             failed_cmd: None,
@@ -229,7 +249,10 @@ impl ExecutionContext {
             stdin_buffer: None,
             functions: FxHashMap::default(),
             in_trap: false,
+            interrupt_trap_fired: false,
             exec_depth: 0,
+            function_depth: 0,
+            source_depth: 0,
             exit_requested: None,
             return_requested: None,
             loop_depth: 0,
@@ -237,6 +260,7 @@ impl ExecutionContext {
             continue_requested: None,
             options: ShellOptions::default(),
             options_shielded: false,
+            getopts_position: None,
             interactive_events: None,
         }
     }
@@ -291,6 +315,17 @@ impl ExecutionContext {
         &mut self.options
     }
 
+    pub(crate) fn getopts_offset(&self, optind: usize) -> usize {
+        self.getopts_position
+            .filter(|(position, _)| *position == optind)
+            .map(|(_, offset)| offset)
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn set_getopts_position(&mut self, optind: usize, offset: usize) {
+        self.getopts_position = Some((optind, offset));
+    }
+
     pub fn is_errexit_shielded(&self) -> bool {
         self.options_shielded
     }
@@ -302,6 +337,14 @@ impl ExecutionContext {
     pub fn request_exit(&mut self, code: i32) {
         self.exit_requested = Some(code);
         self.set_last_exit(code);
+    }
+
+    pub(crate) fn take_exit_request(&mut self) -> Option<i32> {
+        self.exit_requested.take()
+    }
+
+    pub(crate) fn restore_exit_request(&mut self, code: i32) {
+        self.exit_requested = Some(code);
     }
 
     pub fn is_exiting(&self) -> bool {
@@ -321,6 +364,30 @@ impl ExecutionContext {
         self.return_requested.is_some()
     }
 
+    pub fn enter_function(&mut self) {
+        self.function_depth += 1;
+    }
+
+    pub fn exit_function(&mut self) {
+        self.function_depth = self.function_depth.saturating_sub(1);
+    }
+
+    pub fn in_function(&self) -> bool {
+        self.function_depth > 0
+    }
+
+    pub fn enter_source(&mut self) {
+        self.source_depth += 1;
+    }
+
+    pub fn exit_source(&mut self) {
+        self.source_depth = self.source_depth.saturating_sub(1);
+    }
+
+    pub fn in_source(&self) -> bool {
+        self.source_depth > 0
+    }
+
     pub fn take_return(&mut self) -> Option<i32> {
         self.return_requested.take()
     }
@@ -338,11 +405,11 @@ impl ExecutionContext {
     }
 
     pub fn trigger_break(&mut self, depth: usize) {
-        self.break_requested = Some(depth);
+        self.break_requested = Some(depth.min(self.loop_depth));
     }
 
     pub fn trigger_continue(&mut self, depth: usize) {
-        self.continue_requested = Some(depth);
+        self.continue_requested = Some(depth.min(self.loop_depth));
     }
 
     pub fn break_requested(&self) -> Option<usize> {
@@ -385,6 +452,10 @@ impl ExecutionContext {
         self.functions.insert(name, plan);
     }
 
+    pub fn unset_function(&mut self, name: &str) {
+        self.functions.remove(name);
+    }
+
     pub fn get_function(&self, name: &str) -> Option<ExecutionPlan> {
         self.functions.get(name).cloned()
     }
@@ -407,6 +478,18 @@ impl ExecutionContext {
 
     pub fn set_in_trap(&mut self, in_trap: bool) {
         self.in_trap = in_trap;
+    }
+
+    pub(crate) fn take_interrupt_trap(&mut self) -> bool {
+        if self.interrupt_trap_fired {
+            return false;
+        }
+        self.interrupt_trap_fired = true;
+        true
+    }
+
+    pub(crate) fn replace_token(&mut self, token: CancellationToken) -> CancellationToken {
+        std::mem::replace(&mut self.token, token)
     }
 
     pub fn with_token(mut self, token: CancellationToken) -> Self {
@@ -479,6 +562,15 @@ impl ExecutionContext {
         self.set_local("?", code.to_string());
     }
 
+    pub(crate) fn command_substitution_count(&self) -> u64 {
+        self.command_substitution_count
+    }
+
+    pub(crate) fn record_command_substitution(&mut self, status: i32) {
+        self.command_substitution_count = self.command_substitution_count.wrapping_add(1);
+        self.set_last_exit(status);
+    }
+
     pub fn set_positional_args(&mut self, args: Vec<String>) {
         if args.is_empty() {
             self.positional_args = vec!["esh".to_string()];
@@ -507,6 +599,10 @@ impl ExecutionContext {
         }
     }
 
+    pub fn positional_args_with_zero(&self) -> &[String] {
+        &self.positional_args
+    }
+
     pub fn shift_positional_args(&mut self, n: usize) -> usize {
         if self.positional_args.len() <= 1 {
             return 0;
@@ -517,9 +613,10 @@ impl ExecutionContext {
         actual_n
     }
 
-    pub fn set_trap(&mut self, signal: TrapSignal, plan: ExecutionPlan) {
-        if let Some(frame) = self.scopes.last_mut() {
+    pub fn set_trap(&mut self, signal: TrapSignal, plan: ExecutionPlan, action: String) {
+        if let Some(frame) = self.scopes.first_mut() {
             frame.traps.insert(signal, plan);
+            frame.trap_actions.insert(signal, action);
         }
     }
 
@@ -532,26 +629,147 @@ impl ExecutionContext {
         None
     }
 
+    pub fn get_trap_action(&self, signal: TrapSignal) -> Option<String> {
+        for frame in self.scopes.iter().rev() {
+            if let Some(action) = frame.trap_actions.get(&signal) {
+                return Some(action.clone());
+            }
+        }
+        None
+    }
+
     pub fn clear_trap(&mut self, signal: TrapSignal) {
-        if let Some(frame) = self.scopes.last_mut() {
+        if let Some(frame) = self.scopes.first_mut() {
             frame.traps.remove(&signal);
+            frame.trap_actions.remove(&signal);
         }
     }
 
     pub fn set_env(&mut self, key: impl Into<String>, val: impl Into<String>) {
         let k = key.into();
         let v = val.into();
-        self.env_vars.insert(k.clone(), v.clone());
-        self.set_local(&k, v);
+        if !self
+            .scopes
+            .iter()
+            .any(|frame| frame.locals.contains_key(&k))
+        {
+            self.snapshot_exported_env(&k);
+        }
+        self.exported_vars.insert(k.clone());
+        self.set_scoped_var(&k, v);
+    }
+
+    pub fn export_var(&mut self, key: &str) {
+        if !self
+            .scopes
+            .iter()
+            .any(|frame| frame.locals.contains_key(key))
+        {
+            self.snapshot_exported_env(key);
+        }
+        self.exported_vars.insert(key.to_string());
+        if let Some(value) = self.get_var(key) {
+            self.env_vars.insert(key.to_string(), value);
+        }
+    }
+
+    /// Assign and export a name. New names belong to the root shell scope, so
+    /// an `export NAME=value` side effect survives a temporary command scope.
+    /// Existing names keep their current scope, including function locals.
+    pub fn set_exported_var(&mut self, key: &str, value: String) {
+        let target = self
+            .scopes
+            .iter()
+            .rposition(|frame| frame.locals.contains_key(key))
+            .unwrap_or(0);
+        if target + 1 == self.scopes.len() {
+            self.snapshot_exported_env(key);
+        }
+        self.exported_vars.insert(key.to_string());
+        self.scopes[target].unset_vars.remove(key);
+        self.scopes[target]
+            .locals
+            .insert(key.to_string(), ShellValue::String(value.clone()));
+        self.env_vars.insert(key.to_string(), value);
     }
 
     pub fn env_vars(&self) -> &FxHashMap<String, String> {
         &self.env_vars
     }
 
+    pub(crate) fn restore_env_vars(&mut self, vars: FxHashMap<String, (Option<String>, bool)>) {
+        for (key, (value, was_exported)) in vars {
+            if let Some(value) = value {
+                self.env_vars.insert(key.clone(), value);
+            } else {
+                self.env_vars.remove(&key);
+            }
+            if was_exported {
+                self.exported_vars.insert(key);
+            } else {
+                self.exported_vars.remove(&key);
+            }
+        }
+    }
+
+    pub(crate) fn is_exported(&self, key: &str) -> bool {
+        self.exported_vars.contains(key)
+    }
+
+    pub(crate) fn exported_var_names(&self) -> impl Iterator<Item = &str> {
+        self.exported_vars.iter().map(String::as_str)
+    }
+
+    fn snapshot_exported_env(&mut self, key: &str) {
+        if self.scopes.len() <= 1 {
+            return;
+        }
+        let snapshot = (
+            self.env_vars.get(key).cloned(),
+            self.exported_vars.contains(key),
+        );
+        self.scopes
+            .last_mut()
+            .expect("execution context always has a scope")
+            .exported_env_before
+            .entry(key.to_string())
+            .or_insert(snapshot);
+    }
+
+    fn sync_exported_value(&mut self, key: &str, value: &ShellValue) {
+        if !self.exported_vars.contains(key) {
+            return;
+        }
+        if let ShellValue::String(value) = value {
+            self.env_vars.insert(key.to_string(), value.clone());
+        } else {
+            self.env_vars.remove(key);
+        }
+    }
+
     pub fn enable_capture(&mut self) {
         self.captured_stdout = Some(Arc::new(Mutex::new(Vec::new())));
         self.captured_stderr = Some(Arc::new(Mutex::new(Vec::new())));
+    }
+
+    pub(crate) fn begin_redirect_capture(&mut self) -> RedirectCapture {
+        let previous = RedirectCapture {
+            stdout: self.captured_stdout.take(),
+            stderr: self.captured_stderr.take(),
+        };
+        self.enable_capture();
+        previous
+    }
+
+    pub(crate) fn finish_redirect_capture(
+        &mut self,
+        previous: RedirectCapture,
+    ) -> (Vec<u8>, Vec<u8>) {
+        let stdout = self.get_captured_stdout_bytes().unwrap_or_default();
+        let stderr = self.get_captured_stderr_bytes().unwrap_or_default();
+        self.captured_stdout = previous.stdout;
+        self.captured_stderr = previous.stderr;
+        (stdout, stderr)
     }
 
     pub(crate) fn is_capturing(&self) -> bool {
@@ -619,27 +837,70 @@ impl ExecutionContext {
     }
 
     pub fn set_local_val(&mut self, key: &str, val: ShellValue) {
-        if let Some(current) = self.scopes.last_mut() {
-            current.locals.insert(key.to_string(), val);
+        self.snapshot_exported_env(key);
+        if key == "OPTIND" {
+            self.getopts_position = None;
         }
+        if let Some(current) = self.scopes.last_mut() {
+            current.unset_vars.remove(key);
+            current.locals.insert(key.to_string(), val.clone());
+        }
+        self.sync_exported_value(key, &val);
     }
 
     pub fn set_scoped_val(&mut self, key: &str, val: ShellValue) {
-        for frame in self.scopes.iter_mut().rev() {
-            if frame.locals.contains_key(key) {
-                frame.locals.insert(key.to_string(), val);
-                return;
-            }
+        if key == "OPTIND" {
+            self.getopts_position = None;
+        }
+        if let Some(frame_index) = self
+            .scopes
+            .iter()
+            .rposition(|frame| frame.locals.contains_key(key) || frame.unset_vars.contains(key))
+        {
+            self.scopes[frame_index].unset_vars.remove(key);
+            self.scopes[frame_index]
+                .locals
+                .insert(key.to_string(), val.clone());
+            self.sync_exported_value(key, &val);
+            return;
         }
         self.set_local_val(key, val);
     }
 
     pub fn set_local_var(&mut self, key: &str, val: String) {
-        self.set_local_val(key, ShellValue::String(val));
+        if self.options.allexport {
+            let target = self.scopes.len() - 1;
+            self.snapshot_exported_env(key);
+            self.exported_vars.insert(key.to_string());
+            self.scopes[target].unset_vars.remove(key);
+            self.scopes[target]
+                .locals
+                .insert(key.to_string(), ShellValue::String(val.clone()));
+            self.env_vars.insert(key.to_string(), val);
+        } else {
+            self.set_local_val(key, ShellValue::String(val));
+        }
     }
 
     pub fn set_scoped_var(&mut self, key: &str, val: String) {
-        self.set_scoped_val(key, ShellValue::String(val));
+        if self.options.allexport {
+            let target = self
+                .scopes
+                .iter()
+                .rposition(|frame| frame.locals.contains_key(key))
+                .unwrap_or_else(|| self.scopes.len() - 1);
+            if target + 1 == self.scopes.len() {
+                self.snapshot_exported_env(key);
+            }
+            self.exported_vars.insert(key.to_string());
+            self.scopes[target].unset_vars.remove(key);
+            self.scopes[target]
+                .locals
+                .insert(key.to_string(), ShellValue::String(val.clone()));
+            self.env_vars.insert(key.to_string(), val);
+        } else {
+            self.set_scoped_val(key, ShellValue::String(val));
+        }
     }
 
     pub fn set_array_elem(&mut self, key: &str, index: usize, val: String) {
@@ -697,8 +958,32 @@ impl ExecutionContext {
             if let Some(val) = frame.locals.get(key) {
                 return Some(val);
             }
+            if frame.unset_vars.contains(key) {
+                return None;
+            }
         }
         None
+    }
+
+    /// Remove the visible shell variable while preserving an unset shadow in
+    /// the active scope so an outer value cannot reappear during a function.
+    pub fn unset_var(&mut self, key: &str) {
+        let target = self
+            .scopes
+            .iter()
+            .rposition(|frame| frame.locals.contains_key(key) || frame.unset_vars.contains(key));
+        if let Some(index) = target {
+            let frame = &mut self.scopes[index];
+            frame.locals.remove(key);
+            frame.unset_vars.insert(key.to_string());
+        } else if let Some(root) = self.scopes.first_mut() {
+            root.unset_vars.insert(key.to_string());
+        }
+        self.env_vars.remove(key);
+        self.exported_vars.remove(key);
+        if key == "OPTIND" {
+            self.getopts_position = None;
+        }
     }
 }
 
@@ -713,7 +998,8 @@ impl ScopeManager for ExecutionContext {
                 "Cannot pop root scope".to_string(),
             ));
         }
-        self.scopes.pop();
+        let frame = self.scopes.pop().expect("scope depth checked above");
+        self.restore_env_vars(frame.exported_env_before);
         Ok(())
     }
 
@@ -729,6 +1015,28 @@ impl ScopeManager for ExecutionContext {
         if key == "#" {
             let count = self.positional_args.len().saturating_sub(1);
             return Some(count.to_string());
+        }
+        if key == "-" {
+            let mut flags = String::new();
+            if self.options.allexport {
+                flags.push('a');
+            }
+            if self.options.errexit {
+                flags.push('e');
+            }
+            if self.options.nounset {
+                flags.push('u');
+            }
+            if self.options.noglob {
+                flags.push('f');
+            }
+            if self.options.xtrace {
+                flags.push('x');
+            }
+            if self.options.noclobber {
+                flags.push('C');
+            }
+            return Some(flags);
         }
         if key == "@" || key == "*" {
             if self.positional_args.len() > 1 {
@@ -767,6 +1075,9 @@ impl ScopeManager for ExecutionContext {
         for frame in self.scopes.iter().rev() {
             if let Some(val) = frame.locals.get(key) {
                 return Some(val.to_string_lossy());
+            }
+            if frame.unset_vars.contains(key) {
+                return None;
             }
         }
 

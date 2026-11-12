@@ -89,12 +89,16 @@ impl<'a> SemanticClassifier<'a> {
                     emitter.emit(SyntaxCategory::Operator, text, span);
                 }
                 TokenKind::RedirectOut
+                | TokenKind::RedirectClobber
                 | TokenKind::RedirectAppend
                 | TokenKind::RedirectIn
                 | TokenKind::RedirectHereDoc
+                | TokenKind::RedirectHereDocStrip
                 | TokenKind::RedirectHereString
                 | TokenKind::RedirectStderr
                 | TokenKind::RedirectStderrAppend
+                | TokenKind::RedirectStderrToStdout
+                | TokenKind::RedirectStdoutToStderr
                 | TokenKind::RedirectAll
                 | TokenKind::RedirectAllAppend => {
                     let text = tok.slice(self.source);
@@ -154,6 +158,10 @@ impl<'a> SemanticClassifier<'a> {
                         &mut inside_test,
                         emitter,
                     );
+                }
+                TokenKind::HereDocDelimiter { .. } => {
+                    expecting_command = false;
+                    emitter.emit(SyntaxCategory::String, tok.slice(self.source), span);
                 }
                 TokenKind::Eof => unreachable!(),
             }

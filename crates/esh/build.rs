@@ -67,12 +67,14 @@ fn main() {
 
 /// ESH is the only catalog consumer that turns an opaque binding into Rust code.
 fn handler_path(name: &str, binding: &str) -> String {
+    if name == "[" {
+        return "builtins::bracket_test".to_owned();
+    }
     match binding {
         "" => match name {
             "break" => "builtins::r#break".to_owned(),
             "continue" => "builtins::r#continue".to_owned(),
             "return" => "builtins::r#return".to_owned(),
-            "[" => "builtins::test".to_owned(),
             "typeset" => "builtins::declare".to_owned(),
             other => format!("builtins::{other}"),
         },

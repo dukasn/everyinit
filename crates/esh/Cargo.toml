@@ -45,11 +45,11 @@ zip = { workspace = true }
 semver = { workspace = true }
 chrono = { workspace = true }
 crossterm = { workspace = true }
+libc = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
-libc = { workspace = true }
 
 [build-dependencies]
 evin-catalog = { workspace = true }

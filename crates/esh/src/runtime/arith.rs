@@ -19,6 +19,7 @@ use crate::runtime::traits::ScopeManager;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArithToken {
     Num(i64),
+    MinMagnitude,
     Var(String),
     // Operators
     Plus,      // +
@@ -76,12 +77,12 @@ pub fn tokenize_arith(expr: &str) -> Result<Vec<ArithToken>, ExecError> {
 
         // 3-char operators: <<=, >>=
         if i + 2 < bytes.len() {
-            let three = &expr[i..i + 3];
-            if three == "<<=" {
+            let three = &bytes[i..i + 3];
+            if three == b"<<=" {
                 tokens.push(ArithToken::ShlAssign);
                 i += 3;
                 continue;
-            } else if three == ">>=" {
+            } else if three == b">>=" {
                 tokens.push(ArithToken::ShrAssign);
                 i += 3;
                 continue;
@@ -90,99 +91,99 @@ pub fn tokenize_arith(expr: &str) -> Result<Vec<ArithToken>, ExecError> {
 
         // 2-char operators
         if i + 1 < bytes.len() {
-            let two = &expr[i..i + 2];
+            let two = &bytes[i..i + 2];
             match two {
-                "++" => {
+                b"++" => {
                     tokens.push(ArithToken::Increment);
                     i += 2;
                     continue;
                 }
-                "--" => {
+                b"--" => {
                     tokens.push(ArithToken::Decrement);
                     i += 2;
                     continue;
                 }
-                "**" => {
+                b"**" => {
                     tokens.push(ArithToken::Power);
                     i += 2;
                     continue;
                 }
-                "<<" => {
+                b"<<" => {
                     tokens.push(ArithToken::Shl);
                     i += 2;
                     continue;
                 }
-                ">>" => {
+                b">>" => {
                     tokens.push(ArithToken::Shr);
                     i += 2;
                     continue;
                 }
-                "<=" => {
+                b"<=" => {
                     tokens.push(ArithToken::Le);
                     i += 2;
                     continue;
                 }
-                ">=" => {
+                b">=" => {
                     tokens.push(ArithToken::Ge);
                     i += 2;
                     continue;
                 }
-                "==" => {
+                b"==" => {
                     tokens.push(ArithToken::Eq);
                     i += 2;
                     continue;
                 }
-                "!=" => {
+                b"!=" => {
                     tokens.push(ArithToken::Ne);
                     i += 2;
                     continue;
                 }
-                "&&" => {
+                b"&&" => {
                     tokens.push(ArithToken::LogAnd);
                     i += 2;
                     continue;
                 }
-                "||" => {
+                b"||" => {
                     tokens.push(ArithToken::LogOr);
                     i += 2;
                     continue;
                 }
-                "+=" => {
+                b"+=" => {
                     tokens.push(ArithToken::AddAssign);
                     i += 2;
                     continue;
                 }
-                "-=" => {
+                b"-=" => {
                     tokens.push(ArithToken::SubAssign);
                     i += 2;
                     continue;
                 }
-                "*=" => {
+                b"*=" => {
                     tokens.push(ArithToken::MulAssign);
                     i += 2;
                     continue;
                 }
-                "/=" => {
+                b"/=" => {
                     tokens.push(ArithToken::DivAssign);
                     i += 2;
                     continue;
                 }
-                "%=" => {
+                b"%=" => {
                     tokens.push(ArithToken::ModAssign);
                     i += 2;
                     continue;
                 }
-                "&=" => {
+                b"&=" => {
                     tokens.push(ArithToken::AndAssign);
                     i += 2;
                     continue;
                 }
-                "^=" => {
+                b"^=" => {
                     tokens.push(ArithToken::XorAssign);
                     i += 2;
                     continue;
                 }
-                "|=" => {
+                b"|=" => {
                     tokens.push(ArithToken::OrAssign);
                     i += 2;
                     continue;
@@ -298,8 +299,7 @@ pub fn tokenize_arith(expr: &str) -> Result<Vec<ArithToken>, ExecError> {
                         i += 1;
                     }
                     let s = &expr[hex_start..i];
-                    let val = i64::from_str_radix(s, 16).unwrap_or(0);
-                    tokens.push(ArithToken::Num(val));
+                    tokens.push(parse_integer_literal(s, 16, "hexadecimal", expr)?);
                     continue;
                 } else if next == b'b' || next == b'B' {
                     i += 2;
@@ -308,8 +308,7 @@ pub fn tokenize_arith(expr: &str) -> Result<Vec<ArithToken>, ExecError> {
                         i += 1;
                     }
                     let s = &expr[bin_start..i];
-                    let val = i64::from_str_radix(s, 2).unwrap_or(0);
-                    tokens.push(ArithToken::Num(val));
+                    tokens.push(parse_integer_literal(s, 2, "binary", expr)?);
                     continue;
                 } else if next == b'o' || next == b'O' {
                     i += 2;
@@ -318,18 +317,25 @@ pub fn tokenize_arith(expr: &str) -> Result<Vec<ArithToken>, ExecError> {
                         i += 1;
                     }
                     let s = &expr[oct_start..i];
-                    let val = i64::from_str_radix(s, 8).unwrap_or(0);
-                    tokens.push(ArithToken::Num(val));
+                    tokens.push(parse_integer_literal(s, 8, "octal", expr)?);
                     continue;
                 }
+            }
+
+            if b == b'0' {
+                while i < bytes.len() && bytes[i].is_ascii_digit() {
+                    i += 1;
+                }
+                let literal = &expr[start..i];
+                tokens.push(parse_integer_literal(literal, 8, "octal", literal)?);
+                continue;
             }
 
             while i < bytes.len() && bytes[i].is_ascii_digit() {
                 i += 1;
             }
             let s = &expr[start..i];
-            let val = s.parse::<i64>().unwrap_or(0);
-            tokens.push(ArithToken::Num(val));
+            tokens.push(parse_integer_literal(s, 10, "decimal", s)?);
             continue;
         }
 
@@ -363,24 +369,62 @@ pub fn tokenize_arith(expr: &str) -> Result<Vec<ArithToken>, ExecError> {
             continue;
         }
 
-        i += 1;
+        let invalid = expr[i..]
+            .chars()
+            .next()
+            .expect("index is within expression");
+        return Err(ExecError::Custom(format!(
+            "Invalid character '{invalid}' in arithmetic expression"
+        )));
     }
 
     Ok(tokens)
 }
 
+fn parse_integer_literal(
+    literal: &str,
+    radix: u32,
+    radix_name: &str,
+    expression: &str,
+) -> Result<ArithToken, ExecError> {
+    let magnitude = i128::from_str_radix(literal, radix).map_err(|_| {
+        ExecError::Custom(format!(
+            "Invalid {radix_name} literal in arithmetic: {expression}"
+        ))
+    })?;
+    let min_magnitude = -(i64::MIN as i128);
+    if magnitude > min_magnitude {
+        return Err(ExecError::Custom(format!(
+            "Invalid {radix_name} literal in arithmetic: {expression}"
+        )));
+    }
+    if magnitude == min_magnitude {
+        Ok(ArithToken::MinMagnitude)
+    } else {
+        Ok(ArithToken::Num(magnitude as i64))
+    }
+}
+
 pub struct ArithParser<'a> {
     tokens: Vec<ArithToken>,
     pos: usize,
+    evaluating: bool,
     ctx: &'a mut ExecutionContext,
+    resolving: &'a mut Vec<String>,
 }
 
 impl<'a> ArithParser<'a> {
-    pub fn new(tokens: Vec<ArithToken>, ctx: &'a mut ExecutionContext) -> Self {
+    pub fn new(
+        tokens: Vec<ArithToken>,
+        ctx: &'a mut ExecutionContext,
+        resolving: &'a mut Vec<String>,
+    ) -> Self {
         Self {
             tokens,
             pos: 0,
+            evaluating: true,
             ctx,
+            resolving,
         }
     }
 
@@ -398,15 +442,36 @@ impl<'a> ArithParser<'a> {
         }
     }
 
-    fn get_var_val(&self, name: &str) -> i64 {
-        self.ctx
-            .get_var(name)
-            .and_then(|v| v.trim().parse::<i64>().ok())
-            .unwrap_or(0)
+    fn get_var_val(&mut self, name: &str) -> Result<i64, ExecError> {
+        if !self.evaluating {
+            return Ok(0);
+        }
+        let Some(value) = self.ctx.get_var(name) else {
+            if self.ctx.options().nounset {
+                return Err(ExecError::Custom(format!("{name}: unbound variable")));
+            }
+            return Ok(0);
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            return Ok(0);
+        }
+        if self.resolving.iter().any(|resolving| resolving == name) {
+            return Err(ExecError::Custom(format!(
+                "Circular arithmetic variable reference: {name}"
+            )));
+        }
+
+        self.resolving.push(name.to_string());
+        let result = eval_arithmetic_expr_with_stack(value, self.ctx, self.resolving);
+        self.resolving.pop();
+        result
     }
 
     fn set_var_val(&mut self, name: &str, val: i64) {
-        self.ctx.set_var(name, &val.to_string());
+        if self.evaluating {
+            self.ctx.set_var(name, &val.to_string());
+        }
     }
 
     pub fn parse_expression(&mut self) -> Result<i64, ExecError> {
@@ -440,7 +505,7 @@ impl<'a> ArithParser<'a> {
                     ArithToken::AddAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
+                        let cur = self.get_var_val(&var_name)?;
                         let new_val = cur.wrapping_add(rhs);
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
@@ -448,7 +513,7 @@ impl<'a> ArithParser<'a> {
                     ArithToken::SubAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
+                        let cur = self.get_var_val(&var_name)?;
                         let new_val = cur.wrapping_sub(rhs);
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
@@ -456,7 +521,7 @@ impl<'a> ArithParser<'a> {
                     ArithToken::MulAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
+                        let cur = self.get_var_val(&var_name)?;
                         let new_val = cur.wrapping_mul(rhs);
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
@@ -464,39 +529,39 @@ impl<'a> ArithParser<'a> {
                     ArithToken::DivAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
-                        let new_val = if rhs != 0 { cur / rhs } else { 0 };
+                        let cur = self.get_var_val(&var_name)?;
+                        let new_val = div_values(cur, rhs, self.evaluating)?;
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
                     }
                     ArithToken::ModAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
-                        let new_val = if rhs != 0 { cur % rhs } else { 0 };
+                        let cur = self.get_var_val(&var_name)?;
+                        let new_val = mod_values(cur, rhs, self.evaluating)?;
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
                     }
                     ArithToken::ShlAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
-                        let new_val = cur.wrapping_shl(rhs as u32);
+                        let cur = self.get_var_val(&var_name)?;
+                        let new_val = shift_value(cur, rhs, true, self.evaluating)?;
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
                     }
                     ArithToken::ShrAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
-                        let new_val = cur.wrapping_shr(rhs as u32);
+                        let cur = self.get_var_val(&var_name)?;
+                        let new_val = shift_value(cur, rhs, false, self.evaluating)?;
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
                     }
                     ArithToken::AndAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
+                        let cur = self.get_var_val(&var_name)?;
                         let new_val = cur & rhs;
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
@@ -504,7 +569,7 @@ impl<'a> ArithParser<'a> {
                     ArithToken::XorAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
+                        let cur = self.get_var_val(&var_name)?;
                         let new_val = cur ^ rhs;
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
@@ -512,7 +577,7 @@ impl<'a> ArithParser<'a> {
                     ArithToken::OrAssign => {
                         self.pos += 2;
                         let rhs = self.parse_assignment()?;
-                        let cur = self.get_var_val(&var_name);
+                        let cur = self.get_var_val(&var_name)?;
                         let new_val = cur | rhs;
                         self.set_var_val(&var_name, new_val);
                         return Ok(new_val);
@@ -529,11 +594,24 @@ impl<'a> ArithParser<'a> {
         let cond = self.parse_logical_or()?;
         if let Some(ArithToken::Question) = self.peek() {
             self.advance();
-            let true_val = self.parse_conditional()?;
+            let parent_evaluating = self.evaluating;
+            self.evaluating = parent_evaluating && cond != 0;
+            let true_result = self.parse_conditional();
+            self.evaluating = parent_evaluating;
+            let true_val = true_result?;
             if let Some(ArithToken::Colon) = self.peek() {
                 self.advance();
-                let false_val = self.parse_conditional()?;
-                return Ok(if cond != 0 { true_val } else { false_val });
+                self.evaluating = parent_evaluating && cond == 0;
+                let false_result = self.parse_conditional();
+                self.evaluating = parent_evaluating;
+                let false_val = false_result?;
+                return Ok(if !parent_evaluating {
+                    0
+                } else if cond != 0 {
+                    true_val
+                } else {
+                    false_val
+                });
             } else {
                 return Err(ExecError::Custom(
                     "Missing ':' in arithmetic conditional expression".to_string(),
@@ -547,8 +625,18 @@ impl<'a> ArithParser<'a> {
         let mut left = self.parse_logical_and()?;
         while let Some(ArithToken::LogOr) = self.peek() {
             self.advance();
-            let right = self.parse_logical_and()?;
-            left = if left != 0 || right != 0 { 1 } else { 0 };
+            let parent_evaluating = self.evaluating;
+            self.evaluating = parent_evaluating && left == 0;
+            let right_result = self.parse_logical_and();
+            self.evaluating = parent_evaluating;
+            let right = right_result?;
+            left = if !parent_evaluating {
+                0
+            } else if left != 0 || right != 0 {
+                1
+            } else {
+                0
+            };
         }
         Ok(left)
     }
@@ -557,8 +645,18 @@ impl<'a> ArithParser<'a> {
         let mut left = self.parse_bitwise_or()?;
         while let Some(ArithToken::LogAnd) = self.peek() {
             self.advance();
-            let right = self.parse_bitwise_or()?;
-            left = if left != 0 && right != 0 { 1 } else { 0 };
+            let parent_evaluating = self.evaluating;
+            self.evaluating = parent_evaluating && left != 0;
+            let right_result = self.parse_bitwise_or();
+            self.evaluating = parent_evaluating;
+            let right = right_result?;
+            left = if !parent_evaluating {
+                0
+            } else if left != 0 && right != 0 {
+                1
+            } else {
+                0
+            };
         }
         Ok(left)
     }
@@ -650,12 +748,12 @@ impl<'a> ArithParser<'a> {
                 ArithToken::Shl => {
                     self.advance();
                     let right = self.parse_additive()?;
-                    left = left.wrapping_shl(right as u32);
+                    left = shift_value(left, right, true, self.evaluating)?;
                 }
                 ArithToken::Shr => {
                     self.advance();
                     let right = self.parse_additive()?;
-                    left = left.wrapping_shr(right as u32);
+                    left = shift_value(left, right, false, self.evaluating)?;
                 }
                 _ => break,
             }
@@ -695,12 +793,12 @@ impl<'a> ArithParser<'a> {
                 ArithToken::Slash => {
                     self.advance();
                     let right = self.parse_power()?;
-                    left = if right != 0 { left / right } else { 0 };
+                    left = div_values(left, right, self.evaluating)?;
                 }
                 ArithToken::Percent => {
                     self.advance();
                     let right = self.parse_power()?;
-                    left = if right != 0 { left % right } else { 0 };
+                    left = mod_values(left, right, self.evaluating)?;
                 }
                 _ => break,
             }
@@ -732,6 +830,10 @@ impl<'a> ArithParser<'a> {
                 }
                 ArithToken::Minus => {
                     self.advance();
+                    if matches!(self.peek(), Some(ArithToken::MinMagnitude)) {
+                        self.advance();
+                        return Ok(i64::MIN);
+                    }
                     let val = self.parse_unary()?;
                     Ok(val.wrapping_neg())
                 }
@@ -748,7 +850,7 @@ impl<'a> ArithParser<'a> {
                 ArithToken::Increment => {
                     self.advance();
                     if let Some(ArithToken::Var(name)) = self.advance() {
-                        let cur = self.get_var_val(&name);
+                        let cur = self.get_var_val(&name)?;
                         let next = cur.wrapping_add(1);
                         self.set_var_val(&name, next);
                         Ok(next)
@@ -761,7 +863,7 @@ impl<'a> ArithParser<'a> {
                 ArithToken::Decrement => {
                     self.advance();
                     if let Some(ArithToken::Var(name)) = self.advance() {
-                        let cur = self.get_var_val(&name);
+                        let cur = self.get_var_val(&name)?;
                         let next = cur.wrapping_sub(1);
                         self.set_var_val(&name, next);
                         Ok(next)
@@ -774,7 +876,9 @@ impl<'a> ArithParser<'a> {
                 _ => self.parse_postfix(),
             }
         } else {
-            Ok(0)
+            Err(ExecError::Custom(
+                "Expected operand in arithmetic expression".to_string(),
+            ))
         }
     }
 
@@ -817,7 +921,10 @@ impl<'a> ArithParser<'a> {
         if let Some(tok) = self.advance() {
             match tok {
                 ArithToken::Num(n) => Ok(n),
-                ArithToken::Var(name) => Ok(self.get_var_val(&name)),
+                ArithToken::MinMagnitude => Err(ExecError::Custom(
+                    "Integer literal is out of range in arithmetic expression".to_string(),
+                )),
+                ArithToken::Var(name) => self.get_var_val(&name),
                 ArithToken::LParen => {
                     let val = self.parse_expression()?;
                     if let Some(ArithToken::RParen) = self.peek() {
@@ -841,7 +948,77 @@ impl<'a> ArithParser<'a> {
 }
 
 pub fn eval_arithmetic_expr(expr: &str, ctx: &mut ExecutionContext) -> Result<i64, ExecError> {
+    eval_arithmetic_expr_with_stack(expr, ctx, &mut Vec::new())
+}
+
+fn eval_arithmetic_expr_with_stack(
+    expr: &str,
+    ctx: &mut ExecutionContext,
+    resolving: &mut Vec<String>,
+) -> Result<i64, ExecError> {
     let tokens = tokenize_arith(expr)?;
-    let mut parser = ArithParser::new(tokens, ctx);
-    parser.parse_expression()
+    if tokens.is_empty() {
+        return Ok(0);
+    }
+    let mut parser = ArithParser::new(tokens, ctx, resolving);
+    let result = parser.parse_expression()?;
+    if parser.pos != parser.tokens.len() {
+        return Err(ExecError::Custom(
+            "Unexpected trailing token in arithmetic expression".to_string(),
+        ));
+    }
+    Ok(result)
+}
+
+fn div_values(left: i64, right: i64, evaluating: bool) -> Result<i64, ExecError> {
+    if !evaluating {
+        return Ok(0);
+    }
+    if right == 0 {
+        return Err(ExecError::Custom(
+            "Division by zero in arithmetic expression".to_string(),
+        ));
+    }
+    Ok(if left == i64::MIN && right == -1 {
+        i64::MIN
+    } else {
+        left / right
+    })
+}
+
+fn shift_value(
+    value: i64,
+    count: i64,
+    left_shift: bool,
+    evaluating: bool,
+) -> Result<i64, ExecError> {
+    if !evaluating {
+        return Ok(0);
+    }
+    if !(0..i64::BITS as i64).contains(&count) {
+        return Err(ExecError::Custom(format!(
+            "Shift count out of range in arithmetic expression: {count}"
+        )));
+    }
+    Ok(if left_shift {
+        value.wrapping_shl(count as u32)
+    } else {
+        value.wrapping_shr(count as u32)
+    })
+}
+
+fn mod_values(left: i64, right: i64, evaluating: bool) -> Result<i64, ExecError> {
+    if !evaluating {
+        return Ok(0);
+    }
+    if right == 0 {
+        return Err(ExecError::Custom(
+            "Division by zero in arithmetic expression".to_string(),
+        ));
+    }
+    Ok(if left == i64::MIN && right == -1 {
+        0
+    } else {
+        left % right
+    })
 }
