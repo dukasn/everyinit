@@ -20,7 +20,6 @@ $ui-window-expanded: 840px !default;
 $ui-window-large: 1200px !default;
 $ui-window-extra-large: 1600px !default;
 $ui-window-compact-height: 479px !default;
-$presentation-variants: () !default;
 
 :root {
     /* Reference palette: warm industrial concrete. */
@@ -56,68 +55,38 @@ $presentation-variants: () !default;
     --ui-ref-space-20: 80px;
     --ui-ref-space-24: 96px;
 
-    /* Light color roles (Warm Architectural Matter / Material 3 Tonal Palette). */
-    --ui-color-background: #F8F6F2;
-    --ui-color-on-background: #1D1B19;
-    --ui-color-surface: #F2ECE4;
-    --ui-color-surface-variant: #EAE3D9;
-    --ui-color-surface-container-lowest: #FFFBF7;
-    --ui-color-surface-container-low: #F2ECE4;
-    --ui-color-surface-container: #ECE5DC;
-    --ui-color-surface-container-high: #E4DDD3;
-    --ui-color-surface-container-highest: #DDD5C9;
-    --ui-color-on-surface: #1D1B19;
-    --ui-color-on-surface-variant: #524B43;
-    --ui-color-primary: #332E2A;
-    --ui-color-on-primary: #FFFBF7;
-    --ui-color-outline: #C0B7AA;
-    --ui-color-outline-variant: #DDD6CC;
-    --ui-color-link: #24201D;
-    --ui-color-link-hover: #0E0D0C;
+    /* Light color roles use paper surfaces and clear ink contrast. */
+    --ui-color-background: #FFFFFF;
+    --ui-color-on-background: #17191D;
+    --ui-color-surface: #FFFFFF;
+    --ui-color-surface-variant: #F0F2F5;
+    --ui-color-surface-container-lowest: #FFFFFF;
+    --ui-color-surface-container-low: #F7F8FA;
+    --ui-color-surface-container: #F0F2F5;
+    --ui-color-surface-container-high: #E8EBF0;
+    --ui-color-surface-container-highest: #DDE2E9;
+    --ui-color-on-surface: #17191D;
+    --ui-color-on-surface-variant: #596272;
+    --ui-color-primary: #2563EB;
+    --ui-color-on-primary: #FFFFFF;
+    --ui-color-outline: #D9DEE6;
+    --ui-color-outline-variant: #E7EAF0;
+    --ui-color-link: #2563EB;
+    --ui-color-link-hover: #1749B3;
     --ui-color-state-hover: rgb(51 46 42 / 0.07);
     --ui-color-state-focus: rgb(51 46 42 / 0.16);
     --ui-color-state-selected: rgb(51 46 42 / 0.12);
     --ui-color-scrim: rgb(29 27 25 / 0.48);
-    --ui-color-code-surface: #ECE5DC;
-    --ui-color-code-inline-surface: #E0D8CC;
-    --ui-color-code-on-surface: #1D1B19;
-    --ui-color-code-outline: #D4CCC0;
-    --ui-color-code-label: #635C53;
-    --ui-color-banner-surface: #25221F;
-    --ui-color-banner-on-surface: #F4F4F6;
-    --ui-color-banner-badge: #E5E0DB;
-    --ui-color-banner-on-badge: #302D29;
-    --ui-color-banner-outline: rgb(255 251 247 / 0.14);
-
-    /* Topbar palette is emitted only for the selected variant. It remains
-     * isolated from document-theme ink so contrast is never inherited. */
-    @if index($presentation-variants, "deepspace") {
-        --ui-topbar-white: #FFFFFF; --ui-topbar-black: #000000; --ui-topbar-deepspace-surface: #05060A; --ui-topbar-deepspace-ink: #E2E8F0; --ui-topbar-deepspace-outline: rgb(168 85 247 / 0.2); --ui-topbar-deepspace-purple: #C084FC; --ui-topbar-deepspace-purple-soft: rgb(168 85 247 / 0.25); --ui-topbar-deepspace-cyan: #38BDF8; --ui-topbar-deepspace-cyan-soft: rgb(56 189 248 / 0.1); --ui-topbar-deepspace-badge: #E9D5FF; --ui-topbar-deepspace-badge-surface: rgb(168 85 247 / 0.15); --ui-topbar-deepspace-badge-outline: rgb(168 85 247 / 0.4);
-    } @if index($presentation-variants, "collider") {
-        --ui-topbar-ink-light: #E2E8F0; --ui-topbar-collider-surface: #030712; --ui-topbar-collider-outline: #1F2937; --ui-topbar-collider-track: rgb(255 255 255 / 0.08); --ui-topbar-collider-cyan: #22D3EE; --ui-topbar-collider-pink: #E879F9; --ui-topbar-collider-badge-surface: rgb(34 211 238 / 0.08); --ui-topbar-collider-badge-outline: rgb(34 211 238 / 0.25); --ui-topbar-collider-link: #F472B6;
-    } @if index($presentation-variants, "industrial") {
-        --ui-topbar-black: #000000; --ui-topbar-industrial-surface: #14120E; --ui-topbar-industrial-ink: #F5F5F4; --ui-topbar-industrial-outline: #382E1E; --ui-topbar-industrial-amber: #F59E0B; --ui-topbar-industrial-stripe: #1C1917; --ui-topbar-industrial-action: #FBBF24; --ui-topbar-industrial-action-surface: rgb(245 158 11 / 0.12);
-    } @if index($presentation-variants, "genome") {
-        --ui-topbar-black: #000000; --ui-topbar-genome-surface: #041310; --ui-topbar-genome-ink: #D1FAE5; --ui-topbar-genome-outline: rgb(16 185 129 / 0.25); --ui-topbar-genome-glow: rgb(5 150 105 / 0.15); --ui-topbar-genome-dot: rgb(52 211 153 / 0.2); --ui-topbar-genome-tag: #34D399; --ui-topbar-genome-tag-surface: rgb(6 78 59 / 0.4); --ui-topbar-genome-tag-outline: #059669; --ui-topbar-genome-action: #6EE7B7;
-    } @if index($presentation-variants, "blueprint") {
-        --ui-topbar-blueprint-surface: #071526; --ui-topbar-blueprint-ink: #BAE6FD; --ui-topbar-blueprint-outline: #0369A1; --ui-topbar-blueprint-grid: rgb(56 189 248 / 0.08); --ui-topbar-blueprint-corner: #0284C7; --ui-topbar-blueprint-badge: #F0F9FF; --ui-topbar-blueprint-action: #38BDF8; --ui-topbar-blueprint-action-hover: #FFFFFF;
-    } @if index($presentation-variants, "crt") {
-        --ui-topbar-black: #000000; --ui-topbar-crt-surface: #0A0700; --ui-topbar-crt-ink: #FBBF24; --ui-topbar-crt-outline: #78350F; --ui-topbar-crt-scan: rgb(0 0 0 / 0.35); --ui-topbar-crt-action: #F59E0B; --ui-topbar-crt-action-hover: #FDE68A; --ui-topbar-crt-glow: rgb(245 158 11 / 0.6); --ui-topbar-crt-action-shadow: 0 0 6px rgb(245 158 11 / 0.4);
-    } @if index($presentation-variants, "aurora") {
-        --ui-topbar-white: #FFFFFF; --ui-topbar-aurora-surface: #0D0F1A; --ui-topbar-aurora-outline: rgb(255 255 255 / 0.08); --ui-topbar-aurora-indigo: rgb(99 102 241 / 0.45); --ui-topbar-aurora-pink: rgb(236 72 153 / 0.45); --ui-topbar-aurora-blue: rgb(14 165 233 / 0.4); --ui-topbar-aurora-glass: rgb(255 255 255 / 0.12); --ui-topbar-aurora-glass-outline: rgb(255 255 255 / 0.2);
-    } @if index($presentation-variants, "cyber") {
-        --ui-topbar-cyber-surface: #05080F; --ui-topbar-cyber-ink: #A7F3D0; --ui-topbar-cyber-outline: rgb(0 255 170 / 0.2); --ui-topbar-cyber-grid: rgb(0 255 170 / 0.04); --ui-topbar-cyber-green: #10B981; --ui-topbar-cyber-action-hover: #34D399; --ui-topbar-cyber-code: #34D399; --ui-topbar-cyber-code-surface: rgb(16 185 129 / 0.1); --ui-topbar-cyber-code-outline: rgb(16 185 129 / 0.3); --ui-topbar-cyber-action-ink: #022C22;
-    } @if index($presentation-variants, "prismatic") {
-        --ui-topbar-white: #FFFFFF; --ui-topbar-prismatic-surface: #11131D; --ui-topbar-prismatic-outline: rgb(255 255 255 / 0.08); --ui-topbar-prismatic-pink: #FF007A; --ui-topbar-prismatic-purple: #7928CA; --ui-topbar-prismatic-blue: #0070F3; --ui-topbar-prismatic-cyan: #00DFD8; --ui-topbar-prismatic-badge-start: #EC4899; --ui-topbar-prismatic-badge-end: #8B5CF6; --ui-topbar-prismatic-link: #38BDF8; --ui-topbar-prismatic-close: #94A3B8;
-    } @if index($presentation-variants, "brutalist") {
-        --ui-topbar-white: #FFFFFF; --ui-topbar-black: #000000; --ui-topbar-brutalist-surface: #DFFF1A; --ui-topbar-brutalist-action-hover: #252525; --ui-topbar-brutalist-pattern: rgb(0 0 0 / 0.04);
-    } @if index($presentation-variants, "holo") {
-        --ui-topbar-white: #FFFFFF; --ui-topbar-holo-surface-start: #181926; --ui-topbar-holo-surface-end: #24273A; --ui-topbar-holo-outline: rgb(255 255 255 / 0.1); --ui-topbar-holo-sheen: rgb(255 255 255 / 0.1); --ui-topbar-holo-gold: rgb(255 215 0 / 0.12); --ui-topbar-holo-magenta: rgb(255 0 128 / 0.12); --ui-topbar-holo-cyan: rgb(0 255 255 / 0.12); --ui-topbar-holo-ink-start: #FFD1FF; --ui-topbar-holo-ink-end: #FAD0C4; --ui-topbar-holo-glass: rgb(255 255 255 / 0.08); --ui-topbar-holo-glass-hover: rgb(255 255 255 / 0.18); --ui-topbar-holo-glass-outline: rgb(255 255 255 / 0.15); --ui-topbar-holo-close: #CBD5E1;
-    } @if index($presentation-variants, "geo") {
-        --ui-topbar-white: #FFFFFF; --ui-topbar-black: #000000; --ui-topbar-geo-surface: #11141A; --ui-topbar-geo-ink: #E2E8F0; --ui-topbar-geo-outline: #1E2430; --ui-topbar-geo-orange: #F97316; --ui-topbar-geo-blue: #0EA5E9; --ui-topbar-geo-purple: #8B5CF6; --ui-topbar-geo-action-hover: #FB923C; --ui-topbar-geo-close: #94A3B8;
-    } @if index($presentation-variants, "luxury") {
-        --ui-topbar-ink-light: #E2E8F0; --ui-topbar-luxury-surface: #090A0F; --ui-topbar-luxury-outline: #1A1D28; --ui-topbar-luxury-glow: rgb(139 92 246 / 0.25); --ui-topbar-luxury-sparkle: #A78BFA; --ui-topbar-luxury-link: #C4B5FD; --ui-topbar-luxury-close: #64748B;
-    }
+    --ui-color-code-surface: #F7F8FA;
+    --ui-color-code-inline-surface: #ECEFF3;
+    --ui-color-code-on-surface: #17191D;
+    --ui-color-code-outline: #D9DEE6;
+    --ui-color-code-label: #596272;
+    --ui-color-banner-surface: #E8EBF0;
+    --ui-color-banner-on-surface: #17191D;
+    --ui-color-banner-badge: #F0F2F5;
+    --ui-color-banner-on-badge: #17191D;
+    --ui-color-banner-outline: #D9DEE6;
 
     /* Canonical Matter Chromatic & ANSI Palette (Light: Deep Saturation / WCAG AA 4.5:1+) */
     --ui-palette-black: #1D1B19;
@@ -142,19 +111,6 @@ $presentation-variants: () !default;
     --ui-syn-punctuation: #524B43;
     --ui-syn-attribute: var(--ui-palette-yellow);
     --ui-syn-operator: var(--ui-palette-cyan);
-
-    /* Flow syntax roles distinguish Evin structure from YAML-compatible values. */
-    --ui-flow-root: var(--ui-syn-comment);
-    --ui-flow-task: var(--ui-color-code-on-surface);
-    --ui-flow-directive: var(--ui-palette-yellow);
-    --ui-flow-property: var(--ui-palette-red);
-    --ui-flow-pragma: var(--ui-syn-comment);
-    --ui-flow-string: var(--ui-palette-yellow);
-    --ui-flow-path: var(--ui-palette-yellow);
-    --ui-flow-enum: var(--ui-palette-green);
-    --ui-flow-action: var(--ui-palette-magenta);
-    --ui-flow-variable: var(--ui-palette-blue);
-    --ui-flow-comment: var(--ui-syn-comment);
 
     /* Diagram Surface & Node Design Tokens (Warm Cohesive Matter Palette) */
     --ui-diagram-bg: #EAE3D9;
@@ -382,37 +338,37 @@ $presentation-variants: () !default;
 }
 
 @mixin dark-theme {
-    --ui-color-background: #040406;
-    --ui-color-on-background: #E8E8EB;
-    --ui-color-surface: #0B0B0D;
-    --ui-color-surface-variant: #1A1A1E;
-    --ui-color-surface-container-lowest: #040406;
-    --ui-color-surface-container-low: #08080A;
-    --ui-color-surface-container: #101013;
-    --ui-color-surface-container-high: #1A1A1E;
-    --ui-color-surface-container-highest: #242429;
-    --ui-color-on-surface: #E8E8EB;
-    --ui-color-on-surface-variant: #C8C8CE;
-    --ui-color-primary: #E0E0E6;
-    --ui-color-on-primary: #1A1A1C;
-    --ui-color-outline: #929298;
-    --ui-color-outline-variant: #444449;
-    --ui-color-link: #E8E8EB;
-    --ui-color-link-hover: #FFFFFF;
+    --ui-color-background: #090A0D;
+    --ui-color-on-background: #F4F6F8;
+    --ui-color-surface: #090A0D;
+    --ui-color-surface-variant: #15191F;
+    --ui-color-surface-container-lowest: #090A0D;
+    --ui-color-surface-container-low: #0B0D11;
+    --ui-color-surface-container: #101318;
+    --ui-color-surface-container-high: #15191F;
+    --ui-color-surface-container-highest: #20252D;
+    --ui-color-on-surface: #F4F6F8;
+    --ui-color-on-surface-variant: #A3ADBB;
+    --ui-color-primary: #60A5FA;
+    --ui-color-on-primary: #090A0D;
+    --ui-color-outline: #252A32;
+    --ui-color-outline-variant: #1B2027;
+    --ui-color-link: #71ADFF;
+    --ui-color-link-hover: #9BC5FF;
     --ui-color-state-hover: rgb(232 232 235 / 0.08);
     --ui-color-state-focus: rgb(232 232 235 / 0.18);
     --ui-color-state-selected: rgb(232 232 235 / 0.14);
     --ui-color-scrim: rgb(0 0 0 / 0.56);
-    --ui-color-code-surface: #08080A;
-    --ui-color-code-inline-surface: #151517;
-    --ui-color-code-on-surface: #E8E8EB;
-    --ui-color-code-outline: rgb(232 232 235 / 0.12);
-    --ui-color-code-label: rgb(232 232 235 / 0.65);
-    --ui-color-banner-surface: #0B0B0D;
-    --ui-color-banner-on-surface: #FFFBF7;
-    --ui-color-banner-badge: #444449;
-    --ui-color-banner-on-badge: #E8E8EB;
-    --ui-color-banner-outline: rgb(255 251 247 / 0.12);
+    --ui-color-code-surface: #0F1217;
+    --ui-color-code-inline-surface: #171B22;
+    --ui-color-code-on-surface: #E3E7EE;
+    --ui-color-code-outline: #252B34;
+    --ui-color-code-label: #A3ADBB;
+    --ui-color-banner-surface: #15191F;
+    --ui-color-banner-on-surface: #F4F6F8;
+    --ui-color-banner-badge: #20252D;
+    --ui-color-banner-on-badge: #F4F6F8;
+    --ui-color-banner-outline: #252A32;
 
     /* Canonical Matter Chromatic & ANSI Palette (Dark: Luminous Pastel) */
     --ui-palette-black: #0F0F10;
@@ -437,19 +393,6 @@ $presentation-variants: () !default;
     --ui-syn-punctuation: #CDD6F4;
     --ui-syn-attribute: var(--ui-palette-yellow);
     --ui-syn-operator: var(--ui-palette-cyan);
-
-    /* Flow syntax roles distinguish Evin structure from YAML-compatible values. */
-    --ui-flow-root: var(--ui-syn-comment);
-    --ui-flow-task: var(--ui-color-code-on-surface);
-    --ui-flow-directive: var(--ui-palette-yellow);
-    --ui-flow-property: var(--ui-palette-red);
-    --ui-flow-pragma: var(--ui-syn-comment);
-    --ui-flow-string: var(--ui-palette-yellow);
-    --ui-flow-path: var(--ui-palette-yellow);
-    --ui-flow-enum: var(--ui-palette-green);
-    --ui-flow-action: var(--ui-palette-magenta);
-    --ui-flow-variable: var(--ui-palette-blue);
-    --ui-flow-comment: var(--ui-syn-comment);
 
     /* Dark Diagram Surface & Node Design Tokens */
     --ui-diagram-bg: #040406;

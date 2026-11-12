@@ -12,43 +12,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::BTreeMap;
 use syntect::html::{ClassStyle, ClassedHTMLGenerator};
 use syntect::parsing::{SyntaxDefinition, SyntaxSet};
 use syntect::util::LinesWithEndings;
-
-const FLOW_DIRECTIVES: &[&str] = &["on", "watch", "steps"];
-const FLOW_PATH_FIELDS: &[&str] = &[
-    "asset_dir",
-    "cwd",
-    "exclude",
-    "extensions_dir",
-    "favicon",
-    "files",
-    "icon_dir",
-    "include",
-    "layout_dir",
-    "logo",
-    "modules",
-    "out",
-    "output_dir",
-    "path",
-    "paths",
-    "rules",
-    "source_dir",
-    "watch",
-];
-const FLOW_ENUM_FIELDS: &[&str] = &[
-    "bump",
-    "channel",
-    "execution",
-    "format",
-    "hooks",
-    "presets",
-    "scope",
-    "stage",
-    "stages",
-    "targets",
-];
 
 pub struct SyntaxHighlighter {
     syntax_set: SyntaxSet,
@@ -70,18 +37,29 @@ impl SyntaxHighlighter {
     pub fn load_grammars(paths: &[std::path::PathBuf]) -> Result<Self, String> {
         let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
         for path in paths {
-            let extension = path.extension().and_then(|value| value.to_str());
-            if extension != Some("sublime-syntax") {
-                return Err(format!(
-                    "custom grammar '{}' must use the .sublime-syntax format",
-                    path.display()
-                ));
-            }
             let source = std::fs::read_to_string(path)
                 .map_err(|error| format!("failed to read grammar '{}': {error}", path.display()))?;
             let fallback_name = path.file_stem().and_then(|value| value.to_str());
-            let syntax = SyntaxDefinition::load_from_str(&source, true, fallback_name)
-                .map_err(|error| format!("invalid grammar '{}': {error}", path.display()))?;
+            let syntax = match path.extension().and_then(|value| value.to_str()) {
+                Some("sublime-syntax") => {
+                    SyntaxDefinition::load_from_str(&source, true, fallback_name)
+                        .map_err(|error| format!("invalid grammar '{}': {error}", path.display()))?
+                }
+                Some("tmLanguage") => {
+                    let converted =
+                        tm_language_to_sublime(&source, fallback_name).map_err(|error| {
+                            format!("invalid grammar '{}': {error}", path.display())
+                        })?;
+                    SyntaxDefinition::load_from_str(&converted, true, fallback_name)
+                        .map_err(|error| format!("invalid grammar '{}': {error}", path.display()))?
+                }
+                _ => {
+                    return Err(format!(
+                        "custom grammar '{}' must use .sublime-syntax or .tmLanguage format",
+                        path.display()
+                    ));
+                }
+            };
             builder.add(syntax);
         }
         Ok(Self {
@@ -90,12 +68,10 @@ impl SyntaxHighlighter {
     }
 
     pub fn highlight(&self, language: Option<&str>, code: &str) -> String {
-        let lang_token = match language {
-            Some(l) => l.trim(),
-            None => return crate::v1::renderer::HtmlRenderer::escape_html(code),
+        let Some(language) = language.map(str::trim).filter(|value| !value.is_empty()) else {
+            return escape(code);
         };
-
-        let normalized = match lang_token {
+        let normalized = match language {
             "yml" => "yaml",
             "sh" | "bash" | "zsh" => "shell",
             "js" => "javascript",
@@ -105,225 +81,158 @@ impl SyntaxHighlighter {
             "md" => "markdown",
             other => other,
         };
-
-        if normalized == "flow" {
-            return highlight_flow(code);
-        }
-
-        let syntax = match self
+        let Some(syntax) = self
             .syntax_set
             .find_syntax_by_token(normalized)
             .or_else(|| self.syntax_set.find_syntax_by_extension(normalized))
-        {
-            Some(s) => s,
-            None => return crate::v1::renderer::HtmlRenderer::escape_html(code),
+        else {
+            return escape(code);
         };
-
         let mut generator = ClassedHTMLGenerator::new_with_class_style(
             syntax,
             &self.syntax_set,
             ClassStyle::SpacedPrefixed { prefix: "syn-" },
         );
-
         for line in LinesWithEndings::from(code) {
             let _ = generator.parse_html_for_line_which_includes_newline(line);
         }
-
         generator.finalize()
     }
 }
 
-fn highlight_flow(code: &str) -> String {
-    let mut html = String::with_capacity(code.len() + code.len() / 3);
-    let mut in_tasks = false;
-    let mut task_indent = 0;
-    let mut list_field: Option<(String, usize)> = None;
-
-    for line in LinesWithEndings::from(code) {
-        let content = line.strip_suffix('\n').unwrap_or(line);
-        let newline = if line.ends_with('\n') { "\n" } else { "" };
-        let indent = content.len() - content.trim_start_matches([' ', '\t']).len();
-        let body = &content[indent..];
-
-        if body.is_empty() {
-            html.push_str(newline);
-            continue;
-        }
-        if body.starts_with("#!evin/") {
-            push_flow_span(&mut html, "pragma", body);
-            html.push_str(newline);
-            continue;
-        }
-        if body.starts_with('#') {
-            push_flow_span(&mut html, "comment", body);
-            html.push_str(newline);
-            continue;
-        }
-
-        let (list_prefix, key_start) = if body.starts_with("- ") {
-            ("- ", 2)
-        } else {
-            ("", 0)
-        };
-        let rest = &body[key_start..];
-        let key_end = rest.find(':');
-        if let Some(key_end) = key_end {
-            let key_text = &rest[..key_end];
-            let key = key_text.trim();
-            let is_simple_key = !key.is_empty()
-                && key
-                    .chars()
-                    .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-'));
-            if is_simple_key {
-                if indent == 0 {
-                    in_tasks = key == "tasks";
-                    task_indent = indent + 2;
-                }
-                let role = if indent == 0 {
-                    "root"
-                } else if in_tasks && indent == task_indent && list_prefix.is_empty() {
-                    "task"
-                } else if FLOW_DIRECTIVES.contains(&key) {
-                    "directive"
-                } else {
-                    "property"
-                };
-
-                html.push_str(&escape(&content[..indent]));
-                html.push_str(&escape(list_prefix));
-                push_flow_span(&mut html, role, key_text);
-                html.push(':');
-                let value = &rest[key_end + 1..];
-                push_flow_value(&mut html, value, key);
-                let trimmed_value = value.trim();
-                if trimmed_value.is_empty() {
-                    list_field = Some((key.to_owned(), indent));
-                } else if list_field
-                    .as_ref()
-                    .is_some_and(|(_, parent_indent)| indent <= *parent_indent)
-                {
-                    list_field = None;
-                }
-                html.push_str(newline);
-                continue;
-            }
-        }
-
-        html.push_str(&escape(&content[..indent]));
-        if let Some((key, parent_indent)) = list_field.as_ref()
-            && indent > *parent_indent
-            && let Some(item) = body.strip_prefix("- ")
-        {
-            html.push_str("- ");
-            push_flow_scalar(&mut html, item, key);
-        } else {
-            html.push_str(&escape(body));
-        }
-        html.push_str(newline);
-    }
-
-    html
-}
-
-fn push_flow_value(html: &mut String, value: &str, key: &str) {
-    let mut plain_end = 0;
-    let bytes = value.as_bytes();
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'#' && (index == 0 || bytes[index - 1].is_ascii_whitespace()) {
-            push_flow_scalar(html, &value[plain_end..index], key);
-            push_flow_span(html, "comment", &value[index..]);
-            return;
-        }
-        if bytes[index] == b'"' || bytes[index] == b'\'' {
-            push_flow_scalar(html, &value[plain_end..index], key);
-            let quote = bytes[index];
-            let start = index;
-            index += 1;
-            while index < bytes.len() {
-                if bytes[index] == b'\\' {
-                    index = (index + 2).min(bytes.len());
-                    continue;
-                }
-                if bytes[index] == quote {
-                    index += 1;
-                    break;
-                }
-                index += 1;
-            }
-            push_flow_interpolated(html, &value[start..index], flow_value_role(key));
-            plain_end = index;
-            continue;
-        }
-        if value[index..].starts_with("${")
-            && let Some(end) = value[index..].find('}')
-        {
-            push_flow_scalar(html, &value[plain_end..index], key);
-            let end = index + end + 1;
-            push_flow_span(html, "variable", &value[index..end]);
-            index = end;
-            plain_end = index;
-            continue;
-        }
-        let ch = value[index..].chars().next().expect("valid UTF-8 boundary");
-        index += ch.len_utf8();
-    }
-    push_flow_scalar(html, &value[plain_end..], key);
-}
-
-fn push_flow_scalar(html: &mut String, value: &str, key: &str) {
-    if value.is_empty() {
-        return;
-    }
-    let role = flow_value_role(key);
-    if role == "value" {
-        html.push_str(&escape(value));
-    } else {
-        push_flow_span(html, role, value);
-    }
-}
-
-fn push_flow_interpolated(html: &mut String, value: &str, role: &str) {
-    let mut cursor = 0;
-    while let Some(offset) = value[cursor..].find("${") {
-        let start = cursor + offset;
-        if let Some(end_offset) = value[start..].find('}') {
-            let end = start + end_offset + 1;
-            push_flow_span(html, role, &value[cursor..start]);
-            push_flow_span(html, "variable", &value[start..end]);
-            cursor = end;
-        } else {
-            break;
-        }
-    }
-    push_flow_span(html, role, &value[cursor..]);
-}
-
-fn flow_value_role(key: &str) -> &'static str {
-    if key == "uses" {
-        "action"
-    } else if FLOW_PATH_FIELDS.contains(&key) {
-        "path"
-    } else if FLOW_ENUM_FIELDS.contains(&key) {
-        "enum"
-    } else {
-        "string"
-    }
-}
-
-fn push_flow_span(html: &mut String, role: &str, value: &str) {
-    if value.is_empty() {
-        return;
-    }
-    html.push_str("<span class=\"syn-flow-");
-    html.push_str(role);
-    html.push_str("\">");
-    html.push_str(&escape(value));
-    html.push_str("</span>");
-}
-
 fn escape(value: &str) -> String {
     crate::v1::renderer::HtmlRenderer::escape_html(value)
+}
+
+fn tm_language_to_sublime(source: &str, fallback_name: Option<&str>) -> Result<String, String> {
+    let plist = plist::Value::from_reader(std::io::Cursor::new(source.as_bytes()))
+        .map_err(|error| format!("could not parse TextMate property list: {error}"))?;
+    let root = plist
+        .as_dictionary()
+        .ok_or_else(|| "TextMate grammar root must be a dictionary".to_string())?;
+    let name = plist_string(root.get("name"))
+        .or(fallback_name)
+        .unwrap_or("Custom Grammar");
+    let scope = plist_string(root.get("scopeName")).unwrap_or("source.custom");
+    let extensions = plist_strings(root.get("fileTypes"));
+    let mut contexts = BTreeMap::<String, Vec<String>>::new();
+    let mut counter = 0usize;
+    let main = convert_patterns(root.get("patterns"), &mut contexts, &mut counter)?;
+    contexts.insert("main".to_string(), main);
+    if let Some(repository) = root.get("repository").and_then(plist::Value::as_dictionary) {
+        for (key, value) in repository {
+            let patterns = value
+                .as_dictionary()
+                .and_then(|dict| dict.get("patterns"))
+                .cloned()
+                .unwrap_or_else(|| plist::Value::Array(vec![value.clone()]));
+            let converted = convert_patterns(Some(&patterns), &mut contexts, &mut counter)?;
+            contexts.insert(key.clone(), converted);
+        }
+    }
+
+    let mut output = format!(
+        "%YAML 1.2\n---\nname: {}\nfile_extensions: [{}]\nscope: {}\ncontexts:\n",
+        yaml_quote(name),
+        extensions
+            .iter()
+            .map(|extension| yaml_quote(extension))
+            .collect::<Vec<_>>()
+            .join(", "),
+        yaml_quote(scope)
+    );
+    for (context, rules) in contexts {
+        output.push_str(&format!("  {}:\n", yaml_quote(&context)));
+        if rules.is_empty() {
+            output.push_str("    - match: '(?!)'\n");
+            output.push_str("      scope: comment\n");
+        } else {
+            for rule in rules {
+                output.push_str("    ");
+                output.push_str(&rule);
+                output.push('\n');
+            }
+        }
+    }
+    Ok(output)
+}
+
+fn convert_patterns(
+    patterns: Option<&plist::Value>,
+    contexts: &mut BTreeMap<String, Vec<String>>,
+    counter: &mut usize,
+) -> Result<Vec<String>, String> {
+    let Some(patterns) = patterns.and_then(plist::Value::as_array) else {
+        return Ok(Vec::new());
+    };
+    let mut rules = Vec::new();
+    for pattern in patterns {
+        let Some(pattern) = pattern.as_dictionary() else {
+            continue;
+        };
+        if let Some(include) = plist_string(pattern.get("include")) {
+            let include = include.strip_prefix('#').unwrap_or(include);
+            rules.push(format!("- include: {}", yaml_quote(include)));
+            continue;
+        }
+        if let Some(regex) = plist_string(pattern.get("match")) {
+            rules.push(format!("- match: {}", yaml_quote(regex)));
+            if let Some(scope) = plist_string(pattern.get("name")) {
+                rules.push(format!("  scope: {}", yaml_quote(scope)));
+            }
+            continue;
+        }
+        let (Some(begin), Some(end)) = (
+            plist_string(pattern.get("begin")),
+            plist_string(pattern.get("end")),
+        ) else {
+            continue;
+        };
+        let child = format!("tm_context_{}", *counter);
+        *counter += 1;
+        rules.push(format!("- match: {}", yaml_quote(begin)));
+        if let Some(scope) = plist_string(pattern.get("name")) {
+            rules.push(format!("  scope: {}", yaml_quote(scope)));
+        }
+        rules.push(format!("  push: {}", yaml_quote(&child)));
+        let mut child_rules = Vec::new();
+        if let Some(scope) = plist_string(pattern.get("contentName")) {
+            child_rules.push(format!("- meta_scope: {}", yaml_quote(scope)));
+        }
+        child_rules.push(format!("- match: {}", yaml_quote(end)));
+        child_rules.push("  pop: true".to_string());
+        child_rules.extend(convert_patterns(
+            pattern.get("patterns"),
+            contexts,
+            counter,
+        )?);
+        contexts.insert(child, child_rules);
+    }
+    Ok(rules)
+}
+
+fn plist_string(value: Option<&plist::Value>) -> Option<&str> {
+    value.and_then(plist::Value::as_string)
+}
+
+fn plist_strings(value: Option<&plist::Value>) -> Vec<&str> {
+    value
+        .and_then(plist::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(plist::Value::as_string)
+        .collect()
+}
+
+fn yaml_quote(value: &str) -> String {
+    format!(
+        "\"{}\"",
+        value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+    )
 }
 
 #[cfg(test)]
@@ -331,80 +240,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_syntax_highlighter_flow_semantics_yaml_rust_and_esh() {
+    fn bundled_standard_grammars_and_unknown_language_fallback() {
         let highlighter = SyntaxHighlighter::new();
-
-        let yaml_code = "name: Evin Build\nversion: 1.0\n";
-        let yaml_html = highlighter.highlight(Some("yaml"), yaml_code);
-        assert!(
-            yaml_html.contains("syn-"),
-            "YAML should produce highlighted syn- tokens: {}",
-            yaml_html
+        let rust = highlighter.highlight(Some("rust"), "fn main() {}\n");
+        assert!(rust.contains("syn-"));
+        assert_eq!(
+            highlighter.highlight(Some("flow"), "tasks: <x>"),
+            "tasks: &lt;x&gt;"
         );
-
-        let flow_code = "#!evin/v1\nworkspace:\n  name: example\n";
-        let flow_html = highlighter.highlight(Some("flow"), flow_code);
-        assert!(
-            flow_html.contains("syn-flow-pragma"),
-            "Flow pragma should receive its own syntax role: {}",
-            flow_html
-        );
-        assert!(flow_html.contains("syn-flow-root"));
-        assert!(flow_html.contains("syn-flow-property"));
-        assert!(flow_html.contains("example"));
-
-        let semantic_sample = "#!evin/v1\ntasks:\n  lint:\n    stage: Check\n    steps:\n      - uses: evin/archive@v1\n        with:\n          package: ${package_name}\n";
-        let semantic_html = highlighter.highlight(Some("flow"), semantic_sample);
-        for role in ["task", "enum", "directive", "action", "variable"] {
-            assert!(
-                semantic_html.contains(&format!("syn-flow-{role}")),
-                "Flow sample should contain {role} coloring: {semantic_html}"
-            );
-        }
-        let escaped_html =
-            highlighter.highlight(Some("flow"), "tasks:\n  build:\n    run: <script>\n");
-        assert!(escaped_html.contains("&lt;script&gt;"));
-
-        let rust_code = "fn main() {\n    println!(\"Hello\");\n}\n";
-        let rust_html = highlighter.highlight(Some("rust"), rust_code);
-        assert!(
-            rust_html.contains("syn-"),
-            "Rust should produce highlighted syn- tokens: {}",
-            rust_html
-        );
-
-        let esh_html = highlighter.highlight(Some("esh"), "echo <literal>");
-        assert_eq!(esh_html, "echo &lt;literal&gt;");
     }
 
     #[test]
-    fn custom_sublime_grammars_are_loaded_from_configured_paths() {
-        let project_grammar = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../docs/.evin/docs/grammars/esh.sublime-syntax");
-        SyntaxHighlighter::load_grammars(&[project_grammar]).unwrap();
-
+    fn custom_sublime_and_textmate_grammars_are_loaded() {
         let directory = tempfile::tempdir().unwrap();
-        let grammar = directory.path().join("sample.sublime-syntax");
+        let sublime = directory.path().join("sample.sublime-syntax");
         std::fs::write(
-            &grammar,
-            r#"%YAML 1.2
----
-name: Sample ESH
-file_extensions: [esh]
-scope: source.esh
-contexts:
-  main:
-    - match: '\bprint\b'
-      scope: keyword.control.esh
-"#,
+            &sublime,
+            "%YAML 1.2\n---\nname: Sample DSL\nfile_extensions: [dsl]\nscope: source.dsl\ncontexts:\n  main:\n    - match: '\\bprint\\b'\n      scope: keyword.control.dsl\n",
         )
         .unwrap();
-        let highlighter = SyntaxHighlighter::load_grammars(&[grammar]).unwrap();
-        let html = highlighter.highlight(Some("esh"), "print hello");
+        let tm = directory.path().join("sample.tmLanguage");
+        std::fs::write(
+            &tm,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>name</key><string>Sample TM</string><key>scopeName</key><string>source.tm</string>
+<key>fileTypes</key><array><string>tm</string></array><key>patterns</key><array>
+<dict><key>match</key><string>\bprint\b</string><key>name</key><string>keyword.control.tm</string></dict>
+</array></dict></plist>"#,
+        )
+        .unwrap();
+        let highlighter = SyntaxHighlighter::load_grammars(&[sublime, tm]).unwrap();
         assert!(
-            html.contains("syn-keyword") && html.contains("syn-control"),
-            "{html}"
+            highlighter
+                .highlight(Some("dsl"), "print hi")
+                .contains("syn-keyword")
         );
-        assert!(html.contains("print"));
+        assert!(
+            highlighter
+                .highlight(Some("tm"), "print hi")
+                .contains("syn-keyword")
+        );
     }
 }

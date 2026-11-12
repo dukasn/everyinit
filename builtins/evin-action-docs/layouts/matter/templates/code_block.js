@@ -1,11 +1,9 @@
 (function() {
     'use strict';
 
-    window.MatterActions = window.MatterActions || window.DocsActions || window.EvinActions || {};
-    window.DocsActions = window.MatterActions;
-    window.EvinActions = window.MatterActions;
+    window.DocsActions = window.DocsActions || {};
 
-    if (!window.MatterActions.copyText) {
+    if (!window.DocsActions.copyText) {
         function fallbackCopy(text, onSuccess) {
             try {
                 const textarea = document.createElement('textarea');
@@ -22,7 +20,7 @@
             } catch (_) {}
         }
 
-        window.MatterActions.copyText = function(text, button, successTitle) {
+        window.DocsActions.copyText = function(text, button, successTitle) {
             if (!text) return;
             const onSuccess = function() {
                 if (!button) return;
@@ -46,16 +44,16 @@
         };
     }
 
-    window.MatterActions['code:copy'] = function(copyBtn, e) {
+    window.DocsActions['code:copy'] = function(copyBtn, e) {
         const surface = copyBtn.closest('.code-surface');
         const codeEl = surface ? surface.querySelector('code') : null;
         if (!codeEl) return;
 
         const text = codeEl.innerText || codeEl.textContent || '';
-        window.MatterActions.copyText(text, copyBtn, 'Copied!');
+        window.DocsActions.copyText(text, copyBtn, 'Copied!');
     };
 
-    window.MatterActions['code:download'] = function(downloadBtn, e) {
+    window.DocsActions['code:download'] = function(downloadBtn, e) {
         const surface = downloadBtn.closest('.code-surface');
         const codeEl = surface ? surface.querySelector('code') : null;
         if (!codeEl) return;

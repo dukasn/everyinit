@@ -54,7 +54,13 @@ tasks:
           site_url: https://everyinit.dev/
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
-          grammars: [docs/.evin/docs/grammars/esh.sublime-syntax]
+          appearance:
+            accent: "#2563eb"
+            logo: docs/.evin/docs/branding/logo.svg
+            favicon: docs/.evin/docs/branding/favicon.svg
+          grammars:
+            - docs/.evin/docs/grammars/flow.sublime-syntax
+            - docs/.evin/docs/grammars/esh.sublime-syntax
 
   test-responsive:
     stage: Docs
@@ -88,4 +94,10 @@ tasks:
           site_url: https://everyinit.dev/
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
-          grammars: [docs/.evin/docs/grammars/esh.sublime-syntax]
+          appearance:
+            accent: "#2563eb"
+            logo: docs/.evin/docs/branding/logo.svg
+            favicon: docs/.evin/docs/branding/favicon.svg
+          grammars:
+            - docs/.evin/docs/grammars/flow.sublime-syntax
+            - docs/.evin/docs/grammars/esh.sublime-syntax

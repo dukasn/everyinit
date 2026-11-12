@@ -240,13 +240,13 @@ fn navigation_groups_pages_by_route_and_marks_the_active_group() {
     assert!(html.contains("aria-current=\"page\""));
 
     let position = |needle: &str| html.find(needle).unwrap();
-    assert!(position("nav-group-getting-started") < position("nav-group-guides"));
-    assert!(position("nav-group-guides") < position("nav-group-esh"));
-    assert!(position("nav-group-esh") < position("nav-group-builtins"));
-    assert!(position("nav-group-builtins") < position("nav-group-reference"));
-    assert!(position("nav-group-reference") < position("nav-group-contributing"));
-    assert!(position("nav-group-contributing") < position("nav-group-alpha"));
+    assert!(position("nav-group-esh") < position("nav-group-alpha"));
     assert!(position("nav-group-alpha") < position("nav-group-beta"));
+    assert!(position("nav-group-beta") < position("nav-group-builtins"));
+    assert!(position("nav-group-builtins") < position("nav-group-contributing"));
+    assert!(position("nav-group-contributing") < position("nav-group-getting-started"));
+    assert!(position("nav-group-getting-started") < position("nav-group-guides"));
+    assert!(position("nav-group-guides") < position("nav-group-reference"));
     assert!(position(">Overview</span>") < position(">Writing ESH scripts</span>"));
     assert!(position(">Writing ESH scripts</span>") < position(">ESH Runtime Reference</span>"));
     assert!(position(">Actions</span>") < position(">CLI</span>"));

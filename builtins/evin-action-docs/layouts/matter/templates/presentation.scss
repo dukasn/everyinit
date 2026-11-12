@@ -1,11 +1,5 @@
-// The shared presentation stylesheet is collected only when a topbar or a
-// spotlight is rendered. Each variant block in core/banner is guarded by the
-// resolved build-time list, so this source never implies every variant is
-// emitted into a documentation artifact.
-$matter-presentation-variants: () !default;
 $matter-topbar-enabled: false !default;
 $matter-spotlight-enabled: false !default;
-$presentation-variants: $matter-presentation-variants;
 $topbar-enabled: $matter-topbar-enabled;
 
 @import "core/banner";

@@ -96,20 +96,6 @@ const DOCS_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "theme",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Documentation theme.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "theme_overrides",
-            kind: ActionFieldKind::Object,
-            required: false,
-            description: "Theme variable overrides.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
             path: "bundle",
             kind: ActionFieldKind::Enum(&["separated", "single-file"]),
             required: false,
@@ -142,20 +128,6 @@ const DOCS_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             kind: ActionFieldKind::String,
             required: false,
             description: "Custom layout directory.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "favicon",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Favicon path.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "logo",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Logo path.",
             condition: None,
         },
         ActionFieldDescriptor {
@@ -222,17 +194,10 @@ const DOCS_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "appearance.accent_light",
+            path: "appearance.accent",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Light theme accent in #RRGGBB format.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "appearance.accent_dark",
-            kind: ActionFieldKind::String,
-            required: false,
-            description: "Dark theme accent in #RRGGBB format.",
+            description: "Primary accent color in #RRGGBB format.",
             condition: None,
         },
         ActionFieldDescriptor {
@@ -362,13 +327,6 @@ const DOCS_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             condition: None,
         },
         ActionFieldDescriptor {
-            path: "topbar.variant",
-            kind: ActionFieldKind::String,
-            required: true,
-            description: "Topbar presentation variant.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
             path: "topbar.badge",
             kind: ActionFieldKind::String,
             required: false,
@@ -408,20 +366,6 @@ const DOCS_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             kind: ActionFieldKind::Boolean,
             required: false,
             description: "Allow dismissing the topbar.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "presentation",
-            kind: ActionFieldKind::Object,
-            required: false,
-            description: "Site presentation configuration.",
-            condition: None,
-        },
-        ActionFieldDescriptor {
-            path: "presentation.variant",
-            kind: ActionFieldKind::String,
-            required: true,
-            description: "Site presentation variant.",
             condition: None,
         },
         ActionFieldDescriptor {

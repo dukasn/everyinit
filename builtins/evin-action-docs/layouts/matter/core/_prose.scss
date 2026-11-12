@@ -332,17 +332,6 @@ blockquote,
 .syn-constant, .syn-number { color: var(--ui-syn-constant); }
 .syn-attribute { color: var(--ui-syn-attribute); }
 .syn-operator { color: var(--ui-syn-operator); }
-.syn-flow-root { color: var(--ui-flow-root); }
-.syn-flow-task { color: var(--ui-flow-task); font-weight: 700; }
-.syn-flow-directive { color: var(--ui-flow-directive); font-weight: 600; }
-.syn-flow-property { color: var(--ui-flow-property); font-weight: 600; }
-.syn-flow-pragma { color: var(--ui-flow-pragma); font-style: italic; }
-.syn-flow-string { color: var(--ui-flow-string); }
-.syn-flow-path { color: var(--ui-flow-path); }
-.syn-flow-enum { color: var(--ui-flow-enum); }
-.syn-flow-action { color: var(--ui-flow-action); }
-.syn-flow-variable { color: var(--ui-flow-variable); }
-.syn-flow-comment { color: var(--ui-flow-comment); font-style: italic; }
 .syn-inserted, .syn-addition, .diff-add { color: var(--ui-palette-green); }
 .syn-deleted, .syn-deletion, .diff-del { color: var(--ui-palette-red); }
 .syn-changed, .syn-modified, .diff-mod { color: var(--ui-palette-yellow); }
@@ -374,7 +363,7 @@ hr, .m3-divider {
     opacity: 0.9;
 }
 
-/* ESH / LSP Built-in Symbol Catalog Cards (Clean M3 Matter Surface) */
+/* Symbol catalog cards */
 .docs-lsp-symbol {
     margin: var(--ui-ref-space-8) 0;
     padding: var(--ui-ref-space-6);

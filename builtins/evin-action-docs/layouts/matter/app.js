@@ -800,12 +800,6 @@ const App = (() => {
     // 6. GLOBAL INITIALIZATION
     const init = () => {
         setTheme(theme);
-        const currentSection = location.pathname.includes('/reference/esh/')
-            ? 'esh'
-            : location.pathname.includes('/reference/') ? 'reference' : 'docs';
-        $$('.site-primary-nav [data-site-section]').forEach(link => {
-            if (link.dataset.siteSection === currentSection) link.setAttribute('aria-current', 'page');
-        });
         const navFilter = $('#navFilter');
         navFilter?.addEventListener('input', () => {
             const query = navFilter.value.trim().toLocaleLowerCase();
@@ -1006,7 +1000,7 @@ const App = (() => {
     return { init, ACTIONS };
 })();
 
-window.MatterActions = window.DocsActions = window.EvinActions = App.ACTIONS;
+window.DocsActions = App.ACTIONS;
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', App.init);
 } else {

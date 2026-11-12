@@ -1,0 +1,41 @@
+%YAML 1.2
+---
+name: Evin Flow
+file_extensions: [flow]
+scope: source.flow
+contexts:
+  main:
+    - match: '^#!.*$'
+      scope: comment.line.shebang.flow
+    - match: '#.*$'
+      scope: comment.line.number-sign.flow
+    - match: '\b(on|watch|steps)\b(?=\s*:)'
+      scope: keyword.control.flow
+    - match: '\b(workspace|module|namespace|environment|git_rules|tasks|values)\b(?=\s*:)'
+      scope: entity.name.section.flow
+    - match: '\b(true|false|null)\b'
+      scope: constant.language.flow
+    - match: '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?'
+      scope: variable.other.flow
+    - match: '"'
+      scope: punctuation.definition.string.begin.flow
+      push: double-quoted-string
+    - match: "'"
+      scope: punctuation.definition.string.begin.flow
+      push: single-quoted-string
+    - match: '\b[A-Za-z_][A-Za-z0-9_-]*(?=\s*:)'
+      scope: entity.name.tag.flow
+    - match: '\b[0-9]+(\.[0-9]+)?\b'
+      scope: constant.numeric.flow
+  double-quoted-string:
+    - meta_scope: string.quoted.double.flow
+    - match: '\\.'
+      scope: constant.character.escape.flow
+    - match: '"'
+      scope: punctuation.definition.string.end.flow
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.flow
+    - match: "'"
+      scope: punctuation.definition.string.end.flow
+      pop: true

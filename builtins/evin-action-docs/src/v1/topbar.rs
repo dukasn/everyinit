@@ -12,25 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::v1::presentation::{self, Presentation};
 use serde::Deserialize;
-use std::collections::BTreeSet;
-
-pub const MATTER_VARIANTS: &[&str] = &[
-    "deepspace",
-    "collider",
-    "industrial",
-    "genome",
-    "blueprint",
-    "crt",
-    "aurora",
-    "cyber",
-    "prismatic",
-    "brutalist",
-    "holo",
-    "geo",
-    "luxury",
-];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(untagged)]
@@ -44,7 +26,6 @@ pub enum TopbarSetting {
 pub struct Topbar {
     #[serde(default)]
     pub id: Option<String>,
-    pub variant: String,
     #[serde(default)]
     pub badge: Option<String>,
     pub message: String,
@@ -69,75 +50,49 @@ impl TopbarSetting {
         }
     }
 
-    pub fn validate(&self, theme: Option<&str>) -> Result<(), String> {
+    pub fn validate(&self) -> Result<(), String> {
         match self {
             Self::Disabled(false) => Ok(()),
             Self::Disabled(true) => Err("topbar must be a mapping or false".to_string()),
-            Self::Enabled(topbar) => topbar.validate(theme),
+            Self::Enabled(topbar) => topbar.validate(),
         }
     }
 }
 
-pub fn resolve(
-    root: Option<&TopbarSetting>,
-    fallback: Option<&TopbarSetting>,
-    presentation: Option<&Presentation>,
-) -> Result<Option<Topbar>, String> {
-    let Some(topbar) = root.or(fallback).and_then(TopbarSetting::enabled) else {
+pub fn resolve(setting: Option<&TopbarSetting>) -> Result<Option<Topbar>, String> {
+    let Some(topbar) = setting.and_then(TopbarSetting::enabled) else {
         return Ok(None);
     };
-    let mut resolved = topbar.clone();
-    resolved.variant = presentation::resolve_variant(&topbar.variant, presentation)?;
-    Ok(Some(resolved))
+    topbar.validate()?;
+    Ok(Some(topbar.clone()))
 }
 
-/// Configures Matter's shared presentation stylesheet before compilation.
-/// Variants and consumer shells are build-time values, so unused visual
-/// treatments, tokens, and component CSS never reach the generated stylesheet.
 pub fn configure_matter_scss(
     raw_scss: &str,
-    theme: &str,
-    variants: &BTreeSet<String>,
     topbar_enabled: bool,
     spotlight_enabled: bool,
 ) -> String {
-    if theme != "matter" {
-        return raw_scss.to_string();
-    }
-
-    let variants = variants
-        .iter()
-        .map(|variant| format!("\"{variant}\""))
-        .collect::<Vec<_>>()
-        .join(", ");
     format!(
-        "$matter-presentation-variants: ({variants});\n$matter-topbar-enabled: {topbar_enabled};\n$matter-spotlight-enabled: {spotlight_enabled};\n{raw_scss}"
+        "$matter-topbar-enabled: {topbar_enabled};\n$matter-spotlight-enabled: {spotlight_enabled};\n{raw_scss}"
     )
 }
 
 impl Topbar {
-    pub fn validate(&self, theme: Option<&str>) -> Result<(), String> {
-        presentation::validate_variant(&self.variant, theme, true)?;
+    pub fn validate(&self) -> Result<(), String> {
         if self.message.trim().is_empty() {
             return Err("topbar.message must be a non-empty string".to_string());
         }
-        if let Some(badge) = &self.badge
-            && badge.trim().is_empty()
+        if self
+            .badge
+            .as_ref()
+            .is_some_and(|badge| badge.trim().is_empty())
         {
             return Err("topbar.badge must not be empty when provided".to_string());
         }
-        if self.dismissible {
-            let Some(id) = self.id.as_deref() else {
-                return Err("topbar.id is required when topbar.dismissible is true".to_string());
-            };
-            if !is_stable_id(id) {
-                return Err(
-                    "topbar.id must contain only ASCII letters, digits, '_' or '-'".to_string(),
-                );
-            }
-        } else if let Some(id) = &self.id
-            && !is_stable_id(id)
-        {
+        if self.dismissible && self.id.is_none() {
+            return Err("topbar.id is required when topbar.dismissible is true".to_string());
+        }
+        if self.id.as_deref().is_some_and(|id| !is_stable_id(id)) {
             return Err(
                 "topbar.id must contain only ASCII letters, digits, '_' or '-'".to_string(),
             );
@@ -146,7 +101,7 @@ impl Topbar {
             if action.label.trim().is_empty() {
                 return Err("topbar.action.label must be a non-empty string".to_string());
             }
-            presentation::validate_href(&action.href, "topbar.action.href")?;
+            validate_href(&action.href, "topbar.action.href")?;
         }
         Ok(())
     }
@@ -164,6 +119,19 @@ fn is_stable_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
 }
 
+fn validate_href(value: &str, field: &str) -> Result<(), String> {
+    let href = value.trim();
+    if href.starts_with('/') && !href.starts_with("//") {
+        return Ok(());
+    }
+    let external = url::Url::parse(href).ok().is_some_and(|url| {
+        (url.scheme() == "https" && url.host_str().is_some()) || url.scheme() == "mailto"
+    });
+    external
+        .then_some(())
+        .ok_or_else(|| format!("{field} must be a site route, absolute HTTPS URL, or mailto link"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,11 +139,10 @@ mod tests {
     fn topbar() -> Topbar {
         Topbar {
             id: Some("canary-1".to_string()),
-            variant: "genome".to_string(),
-            badge: Some("Canary".to_string()),
+            badge: Some("Notice".to_string()),
             message: "A release is coming.".to_string(),
             action: Some(TopbarAction {
-                label: "Watch".to_string(),
+                label: "Read more".to_string(),
                 href: "/releases".to_string(),
             }),
             dismissible: true,
@@ -183,79 +150,32 @@ mod tests {
     }
 
     #[test]
-    fn validates_a_matter_topbar() {
-        assert!(topbar().validate(Some("matter")).is_ok());
+    fn validates_neutral_topbar_content_and_routes() {
+        assert!(topbar().validate().is_ok());
+        let mut invalid = topbar();
+        invalid.action.as_mut().unwrap().href = "javascript:alert(1)".to_string();
+        assert!(invalid.validate().is_err());
+        invalid = topbar();
+        invalid.id = None;
+        assert!(invalid.validate().unwrap_err().contains("id is required"));
+        assert!(TopbarSetting::Disabled(true).validate().is_err());
     }
 
     #[test]
-    fn every_matter_variant_is_selectable() {
-        for variant in MATTER_VARIANTS {
-            let mut value = topbar();
-            value.variant = (*variant).to_string();
-            assert!(value.validate(Some("matter")).is_ok(), "{variant}");
-        }
-    }
-
-    #[test]
-    fn rejects_invalid_setting_values() {
-        let mut value = topbar();
-        value.variant = "Not valid".to_string();
-        assert!(value.validate(None).unwrap_err().contains("kebab-case"));
-        value.variant = "genome".to_string();
-        value.id = None;
-        assert!(value.validate(None).unwrap_err().contains("id is required"));
-        assert!(TopbarSetting::Disabled(true).validate(None).is_err());
-    }
-
-    #[test]
-    fn permits_custom_layout_variants() {
-        let mut value = topbar();
-        value.variant = "brand-alert".to_string();
-        assert!(value.validate(Some("custom")).is_ok());
-        assert!(value.validate(Some("matter")).is_err());
-    }
-
-    #[test]
-    fn root_setting_wins_over_the_action_fallback() {
-        let fallback = TopbarSetting::Enabled(topbar());
-        let disabled = TopbarSetting::Disabled(false);
+    fn resolve_honors_disabled_and_enabled_settings() {
         assert!(
-            resolve(Some(&disabled), Some(&fallback), None)
+            resolve(Some(&TopbarSetting::Disabled(false)))
                 .unwrap()
                 .is_none()
         );
-
-        let mut root_topbar = topbar();
-        root_topbar.variant = "aurora".to_string();
-        let root = TopbarSetting::Enabled(root_topbar);
-        assert_eq!(
-            resolve(Some(&root), Some(&fallback), None)
-                .unwrap()
-                .unwrap()
-                .variant,
-            "aurora"
-        );
-        assert_eq!(
-            resolve(None, Some(&fallback), None)
-                .unwrap()
-                .unwrap()
-                .variant,
-            "genome"
-        );
+        let setting = TopbarSetting::Enabled(topbar());
+        assert_eq!(resolve(Some(&setting)).unwrap(), Some(topbar()));
     }
 
     #[test]
-    fn configures_matter_scss_with_only_the_selected_variant() {
-        let variants = BTreeSet::from(["genome".to_string()]);
-        let configured =
-            configure_matter_scss("@use \"core/banner\";", "matter", &variants, true, false);
-        assert!(configured.starts_with("$matter-presentation-variants: (\"genome\");"));
-        assert!(
-            configure_matter_scss("body {}", "custom", &variants, true, false).starts_with("body")
-        );
-        assert!(
-            configure_matter_scss("body {}", "matter", &BTreeSet::new(), false, false)
-                .starts_with("$matter-presentation-variants: ();")
-        );
+    fn scss_configuration_only_selects_component_presence() {
+        let configured = configure_matter_scss("body {}", true, false);
+        assert!(configured.starts_with("$matter-topbar-enabled: true;"));
+        assert!(configured.contains("$matter-spotlight-enabled: false;"));
     }
 }

@@ -80,7 +80,7 @@ impl<'a> ResourceResolver<'a> {
 
     pub fn resolve_logo(
         &self,
-        diagnostics: &mut Vec<Diagnostic>,
+        _diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<ResolvedLogo, Diagnostic> {
         // Tier 1: Explicit config.logo
         if let Some(ref logo_rel) = self.config.appearance.logo {
@@ -111,43 +111,7 @@ impl<'a> ResourceResolver<'a> {
             return Ok(ResolvedLogo::CustomSvg(svg));
         }
 
-        // Tier 2: Conventional <extensions_root>/logo.svg or <extensions_root>/icons/logo.svg
-        let conv1 = self.extensions_root.join("logo.svg");
-        if conv1.is_file() {
-            let svg = std::fs::read_to_string(&conv1).map_err(|err| {
-                Diagnostic::new(
-                    format!(
-                        "Failed to read conventional logo file '{}': {err}",
-                        conv1.display()
-                    ),
-                    IssueCode::new("io-error"),
-                )
-            })?;
-            return Ok(ResolvedLogo::CustomSvg(svg));
-        }
-
-        let conv2 = self.extensions_root.join("icons/logo.svg");
-        if conv2.is_file() {
-            let svg = std::fs::read_to_string(&conv2).map_err(|err| {
-                Diagnostic::new(
-                    format!(
-                        "Failed to read conventional logo file '{}': {err}",
-                        conv2.display()
-                    ),
-                    IssueCode::new("io-error"),
-                )
-            })?;
-            return Ok(ResolvedLogo::CustomSvg(svg));
-        }
-
-        // Tier 3 & 4: Neutral fallback with build warning
-        diagnostics.push(
-            Diagnostic::new(
-                "Documentation build using neutral fallback brand symbol (🕮). Provide a brand logo via 'logo' configuration or place 'logo.svg' in '.evin/actions/docs/' (or custom 'extensions_dir').",
-                IssueCode::new("neutral-fallback"),
-            )
-            .with_severity(Severity::Warning),
-        );
+        // Branding is opt-in. Do not infer a logo from repository conventions.
         Ok(ResolvedLogo::NeutralFallback)
     }
 
@@ -194,70 +158,6 @@ impl<'a> ResourceResolver<'a> {
             });
         }
 
-        // Tier 2: Conventional <extensions_root>/favicon.{svg,png,ico}
-        if self.extensions_root.is_dir()
-            && let Ok(entries) = std::fs::read_dir(&self.extensions_root)
-        {
-            let mut candidates = Vec::new();
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file()
-                    && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
-                    && stem.eq_ignore_ascii_case("favicon")
-                    && let Some(ext) = path.extension().and_then(|e| e.to_str())
-                {
-                    let ext_lower = ext.to_lowercase();
-                    if matches!(ext_lower.as_str(), "svg" | "png" | "ico") {
-                        candidates.push(path);
-                    }
-                }
-            }
-
-            if candidates.len() > 1 {
-                let names: Vec<String> = candidates
-                    .iter()
-                    .map(|p| {
-                        p.file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                            .to_string()
-                    })
-                    .collect();
-                return Err(Diagnostic::new(
-                    format!(
-                        "Multiple conventional favicon candidates found in '{}': [{}]. Specify explicit 'favicon' in configuration or remove ambiguous files.",
-                        self.extensions_root.display(),
-                        names.join(", ")
-                    ),
-                    IssueCode::new("ambiguous-favicon"),
-                ));
-            }
-
-            if candidates.len() == 1 {
-                let full_path = &candidates[0];
-                let ext = full_path
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("svg")
-                    .to_lowercase();
-                let mime = mime_for_extension(&ext);
-                let bytes = std::fs::read(full_path).map_err(|err| {
-                    Diagnostic::new(
-                        format!(
-                            "Failed to read conventional favicon file '{}': {err}",
-                            full_path.display()
-                        ),
-                        IssueCode::new("io-error"),
-                    )
-                })?;
-                return Ok(ResolvedFavicon::Custom {
-                    bytes,
-                    extension: ext,
-                    mime_type: mime.to_string(),
-                });
-            }
-        }
-
         // Tier 3 & 4: Neutral fallback
         Ok(ResolvedFavicon::NeutralFallback)
     }
@@ -281,12 +181,6 @@ impl<'a> ResourceResolver<'a> {
                 ));
             }
             return Ok(Some(full_path));
-        }
-
-        // Tier 2: Conventional <extensions_root>/icons
-        let conv = self.extensions_root.join("icons");
-        if conv.is_dir() {
-            return Ok(Some(conv));
         }
 
         // Tier 3 & 4: None
@@ -418,22 +312,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_resource_resolver_defaults_to_neutral() {
+    fn test_resource_resolver_omits_unconfigured_branding_without_warnings() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config = DocsConfig::default();
         let resolver = ResourceResolver::new(temp_dir.path(), &config).unwrap();
         let mut diagnostics = Vec::new();
         let logo = resolver.resolve_logo(&mut diagnostics).unwrap();
         assert_eq!(logo, ResolvedLogo::NeutralFallback);
-        assert_eq!(diagnostics.len(), 1);
-        assert_eq!(diagnostics[0].code.key, "neutral-fallback");
+        assert!(diagnostics.is_empty());
 
         let favicon = resolver.resolve_favicon(&mut diagnostics).unwrap();
         assert_eq!(favicon, ResolvedFavicon::NeutralFallback);
     }
 
     #[test]
-    fn test_resource_resolver_precedence_explicit_over_conventional() {
+    fn test_resource_resolver_uses_only_explicit_logo_configuration() {
         let temp_dir = tempfile::tempdir().unwrap();
         let ext_dir = temp_dir.path().join(".evin/actions/docs");
         std::fs::create_dir_all(&ext_dir).unwrap();
@@ -461,19 +354,18 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_resolver_conventional_logo() {
+    fn test_resource_resolver_does_not_infer_logo_from_repository_paths() {
         let temp_dir = tempfile::tempdir().unwrap();
         let ext_dir = temp_dir.path().join(".evin/actions/docs");
         std::fs::create_dir_all(&ext_dir).unwrap();
-        std::fs::write(ext_dir.join("logo.svg"), "<svg id='conv'></svg>").unwrap();
+        std::fs::write(ext_dir.join("logo.svg"), "<svg id='implicit'></svg>").unwrap();
 
         let config = DocsConfig::default();
         let resolver = ResourceResolver::new(temp_dir.path(), &config).unwrap();
         let mut diagnostics = Vec::new();
-        let logo = resolver.resolve_logo(&mut diagnostics).unwrap();
         assert_eq!(
-            logo,
-            ResolvedLogo::CustomSvg("<svg id='conv'></svg>".to_string())
+            resolver.resolve_logo(&mut diagnostics).unwrap(),
+            ResolvedLogo::NeutralFallback
         );
         assert!(diagnostics.is_empty());
     }
@@ -496,17 +388,16 @@ mod tests {
     }
 
     #[test]
-    fn test_resource_resolver_ambiguous_favicon() {
+    fn test_resource_resolver_does_not_infer_favicon_from_repository_paths() {
         let temp_dir = tempfile::tempdir().unwrap();
         let ext_dir = temp_dir.path().join(".evin/actions/docs");
         std::fs::create_dir_all(&ext_dir).unwrap();
         std::fs::write(ext_dir.join("favicon.svg"), "<svg></svg>").unwrap();
-        std::fs::write(ext_dir.join("favicon.png"), b"fake png").unwrap();
-
         let config = DocsConfig::default();
         let resolver = ResourceResolver::new(temp_dir.path(), &config).unwrap();
-        let mut diagnostics = Vec::new();
-        let err = resolver.resolve_favicon(&mut diagnostics).unwrap_err();
-        assert_eq!(err.code.key, "ambiguous-favicon");
+        assert_eq!(
+            resolver.resolve_favicon(&mut Vec::new()).unwrap(),
+            ResolvedFavicon::NeutralFallback
+        );
     }
 }

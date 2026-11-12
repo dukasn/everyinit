@@ -29,6 +29,11 @@
             --ui-color-background: #090a0d;
             --ui-color-on-background: #f4f6f8;
         }
+        html[data-theme="light"] {
+            color-scheme: light;
+            --ui-color-background: #ffffff;
+            --ui-color-on-background: #17191d;
+        }
         html, body {
             margin: 0;
             padding: 0;
@@ -77,16 +82,10 @@
             <svg class="docs-icon sidebar-icon sidebar-icon-collapse control-icon-motion" aria-hidden="true"><use href="#icon-layout-sidebar-left-collapse"></use></svg>
             <svg class="docs-icon sidebar-icon sidebar-icon-expand control-icon-motion" aria-hidden="true"><use href="#icon-layout-sidebar-left-expand"></use></svg>
         </button>
-        <a class="site-brand" href="<home-href></home-href>" aria-label="Everyinit documentation home">
-            <span class="site-mark" aria-hidden="true">&gt;_</span>
+        <a class="site-brand" href="<home-href></home-href>" aria-label="Documentation home">
+            <brand-logo></brand-logo>
             <span><site-brand></site-brand></span>
-            <span class="site-version">v0.2.4</span>
         </a>
-        <nav class="site-primary-nav" aria-label="Main sections">
-            <a data-site-section="docs" href="<home-href></home-href>">Docs</a>
-            <a data-site-section="reference" href="/reference/">Reference</a>
-            <a data-site-section="esh" href="/reference/esh/">ESH</a>
-        </nav>
         <div class="site-header-actions">
             <button id="searchToggle" class="search-trigger" type="button" aria-haspopup="dialog" aria-controls="searchModal" aria-label="Search documentation" title="Search (Ctrl+K)" data-action="search:open">
                 <svg class="docs-icon control-icon-motion" aria-hidden="true"><use href="#icon-search"></use></svg>

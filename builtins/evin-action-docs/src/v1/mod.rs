@@ -22,7 +22,6 @@ pub mod i18n;
 pub mod icons;
 pub mod js_minification;
 pub mod mermaid;
-pub mod presentation;
 pub mod reference;
 pub mod renderer;
 pub mod search;
@@ -43,7 +42,6 @@ use debug::DocsDebugStats;
 use evin_action_sdk::{InvocationFlags, RunnerContext};
 use fs::EmbeddedFs;
 use include_dir::{Dir, include_dir};
-use presentation::Presentation;
 use renderer::HtmlRenderer;
 pub use resolver::{
     DocResolver, ResolvedFavicon, ResolvedLogo, ResolvedResources, ResourceResolver,
@@ -65,9 +63,6 @@ fn default_out() -> PathBuf {
 }
 fn default_asset_dir() -> String {
     "assets".to_string()
-}
-fn default_theme() -> String {
-    "matter".to_string()
 }
 fn default_validate_links() -> bool {
     true
@@ -136,9 +131,7 @@ impl HexColor {
 #[serde(deny_unknown_fields)]
 pub struct AppearanceConfig {
     #[serde(default)]
-    pub accent_light: Option<HexColor>,
-    #[serde(default)]
-    pub accent_dark: Option<HexColor>,
+    pub accent: Option<HexColor>,
     #[serde(default)]
     pub logo: Option<PathBuf>,
     #[serde(default)]
@@ -218,10 +211,8 @@ pub struct DocsConfig {
     pub title: String,
     #[serde(default = "default_out")]
     pub out: PathBuf,
-    #[serde(default = "default_theme")]
+    #[serde(skip, default = "default_layout")]
     pub theme: String,
-    #[serde(default)]
-    pub theme_overrides: HashMap<String, String>,
     #[serde(default)]
     pub bundle: BundleMode,
     #[serde(default = "default_validate_links")]
@@ -249,8 +240,6 @@ pub struct DocsConfig {
     pub strict_filenames: bool,
     #[serde(default)]
     pub topbar: Option<TopbarSetting>,
-    #[serde(default)]
-    pub presentation: Option<Presentation>,
     #[serde(default)]
     pub diagnostic_search: bool,
     #[serde(default)]
@@ -280,8 +269,7 @@ impl Default for DocsConfig {
             extract_frontmatter: default_extract_frontmatter(),
             title: default_title(),
             out: default_out(),
-            theme: default_theme(),
-            theme_overrides: HashMap::new(),
+            theme: default_layout(),
             bundle: BundleMode::default(),
             validate_links: default_validate_links(),
             port: default_port(),
@@ -296,7 +284,6 @@ impl Default for DocsConfig {
             reference_prefix: default_reference_prefix(),
             strict_filenames: false,
             topbar: None,
-            presentation: None,
             diagnostic_search: false,
             social_image: None,
             lastmod_fallback: false,
@@ -306,6 +293,10 @@ impl Default for DocsConfig {
             serve: ServeConfig::default(),
         }
     }
+}
+
+fn default_layout() -> String {
+    "matter".to_string()
 }
 
 fn resolve_serve_host(config: &DocsConfig, flags: &InvocationFlags) -> server::ServeHost {
@@ -328,14 +319,7 @@ impl DocsConfig {
     fn validate_topbar(&self) -> Result<(), String> {
         self.topbar
             .as_ref()
-            .map(|setting| setting.validate(Some(&self.theme)))
-            .unwrap_or(Ok(()))
-    }
-
-    fn validate_presentation(&self) -> Result<(), String> {
-        self.presentation
-            .as_ref()
-            .map(|setting| setting.validate(Some(&self.theme)))
+            .map(TopbarSetting::validate)
             .unwrap_or(Ok(()))
     }
 
@@ -487,7 +471,6 @@ pub fn validate_config(
         .and_then(|_| config.validate_version())
         .and_then(|_| config.validate_i18n())
         .and_then(|_| config.validate_topbar())
-        .and_then(|_| config.validate_presentation())
         .and_then(|_| {
             if config.asset_dir.contains("${") {
                 Ok(())
@@ -1390,38 +1373,21 @@ fn render_docs_single(
     let start_page = start_page::StartPageModel {
         search_prompts: vec![dictionary.search_placeholder.clone()],
     };
-    let presentation = config.presentation.as_ref();
-    if let Some(setting) = presentation {
-        setting.validate(Some(&config.theme)).map_err(|message| {
-            evin_diagnostic::Diagnostic::new(
-                format!("Invalid presentation configuration: {message}"),
-                evin_diagnostic::IssueCode::new("invalid-config"),
-            )
-        })?;
-    }
     let topbar_setting = config.topbar.as_ref();
     if let Some(setting) = topbar_setting {
-        setting.validate(Some(&config.theme)).map_err(|message| {
+        setting.validate().map_err(|message| {
             evin_diagnostic::Diagnostic::new(
                 format!("Invalid topbar configuration: {message}"),
                 evin_diagnostic::IssueCode::new("invalid-config"),
             )
         })?;
     }
-    let topbar = resolve_topbar(None, config.topbar.as_ref(), presentation).map_err(|message| {
+    let topbar = resolve_topbar(config.topbar.as_ref()).map_err(|message| {
         evin_diagnostic::Diagnostic::new(
             format!("Invalid topbar configuration: {message}"),
             evin_diagnostic::IssueCode::new("invalid-config"),
         )
     })?;
-    if let Some(topbar) = &topbar {
-        topbar.validate(Some(&config.theme)).map_err(|message| {
-            evin_diagnostic::Diagnostic::new(
-                format!("Invalid topbar configuration: {message}"),
-                evin_diagnostic::IssueCode::new("invalid-config"),
-            )
-        })?;
-    }
     if config.validate_links {
         evin_action_sdk::action_event!(logger, evin_action_sdk::activity::DocsAuditStarted {});
         let audit =
@@ -1528,24 +1494,13 @@ fn render_docs_single(
     }
     let active_components_scss = registry.collect_css(&site_used_components);
     let active_components_js = registry.collect_js(&site_used_components);
-    let mut presentation_variants = BTreeSet::new();
-    if let Some(topbar) = &topbar {
-        presentation_variants.insert(topbar.variant.clone());
-    }
-    let raw_css = topbar::configure_matter_scss(
-        &raw_css,
-        &config.theme,
-        &presentation_variants,
-        topbar.is_some(),
-        false,
-    );
+    let raw_css = topbar::configure_matter_scss(&raw_css, topbar.is_some(), false);
 
     let is_production = config.minify.unwrap_or(config.mode == DocsMode::Build);
     let single_file = config.bundle == BundleMode::SingleFile;
     let mut processed_css = CssOptimizer::process_with_components(
         &raw_css,
         &active_components_scss,
-        &config.theme_overrides,
         &embedded_fs,
         is_production,
     )
@@ -1787,11 +1742,11 @@ fn append_appearance_css(
 ) -> String {
     let mut root = Vec::new();
     let mut dark = Vec::new();
-    if let Some(color) = &appearance.accent_light {
+    if let Some(color) = &appearance.accent {
         root.push(format!("--ui-color-primary: {}", color.as_str()));
-    }
-    if let Some(color) = &appearance.accent_dark {
+        root.push(format!("--ui-color-link: {}", color.as_str()));
         dark.push(format!("--ui-color-primary: {}", color.as_str()));
+        dark.push(format!("--ui-color-link: {}", color.as_str()));
     }
     if let Some(font) = &appearance.font_sans {
         root.push(format!("--ui-typescale-font-sans: {font}"));

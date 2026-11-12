@@ -21,6 +21,7 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 chrono = { workspace = true }
 syntect = { workspace = true }
+plist = { workspace = true }
 regex = { workspace = true }
 url = { workspace = true }
 unic-langid = { workspace = true }

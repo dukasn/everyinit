@@ -1,12 +1,10 @@
 (function() {
     'use strict';
 
-    window.MatterActions = window.MatterActions || window.DocsActions || window.EvinActions || {};
-    window.DocsActions = window.MatterActions;
-    window.EvinActions = window.MatterActions;
+    window.DocsActions = window.DocsActions || {};
 
-    if (!window.MatterActions['diagram:copy']) {
-        window.MatterActions['diagram:copy'] = function(copyBtn) {
+    if (!window.DocsActions['diagram:copy']) {
+        window.DocsActions['diagram:copy'] = function(copyBtn) {
             const fig = copyBtn.closest('.diagram-figure, .docs-diagram-figure, .evin-diagram-figure');
             if (!fig) return;
 
@@ -15,14 +13,14 @@
             const text = pre ? (pre.dataset.originalSource || pre.textContent || '') : (svgWrapper ? (svgWrapper.querySelector('svg')?.outerHTML || svgWrapper.innerHTML) : '');
             if (!text) return;
 
-            if (window.MatterActions.copyText) {
-                window.MatterActions.copyText(text, copyBtn, 'Copied!');
+            if (window.DocsActions.copyText) {
+                window.DocsActions.copyText(text, copyBtn, 'Copied!');
             }
         };
     }
 
-    if (!window.MatterActions['diagram:download']) {
-        window.MatterActions['diagram:download'] = function(downloadBtn) {
+    if (!window.DocsActions['diagram:download']) {
+        window.DocsActions['diagram:download'] = function(downloadBtn) {
             const fig = downloadBtn.closest('.diagram-figure, .docs-diagram-figure, .evin-diagram-figure');
             if (!fig) return;
 

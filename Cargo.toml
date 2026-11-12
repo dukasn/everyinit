@@ -57,6 +57,7 @@ humansize = "2.1.3"
 pulldown-cmark = "0.13"
 grass = "0.13.4"
 syntect = { version = "5.2.0", default-features = false, features = ["parsing", "html", "default-syntaxes", "regex-fancy", "yaml-load"] }
+plist = "1.7"
 criterion = "0.5"
 crc32fast = "1.4"
 base64 = "0.22"

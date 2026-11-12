@@ -166,11 +166,11 @@ fn serve_host_accepts_yaml_and_routed_invocation_override() {
 #[test]
 fn nested_appearance_version_and_i18n_are_typed_and_validated() {
     let value = evin_flow::parse_yaml(
-        "site_url: https://docs.example.com/\nappearance:\n  accent_light: '#2563EB'\n  font_mono: 'ui-monospace, monospace'\nversion:\n  current: v0.2\n  latest: v0.2\ni18n:\n  default_locale: en\n  locales: [en, pt-BR]\nserve:\n  port: 3010\n",
+        "site_url: https://docs.example.com/\nappearance:\n  accent: '#2563EB'\n  font_mono: 'ui-monospace, monospace'\nversion:\n  current: v0.2\n  latest: v0.2\ni18n:\n  default_locale: en\n  locales: [en, pt-BR]\nserve:\n  port: 3010\n",
     )
     .unwrap();
     let config = evin_flow::de::from_spanned_value::<DocsConfig>(value).unwrap();
-    assert_eq!(config.appearance.accent_light.unwrap().as_str(), "#2563eb");
+    assert_eq!(config.appearance.accent.unwrap().as_str(), "#2563eb");
     assert_eq!(
         config.version.unwrap().manifest,
         PathBuf::from("versions.json")
@@ -179,7 +179,7 @@ fn nested_appearance_version_and_i18n_are_typed_and_validated() {
     assert_eq!(config.serve.port, 3010);
 
     for invalid in [
-        "site_url: https://docs.example.com/\nappearance:\n  accent_dark: blue\n",
+        "site_url: https://docs.example.com/\nappearance:\n  accent: blue\n",
         "site_url: https://docs.example.com/\nversion:\n  current: ../canary\n  latest: stable\n",
         "site_url: https://docs.example.com/\ni18n:\n  default_locale: en\n  locales: [pt-BR]\n",
     ] {
@@ -281,7 +281,7 @@ fn bundled_themes_support_component_tree_shaking() {
         let registry = templates::ComponentRegistry::load_from_layout(&LAYOUTS_DIR, theme, None);
 
         // 1. Base theme without components has 0 component dead weight
-        let base_css = CssOptimizer::process(&raw_css, &HashMap::new(), &embedded_fs, false)
+        let base_css = CssOptimizer::process(&raw_css, &embedded_fs, false)
             .unwrap_or_else(|error| panic!("{theme} theme did not compile: {error}"));
 
         assert!(!base_css.contains(".start-hero"));
@@ -301,14 +301,9 @@ fn bundled_themes_support_component_tree_shaking() {
         used.insert("diagram_mermaid".to_string());
         used.insert("math".to_string());
         let comp_scss = registry.collect_css(&used);
-        let full_css = CssOptimizer::process_with_components(
-            &raw_css,
-            &comp_scss,
-            &HashMap::new(),
-            &embedded_fs,
-            false,
-        )
-        .unwrap();
+        let full_css =
+            CssOptimizer::process_with_components(&raw_css, &comp_scss, &embedded_fs, false)
+                .unwrap();
 
         assert!(full_css.contains(".start-hero"));
         assert!(full_css.contains(".start-card-grid"));
@@ -319,179 +314,20 @@ fn bundled_themes_support_component_tree_shaking() {
 }
 
 #[test]
-fn matter_topbar_compiles_only_the_selected_variant() {
+fn matter_announcement_uses_the_single_semantic_surface_style() {
     let (_, raw_css, _, embedded_fs) = resolve_layout_assets(Path::new("."), "matter", None);
     let registry = templates::ComponentRegistry::load_from_layout(&LAYOUTS_DIR, "matter", None);
     let presentation_scss = registry.collect_css(&HashSet::from(["presentation".to_string()]));
-    let selected = topbar::Topbar {
-        id: None,
-        variant: "genome".to_string(),
-        badge: None,
-        message: "A release is coming.".to_string(),
-        action: None,
-        dismissible: false,
-    };
-    let selected_variants = BTreeSet::from([selected.variant.clone()]);
-    let selected_css = CssOptimizer::process_with_components(
-        &topbar::configure_matter_scss(&raw_css, "matter", &selected_variants, true, false),
-        &presentation_scss,
-        &HashMap::new(),
-        &embedded_fs,
-        false,
-    )
-    .unwrap();
-    assert!(selected_css.contains(".topbar--genome"));
-    assert!(selected_css.contains(".presentation-surface"));
-    assert!(selected_css.contains(".docs-topbar"));
-    assert!(!selected_css.contains(".start-spotlight-content"));
-    assert!(selected_css.contains("--ui-topbar-genome-surface"));
-    assert!(!selected_css.contains(".topbar--aurora"));
-    assert!(!selected_css.contains("--ui-topbar-aurora-surface"));
+    let configured = topbar::configure_matter_scss(&raw_css, true, false);
+    let css =
+        CssOptimizer::process_with_components(&configured, &presentation_scss, &embedded_fs, false)
+            .unwrap();
 
-    let shared_css = CssOptimizer::process_with_components(
-        &topbar::configure_matter_scss(
-            &raw_css,
-            "matter",
-            &BTreeSet::from(["holo".to_string(), "geo".to_string()]),
-            true,
-            true,
-        ),
-        &presentation_scss,
-        &HashMap::new(),
-        &embedded_fs,
-        false,
-    )
-    .unwrap();
-    assert!(shared_css.contains(".topbar--holo"));
-    assert!(shared_css.contains(".topbar--geo"));
-    assert!(!shared_css.contains(".topbar--genome"));
-
-    let spotlight_only_css = CssOptimizer::process_with_components(
-        &topbar::configure_matter_scss(
-            &raw_css,
-            "matter",
-            &BTreeSet::from(["holo".to_string()]),
-            false,
-            true,
-        ),
-        &presentation_scss,
-        &HashMap::new(),
-        &embedded_fs,
-        false,
-    )
-    .unwrap();
-    assert!(spotlight_only_css.contains(".start-spotlight-content"));
-    assert!(spotlight_only_css.contains(".topbar--holo"));
-    assert!(!spotlight_only_css.contains(".docs-topbar"));
-    assert!(!spotlight_only_css.contains(".topbar-content"));
-
-    for variant in topbar::MATTER_VARIANTS {
-        let mut variant_topbar = selected.clone();
-        variant_topbar.variant = variant.to_string();
-        let variants = BTreeSet::from([variant_topbar.variant.clone()]);
-        let css = CssOptimizer::process_with_components(
-            &topbar::configure_matter_scss(&raw_css, "matter", &variants, true, false),
-            &presentation_scss,
-            &HashMap::new(),
-            &embedded_fs,
-            false,
-        )
-        .unwrap();
-        assert!(css.contains(&format!(".topbar--{variant}")));
-        assert!(css.contains("--topbar-surface"));
-        assert!(css.contains(".presentation-layer-one"));
-        if *variant != "genome" {
-            assert!(!css.contains(".topbar--genome"));
-        }
-    }
-
-    let disabled_css = CssOptimizer::process_with_components(
-        &topbar::configure_matter_scss(&raw_css, "matter", &BTreeSet::new(), false, false),
-        "",
-        &HashMap::new(),
-        &embedded_fs,
-        false,
-    )
-    .unwrap();
-    assert!(!disabled_css.contains(".docs-topbar"));
-    assert!(!disabled_css.contains(".presentation-surface"));
-    assert!(!disabled_css.contains("--ui-topbar-"));
-}
-
-#[test]
-fn test_presentation_surfaces_decoupled_from_document_theme() {
-    let (_, raw_css, _, embedded_fs) = resolve_layout_assets(Path::new("."), "matter", None);
-    let registry = templates::ComponentRegistry::load_from_layout(&LAYOUTS_DIR, "matter", None);
-    let presentation_scss = registry.collect_css(&HashSet::from(["presentation".to_string()]));
-
-    for variant in topbar::MATTER_VARIANTS {
-        let variants = BTreeSet::from([variant.to_string()]);
-        let css = CssOptimizer::process_with_components(
-            &topbar::configure_matter_scss(&raw_css, "matter", &variants, true, true),
-            &presentation_scss,
-            &HashMap::new(),
-            &embedded_fs,
-            false,
-        )
-        .unwrap();
-
-        assert!(
-            css.contains(&format!(".presentation-surface--{variant}")),
-            "Missing presentation surface class for {variant}"
-        );
-        assert!(
-            css.contains("--presentation-surface"),
-            "Missing --presentation-surface token for {variant}"
-        );
-        assert!(
-            css.contains("--presentation-ink"),
-            "Missing --presentation-ink token for {variant}"
-        );
-        assert!(
-            css.contains("--presentation-action-ink"),
-            "Missing --presentation-action-ink token for {variant}"
-        );
-        assert!(
-            css.contains("--presentation-badge-ink"),
-            "Missing --presentation-badge-ink token for {variant}"
-        );
-        assert!(
-            css.contains("--topbar-action-ink-hover"),
-            "Missing --topbar-action-ink-hover token for {variant}"
-        );
-        assert!(
-            css.contains("--topbar-action-font-size"),
-            "Missing --topbar-action-font-size token for {variant}"
-        );
-        assert!(
-            css.contains("--spotlight-action-font-size"),
-            "Missing --spotlight-action-font-size token for {variant}"
-        );
-    }
-
-    // Verify spotlight-only compilation contains complete presentation variables without topbar layout
-    let spotlight_css = CssOptimizer::process_with_components(
-        &topbar::configure_matter_scss(
-            &raw_css,
-            "matter",
-            &BTreeSet::from(["brutalist".to_string()]),
-            false,
-            true,
-        ),
-        &presentation_scss,
-        &HashMap::new(),
-        &embedded_fs,
-        false,
-    )
-    .unwrap();
-
-    assert!(spotlight_css.contains(".presentation-surface--brutalist"));
-    assert!(spotlight_css.contains("--presentation-surface"));
-    assert!(spotlight_css.contains(".start-spotlight"));
-    assert!(spotlight_css.contains("--spotlight-action-font-size"));
-    assert!(spotlight_css.contains(".presentation-scale-feature"));
-    assert!(!spotlight_css.contains(".docs-topbar"));
-    assert!(!spotlight_css.contains(".topbar-content"));
+    assert!(css.contains(".docs-topbar"));
+    assert!(css.contains("var(--ui-color-surface-container-high)"));
+    assert!(css.contains("var(--ui-color-on-surface)"));
+    assert!(!css.contains(".topbar--genome"));
+    assert!(!css.contains("--ui-topbar-aurora"));
 }
 
 #[test]
@@ -503,7 +339,7 @@ fn bundled_themes_use_only_material_window_width_boundaries() {
     {
         let theme = "matter";
         let (_, raw_css, _, embedded_fs) = resolve_layout_assets(Path::new("."), theme, None);
-        let css = CssOptimizer::process(&raw_css, &HashMap::new(), &embedded_fs, false)
+        let css = CssOptimizer::process(&raw_css, &embedded_fs, false)
             .unwrap_or_else(|error| panic!("{theme} theme did not compile: {error}"));
         let boundaries: Vec<u16> = width_query
             .captures_iter(&css)
@@ -521,24 +357,9 @@ fn bundled_themes_use_only_material_window_width_boundaries() {
 }
 
 #[test]
-fn theme_overrides_win_and_shorthand_names_target_semantic_tokens() {
-    let (_, raw_css, _, embedded_fs) = resolve_layout_assets(Path::new("."), "matter", None);
-    let overrides = HashMap::from([
-        ("ui_bg".to_string(), "#222222".to_string()),
-        ("ui_color_primary".to_string(), "#eeeeee".to_string()),
-    ]);
-    let css = CssOptimizer::process(&raw_css, &overrides, &embedded_fs, false).unwrap();
-
-    let override_start = css.rfind(":root {").unwrap();
-    assert!(css[override_start..].contains("--ui-color-background: #222222"));
-    assert!(css[override_start..].contains("--ui-color-primary: #eeeeee"));
-    assert!(override_start > css.rfind("[data-theme=dark]").unwrap());
-}
-
-#[test]
 fn matter_emits_and_uses_configurable_font_tokens() {
     let (_, raw_css, _, embedded_fs) = resolve_layout_assets(Path::new("."), "matter", None);
-    let css = CssOptimizer::process(&raw_css, &HashMap::new(), &embedded_fs, false).unwrap();
+    let css = CssOptimizer::process(&raw_css, &embedded_fs, false).unwrap();
 
     assert!(css.contains("--ui-typescale-font-sans: system-ui"));
     assert!(css.contains("--ui-typescale-font-monospace: \"IBM Plex Mono\", ui-monospace"));
@@ -549,7 +370,7 @@ fn matter_emits_and_uses_configurable_font_tokens() {
 #[test]
 fn matter_sidebar_backdrop_preserves_fixed_positioning_and_excludes_ripple() {
     let (_, raw_css, app_js, embedded_fs) = resolve_layout_assets(Path::new("."), "matter", None);
-    let css = CssOptimizer::process(&raw_css, &HashMap::new(), &embedded_fs, false).unwrap();
+    let css = CssOptimizer::process(&raw_css, &embedded_fs, false).unwrap();
 
     assert!(
         css.contains(".sidebar-backdrop") && css.contains("position: fixed !important"),
@@ -887,7 +708,7 @@ fn tape_fences_render_as_static_code_without_running_shell_commands() {
     let output = render_docs(temp_dir.path(), &config, &site, &logger, &mut stats).unwrap();
     let page = std::fs::read_to_string(output.join("tape/index.html")).unwrap();
     assert!(page.contains("Build proof"));
-    assert!(page.contains("ESH"));
+    assert!(page.contains("Esh"));
     assert!(page.contains("pwd"));
     assert!(!page.contains("terminal-tape-svg"));
     assert!(!page.contains("data-action=\"tape:toggle-playback\""));
@@ -1014,7 +835,7 @@ fn brandless_docs_build_uses_neutral_defaults_without_hardcoded_brand() {
 }
 
 #[test]
-fn custom_extension_brand_assets_render_in_output() {
+fn consumer_appearance_assets_render_when_explicitly_configured() {
     let temp_dir = tempfile::tempdir().unwrap();
     let docs_dir = temp_dir.path().join("docs");
     std::fs::create_dir_all(&docs_dir).unwrap();
@@ -1025,7 +846,7 @@ fn custom_extension_brand_assets_render_in_output() {
     .unwrap();
     std::fs::write(docs_dir.join("p1.md"), "# P1\n").unwrap();
 
-    // Set up conventional extension assets under .evin/actions/docs
+    // Appearance assets are explicit workspace-relative task inputs.
     let ext_dir = temp_dir.path().join(".evin/actions/docs");
     std::fs::create_dir_all(&ext_dir).unwrap();
     std::fs::write(
@@ -1043,6 +864,11 @@ fn custom_extension_brand_assets_render_in_output() {
         source_dir: docs_dir.to_path_buf(),
         out: temp_dir.path().join("site"),
         site_url: url::Url::parse("https://example.com/").unwrap(),
+        appearance: AppearanceConfig {
+            logo: Some(PathBuf::from(".evin/actions/docs/logo.svg")),
+            favicon: Some(PathBuf::from(".evin/actions/docs/favicon.svg")),
+            ..AppearanceConfig::default()
+        },
         ..DocsConfig::default()
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();

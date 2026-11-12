@@ -19,7 +19,7 @@ use crate::v1::start_page::{StartPageMedia, StartPageModel};
 use crate::v1::templates::ComponentRegistry;
 use crate::v1::topbar::Topbar;
 use evin_doc::analysis::{Visitor, walk_nodes};
-use evin_doc::{SiteIndex, SourceResolver, TapeRuntime, push_escaped_html};
+use evin_doc::{SiteIndex, SourceResolver, push_escaped_html};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -911,24 +911,25 @@ impl NavigationModel {
             }
         }
 
-        const READER_JOURNEY: [&str; 7] = [
-            "book",
-            "getting-started",
-            "guides",
-            "esh",
-            "builtins",
-            "reference",
-            "contributing",
-        ];
         let mut keys: Vec<String> = top_groups.keys().cloned().collect();
         keys.sort_by(|left, right| {
-            let rank = |key: &str| {
-                READER_JOURNEY
-                    .iter()
-                    .position(|known| *known == key)
-                    .unwrap_or(READER_JOURNEY.len())
+            let navigation_order = |key: &str| {
+                top_groups
+                    .get(key)
+                    .into_iter()
+                    .flat_map(|(index, pages)| {
+                        index
+                            .iter()
+                            .copied()
+                            .chain(pages.iter().map(|(_, page)| *page))
+                    })
+                    .map(|index| page_nav_order(&site.pages[index]))
+                    .min()
+                    .unwrap_or((true, u64::MAX))
             };
-            rank(left).cmp(&rank(right)).then_with(|| left.cmp(right))
+            navigation_order(left)
+                .cmp(&navigation_order(right))
+                .then_with(|| left.cmp(right))
         });
 
         let mut groups = Vec::new();
@@ -1639,16 +1640,8 @@ impl HtmlRenderer {
         used_components: &mut HashSet<String>,
     ) -> String {
         let mut surface_open = String::from(
-            "<section class=\"docs-topbar topbar presentation-surface presentation--topbar presentation-scale-compact topbar--",
+            "<section class=\"docs-topbar topbar presentation-surface presentation--topbar presentation-scale-compact\" data-presentation-role=\"topbar\" data-presentation-scale=\"compact\" data-topbar-scope=\"",
         );
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str(" presentation-surface--");
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str("\" data-presentation-variant=\"");
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str("\" data-presentation-role=\"topbar\" data-presentation-scale=\"compact\" data-topbar-variant=\"");
-        Self::escape_into(&mut surface_open, &topbar.variant);
-        surface_open.push_str("\" data-topbar-scope=\"");
         Self::escape_into(&mut surface_open, context.seo.site_url.as_str());
         surface_open.push('"');
         if let Some(id) = &topbar.id {
@@ -1866,14 +1859,6 @@ impl HtmlRenderer {
     }
 
     fn nav_group_label_for_site(site: &DocSiteAst, group: &str) -> String {
-        match group {
-            "book" => return "Getting Started".to_string(),
-            "reference" => return "Reference".to_string(),
-            "esh" | "book/esh" | "reference/esh" => {
-                return "Scripting Runtime".to_string();
-            }
-            _ => {}
-        }
         if let Some(index_page) = site.pages.iter().find(|p| p.slug == group) {
             let title = Self::page_title(index_page);
             if !title.is_empty() {
@@ -2231,18 +2216,15 @@ impl HtmlRenderer {
                     out.push('\n');
                 }
                 DocNode::Tape { script, config, .. } => {
-                    let language = match config.runtime {
-                        TapeRuntime::Esh => Some("esh"),
-                        TapeRuntime::System => Some("bash"),
-                    };
-                    let data_lang = format!(" data-language=\"{}\"", language.unwrap_or("text"));
-                    let (display_lang, extension) = Self::format_language_details(language);
+                    let language = config.runtime.language_token();
+                    let data_lang = format!(" data-language=\"{}\"", language);
+                    let (display_lang, extension) = Self::format_language_details(Some(language));
                     let title = config
                         .title
                         .as_deref()
                         .map(Self::escape_html)
                         .unwrap_or_default();
-                    let code = highlighter.highlight(language, script);
+                    let code = highlighter.highlight(Some(language), script);
                     registry.render_to(
                         "code_block",
                         &[
@@ -2946,8 +2928,7 @@ impl HtmlRenderer {
 
                     if !synopsis.is_empty() {
                         out.push_str("  <div class=\"docs-lsp-synopsis\">\n");
-                        let highlighted =
-                            highlighter.highlight(language.as_deref().or(Some("esh")), synopsis);
+                        let highlighted = highlighter.highlight(language.as_deref(), synopsis);
                         out.push_str(&format!(
                             "    <pre class=\"syn-container\"><code>{}</code></pre>\n",
                             highlighted
@@ -3120,7 +3101,6 @@ impl HtmlRenderer {
         }
         match raw.to_ascii_lowercase().as_str() {
             "rs" | "rust" => ("Rust".to_string(), "rs".to_string()),
-            "esh" | "evin-shell" | "esh-script" => ("ESH".to_string(), "esh".to_string()),
             "sh" | "bash" | "zsh" | "shell" => ("Bash".to_string(), "sh".to_string()),
             "yml" | "yaml" => ("YAML".to_string(), "yaml".to_string()),
             "json" => ("JSON".to_string(), "json".to_string()),

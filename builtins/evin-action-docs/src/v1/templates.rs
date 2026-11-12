@@ -560,7 +560,7 @@ mod tests {
 </style>
 
 <script>
-  window.MatterActions['callout:toggle'] = () => {};
+  window.DocsActions['callout:toggle'] = () => {};
 </script>
 "#;
         assert!(SfcParser::is_sfc(sfc));
@@ -583,7 +583,7 @@ mod tests {
                 .script
                 .as_ref()
                 .unwrap()
-                .contains("window.MatterActions['callout:toggle']")
+                .contains("window.DocsActions['callout:toggle']")
         );
     }
 

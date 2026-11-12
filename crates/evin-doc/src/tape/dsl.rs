@@ -34,6 +34,15 @@ pub enum TapeRuntime {
     System,
 }
 
+impl TapeRuntime {
+    pub fn language_token(self) -> &'static str {
+        match self {
+            Self::Esh => "esh",
+            Self::System => "bash",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TapeConfig {
     pub title: Option<String>,

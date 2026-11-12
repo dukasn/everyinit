@@ -5,23 +5,21 @@
         return figure.querySelector('.mermaid-svg-target svg, .diagram-svg-wrapper svg, .evin-mermaid-svg-target svg, .evin-diagram-svg-wrapper svg');
     }
 
-    window.MatterActions = window.MatterActions || window.DocsActions || window.EvinActions || {};
-    window.DocsActions = window.MatterActions;
-    window.EvinActions = window.MatterActions;
+    window.DocsActions = window.DocsActions || {};
 
-    window.MatterActions['diagram:copy'] = function(copyBtn) {
+    window.DocsActions['diagram:copy'] = function(copyBtn) {
         const figure = copyBtn.closest('.diagram-figure, .docs-diagram-figure, .evin-diagram-figure');
         const source = figure && figure.querySelector('.mermaid-source, .evin-mermaid-source');
         const svg = figure && figure.querySelector('.diagram-svg-wrapper svg, .evin-diagram-svg-wrapper svg');
         const text = source ? source.textContent || '' : (svg ? svg.outerHTML : '');
         if (!text) return;
 
-        if (window.MatterActions.copyText) {
-            window.MatterActions.copyText(text, copyBtn, 'Copied!');
+        if (window.DocsActions.copyText) {
+            window.DocsActions.copyText(text, copyBtn, 'Copied!');
         }
     };
 
-    window.MatterActions['diagram:download'] = function(downloadBtn) {
+    window.DocsActions['diagram:download'] = function(downloadBtn) {
         const figure = downloadBtn.closest('.diagram-figure, .docs-diagram-figure, .evin-diagram-figure');
         if (!figure) return;
         const svg = visibleSvg(figure);
