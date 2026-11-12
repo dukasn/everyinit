@@ -42,8 +42,12 @@ for (const viewport of viewports) {
       toggleHeight: document.querySelector('#sidebarToggle').getBoundingClientRect().height,
     }));
     expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
-    expect(dimensions.toggleWidth).toBeGreaterThanOrEqual(48);
-    expect(dimensions.toggleHeight).toBeGreaterThanOrEqual(48);
+    if (viewport.width < 1200) {
+      expect(dimensions.toggleWidth).toBeGreaterThanOrEqual(48);
+      expect(dimensions.toggleHeight).toBeGreaterThanOrEqual(48);
+    } else {
+      await expect(page.locator('#sidebarToggle')).toBeHidden();
+    }
 
     await page.locator('main.content').evaluate((element) => { element.scrollTop = 320; });
     await expect(page.locator('.header-toolbar')).toHaveClass(/is-scrolled/);
@@ -130,15 +134,19 @@ test('documentation navigation opens the current document path', async ({ page }
   await expect(current.locator('xpath=ancestor::li[contains(@class, "nav-subgroup")]/button')).toHaveAttribute('aria-expanded', 'true');
 });
 
-test('site header and sidebar use the documentation layout', async ({ page }) => {
+test('site header and sidebar use the documentation layout', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1544, height: 856 });
   await page.goto('/book/installation/');
+  await expect(page.locator('article h1')).toHaveText('Installation & Quickstart');
 
   const header = page.locator('.site-header');
   await expect(header).toBeVisible();
   await expect(header.locator('.site-brand')).toContainText('Everyinit');
   await expect(header.locator('.site-version')).toHaveText('v0.2.4');
   await expect(header.locator('.site-primary-nav a')).toHaveText(['Docs', 'Reference', 'ESH']);
+  await expect(header.locator('.site-primary-nav a').nth(0)).toHaveAttribute('href', '../../index.html');
+  await expect(header.locator('.site-primary-nav a').nth(1)).toHaveAttribute('href', '/reference/');
+  await expect(header.locator('.site-primary-nav a').nth(2)).toHaveAttribute('href', '/reference/esh/');
   await expect(page.locator('#navFilter')).toBeVisible();
   await expect(page.locator('.toc-rail')).toBeVisible();
 
@@ -149,11 +157,14 @@ test('site header and sidebar use the documentation layout', async ({ page }) =>
     const outlineBox = document.querySelector('.toc-rail').getBoundingClientRect();
     return { headerBox, sidebarBox, articleBox, outlineBox };
   });
-  expect(layout.headerBox.height).toBe(56);
+  expect(layout.headerBox.height).toBe(57);
   expect(layout.sidebarBox.width).toBe(305);
   expect(layout.sidebarBox.top).toBe(layout.headerBox.bottom);
-  expect(layout.articleBox.left).toBeGreaterThan(layout.sidebarBox.right);
-  expect(layout.outlineBox.left).toBeGreaterThan(layout.articleBox.right);
+  expect(Math.abs(layout.articleBox.left - 429)).toBeLessThanOrEqual(2);
+  expect(Math.abs(layout.articleBox.width - 726)).toBeLessThanOrEqual(1);
+  expect(Math.abs(layout.outlineBox.left - 1296)).toBeLessThanOrEqual(2);
+  await expect.poll(() => page.locator('.code-surface pre').first().evaluate((pre) => getComputedStyle(pre).borderWidth)).toBe('0px');
+  await page.screenshot({ path: testInfo.outputPath('reference-layout.png') });
 });
 
 test('home content uses regular Markdown without marketing components or tape playback', async ({ page }) => {
@@ -213,9 +224,9 @@ test('sidebar filter shows matching pages and restores the full navigation', asy
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.goto('/book/installation/');
   const filter = page.locator('#navFilter');
-  await filter.fill('installation');
+  await filter.fill('install');
   await expect(page.locator('.nav-item:visible')).toHaveCount(1);
-  await expect(page.locator('.nav-item:visible').first()).toContainText('Installation');
+  await expect(page.locator('.nav-item:visible').first()).toContainText('Installation & Quickstart');
   await filter.fill('');
   expect(await page.locator('.nav-item:visible').count()).toBeGreaterThan(1);
 });
