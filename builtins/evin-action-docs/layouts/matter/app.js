@@ -9,13 +9,14 @@ const App = (() => {
     const escape = s => s ? String(s).replace(/[&<>"']/g, c => ESC[c]) : '';
 
     // 2. STATE & THEME
-    let theme = localStorage.getItem('m3-docs-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    let theme = localStorage.getItem('m3-theme') || localStorage.getItem('m3-docs-theme') || 'dark';
     let drawerOpen = localStorage.getItem('m3-docs-persistent-drawer') !== 'closed';
     let navState = JSON.parse(localStorage.getItem('m3-docs-nav-groups') || '{}');
     let searchIdx = -1, searchData = null, promptTimer = null, restoreTarget = null, currentMode = null;
 
     const setTheme = t => {
         root.setAttribute('data-theme', theme = t);
+        localStorage.setItem('m3-theme', t);
         localStorage.setItem('m3-docs-theme', t);
         const i = $('#themeIcon');
         if (i) i.textContent = t === 'dark' ? 'light_mode' : 'dark_mode';
@@ -799,8 +800,38 @@ const App = (() => {
     // 6. GLOBAL INITIALIZATION
     const init = () => {
         setTheme(theme);
-        matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
-            if (!localStorage.getItem('m3-docs-theme')) setTheme(e.matches ? 'dark' : 'light');
+        const currentSection = location.pathname.includes('/reference/esh/')
+            ? 'esh'
+            : location.pathname.includes('/reference/') ? 'reference' : 'docs';
+        $$('.site-primary-nav [data-site-section]').forEach(link => {
+            if (link.dataset.siteSection === currentSection) link.setAttribute('aria-current', 'page');
+        });
+        const navFilter = $('#navFilter');
+        navFilter?.addEventListener('input', () => {
+            const query = navFilter.value.trim().toLocaleLowerCase();
+            $$('.nav-item').forEach(link => {
+                const item = link.closest('li');
+                if (item) item.hidden = Boolean(query) && !link.textContent.toLocaleLowerCase().includes(query);
+            });
+            $$('.nav-group, .nav-subgroup').forEach(group => {
+                const links = $$('.nav-item', group);
+                const visible = links.some(link => !link.closest('li')?.hidden);
+                group.hidden = Boolean(query) && !visible;
+                const list = $('.nav-group-list, .nav-subgroup-list', group);
+                const toggle = $('.nav-group-toggle, .nav-subgroup-toggle', group);
+                if (query && list) {
+                    if (toggle && !('filterExpanded' in toggle.dataset)) {
+                        toggle.dataset.filterExpanded = toggle.getAttribute('aria-expanded') || 'false';
+                    }
+                    list.hidden = false;
+                    toggle?.setAttribute('aria-expanded', 'true');
+                } else if (!query && list) {
+                    const expanded = toggle?.dataset.filterExpanded || toggle?.getAttribute('aria-expanded');
+                    list.hidden = expanded !== 'true';
+                    if (expanded != null) toggle?.setAttribute('aria-expanded', expanded);
+                    if (toggle) delete toggle.dataset.filterExpanded;
+                }
+            });
         });
 
         $$('.docs-topbar').forEach(tb => {

@@ -54,7 +54,7 @@ tasks:
           site_url: https://everyinit.dev/
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
-          grammars: [.evin/docs/grammars/esh.sublime-syntax]
+          grammars: [docs/.evin/docs/grammars/esh.sublime-syntax]
 
   test-responsive:
     stage: Docs
@@ -88,4 +88,4 @@ tasks:
           site_url: https://everyinit.dev/
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
-          grammars: [.evin/docs/grammars/esh.sublime-syntax]
+          grammars: [docs/.evin/docs/grammars/esh.sublime-syntax]

@@ -1866,6 +1866,14 @@ impl HtmlRenderer {
     }
 
     fn nav_group_label_for_site(site: &DocSiteAst, group: &str) -> String {
+        match group {
+            "book" => return "Getting Started".to_string(),
+            "reference" => return "Reference".to_string(),
+            "esh" | "book/esh" | "reference/esh" => {
+                return "Scripting Runtime".to_string();
+            }
+            _ => {}
+        }
         if let Some(index_page) = site.pages.iter().find(|p| p.slug == group) {
             let title = Self::page_title(index_page);
             if !title.is_empty() {

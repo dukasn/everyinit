@@ -110,29 +110,14 @@ test('persistent drawer preference survives modal window classes', async ({ page
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('start page keeps the persistent drawer closed by default', async ({ page }) => {
+test('home page uses the same document navigation and leaves it open on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.goto('/');
 
-  await expect(page.locator('#sidebarToggle')).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('#appLayout')).toHaveClass(/sidebar-closed/);
-  await expect.poll(() => page.locator('#sidebar').evaluate((element) => ({
-    overflow: getComputedStyle(element).overflow,
-    childMinWidth: getComputedStyle(element.firstElementChild).minInlineSize,
-  }))).toEqual({ overflow: 'hidden', childMinWidth: '280px' });
-
-  const drawerToggle = page.locator('#sidebarToggle');
-  await drawerToggle.click();
-  await expect(drawerToggle).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#appLayout')).toHaveClass(/sidebar-open/);
-  await expect(page.locator('#sidebar')).toBeVisible();
-
-  const groups = page.locator('.nav-group-toggle');
-  await expect(groups).not.toHaveCount(0);
-  expect(await groups.evaluateAll((toggles) => toggles.map((toggle) => toggle.getAttribute('aria-expanded'))))
-    .toEqual(Array(await groups.count()).fill('false'));
-  await groups.first().click();
-  await expect(groups.first()).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#sidebarToggle')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#appLayout')).not.toHaveClass(/sidebar-closed/);
+  await expect(page.locator('#navFilter')).toBeVisible();
+  await expect(page.locator('body')).toHaveAttribute('data-page-kind', 'document');
 });
 
 test('documentation navigation opens the current document path', async ({ page }) => {
@@ -145,70 +130,40 @@ test('documentation navigation opens the current document path', async ({ page }
   await expect(current.locator('xpath=ancestor::li[contains(@class, "nav-subgroup")]/button')).toHaveAttribute('aria-expanded', 'true');
 });
 
-test('topbar is a 44px shell announcement and remembers dismissal', async ({ page }) => {
-  await page.setViewportSize({ width: 1024, height: 900 });
-  await page.goto('/');
+test('site header and sidebar use the documentation layout', async ({ page }) => {
+  await page.setViewportSize({ width: 1544, height: 856 });
+  await page.goto('/book/installation/');
 
-  const topbar = page.locator('.docs-topbar');
-  await expect(topbar).toHaveAttribute('data-topbar-variant', 'holo');
-  await expect(topbar).toHaveAttribute('data-topbar-id', 'everyinit-release-updates');
-  await expect(topbar.locator('.topbar-action')).toHaveAttribute('href', 'https://github.com/dukasn/everyinit/releases');
+  const header = page.locator('.site-header');
+  await expect(header).toBeVisible();
+  await expect(header.locator('.site-brand')).toContainText('Everyinit');
+  await expect(header.locator('.site-version')).toHaveText('v0.2.4');
+  await expect(header.locator('.site-primary-nav a')).toHaveText(['Docs', 'Reference', 'ESH']);
+  await expect(page.locator('#navFilter')).toBeVisible();
+  await expect(page.locator('.toc-rail')).toBeVisible();
+
   const layout = await page.evaluate(() => {
-    const bar = document.querySelector('.docs-topbar').getBoundingClientRect();
-    const app = document.querySelector('#appLayout').getBoundingClientRect();
-    const sidebar = document.querySelector('#sidebar').getBoundingClientRect();
-    return { top: bar.top, bottom: bar.bottom, width: bar.width, height: bar.height, appTop: app.top, appBottom: app.bottom, sidebarTop: sidebar.top, viewport: window.innerHeight };
+    const headerBox = document.querySelector('.site-header').getBoundingClientRect();
+    const sidebarBox = document.querySelector('#sidebar').getBoundingClientRect();
+    const articleBox = document.querySelector('.content-inner').getBoundingClientRect();
+    const outlineBox = document.querySelector('.toc-rail').getBoundingClientRect();
+    return { headerBox, sidebarBox, articleBox, outlineBox };
   });
-  expect(layout.top).toBe(0);
-  expect(layout.width).toBeGreaterThanOrEqual(1022);
-  expect(layout.height).toBe(44);
-  expect(layout.appTop).toBe(layout.bottom);
-  expect(layout.sidebarTop).toBe(layout.bottom);
-  expect(layout.appBottom).toBeLessThanOrEqual(layout.viewport + 1);
-
-  await topbar.locator('.topbar-close').click();
-  await expect(topbar).toHaveClass(/is-hidden/);
-  await page.reload();
-  await expect(topbar).toHaveClass(/is-hidden/);
+  expect(layout.headerBox.height).toBe(56);
+  expect(layout.sidebarBox.width).toBe(305);
+  expect(layout.sidebarBox.top).toBe(layout.headerBox.bottom);
+  expect(layout.articleBox.left).toBeGreaterThan(layout.sidebarBox.right);
+  expect(layout.outlineBox.left).toBeGreaterThan(layout.articleBox.right);
 });
 
-test('terminal tape player displays one frame and pauses without movement', async ({ page }) => {
+test('home content uses regular Markdown without marketing components or tape playback', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-
-  const tape = page.locator('.terminal-tape').first();
-  const svg = tape.locator('svg.terminal-tape-svg, svg.terminal-tape');
-  await expect(svg).toBeVisible();
-
-  const state = await svg.evaluate((element) => {
-    return {
-      duration: Number(element.dataset.tapeDurationMs),
-      frames: element.querySelectorAll('.tape-frame').length,
-      visibleFrames: [...element.querySelectorAll('.tape-frame')]
-        .filter((frame) => getComputedStyle(frame).display !== 'none').length,
-      starts: [...element.querySelectorAll('.tape-frame')]
-        .map((frame) => Number(frame.dataset.tapeFrameStartMs)),
-    };
-  });
-
-  expect(state.duration).toBeGreaterThan(0);
-  expect(state.frames).toBeGreaterThan(1);
-  expect(state.visibleFrames).toBe(1);
-  expect(state.starts).toEqual([...state.starts].sort((a, b) => a - b));
-
-  const playback = tape.locator('.tape-playback');
-  const visibleFrame = () => svg.locator('.tape-frame').evaluateAll((frames) => (
-    frames.findIndex((frame) => getComputedStyle(frame).display !== 'none')
-  ));
-  await playback.click();
-  await expect(playback).toHaveAttribute('aria-pressed', 'true');
-  const pausedFrame = await visibleFrame();
-  await page.waitForTimeout(250);
-  expect(await visibleFrame()).toBe(pausedFrame);
-
-  await playback.click();
-  await expect(playback).toHaveAttribute('aria-pressed', 'false');
-  await expect.poll(visibleFrame).not.toBe(pausedFrame);
+  await expect(page.locator('article h1')).toHaveText('Everyinit');
+  await expect(page.locator('article h2')).not.toHaveCount(0);
+  await expect(page.locator('.terminal-tape, .start-feature, .start-spotlight')).toHaveCount(0);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
 });
 
 test('search stays centered and safely inset from the top', async ({ page }) => {
@@ -244,86 +199,23 @@ test('search stays centered and safely inset from the top', async ({ page }) => 
   expect(box.y).toBeGreaterThanOrEqual(32);
 });
 
-test('landing and footer grids reflow without page overflow', async ({ page }) => {
+test('documentation content reflows without horizontal page overflow', async ({ page }) => {
   for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 900 }]) {
     await page.setViewportSize(viewport);
-    await page.goto('/');
-    const gridState = await page.evaluate(() => ({
-      cardColumns: getComputedStyle(document.querySelector('.start-card-grid')).gridTemplateColumns.split(' ').length,
-      footerColumns: getComputedStyle(document.querySelector('.start-footer-links')).gridTemplateColumns.split(' ').length,
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    }));
-    expect(gridState.overflow).toBeLessThanOrEqual(0);
-    expect(gridState.cardColumns).toBeGreaterThanOrEqual(1);
-    expect(gridState.footerColumns).toBeGreaterThanOrEqual(1);
+    await page.goto('/book/installation/');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    await expect(page.locator('.prose')).toBeVisible();
   }
 });
 
-test('start-page spotlight is centered, themed, and precedes the footer', async ({ page }) => {
-  await page.setViewportSize({ width: 1200, height: 900 });
-  await page.goto('/');
-  const spotlight = page.locator('.start-spotlight');
-  await expect(spotlight).toHaveAttribute('data-presentation-variant', 'holo');
-  await expect(spotlight.locator('.start-spotlight-action')).toHaveAttribute('href', '/book');
-  const state = await page.evaluate(() => {
-    const spotlight = document.querySelector('.start-spotlight').getBoundingClientRect();
-    const content = document.querySelector('.start-spotlight-content').getBoundingClientRect();
-    const footer = document.querySelector('.start-footer').getBoundingClientRect();
-    const action = document.querySelector('.start-spotlight-action');
-    const title = document.querySelector('.start-spotlight h2');
-    return {
-      spotlight,
-      content,
-      footer,
-      actionDecoration: getComputedStyle(action).textDecorationLine,
-      actionLetterSpacing: getComputedStyle(action).letterSpacing,
-      actionRadius: getComputedStyle(action).borderTopLeftRadius,
-      actionBorder: getComputedStyle(action).borderTopWidth,
-      topbarActionRadius: getComputedStyle(document.querySelector('.topbar-action')).borderTopLeftRadius,
-      titleFontSize: Number.parseFloat(getComputedStyle(title).fontSize),
-    };
-  });
-  expect(Math.abs((state.content.left + state.content.width / 2) - (state.spotlight.left + state.spotlight.width / 2))).toBeLessThanOrEqual(1);
-  expect(state.spotlight.bottom).toBeLessThanOrEqual(state.footer.top);
-  expect(state.actionDecoration).toBe('none');
-  expect(state.actionLetterSpacing).not.toBe('normal');
-  expect(state.actionRadius).toBe(state.topbarActionRadius);
-  expect(state.actionBorder).toBe('1px');
-  expect(state.titleFontSize).toBeGreaterThan(48);
-
-  await page.locator('#themeToggle').click();
-  await expect.poll(() => spotlight.evaluate(el => getComputedStyle(el).color)).not.toBe('rgba(0, 0, 0, 0)');
-});
-
-test('start page hero is full-width, cards show no underlines, and footer layout is correctly sized', async ({ page }) => {
-  await page.setViewportSize({ width: 1200, height: 900 });
-  await page.goto('/');
-
-  const heroBox = await page.locator('.start-hero').boundingBox();
-  const viewport = await page.evaluate(() => ({
-    width: document.documentElement.clientWidth,
-    height: window.innerHeight,
-  }));
-  expect(heroBox.width).toBeGreaterThanOrEqual(viewport.width - 2);
-
-  const firstCard = page.locator('.start-card').first();
-  const cardStyles = await firstCard.evaluate(el => ({
-    textDecorationLine: getComputedStyle(el).textDecorationLine,
-    iconWidth: getComputedStyle(el.querySelector('.start-card-icon')).width,
-    iconHeight: getComputedStyle(el.querySelector('.start-card-icon')).height,
-  }));
-  expect(cardStyles.textDecorationLine).toBe('none');
-  expect(cardStyles.iconWidth).toBe('40px');
-  expect(cardStyles.iconHeight).toBe('40px');
-
-  await firstCard.hover();
-  const cardHoverDecoration = await firstCard.evaluate(el => getComputedStyle(el).textDecorationLine);
-  expect(cardHoverDecoration).toBe('none');
-
-  const footerLogo = await page.locator('.start-footer-logo').evaluate(el => ({
-    width: getComputedStyle(el).width,
-    height: getComputedStyle(el).height,
-  }));
-  expect(footerLogo.width).toBe('48px');
-  expect(footerLogo.height).toBe('48px');
+test('sidebar filter shows matching pages and restores the full navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto('/book/installation/');
+  const filter = page.locator('#navFilter');
+  await filter.fill('installation');
+  await expect(page.locator('.nav-item:visible')).toHaveCount(1);
+  await expect(page.locator('.nav-item:visible').first()).toContainText('Installation');
+  await filter.fill('');
+  expect(await page.locator('.nav-item:visible').count()).toBeGreaterThan(1);
 });

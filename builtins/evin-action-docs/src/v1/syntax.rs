@@ -379,6 +379,10 @@ mod tests {
 
     #[test]
     fn custom_sublime_grammars_are_loaded_from_configured_paths() {
+        let project_grammar = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../docs/.evin/docs/grammars/esh.sublime-syntax");
+        SyntaxHighlighter::load_grammars(&[project_grammar]).unwrap();
+
         let directory = tempfile::tempdir().unwrap();
         let grammar = directory.path().join("sample.sublime-syntax");
         std::fs::write(
