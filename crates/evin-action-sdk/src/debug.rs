@@ -324,7 +324,7 @@ define_debug_registry! {
     pub struct SubprocessStart { command: String, cwd: String, shell: String } => (601, subprocess, append);
     pub struct SubprocessEnvironment { injected_vars: Vec<String> } => (602, subprocess, append);
     pub struct SubprocessFinish { duration_ms: u128, exit_code: Option<i64> } => (603, subprocess, append);
-    pub struct SubprocessStep { task_id: String, pid: u32, step_cwd: String, exit_code: i32, duration_ms: u64 } => (604, subprocess, append);
+    pub struct SubprocessStateOutput { keys: Vec<String> } => (604, subprocess, append);
     pub struct SubprocessRedaction { redaction_count: usize } => (605, subprocess, append);
 }
 

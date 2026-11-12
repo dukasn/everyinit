@@ -29,11 +29,27 @@ fn is_secret_name(key: &str) -> bool {
         || k.contains("PRIVATE")
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Default, Debug)]
 pub struct SecretsProvider {
     secrets: HashMap<String, String>,
     /// Sorted by length descending to redact longer overlapping strings first.
     redaction_values: Vec<String>,
+    runtime_redaction_values: std::sync::RwLock<Vec<String>>,
+}
+
+impl Clone for SecretsProvider {
+    fn clone(&self) -> Self {
+        Self {
+            secrets: self.secrets.clone(),
+            redaction_values: self.redaction_values.clone(),
+            runtime_redaction_values: std::sync::RwLock::new(
+                self.runtime_redaction_values
+                    .read()
+                    .map(|values| values.clone())
+                    .unwrap_or_default(),
+            ),
+        }
+    }
 }
 
 impl SecretsProvider {
@@ -82,6 +98,7 @@ impl SecretsProvider {
         let mut provider = Self {
             secrets,
             redaction_values: Vec::new(),
+            runtime_redaction_values: std::sync::RwLock::new(Vec::new()),
         };
         provider.prepare_redactor();
         provider
@@ -116,17 +133,74 @@ impl SecretsProvider {
     }
 
     /// Redact any known secret within the given text, replacing it with `***`.
-    pub fn redact(&self, text: &str) -> String {
-        if self.redaction_values.is_empty() {
-            return text.to_string();
+    /// Adds a state output to the redactor when its key looks credential-like.
+    pub fn register_output_value_for_redaction(&self, key: &str, value: &str) {
+        if !is_secret_name(key) || value.len() < 4 {
+            return;
         }
+        if let Ok(mut values) = self.runtime_redaction_values.write()
+            && !values.iter().any(|existing| existing == value)
+        {
+            values.push(value.to_string());
+            values.sort_by_key(|value| std::cmp::Reverse(value.len()));
+        }
+    }
 
+    pub fn redact(&self, text: &str) -> String {
+        self.redact_with_count(text).0
+    }
+
+    /// Redacts known values and returns the number of replacements performed.
+    pub fn redact_with_count(&self, text: &str) -> (String, usize) {
+        let mut values = self.redaction_values.clone();
+        if let Ok(runtime_values) = self.runtime_redaction_values.read() {
+            values.extend(runtime_values.iter().cloned());
+        }
+        values.sort_by_key(|value| std::cmp::Reverse(value.len()));
+        values.dedup();
         let mut sanitized = text.to_string();
-        for secret in &self.redaction_values {
-            if sanitized.contains(secret) {
-                sanitized = sanitized.replace(secret, "***");
+        let mut redaction_count = 0;
+        for secret in values {
+            if !secret.is_empty() && sanitized.contains(&secret) {
+                redaction_count += sanitized.match_indices(&secret).count();
+                sanitized = sanitized.replace(&secret, "***");
             }
         }
-        sanitized
+        (sanitized, redaction_count)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn runtime_redaction_values(&self) -> Vec<String> {
+        self.runtime_redaction_values
+            .read()
+            .map(|values| values.clone())
+            .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SecretsProvider;
+
+    #[test]
+    fn redaction_counts_each_replacement_and_keeps_runtime_values_isolated_on_clone() {
+        let mut original = SecretsProvider::default();
+        original.register_secret("API_TOKEN", "base-secret-value");
+        let task = original.clone();
+        task.register_output_value_for_redaction(
+            "DERIVED_TOKEN",
+            "prefix-base-secret-value-suffix",
+        );
+
+        let (redacted, count) = task.redact_with_count(
+            "prefix-base-secret-value-suffix base-secret-value prefix-base-secret-value-suffix",
+        );
+        assert_eq!(redacted, "*** *** ***");
+        assert_eq!(count, 3);
+        assert!(original.runtime_redaction_values().is_empty());
+        assert_eq!(
+            task.runtime_redaction_values(),
+            ["prefix-base-secret-value-suffix"]
+        );
     }
 }

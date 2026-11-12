@@ -20,3 +20,6 @@ pub use core::PipelineEngine;
 pub use types::{
     EngineContext, PipelineConfig, PipelineExecutionState, PipelineReport, TaskResult,
 };
+
+#[cfg(test)]
+mod test_dag_state;

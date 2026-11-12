@@ -22,3 +22,4 @@ regex.workspace = true
 evin-dotenv = { workspace = true }
 tokio-util = { workspace = true }
 esh = { workspace = true }
+tempfile = { workspace = true }

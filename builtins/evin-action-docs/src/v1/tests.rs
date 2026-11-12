@@ -759,10 +759,8 @@ fn generate_esh_builtins_catalog_json_from_markdown_reference() {
     let embedded_path = workspace_root.join("crates/esh/assets/builtins-catalog.json");
     let embedded_raw = std::fs::read_to_string(embedded_path).unwrap();
     let embedded: evin_catalog::CatalogExport = serde_json::from_str(&embedded_raw).unwrap();
-    assert_eq!(catalog.symbols.get("retry"), embedded.symbols.get("retry"));
-    assert_eq!(catalog.symbols.get("mkdir"), embedded.symbols.get("mkdir"));
-    assert_eq!(catalog.symbols.get("head"), embedded.symbols.get("head"));
-    assert_eq!(catalog.symbols.get("cp"), embedded.symbols.get("cp"));
+    assert_eq!(catalog.symbols, embedded.symbols);
+    assert_eq!(catalog.keywords, embedded.keywords);
 }
 
 #[test]

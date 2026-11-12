@@ -227,14 +227,32 @@ async fn test_shell_runner_redaction() {
 
     let mut stdout = String::new();
     let mut stderr = String::new();
+    let mut reported_redactions = None;
     while let Ok(msg) = rx.try_recv() {
-        if let LogMessage::RawOutput { line, stream, .. } = msg {
-            let output = match stream {
-                evin_action_sdk::OutputStream::Stdout => &mut stdout,
-                evin_action_sdk::OutputStream::Stderr => &mut stderr,
-            };
-            output.push_str(&line);
-            output.push('\n');
+        match msg {
+            LogMessage::RawOutput { line, stream, .. } => {
+                let output = match stream {
+                    evin_action_sdk::OutputStream::Stdout => &mut stdout,
+                    evin_action_sdk::OutputStream::Stderr => &mut stderr,
+                };
+                output.push_str(&line);
+                output.push('\n');
+            }
+            LogMessage::DebugRecord { record, .. } if record.code == "E_605" => {
+                reported_redactions =
+                    record
+                        .payload
+                        .iter()
+                        .find_map(|(key, value)| match (key, value) {
+                            (key, evin_action_sdk::debug::DebugValue::Unsigned(n))
+                                if *key == "redaction_count" =>
+                            {
+                                Some(*n as usize)
+                            }
+                            _ => None,
+                        });
+            }
+            _ => {}
         }
     }
 
@@ -242,5 +260,96 @@ async fn test_shell_runner_redaction() {
     assert!(!stdout.contains("my_top_secret_token_12345"), "{stdout}");
     assert!(stderr.contains("stderr token ***..."), "{stderr}");
     assert!(!stderr.contains("my_top_secret_token_12345"), "{stderr}");
+    let redacted_lines = stdout
+        .lines()
+        .chain(stderr.lines())
+        .filter(|line| line.contains("***"))
+        .count();
+    assert_eq!(reported_redactions, Some(redacted_lines));
     let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[tokio::test]
+async fn esh_state_outputs_feed_dag_state_and_redact_dynamic_secret_outputs() {
+    let runner = ShellRunner::new();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let mut secrets = evin_action_sdk::secrets::SecretsProvider::default();
+    secrets.register_secret("SOURCE_TOKEN", "source-secret-value");
+    let secrets = std::sync::Arc::new(secrets);
+    let logger = evin_action_sdk::Logger::new("state-output".into(), tx.clone(), secrets.clone());
+    let ctx = RunnerContext::new(
+        None,
+        "state-output".into(),
+        false,
+        evin_action_sdk::PipelineMode::Normal,
+        tx,
+        vec![],
+        Some(temp_dir.path().to_string_lossy().into_owned()),
+        HashMap::new(),
+        temp_dir.path().to_path_buf(),
+        HashMap::new(),
+        std::sync::Arc::new(evin_action_sdk::git::GitProvider::new(
+            temp_dir.path().to_path_buf(),
+            evin_action_sdk::PipelineMode::Normal,
+            logger,
+        )),
+        secrets,
+    );
+
+    let script = "printf 'API_TOKEN=prefix-source-secret-value-suffix\\nversion=1.2.3\\n' >> \"$EVIN_STATE\"\necho \"token: prefix-source-secret-value-suffix\"";
+    runner
+        .run(&ctx, script, HashMap::new(), None)
+        .await
+        .unwrap();
+
+    let outputs = ctx.state.outputs.lock().unwrap();
+    assert_eq!(outputs.get("version").map(String::as_str), Some("1.2.3"));
+    assert_eq!(
+        outputs.get("API_TOKEN").map(String::as_str),
+        Some("prefix-source-secret-value-suffix")
+    );
+    drop(outputs);
+
+    let mut stdout = Vec::new();
+    let mut state_keys = None;
+    let mut redaction_count = None;
+    while let Ok(message) = rx.try_recv() {
+        match message {
+            LogMessage::RawOutput {
+                line,
+                stream: evin_action_sdk::OutputStream::Stdout,
+                ..
+            } => stdout.push(line),
+            LogMessage::DebugRecord { record, .. } if record.code == "E_604" => {
+                state_keys = record
+                    .payload
+                    .iter()
+                    .find_map(|(key, value)| match (key, value) {
+                        (key, evin_action_sdk::debug::DebugValue::List(keys)) if *key == "keys" => {
+                            Some(keys.clone())
+                        }
+                        _ => None,
+                    });
+            }
+            LogMessage::DebugRecord { record, .. } if record.code == "E_605" => {
+                redaction_count =
+                    record
+                        .payload
+                        .iter()
+                        .find_map(|(key, value)| match (key, value) {
+                            (key, evin_action_sdk::debug::DebugValue::Unsigned(count))
+                                if *key == "redaction_count" =>
+                            {
+                                Some(*count)
+                            }
+                            _ => None,
+                        });
+            }
+            _ => {}
+        }
+    }
+    assert!(stdout.iter().any(|line| line == "token: ***"));
+    assert_eq!(state_keys, Some(vec!["API_TOKEN".into(), "version".into()]));
+    assert_eq!(redaction_count, Some(1));
 }

@@ -93,7 +93,8 @@ fn test_lsp_did_open_and_hover_lookup() {
     let mut output = Vec::new();
 
     let uri = "file:///workspace/script.esh";
-    let script = "read -r -p 'Name: ' USERNAME\nset -e -u -o pipefail\n";
+    let script =
+        "read -r -p 'Name: ' USERNAME\njson -g version package.json\nset -e -u -o pipefail\n";
 
     // Initialize first
     let init_req = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize" });
@@ -144,6 +145,28 @@ fn test_lsp_did_open_and_hover_lookup() {
         "Hover info for read: {}",
         hover_val
     );
+
+    let mut json_hover_output = Vec::new();
+    let json_hover_req = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "textDocument/hover",
+        "params": {
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 1 }
+        }
+    });
+    server
+        .handle_message(&json_hover_req.to_string(), &mut json_hover_output)
+        .expect("json hover");
+    let mut cursor = Cursor::new(json_hover_output);
+    let msg = read_message(&mut cursor)
+        .expect("read json hover response")
+        .expect("json hover message");
+    let resp: Value = serde_json::from_str(&msg).expect("json hover json parse");
+    let json_hover = resp["result"]["contents"]["value"].as_str().unwrap();
+    assert!(json_hover.contains("json {-g key_path|-v|-k|-p} [source|-]"));
+    assert!(json_hover.contains("json -g downloads.bytes \"$PACKAGE\""));
 }
 
 #[test]
@@ -299,6 +322,17 @@ fn test_lsp_completions_list() {
     assert!(items.iter().any(|item| item["label"] == "read"));
     assert!(items.iter().any(|item| item["label"] == "declare"));
     assert!(items.iter().any(|item| item["label"] == "if"));
+    let json = items
+        .iter()
+        .find(|item| item["label"] == "json")
+        .expect("json completion");
+    assert_eq!(json["detail"], "json {-g key_path|-v|-k|-p} [source|-]");
+    assert!(
+        json["documentation"]["value"]
+            .as_str()
+            .unwrap()
+            .contains("json -g downloads.bytes \"$PACKAGE\"")
+    );
 }
 
 #[test]

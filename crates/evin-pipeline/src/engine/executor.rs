@@ -534,13 +534,19 @@ impl PipelineEngine {
                 }
             }
 
+            let task_secrets = Arc::new((*engine_ctx.secrets).clone());
+            for outputs in inputs.values() {
+                for (key, value) in outputs {
+                    task_secrets.register_output_value_for_redaction(key, value);
+                }
+            }
             let git_provider = Arc::new(evin_action_sdk::git::GitProvider::new_with_dry_run(
                 engine_ctx.workspace_root.clone(),
                 mode,
                 evin_action_sdk::Logger::new(
                     task_name.clone(),
                     engine_ctx.log_tx.clone(),
-                    engine_ctx.secrets.clone(),
+                    task_secrets.clone(),
                 ),
                 dry_run.clone(),
             ));
@@ -550,7 +556,7 @@ impl PipelineEngine {
                 engine_ctx.log_tx.clone(),
                 engine_ctx.workspace_root.clone(),
                 git_provider,
-                engine_ctx.secrets.clone(),
+                task_secrets,
             )
             .workspace_name(workspace_name)
             .is_ci_mode(is_ci_mode)

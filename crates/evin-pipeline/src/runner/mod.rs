@@ -137,6 +137,16 @@ impl ShellRunner<EshRunner> {
         } else {
             esh::ExecutionContext::new()
         };
+        let state_file = tempfile::NamedTempFile::new().map_err(|error| {
+            evin_diagnostic::IssueCode::new("issue-task-state-output-failed")
+                .arg("error", error.to_string())
+        })?;
+        let state_path = state_file.into_temp_path();
+        let mut env = env;
+        env.insert(
+            "EVIN_STATE".to_string(),
+            state_path.to_string_lossy().into_owned(),
+        );
         if let Some(cwd) = &ctx.cwd {
             let _ = esh_ctx.set_cwd(cwd);
         }
@@ -151,12 +161,16 @@ impl ShellRunner<EshRunner> {
 
         let mut redaction_count = 0usize;
 
+        let state_keys = capture_state_outputs(ctx, &state_path)?;
+        if !state_keys.is_empty() {
+            ctx.log
+                .debug_event(evin_action_sdk::debug::SubprocessStateOutput { keys: state_keys });
+        }
+
         if let Some(stdout_text) = esh_ctx.get_captured_stdout() {
             for line in stdout_text.lines() {
-                let safe_line = ctx.secrets.redact(line);
-                if safe_line != line {
-                    redaction_count += 1;
-                }
+                let (safe_line, count) = ctx.secrets.redact_with_count(line);
+                redaction_count += count;
                 ctx.log
                     .raw_output(evin_action_sdk::OutputStream::Stdout, &safe_line);
             }
@@ -164,10 +178,8 @@ impl ShellRunner<EshRunner> {
 
         if let Some(stderr_text) = esh_ctx.get_captured_stderr() {
             for line in stderr_text.lines() {
-                let safe_line = ctx.secrets.redact(line);
-                if safe_line != line {
-                    redaction_count += 1;
-                }
+                let (safe_line, count) = ctx.secrets.redact_with_count(line);
+                redaction_count += count;
                 ctx.log
                     .raw_output(evin_action_sdk::OutputStream::Stderr, &safe_line);
             }
@@ -207,6 +219,29 @@ impl ShellRunner<EshRunner> {
 
         Ok(())
     }
+}
+
+fn capture_state_outputs(
+    ctx: &RunnerContext,
+    path: &std::path::Path,
+) -> Result<Vec<String>, evin_diagnostic::IssueCode> {
+    let content = std::fs::read_to_string(path).map_err(|error| {
+        evin_diagnostic::IssueCode::new("issue-task-state-output-failed")
+            .arg("error", error.to_string())
+    })?;
+    let mut keys = std::collections::BTreeSet::new();
+    for line in content.lines() {
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if key.is_empty() {
+            continue;
+        }
+        ctx.state.set_output(key, value);
+        ctx.secrets.register_output_value_for_redaction(key, value);
+        keys.insert(key.to_string());
+    }
+    Ok(keys.into_iter().collect())
 }
 
 impl ShellRunner<OsRunner> {
@@ -389,9 +424,9 @@ fn emit_line(
     redaction_count: &std::sync::atomic::AtomicUsize,
 ) {
     let line = String::from_utf8_lossy(bytes);
-    let safe_line = secrets.redact(&line);
-    if safe_line != line {
-        redaction_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let (safe_line, count) = secrets.redact_with_count(&line);
+    if count > 0 {
+        redaction_count.fetch_add(count, std::sync::atomic::Ordering::Relaxed);
     }
     log.raw_output(stream, &safe_line);
 }

@@ -81,3 +81,46 @@ fn public_esh_examples_compile() {
         }
     }
 }
+
+#[tokio::test]
+async fn json_project_data_example_runs_as_documented() {
+    let engine = Engine::new();
+    let documents = [
+        (
+            "ESH data guide",
+            include_str!("../../../docs/book/esh/20.work-with-project-data.md"),
+        ),
+        (
+            "ESH runtime reference",
+            include_str!("../../../docs/reference/esh/100.runtime-reference.3010.md"),
+        ),
+    ];
+
+    for (document, source) in documents {
+        let block = esh_blocks(source)
+            .into_iter()
+            .find(|block| {
+                block.starts_with("PACKAGE='{\"name\":\"everyinit\"")
+                    && block.contains("json -g downloads.bytes")
+            })
+            .unwrap_or_else(|| panic!("{document} JSON example must be present"));
+        let mut ctx = esh::ExecutionContext::new();
+        ctx.enable_capture();
+        let status = engine
+            .eval_str(&block, &mut ctx)
+            .await
+            .unwrap_or_else(|error| panic!("{document} JSON example failed: {error}"));
+
+        assert_eq!(status, 0, "{document} JSON example status");
+        assert_eq!(
+            ctx.get_captured_stdout().unwrap(),
+            "everyinit 1.2.3 ships 2048 bytes\n",
+            "{document} JSON example output"
+        );
+        assert_eq!(
+            ctx.get_captured_stderr().unwrap(),
+            "",
+            "{document} JSON example stderr"
+        );
+    }
+}

@@ -273,6 +273,78 @@ async fn test_parallel_join_cancellation_terminates_each_external_process_group(
 }
 
 #[cfg(unix)]
+#[tokio::test]
+async fn native_workflow_state_survives_parallel_cancellation_and_exit_cleanup() {
+    let engine = Engine::new();
+    let token = CancellationToken::new();
+    let cancel = token.clone();
+    let mut ctx = ExecutionContext::new().with_token(token);
+    ctx.enable_capture();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        cancel.cancel();
+    });
+
+    let script = r#"
+        TARGETS=("linux" "macos")
+        declare -A CONFIG
+        CONFIG[mode]="safe"
+        trap 'echo "interrupt"' INT
+        trap 'printf "cleanup:%s:%s\n" "${TARGETS[0]}" "${CONFIG[mode]}"' EXIT
+        worker() {
+          TARGETS[0]="branch"
+          CONFIG[mode]="branch"
+          sleep 30
+        }
+        worker &| printf 'parallel:%s:%s\n' "${TARGETS[0]}" "${CONFIG[mode]}"
+    "#;
+    let status = tokio::time::timeout(Duration::from_secs(5), engine.eval_str(script, &mut ctx))
+        .await
+        .expect("workflow cancellation must finish")
+        .unwrap();
+
+    assert_eq!(status, 130);
+    let stdout = ctx.get_captured_stdout().unwrap();
+    assert!(stdout.contains("parallel:linux:safe\n"), "{stdout}");
+    assert!(stdout.contains("cleanup:linux:safe\n"), "{stdout}");
+    assert!(
+        !stdout.contains("branch"),
+        "parallel branch state leaked: {stdout}"
+    );
+    assert!(stdout.contains("interrupt\n"), "{stdout}");
+}
+
+#[tokio::test]
+async fn native_workflow_failure_runs_cleanup_without_parallel_state_leaks() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let script = r#"
+        set -e
+        TARGETS=("linux" "macos")
+        declare -A CONFIG
+        CONFIG[mode]="safe"
+        trap 'printf "cleanup:%s:%s\n" "${TARGETS[0]}" "${CONFIG[mode]}"' EXIT
+        worker() {
+          TARGETS[0]="branch"
+          CONFIG[mode]="branch"
+          return 7
+        }
+        worker &| printf 'join:%s:%s\n' "${TARGETS[0]}" "${CONFIG[mode]}"
+    "#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+    assert_eq!(status, 7);
+    let stdout = ctx.get_captured_stdout().unwrap();
+    assert!(stdout.contains("join:linux:safe\n"), "{stdout}");
+    assert!(stdout.contains("cleanup:linux:safe\n"), "{stdout}");
+    assert!(
+        !stdout.contains("branch"),
+        "parallel branch state leaked: {stdout}"
+    );
+}
+
+#[cfg(unix)]
 fn engine() -> Engine {
     Engine::new()
 }
