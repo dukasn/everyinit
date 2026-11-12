@@ -18,6 +18,7 @@ pub mod css;
 mod debug;
 pub mod favicon;
 pub mod fs;
+pub mod i18n;
 pub mod icons;
 pub mod js_minification;
 pub mod mermaid;
@@ -56,11 +57,11 @@ use validator::{DiagramValidator, LinkValidator, MathValidator};
 
 pub(crate) static LAYOUTS_DIR: Dir<'_> = include_dir!("builtins/evin-action-docs/layouts");
 
-fn default_source_dir() -> String {
-    "docs".to_string()
+fn default_source_dir() -> PathBuf {
+    PathBuf::from("docs")
 }
-fn default_out() -> String {
-    "dist/docs".to_string()
+fn default_out() -> PathBuf {
+    PathBuf::from("dist/docs")
 }
 fn default_asset_dir() -> String {
     "assets".to_string()
@@ -83,6 +84,12 @@ fn default_reference_prefix() -> String {
 fn default_language() -> String {
     "en".to_string()
 }
+fn default_title() -> String {
+    "Documentation".to_string()
+}
+fn default_manifest() -> PathBuf {
+    PathBuf::from("versions.json")
+}
 
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -100,6 +107,86 @@ pub enum BundleMode {
     SingleFile,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "String")]
+pub struct HexColor(String);
+
+impl TryFrom<String> for HexColor {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.len() == 7
+            && value.starts_with('#')
+            && value[1..].bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            Ok(Self(value.to_ascii_lowercase()))
+        } else {
+            Err("color must use #RRGGBB format".to_string())
+        }
+    }
+}
+
+impl HexColor {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AppearanceConfig {
+    #[serde(default)]
+    pub accent_light: Option<HexColor>,
+    #[serde(default)]
+    pub accent_dark: Option<HexColor>,
+    #[serde(default)]
+    pub logo: Option<PathBuf>,
+    #[serde(default)]
+    pub favicon: Option<PathBuf>,
+    #[serde(default)]
+    pub font_sans: Option<String>,
+    #[serde(default)]
+    pub font_mono: Option<String>,
+    #[serde(default)]
+    pub custom_css: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VersionConfig {
+    pub current: String,
+    pub latest: String,
+    #[serde(default = "default_manifest")]
+    pub manifest: PathBuf,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct I18nConfig {
+    pub default_locale: String,
+    pub locales: Vec<String>,
+    #[serde(default)]
+    pub dictionaries_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ServeConfig {
+    #[serde(default = "default_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub host: bool,
+}
+
+impl Default for ServeConfig {
+    fn default() -> Self {
+        Self {
+            port: default_port(),
+            host: false,
+        }
+    }
+}
+
 impl BundleMode {
     fn as_str(self) -> &'static str {
         match self {
@@ -112,13 +199,13 @@ impl BundleMode {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DocsConfig {
-    pub site_url: String,
+    pub site_url: url::Url,
     #[serde(default = "default_language")]
     pub language: String,
     #[serde(default)]
     pub mode: DocsMode,
     #[serde(default = "default_source_dir")]
-    pub source_dir: String,
+    pub source_dir: PathBuf,
     #[serde(default = "default_asset_dir")]
     pub asset_dir: String,
     #[serde(default)]
@@ -127,10 +214,10 @@ pub struct DocsConfig {
     pub exclude: Vec<String>,
     #[serde(default = "default_extract_frontmatter")]
     pub extract_frontmatter: bool,
-    #[serde(default)]
-    pub title: Option<String>,
+    #[serde(default = "default_title")]
+    pub title: String,
     #[serde(default = "default_out")]
-    pub out: String,
+    pub out: PathBuf,
     #[serde(default = "default_theme")]
     pub theme: String,
     #[serde(default)]
@@ -146,10 +233,7 @@ pub struct DocsConfig {
     #[serde(default)]
     pub layout_dir: Option<String>,
     #[serde(default)]
-    pub favicon: Option<String>,
-    #[serde(default)]
-    pub logo: Option<String>,
-    #[serde(default)]
+    pub appearance: AppearanceConfig,
     pub extensions_dir: Option<String>,
     #[serde(default)]
     pub theme_color: Option<String>,
@@ -173,12 +257,20 @@ pub struct DocsConfig {
     pub social_image: Option<String>,
     #[serde(default)]
     pub lastmod_fallback: bool,
+    #[serde(default)]
+    pub version: Option<VersionConfig>,
+    #[serde(default)]
+    pub i18n: Option<I18nConfig>,
+    #[serde(default)]
+    pub grammars: Vec<PathBuf>,
+    #[serde(default)]
+    pub serve: ServeConfig,
 }
 
 impl Default for DocsConfig {
     fn default() -> Self {
         Self {
-            site_url: String::new(),
+            site_url: url::Url::parse("https://example.invalid/").expect("valid default URL"),
             language: default_language(),
             mode: DocsMode::Build,
             source_dir: default_source_dir(),
@@ -186,7 +278,7 @@ impl Default for DocsConfig {
             include: Vec::new(),
             exclude: Vec::new(),
             extract_frontmatter: default_extract_frontmatter(),
-            title: None,
+            title: default_title(),
             out: default_out(),
             theme: default_theme(),
             theme_overrides: HashMap::new(),
@@ -195,8 +287,7 @@ impl Default for DocsConfig {
             port: default_port(),
             host: false,
             layout_dir: None,
-            favicon: None,
-            logo: None,
+            appearance: AppearanceConfig::default(),
             extensions_dir: None,
             theme_color: None,
             background_color: None,
@@ -209,12 +300,16 @@ impl Default for DocsConfig {
             diagnostic_search: false,
             social_image: None,
             lastmod_fallback: false,
+            version: None,
+            i18n: None,
+            grammars: Vec::new(),
+            serve: ServeConfig::default(),
         }
     }
 }
 
 fn resolve_serve_host(config: &DocsConfig, flags: &InvocationFlags) -> server::ServeHost {
-    server::ServeHost::from_exposed(config.host || flags.contains("host"))
+    server::ServeHost::from_exposed(config.serve.host || flags.contains("host"))
 }
 
 impl DocsConfig {
@@ -242,6 +337,80 @@ impl DocsConfig {
             .as_ref()
             .map(|setting| setting.validate(Some(&self.theme)))
             .unwrap_or(Ok(()))
+    }
+
+    fn validate_version(&self) -> Result<(), String> {
+        let Some(version) = &self.version else {
+            return Ok(());
+        };
+        for (name, value) in [
+            ("version.current", &version.current),
+            ("version.latest", &version.latest),
+        ] {
+            if value.is_empty()
+                || !value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+            {
+                return Err(format!("{name} must be a non-empty path-safe identifier"));
+            }
+        }
+        if version.manifest.is_absolute()
+            || version
+                .manifest
+                .components()
+                .any(|component| !matches!(component, std::path::Component::Normal(_)))
+        {
+            return Err(
+                "version.manifest must be a relative path inside the output directory".to_string(),
+            );
+        }
+        Ok(())
+    }
+
+    fn validate_i18n(&self) -> Result<(), String> {
+        let Some(i18n) = &self.i18n else {
+            return Ok(());
+        };
+        if i18n.locales.is_empty() {
+            return Err("i18n.locales must contain at least one locale".to_string());
+        }
+        let mut locales = HashSet::new();
+        for locale in &i18n.locales {
+            let parsed = locale
+                .parse::<unic_langid::LanguageIdentifier>()
+                .map_err(|_| format!("i18n locale '{locale}' is not a valid language tag"))?;
+            if !locales.insert(parsed.to_string()) {
+                return Err(format!("i18n.locales contains duplicate locale '{locale}'"));
+            }
+        }
+        let default = i18n
+            .default_locale
+            .parse::<unic_langid::LanguageIdentifier>()
+            .map_err(|_| "i18n.default_locale is not a valid language tag".to_string())?;
+        if !locales.contains(&default.to_string()) {
+            return Err("i18n.default_locale must be included in i18n.locales".to_string());
+        }
+        Ok(())
+    }
+
+    fn validate_appearance(&self) -> Result<(), String> {
+        for (name, value) in [
+            ("appearance.font_sans", self.appearance.font_sans.as_deref()),
+            ("appearance.font_mono", self.appearance.font_mono.as_deref()),
+        ] {
+            if let Some(value) = value
+                && (value.trim().is_empty()
+                    || !value.chars().all(|character| {
+                        character.is_ascii_alphanumeric()
+                            || character.is_ascii_whitespace()
+                            || matches!(character, ',' | '-' | '_' | '\'' | '"')
+                    }))
+            {
+                return Err(format!("{name} contains unsupported CSS characters"));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -314,6 +483,9 @@ pub fn validate_config(
     let config: DocsConfig = evin_action_sdk::parse_config(with)?;
     let validation = config
         .normalized_reference_prefix()
+        .and_then(|_| config.validate_appearance())
+        .and_then(|_| config.validate_version())
+        .and_then(|_| config.validate_i18n())
         .and_then(|_| config.validate_topbar())
         .and_then(|_| config.validate_presentation())
         .and_then(|_| {
@@ -324,13 +496,7 @@ pub fn validate_config(
             }
         })
         .and_then(|_| {
-            if config.site_url.contains("${") {
-                Ok(())
-            } else if config.site_url.trim().is_empty() {
-                Err("site_url is required when target is web".to_string())
-            } else {
-                seo::validate_site_settings(&config.site_url, &config.language).map(|_| ())
-            }
+            seo::validate_site_settings(config.site_url.as_str(), &config.language).map(|_| ())
         });
     validation.map_err(|message| evin_flow::ConfigError {
         message,
@@ -344,7 +510,7 @@ pub(crate) fn parse_docs(
     logger: &evin_action_sdk::Logger,
     stats: &mut DocsDebugStats,
 ) -> Result<DocSiteAst, evin_diagnostic::Diagnostic> {
-    let source_root = PathBuf::from(&config.source_dir);
+    let source_root = config.source_dir.clone();
     let source_root = if source_root.is_absolute() {
         source_root
     } else {
@@ -417,7 +583,7 @@ pub(crate) fn parse_docs(
             })?,
             site_version: "1.0".to_string(),
         },
-        config.title.clone(),
+        Some(config.title.clone()),
     )
     .map_err(doc_issue_to_diagnostic)?;
     if config.strict_filenames {
@@ -439,6 +605,19 @@ pub(crate) fn parse_docs(
         .count();
     stats.emit_scan(logger);
     Ok(site)
+}
+
+fn parse_configured_site(
+    workspace_root: &Path,
+    config: &DocsConfig,
+    logger: &evin_action_sdk::Logger,
+    stats: &mut DocsDebugStats,
+) -> Result<DocSiteAst, evin_diagnostic::Diagnostic> {
+    let mut source_config = config.clone();
+    if let Some(i18n) = &config.i18n {
+        source_config.source_dir = config.source_dir.join(&i18n.default_locale);
+    }
+    parse_docs(workspace_root, &source_config, logger, stats)
 }
 
 fn doc_issue_to_diagnostic(issue: evin_doc::DocIssue) -> evin_diagnostic::Diagnostic {
@@ -578,7 +757,7 @@ pub(crate) fn source_fingerprint(
     workspace_root: &Path,
     config: &DocsConfig,
 ) -> Vec<(PathBuf, Option<std::time::SystemTime>, u64)> {
-    let source_root = PathBuf::from(&config.source_dir);
+    let source_root = config.source_dir.clone();
     let source_root = if source_root.is_absolute() {
         source_root
     } else {
@@ -661,6 +840,487 @@ pub(crate) fn render_docs(
     logger: &evin_action_sdk::Logger,
     stats: &mut DocsDebugStats,
 ) -> Result<PathBuf, evin_diagnostic::Diagnostic> {
+    if config.i18n.is_none() && config.version.is_none() {
+        return render_docs_single(
+            workspace_root,
+            config,
+            site_ast,
+            &i18n::UiDictionary::default(),
+            logger,
+            stats,
+        );
+    };
+    render_localized_docs(workspace_root, config, site_ast, logger, stats)
+}
+
+fn render_localized_docs(
+    workspace_root: &Path,
+    config: &DocsConfig,
+    default_site: &DocSiteAst,
+    logger: &evin_action_sdk::Logger,
+    stats: &mut DocsDebugStats,
+) -> Result<PathBuf, evin_diagnostic::Diagnostic> {
+    let out_dir = if config.out.is_absolute() {
+        config.out.clone()
+    } else {
+        workspace_root.join(&config.out)
+    };
+    let default_locale = config
+        .i18n
+        .as_ref()
+        .map(|settings| settings.default_locale.as_str())
+        .unwrap_or(&config.language)
+        .to_string();
+    let locales = config
+        .i18n
+        .as_ref()
+        .map(|settings| settings.locales.clone())
+        .unwrap_or_else(|| vec![default_locale.clone()]);
+    let version_dir = config
+        .version
+        .as_ref()
+        .map(|version| out_dir.join(&version.current))
+        .unwrap_or_else(|| out_dir.clone());
+    let mut routes = BTreeSet::new();
+    let mut titles = HashMap::new();
+
+    for locale in &locales {
+        let dictionary_dir = config
+            .i18n
+            .as_ref()
+            .and_then(|settings| settings.dictionaries_dir.as_deref());
+        let dictionary = i18n::UiDictionary::load(workspace_root, locale, dictionary_dir).map_err(
+            |message| {
+                evin_diagnostic::Diagnostic::new(
+                    message.clone(),
+                    evin_diagnostic::IssueCode::new("invalid-i18n-dictionary")
+                        .arg("error", message),
+                )
+            },
+        )?;
+        let translated_site = if locale == &default_locale {
+            default_site.clone()
+        } else if config.i18n.is_some() {
+            let mut source_config = config.clone();
+            source_config.source_dir = config.source_dir.join(locale);
+            source_config.i18n = None;
+            source_config.version = None;
+            parse_docs(workspace_root, &source_config, logger, stats)?
+        } else {
+            default_site.clone()
+        };
+        let (mut localized_site, fallback_pages) = if locale == &default_locale {
+            (translated_site, HashMap::new())
+        } else {
+            merge_locale_sites(default_site, &translated_site, &default_locale)
+        };
+        if config.i18n.is_some() {
+            prefix_site_source_paths(&mut localized_site, locale, &fallback_pages);
+        }
+
+        for page in &localized_site.pages {
+            let route = if page.slug == "index" {
+                "/".to_string()
+            } else {
+                format!("/{}", page.slug)
+            };
+            let title = page
+                .metadata
+                .get("title")
+                .and_then(|value| value.as_str())
+                .unwrap_or(&page.slug);
+            routes.insert(route.clone());
+            titles.insert(route, title.to_string());
+        }
+
+        let mut localized_config = config.clone();
+        localized_config.i18n = None;
+        localized_config.version = None;
+        localized_config.language = locale.clone();
+        localized_config.source_dir = config.source_dir.clone();
+        localized_config.out = if config.version.is_some() || config.i18n.is_some() {
+            version_dir.join(locale)
+        } else {
+            out_dir.clone()
+        };
+        localized_config.site_url = match &config.version {
+            Some(version) => append_url_segments(
+                &config.site_url,
+                &[version.current.as_str(), locale.as_str()],
+            ),
+            None if config.i18n.is_some() => append_url_segments(&config.site_url, &[locale]),
+            None => config.site_url.clone(),
+        };
+        render_docs_single(
+            workspace_root,
+            &localized_config,
+            &localized_site,
+            &dictionary,
+            logger,
+            stats,
+        )?;
+
+        let locale_dir = localized_config.out.as_path();
+        if config
+            .version
+            .as_ref()
+            .is_some_and(|version| version.current != version.latest)
+        {
+            let version = config.version.as_ref().expect("checked above");
+            let latest_url = append_url_segments(
+                &config.site_url,
+                &[version.latest.as_str(), locale.as_str()],
+            );
+            inject_version_banner(
+                locale_dir,
+                &version.current,
+                &version.latest,
+                latest_url.as_str(),
+                &dictionary,
+            )?;
+        }
+        if !fallback_pages.is_empty() {
+            render_fallback_notices(
+                config,
+                locale,
+                &default_locale,
+                &fallback_pages,
+                locale_dir,
+                &dictionary,
+            )?;
+        }
+        if let Some(version) = &config.version {
+            inject_version_switcher(
+                locale_dir,
+                &version.current,
+                locale,
+                config.site_url.as_str(),
+                &version.manifest,
+            )?;
+        }
+    }
+
+    if let Some(version) = &config.version {
+        let routes = routes.into_iter().collect::<Vec<_>>();
+        let manifest = serde_json::json!({
+            "version": version.current,
+            "locales": locales,
+            "routes": routes,
+            "titles": titles,
+        });
+        write_json_artifact(&version_dir.join("manifest.json"), &manifest)?;
+
+        let registry_path = out_dir.join(&version.manifest);
+        let mut registry = if registry_path.is_file() {
+            let bytes = std::fs::read(&registry_path)
+                .map_err(|error| io_diagnostic(&registry_path, error))?;
+            serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|error| {
+                evin_diagnostic::Diagnostic::new(
+                    format!(
+                        "Invalid versions manifest '{}': {error}",
+                        registry_path.display()
+                    ),
+                    evin_diagnostic::IssueCode::new("invalid-manifest"),
+                )
+            })?
+        } else {
+            serde_json::json!({ "versions": [] })
+        };
+        let entries = registry
+            .get_mut("versions")
+            .and_then(serde_json::Value::as_array_mut)
+            .ok_or_else(|| {
+                evin_diagnostic::Diagnostic::new(
+                    "versions manifest must contain a `versions` array",
+                    evin_diagnostic::IssueCode::new("invalid-manifest"),
+                )
+            })?;
+        entries.retain(|entry| {
+            entry.get("version").and_then(|value| value.as_str()) != Some(&version.current)
+        });
+        entries.push(serde_json::json!({
+            "version": version.current,
+            "locales": locales,
+            "manifest": format!("{}/manifest.json", version.current),
+        }));
+        entries.sort_by(|left, right| {
+            left.get("version")
+                .and_then(|value| value.as_str())
+                .cmp(&right.get("version").and_then(|value| value.as_str()))
+        });
+        registry["latest"] = serde_json::Value::String(version.latest.clone());
+        write_json_artifact(&registry_path, &registry)?;
+    }
+
+    if config.version.is_some() || config.i18n.is_some() {
+        let target_segments = config.version.as_ref().map_or_else(
+            || vec![default_locale.as_str()],
+            |version| vec![version.latest.as_str(), default_locale.as_str()],
+        );
+        let redirect_target = append_url_segments(&config.site_url, &target_segments);
+        let root_index = out_dir.join("index.html");
+        write_text_artifact(
+            &root_index,
+            &format!(
+                "<!doctype html><html lang=\"{}\"><head><meta charset=\"utf-8\"><link rel=\"canonical\" href=\"{}\"><meta http-equiv=\"refresh\" content=\"0; url={}\"><title>{}</title></head><body><a href=\"{}\">Continue to the documentation</a></body></html>\n",
+                escape_html(&default_locale),
+                escape_html(redirect_target.as_str()),
+                escape_html(redirect_target.as_str()),
+                escape_html(&config.title),
+                escape_html(redirect_target.as_str())
+            ),
+        )?;
+    }
+    Ok(out_dir)
+}
+
+fn merge_locale_sites(
+    default_site: &DocSiteAst,
+    localized_site: &DocSiteAst,
+    default_locale: &str,
+) -> (DocSiteAst, HashMap<String, String>) {
+    let translated = localized_site
+        .pages
+        .iter()
+        .map(|page| (page.slug.as_str(), page))
+        .collect::<HashMap<_, _>>();
+    let mut used = HashSet::new();
+    let mut fallbacks = HashMap::new();
+    let mut pages = Vec::new();
+    for source_page in &default_site.pages {
+        if let Some(page) = translated.get(source_page.slug.as_str()) {
+            pages.push((*page).clone());
+            used.insert(page.slug.clone());
+        } else {
+            let mut page = source_page.clone();
+            page.metadata.insert(
+                "__evin_source_locale".to_string(),
+                serde_json::Value::String(default_locale.to_string()),
+            );
+            fallbacks.insert(page.slug.clone(), default_locale.to_string());
+            pages.push(page);
+        }
+    }
+    pages.extend(
+        localized_site
+            .pages
+            .iter()
+            .filter(|page| !used.contains(&page.slug))
+            .cloned(),
+    );
+    (
+        DocSiteAst {
+            pages,
+            ..localized_site.clone()
+        },
+        fallbacks,
+    )
+}
+
+fn prefix_site_source_paths(
+    site: &mut DocSiteAst,
+    locale: &str,
+    fallbacks: &HashMap<String, String>,
+) {
+    for page in &mut site.pages {
+        let source_locale = fallbacks
+            .get(&page.slug)
+            .map(String::as_str)
+            .unwrap_or(locale);
+        page.source_path = format!(
+            "{source_locale}/{}",
+            page.source_path.trim_start_matches('/')
+        );
+    }
+}
+
+fn render_fallback_notices(
+    config: &DocsConfig,
+    locale: &str,
+    default_locale: &str,
+    fallback_pages: &HashMap<String, String>,
+    locale_dir: &Path,
+    dictionary: &i18n::UiDictionary,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    for slug in fallback_pages.keys() {
+        let path = if slug == "index" {
+            locale_dir.join("index.html")
+        } else {
+            locale_dir.join(slug).join("index.html")
+        };
+        let mut html =
+            std::fs::read_to_string(&path).map_err(|error| io_diagnostic(&path, error))?;
+        let localized_base = match &config.version {
+            Some(version) => {
+                append_url_segments(&config.site_url, &[version.current.as_str(), locale])
+            }
+            None => append_url_segments(&config.site_url, &[locale]),
+        };
+        let default_base = match &config.version {
+            Some(version) => append_url_segments(
+                &config.site_url,
+                &[version.current.as_str(), default_locale],
+            ),
+            None => append_url_segments(&config.site_url, &[default_locale]),
+        };
+        let localized_page_url = page_url(&localized_base, slug);
+        let default_page_url = page_url(&default_base, slug);
+        html = html.replace(localized_page_url.as_str(), default_page_url.as_str());
+        html = html.replace(
+            &format!("lang=\"{}\"", escape_html(locale)),
+            &format!("lang=\"{}\"", escape_html(default_locale)),
+        );
+        let Some(article) = html.find("<article") else {
+            continue;
+        };
+        let Some(open_end) = html[article..].find('>') else {
+            continue;
+        };
+        let insert_at = article + open_end + 1;
+        let notice = format!(
+            "<p class=\"untranslated-notice\">{}</p>",
+            escape_html(&dictionary.untranslated_notice(default_locale))
+        );
+        html.insert_str(insert_at, &notice);
+        write_text_artifact(&path, &html)?;
+    }
+    Ok(())
+}
+
+fn localize_html_chrome(
+    directory: &Path,
+    dictionary: &i18n::UiDictionary,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    let mut files = Vec::new();
+    let mut pending = vec![directory.to_path_buf()];
+    while let Some(current_dir) = pending.pop() {
+        for entry in
+            std::fs::read_dir(&current_dir).map_err(|error| io_diagnostic(&current_dir, error))?
+        {
+            let entry = entry.map_err(|error| io_diagnostic(&current_dir, error))?;
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path
+                .extension()
+                .is_some_and(|extension| extension == "html")
+            {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    for path in files {
+        let mut html =
+            std::fs::read_to_string(&path).map_err(|error| io_diagnostic(&path, error))?;
+        let replacements = [
+            (
+                ">On this page<",
+                &format!(">{}<", escape_html(&dictionary.on_this_page)),
+            ),
+            (
+                ">Previous</span>",
+                &format!(">{}</span>", escape_html(&dictionary.previous)),
+            ),
+            (
+                ">Next</span>",
+                &format!(">{}</span>", escape_html(&dictionary.next)),
+            ),
+            (
+                "placeholder=\"Search documentation...\"",
+                &format!(
+                    "placeholder=\"{}\"",
+                    escape_html(&dictionary.search_placeholder)
+                ),
+            ),
+            (
+                "aria-label=\"Search documentation\"",
+                &format!(
+                    "aria-label=\"{}\"",
+                    escape_html(&dictionary.search_placeholder)
+                ),
+            ),
+        ];
+        for (from, to) in replacements {
+            html = html.replace(from, to);
+        }
+        write_text_artifact(&path, &html)?;
+    }
+    Ok(())
+}
+
+fn page_url(base: &url::Url, slug: &str) -> url::Url {
+    if slug == "index" {
+        base.clone()
+    } else {
+        base.join(&format!("{}/", slug.trim_matches('/')))
+            .unwrap_or_else(|_| base.clone())
+    }
+}
+
+fn inject_version_switcher(
+    directory: &Path,
+    current: &str,
+    locale: &str,
+    base_url: &str,
+    registry_path: &Path,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    let mut files = Vec::new();
+    let mut pending = vec![directory.to_path_buf()];
+    while let Some(current_dir) = pending.pop() {
+        for entry in
+            std::fs::read_dir(&current_dir).map_err(|error| io_diagnostic(&current_dir, error))?
+        {
+            let entry = entry.map_err(|error| io_diagnostic(&current_dir, error))?;
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.file_name().is_some_and(|name| name == "index.html") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    for path in files {
+        let mut html =
+            std::fs::read_to_string(&path).map_err(|error| io_diagnostic(&path, error))?;
+        let route = path
+            .parent()
+            .and_then(|parent| parent.strip_prefix(directory).ok())
+            .map(|parent| parent.to_string_lossy().replace('\\', "/"))
+            .filter(|route| !route.is_empty())
+            .map(|route| format!("/{route}"))
+            .unwrap_or_else(|| "/".to_string());
+        let markup = format!(
+            "<label class=\"docs-version-switcher\"><span class=\"sr-only\">Version</span><select data-docs-version-switcher hidden data-current=\"{}\" data-locale=\"{}\" data-route=\"{}\" data-base-url=\"{}\" data-registry=\"{}\" aria-label=\"Documentation version\"><option value=\"{}\">{}</option></select></label>",
+            escape_html(current),
+            escape_html(locale),
+            escape_html(&route),
+            escape_html(base_url),
+            escape_html(&registry_path.to_string_lossy()),
+            escape_html(current),
+            escape_html(current)
+        );
+        if let Some(header) = html.find("</header>") {
+            html.insert_str(header, &markup);
+        } else if let Some(body) = html.find("<body")
+            && let Some(open_end) = html[body..].find('>')
+        {
+            html.insert_str(body + open_end + 1, &markup);
+        }
+        write_text_artifact(&path, &html)?;
+    }
+    Ok(())
+}
+
+fn render_docs_single(
+    workspace_root: &Path,
+    config: &DocsConfig,
+    site_ast: &DocSiteAst,
+    dictionary: &i18n::UiDictionary,
+    logger: &evin_action_sdk::Logger,
+    stats: &mut DocsDebugStats,
+) -> Result<PathBuf, evin_diagnostic::Diagnostic> {
     let static_site;
     let site_ast = if config.mode == DocsMode::Build {
         static_site = DocSiteAst {
@@ -698,7 +1358,7 @@ pub(crate) fn render_docs(
     };
     let seo = seo::SeoCatalog::build_with_options(
         site_ast,
-        &config.site_url,
+        config.site_url.as_str(),
         &config.language,
         seo_options,
     )
@@ -710,7 +1370,7 @@ pub(crate) fn render_docs(
     let discovery_files = seo.discovery_files(config.mode).inspect_err(|_error| {
         stats.emit_output(logger);
     })?;
-    let source_root = PathBuf::from(&config.source_dir);
+    let source_root = config.source_dir.clone();
     let source_root = if source_root.is_absolute() {
         source_root
     } else {
@@ -727,7 +1387,9 @@ pub(crate) fn render_docs(
             evin_diagnostic::IssueCode::new("issue-docs-mermaid-failed").arg("error", message),
         )
     })?;
-    let start_page = start_page::StartPageModel::default();
+    let start_page = start_page::StartPageModel {
+        search_prompts: vec![dictionary.search_placeholder.clone()],
+    };
     let presentation = config.presentation.as_ref();
     if let Some(setting) = presentation {
         setting.validate(Some(&config.theme)).map_err(|message| {
@@ -818,7 +1480,7 @@ pub(crate) fn render_docs(
         seo.quality.total() + stats.deployment_warnings
     );
     stats.emit_discovery(logger);
-    let out = PathBuf::from(&config.out);
+    let out = config.out.clone();
     let out_dir = if out.is_absolute() {
         out
     } else {
@@ -880,7 +1542,7 @@ pub(crate) fn render_docs(
 
     let is_production = config.minify.unwrap_or(config.mode == DocsMode::Build);
     let single_file = config.bundle == BundleMode::SingleFile;
-    let processed_css = CssOptimizer::process_with_components(
+    let mut processed_css = CssOptimizer::process_with_components(
         &raw_css,
         &active_components_scss,
         &config.theme_overrides,
@@ -896,6 +1558,26 @@ pub(crate) fn render_docs(
         );
         raw_css.clone()
     });
+    let custom_css = if let Some(path) = &config.appearance.custom_css {
+        let path = if path.is_absolute() {
+            path.clone()
+        } else {
+            workspace_root.join(path)
+        };
+        Some(std::fs::read_to_string(&path).map_err(|error| {
+            evin_diagnostic::Diagnostic::new(
+                format!(
+                    "Failed to read appearance.custom_css '{}': {error}",
+                    path.display()
+                ),
+                evin_diagnostic::IssueCode::new("io-error"),
+            )
+        })?)
+    } else {
+        None
+    };
+    processed_css =
+        append_appearance_css(&processed_css, &config.appearance, custom_css.as_deref());
     let serve_enabled = config.mode == DocsMode::Serve;
     let site_title = site_ast.title.as_deref().unwrap_or("Documentation");
     let (favicon_assets, _) = favicon::FaviconPipeline::process(
@@ -942,6 +1624,24 @@ pub(crate) fn render_docs(
     } else {
         raw_combined_js
     };
+    let grammar_paths = config
+        .grammars
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                workspace_root.join(path)
+            }
+        })
+        .collect::<Vec<_>>();
+    let highlighter =
+        crate::v1::syntax::SyntaxHighlighter::load_grammars(&grammar_paths).map_err(|message| {
+            evin_diagnostic::Diagnostic::new(
+                message.clone(),
+                evin_diagnostic::IssueCode::new("invalid-grammar").arg("error", message),
+            )
+        })?;
     let render_context = renderer::PreparedRenderContext::new(
         &rendered_site,
         site_index,
@@ -961,7 +1661,8 @@ pub(crate) fn render_docs(
         topbar.as_ref(),
         &seo,
         config.social_image.as_deref(),
-    );
+    )
+    .with_highlighter(highlighter);
     let rendered_pages = HtmlRenderer::render_prepared(&render_context);
     prune_stale_page_outputs(&out_dir, &rendered_pages)?;
     for (path, contents) in rendered_pages {
@@ -980,6 +1681,7 @@ pub(crate) fn render_docs(
             )
         })?;
     }
+    localize_html_chrome(&out_dir, dictionary)?;
     if !single_file {
         let assets = out_dir.join("assets");
         if std::fs::create_dir_all(&assets).is_err() {
@@ -1066,6 +1768,140 @@ pub(crate) fn render_docs(
     Ok(out_dir)
 }
 
+fn append_url_segments(base: &url::Url, segments: &[&str]) -> url::Url {
+    let mut result = base.clone();
+    if let Ok(mut path) = result.path_segments_mut() {
+        path.pop_if_empty();
+        for segment in segments {
+            path.push(segment);
+        }
+        path.push("");
+    }
+    result
+}
+
+fn append_appearance_css(
+    css: &str,
+    appearance: &AppearanceConfig,
+    custom_css: Option<&str>,
+) -> String {
+    let mut root = Vec::new();
+    let mut dark = Vec::new();
+    if let Some(color) = &appearance.accent_light {
+        root.push(format!("--ui-color-primary: {}", color.as_str()));
+    }
+    if let Some(color) = &appearance.accent_dark {
+        dark.push(format!("--ui-color-primary: {}", color.as_str()));
+    }
+    if let Some(font) = &appearance.font_sans {
+        root.push(format!("--ui-typescale-font-sans: {font}"));
+    }
+    if let Some(font) = &appearance.font_mono {
+        root.push(format!("--ui-typescale-font-monospace: {font}"));
+    }
+    if root.is_empty() && dark.is_empty() && custom_css.is_none() {
+        return css.to_string();
+    }
+    let mut result = css.to_string();
+    result.push_str("\n@layer overrides {\n");
+    if !root.is_empty() {
+        result.push_str(":root {\n  ");
+        result.push_str(&root.join(";\n  "));
+        result.push_str(";\n}\n");
+    }
+    if !dark.is_empty() {
+        result.push_str("[data-theme=\"dark\"] {\n  ");
+        result.push_str(&dark.join(";\n  "));
+        result.push_str(";\n}\n");
+    }
+    if let Some(custom_css) = custom_css {
+        result.push_str(custom_css);
+        result.push('\n');
+    }
+    result.push_str("}\n");
+    result
+}
+
+fn write_json_artifact(
+    path: &Path,
+    value: &serde_json::Value,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    let text = serde_json::to_string_pretty(value).map_err(|error| {
+        evin_diagnostic::Diagnostic::new(
+            format!("Failed to serialize '{}': {error}", path.display()),
+            evin_diagnostic::IssueCode::new("serialization-error"),
+        )
+    })?;
+    write_text_artifact(path, &format!("{text}\n"))
+}
+
+fn write_text_artifact(path: &Path, contents: &str) -> Result<(), evin_diagnostic::Diagnostic> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| io_diagnostic(parent, error))?;
+    }
+    std::fs::write(path, contents).map_err(|error| io_diagnostic(path, error))
+}
+
+fn io_diagnostic(path: &Path, error: std::io::Error) -> evin_diagnostic::Diagnostic {
+    evin_diagnostic::Diagnostic::new(
+        format!("Failed to write '{}': {error}", path.display()),
+        evin_diagnostic::IssueCode::new("io-error"),
+    )
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn inject_version_banner(
+    directory: &Path,
+    current: &str,
+    latest: &str,
+    latest_url: &str,
+    dictionary: &i18n::UiDictionary,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    let mut files = Vec::new();
+    let mut pending = vec![directory.to_path_buf()];
+    while let Some(current_dir) = pending.pop() {
+        for entry in
+            std::fs::read_dir(&current_dir).map_err(|error| io_diagnostic(&current_dir, error))?
+        {
+            let entry = entry.map_err(|error| io_diagnostic(&current_dir, error))?;
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.file_name().is_some_and(|name| name == "index.html") {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    for path in files {
+        let mut html =
+            std::fs::read_to_string(&path).map_err(|error| io_diagnostic(&path, error))?;
+        let Some(article) = html.find("<article") else {
+            continue;
+        };
+        let Some(open_end) = html[article..].find('>') else {
+            continue;
+        };
+        let insert_at = article + open_end + 1;
+        let banner = format!(
+            "<p class=\"version-banner\"><a href=\"{}\">{}</a></p>",
+            escape_html(latest_url),
+            escape_html(&dictionary.version_banner(current, latest))
+        );
+        html.insert_str(insert_at, &banner);
+        write_text_artifact(&path, &html)?;
+    }
+    Ok(())
+}
+
 fn prune_stale_page_outputs(
     out_dir: &Path,
     rendered_pages: &HashMap<String, String>,
@@ -1144,13 +1980,28 @@ pub async fn execute_with_invocation(
     })?;
     let workspace_root = ctx.fs.workspace_root();
     let mut stats = DocsDebugStats::default();
-    let site_ast = parse_docs(workspace_root, &config, &ctx.log, &mut stats)?;
+    let site_ast = parse_configured_site(workspace_root, &config, &ctx.log, &mut stats)?;
     if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
-        let out_dir = if Path::new(&config.out).is_absolute() {
-            PathBuf::from(&config.out)
+        let out_dir = if config.out.is_absolute() {
+            config.out.clone()
         } else {
             workspace_root.join(&config.out)
         };
+        let virtual_root = tempfile::tempdir().map_err(|error| {
+            evin_diagnostic::Diagnostic::new(
+                format!("Failed to prepare temporary docs output: {error}"),
+                evin_diagnostic::IssueCode::new("io-error"),
+            )
+        })?;
+        let mut preview_config = config.clone();
+        preview_config.out = virtual_root.path().join("docs-output");
+        render_docs(
+            workspace_root,
+            &preview_config,
+            &site_ast,
+            &ctx.log,
+            &mut stats,
+        )?;
         ctx.log.plan(evin_action_sdk::activity::DocsPlanBuild {
             output: out_dir.display().to_string(),
         });
@@ -1161,7 +2012,6 @@ pub async fn execute_with_invocation(
             .set_output("output_dir", &out_dir.to_string_lossy());
         ctx.state
             .set_output("page_count", &site_ast.pages.len().to_string());
-        ctx.mark_unverified("Documentation rendering was skipped in dry-run mode");
         return Ok(());
     }
     let out_dir = render_docs(workspace_root, &config, &site_ast, &ctx.log, &mut stats)?;
@@ -1171,7 +2021,7 @@ pub async fn execute_with_invocation(
         .set_output("page_count", &site_ast.pages.len().to_string());
     if config.mode == DocsMode::Serve {
         let host = resolve_serve_host(&config, invocation_flags);
-        let binding = server::DevServer::bind(host, config.port).await?;
+        let binding = server::DevServer::bind(host, config.serve.port).await?;
         ctx.state.set_output("server_url", &binding.url());
         server::DevServer::start(
             binding,

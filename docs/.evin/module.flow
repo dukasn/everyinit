@@ -4,7 +4,6 @@ module:
 
 values:
   site_title: "Everyinit — Evin & ESH"
-  site_url: "https://everyinit.dev/"
 
 tasks:
   evin-catalog:
@@ -52,9 +51,10 @@ tasks:
       - uses: evin/docs@v1
         with:
           title: "${site_title}"
-          site_url: "${site_url}"
+          site_url: https://everyinit.dev/
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
+          grammars: [.evin/docs/grammars/esh.sublime-syntax]
 
   test-responsive:
     stage: Docs
@@ -85,6 +85,7 @@ tasks:
         with:
           mode: serve
           title: "${site_title}"
-          site_url: "${site_url}"
+          site_url: https://everyinit.dev/
           exclude: [esh-posix-compatibility-report.md]
           strict_filenames: true
+          grammars: [.evin/docs/grammars/esh.sublime-syntax]

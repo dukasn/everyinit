@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::v1::{DocsConfig, debug::DocsDebugStats, parse_docs, render_docs, source_fingerprint};
+use crate::v1::{DocsConfig, debug::DocsDebugStats, render_docs, source_fingerprint};
 use evin_diagnostic::{Diagnostic, IssueCode};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -184,7 +184,11 @@ impl DevServer {
                 if next == fingerprint {
                     continue;
                 }
-                let changed = changed_source_label(&fingerprint, &next, &watcher_config.source_dir);
+                let changed = changed_source_label(
+                    &fingerprint,
+                    &next,
+                    &watcher_config.source_dir.to_string_lossy(),
+                );
                 fingerprint = next;
                 stats.changes += 1;
                 stats.rebuilds += 1;
@@ -194,18 +198,22 @@ impl DevServer {
                 );
                 watcher_logger.daemon_status(evin_action_sdk::activity::DocsRebuilding {});
                 let rebuild_started = std::time::Instant::now();
-                let rebuild =
-                    parse_docs(&watcher_root, &watcher_config, &watcher_logger, &mut stats)
-                        .and_then(|site_ast| {
-                            let output = render_docs(
-                                &watcher_root,
-                                &watcher_config,
-                                &site_ast,
-                                &watcher_logger,
-                                &mut stats,
-                            )?;
-                            Ok(output)
-                        });
+                let rebuild = super::parse_configured_site(
+                    &watcher_root,
+                    &watcher_config,
+                    &watcher_logger,
+                    &mut stats,
+                )
+                .and_then(|site_ast| {
+                    let output = render_docs(
+                        &watcher_root,
+                        &watcher_config,
+                        &site_ast,
+                        &watcher_logger,
+                        &mut stats,
+                    )?;
+                    Ok(output)
+                });
                 stats.last_duration_ms = rebuild_started.elapsed().as_millis().max(1);
                 match rebuild {
                     Ok(_) => {

@@ -13,7 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use syntect::html::{ClassStyle, ClassedHTMLGenerator};
-use syntect::parsing::SyntaxSet;
+use syntect::parsing::{SyntaxDefinition, SyntaxSet};
 use syntect::util::LinesWithEndings;
 
 const FLOW_DIRECTIVES: &[&str] = &["on", "watch", "steps"];
@@ -67,6 +67,28 @@ impl SyntaxHighlighter {
         }
     }
 
+    pub fn load_grammars(paths: &[std::path::PathBuf]) -> Result<Self, String> {
+        let mut builder = SyntaxSet::load_defaults_newlines().into_builder();
+        for path in paths {
+            let extension = path.extension().and_then(|value| value.to_str());
+            if extension != Some("sublime-syntax") {
+                return Err(format!(
+                    "custom grammar '{}' must use the .sublime-syntax format",
+                    path.display()
+                ));
+            }
+            let source = std::fs::read_to_string(path)
+                .map_err(|error| format!("failed to read grammar '{}': {error}", path.display()))?;
+            let fallback_name = path.file_stem().and_then(|value| value.to_str());
+            let syntax = SyntaxDefinition::load_from_str(&source, true, fallback_name)
+                .map_err(|error| format!("invalid grammar '{}': {error}", path.display()))?;
+            builder.add(syntax);
+        }
+        Ok(Self {
+            syntax_set: builder.build(),
+        })
+    }
+
     pub fn highlight(&self, language: Option<&str>, code: &str) -> String {
         let lang_token = match language {
             Some(l) => l.trim(),
@@ -84,9 +106,6 @@ impl SyntaxHighlighter {
             other => other,
         };
 
-        if matches!(normalized, "esh" | "evin-shell" | "esh-script") {
-            return esh::syntax::highlight_html_classed(code, "syn-");
-        }
         if normalized == "flow" {
             return highlight_flow(code);
         }
@@ -354,22 +373,34 @@ mod tests {
             rust_html
         );
 
-        let esh_code = "if read -c -p \"Deploy?\"; then\n    echo \"Deploying...\"\nfi\n";
-        let esh_html = highlighter.highlight(Some("esh"), esh_code);
+        let esh_html = highlighter.highlight(Some("esh"), "echo <literal>");
+        assert_eq!(esh_html, "echo &lt;literal&gt;");
+    }
+
+    #[test]
+    fn custom_sublime_grammars_are_loaded_from_configured_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        let grammar = directory.path().join("sample.sublime-syntax");
+        std::fs::write(
+            &grammar,
+            r#"%YAML 1.2
+---
+name: Sample ESH
+file_extensions: [esh]
+scope: source.esh
+contexts:
+  main:
+    - match: '\bprint\b'
+      scope: keyword.control.esh
+"#,
+        )
+        .unwrap();
+        let highlighter = SyntaxHighlighter::load_grammars(&[grammar]).unwrap();
+        let html = highlighter.highlight(Some("esh"), "print hello");
         assert!(
-            esh_html.contains("syn-keyword"),
-            "ESH should produce syn-keyword tokens: {}",
-            esh_html
+            html.contains("syn-keyword") && html.contains("syn-control"),
+            "{html}"
         );
-        assert!(
-            esh_html.contains("syn-string"),
-            "ESH should produce syn-string tokens: {}",
-            esh_html
-        );
-        assert!(
-            esh_html.contains("syn-function"),
-            "ESH should produce syn-function tokens: {}",
-            esh_html
-        );
+        assert!(html.contains("print"));
     }
 }

@@ -1020,13 +1020,14 @@ impl<'a> PreparedRenderContext<'a> {
             .to_string();
         let (brand_logo_html, footer_brand_logo_html) = match brand_logo {
             Some(crate::v1::resolver::ResolvedLogo::CustomSvg(svg)) => (
-                format!("<span class=\"brand-logo-slot brand-logo-custom\" aria-hidden=\"true\">{svg}</span>"),
-                format!("<span class=\"start-footer-logo brand-logo-custom\" aria-hidden=\"true\">{svg}</span>"),
+                format!(
+                    "<span class=\"brand-logo-slot brand-logo-custom\" aria-hidden=\"true\">{svg}</span>"
+                ),
+                format!(
+                    "<span class=\"start-footer-logo brand-logo-custom\" aria-hidden=\"true\">{svg}</span>"
+                ),
             ),
-            _ => (
-                "<span class=\"brand-logo-slot brand-fallback-glyph\" aria-hidden=\"true\">🕮</span>".to_string(),
-                "<span class=\"start-footer-logo brand-fallback-glyph\" aria-hidden=\"true\">🕮</span>".to_string(),
-            ),
+            _ => (String::new(), String::new()),
         };
         let search_data_code = if shell_template.uses(ShellSlot::SearchData) {
             let prompts = start_page
@@ -1101,6 +1102,11 @@ impl<'a> PreparedRenderContext<'a> {
 
     fn asset_url(&self, source: &str, page_slug: &str) -> Option<String> {
         self.assets.render_url(source, page_slug)
+    }
+
+    pub fn with_highlighter(mut self, highlighter: crate::v1::syntax::SyntaxHighlighter) -> Self {
+        self.highlighter = highlighter;
+        self
     }
 }
 

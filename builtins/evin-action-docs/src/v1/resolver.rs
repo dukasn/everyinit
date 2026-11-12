@@ -83,8 +83,8 @@ impl<'a> ResourceResolver<'a> {
         diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<ResolvedLogo, Diagnostic> {
         // Tier 1: Explicit config.logo
-        if let Some(ref logo_rel) = self.config.logo {
-            let p = Path::new(logo_rel);
+        if let Some(ref logo_rel) = self.config.appearance.logo {
+            let p = logo_rel;
             let full_path = if p.is_absolute() {
                 p.to_path_buf()
             } else {
@@ -156,8 +156,8 @@ impl<'a> ResourceResolver<'a> {
         _diagnostics: &mut Vec<Diagnostic>,
     ) -> Result<ResolvedFavicon, Diagnostic> {
         // Tier 1: Explicit config.favicon
-        if let Some(ref fav_rel) = self.config.favicon {
-            let p = Path::new(fav_rel);
+        if let Some(ref fav_rel) = self.config.appearance.favicon {
+            let p = fav_rel;
             let full_path = if p.is_absolute() {
                 p.to_path_buf()
             } else {
@@ -443,7 +443,10 @@ mod tests {
         std::fs::write(&explicit_logo, "<svg id='explicit'></svg>").unwrap();
 
         let config = DocsConfig {
-            logo: Some("my-logo.svg".to_string()),
+            appearance: crate::v1::AppearanceConfig {
+                logo: Some(PathBuf::from("my-logo.svg")),
+                ..Default::default()
+            },
             ..DocsConfig::default()
         };
 
@@ -479,7 +482,10 @@ mod tests {
     fn test_resource_resolver_missing_explicit_fails() {
         let temp_dir = tempfile::tempdir().unwrap();
         let config = DocsConfig {
-            logo: Some("missing-logo.svg".to_string()),
+            appearance: crate::v1::AppearanceConfig {
+                logo: Some(PathBuf::from("missing-logo.svg")),
+                ..Default::default()
+            },
             ..DocsConfig::default()
         };
 

@@ -18,10 +18,10 @@ use super::*;
 fn defaults_are_build_friendly() {
     let config = DocsConfig::default();
     assert_eq!(config.mode, DocsMode::Build);
-    assert!(!config.host);
-    assert_eq!(config.source_dir, "docs");
+    assert!(!config.serve.host);
+    assert_eq!(config.source_dir, PathBuf::from("docs"));
     assert_eq!(config.asset_dir, "assets");
-    assert_eq!(config.out, "dist/docs");
+    assert_eq!(config.out, PathBuf::from("dist/docs"));
     assert_eq!(config.theme, "matter");
     assert_eq!(config.bundle, BundleMode::Separated);
     assert!(!config.strict_filenames);
@@ -117,9 +117,9 @@ fn bundle_mode_rejects_unrecognized_strings() {
 }
 
 #[test]
-fn site_url_template_is_validated_after_value_resolution() {
+fn typed_site_url_rejects_unresolved_template_values() {
     let templated = evin_flow::parse_yaml("site_url: ${docs_site_url}\n").unwrap();
-    assert!(validate_config(Some(&templated)).is_ok());
+    assert!(validate_config(Some(&templated)).is_err());
 }
 
 #[test]
@@ -133,10 +133,10 @@ fn serve_mode_defaults_to_unminified_assets() {
 
 #[test]
 fn serve_host_accepts_yaml_and_routed_invocation_override() {
-    let yaml = "site_url: https://example.com/\nhost: true\n";
+    let yaml = "site_url: https://example.com/\nserve:\n  host: true\n";
     let value = evin_flow::parse_yaml(yaml).unwrap();
     let configured = evin_flow::de::from_spanned_value::<DocsConfig>(value).unwrap();
-    assert!(configured.host);
+    assert!(configured.serve.host);
     assert_eq!(
         resolve_serve_host(&configured, &InvocationFlags::default()),
         server::ServeHost::AllInterfaces
@@ -161,6 +161,31 @@ fn serve_host_accepts_yaml_and_routed_invocation_override() {
     let invalid =
         evin_flow::parse_yaml("site_url: https://example.com/\nhost: 127.0.0.1\n").unwrap();
     assert!(evin_flow::de::from_spanned_value::<DocsConfig>(invalid).is_err());
+}
+
+#[test]
+fn nested_appearance_version_and_i18n_are_typed_and_validated() {
+    let value = evin_flow::parse_yaml(
+        "site_url: https://docs.example.com/\nappearance:\n  accent_light: '#2563EB'\n  font_mono: 'ui-monospace, monospace'\nversion:\n  current: v0.2\n  latest: v0.2\ni18n:\n  default_locale: en\n  locales: [en, pt-BR]\nserve:\n  port: 3010\n",
+    )
+    .unwrap();
+    let config = evin_flow::de::from_spanned_value::<DocsConfig>(value).unwrap();
+    assert_eq!(config.appearance.accent_light.unwrap().as_str(), "#2563eb");
+    assert_eq!(
+        config.version.unwrap().manifest,
+        PathBuf::from("versions.json")
+    );
+    assert_eq!(config.i18n.unwrap().locales, ["en", "pt-BR"]);
+    assert_eq!(config.serve.port, 3010);
+
+    for invalid in [
+        "site_url: https://docs.example.com/\nappearance:\n  accent_dark: blue\n",
+        "site_url: https://docs.example.com/\nversion:\n  current: ../canary\n  latest: stable\n",
+        "site_url: https://docs.example.com/\ni18n:\n  default_locale: en\n  locales: [pt-BR]\n",
+    ] {
+        let value = evin_flow::parse_yaml(invalid).unwrap();
+        assert!(validate_config(Some(&value)).is_err(), "{invalid}");
+    }
 }
 
 #[test]
@@ -196,7 +221,7 @@ fn asset_directory_must_stay_inside_the_documentation_source() {
 #[test]
 fn asset_directory_can_be_resolved_from_a_template() {
     let templated =
-        evin_flow::parse_yaml("site_url: ${docs_site_url}\nasset_dir: ${docs_asset_dir}\n")
+        evin_flow::parse_yaml("site_url: https://example.com/\nasset_dir: ${docs_asset_dir}\n")
             .unwrap();
     assert!(validate_config(Some(&templated)).is_ok());
 }
@@ -226,7 +251,7 @@ fn source_fingerprint_tracks_docs_and_assets_but_not_layouts() {
     std::fs::create_dir_all(&layouts).unwrap();
     std::fs::write(docs.join("index.md"), "# One").unwrap();
     let config = DocsConfig {
-        source_dir: docs.to_string_lossy().to_string(),
+        source_dir: docs.to_path_buf(),
         layout_dir: Some(layouts.to_string_lossy().to_string()),
         ..DocsConfig::default()
     };
@@ -599,9 +624,9 @@ fn visual_gallery_fixture_parses_validates_and_renders_markdown_components() {
     .unwrap();
 
     let config = DocsConfig {
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: temp_dir.path().join("site").to_string_lossy().to_string(),
-        site_url: "https://example.com/".to_string(),
+        source_dir: docs_dir.to_path_buf(),
+        out: temp_dir.path().join("site"),
+        site_url: url::Url::parse("https://example.com/").unwrap(),
         ..DocsConfig::default()
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
@@ -637,6 +662,108 @@ fn visual_gallery_fixture_parses_validates_and_renders_markdown_components() {
 }
 
 #[test]
+fn versioned_build_writes_manifests_redirect_and_status_banner() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let docs_dir = temp_dir.path().join("docs");
+    std::fs::create_dir_all(&docs_dir).unwrap();
+    std::fs::write(docs_dir.join("index.md"), "# Versioned docs\n").unwrap();
+    std::fs::write(docs_dir.join("guide.md"), "# Guide\n").unwrap();
+    let config = DocsConfig {
+        source_dir: docs_dir,
+        out: temp_dir.path().join("site"),
+        site_url: url::Url::parse("https://example.com/docs/").unwrap(),
+        version: Some(VersionConfig {
+            current: "canary".to_string(),
+            latest: "v0.2".to_string(),
+            manifest: PathBuf::from("versions.json"),
+        }),
+        ..DocsConfig::default()
+    };
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
+        temp_dir.path(),
+    ));
+    let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
+    let mut stats = DocsDebugStats::default();
+    let site = parse_docs(temp_dir.path(), &config, &logger, &mut stats).unwrap();
+    let output = render_docs(temp_dir.path(), &config, &site, &logger, &mut stats).unwrap();
+
+    assert_eq!(output, temp_dir.path().join("site"));
+    let root_index = std::fs::read_to_string(output.join("index.html")).unwrap();
+    assert!(root_index.contains("https://example.com/docs/v0.2/en/"));
+    let page = std::fs::read_to_string(output.join("canary/en/guide/index.html")).unwrap();
+    assert!(page.contains("version-banner"));
+    assert!(page.contains("switch to v0.2 (latest)"));
+    assert!(page.contains("data-docs-version-switcher"));
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(output.join("canary/manifest.json")).unwrap())
+            .unwrap();
+    assert_eq!(manifest["version"], "canary");
+    assert!(
+        manifest["routes"]
+            .as_array()
+            .unwrap()
+            .contains(&"/guide".into())
+    );
+    let registry: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(output.join("versions.json")).unwrap()).unwrap();
+    assert_eq!(registry["latest"], "v0.2");
+}
+
+#[test]
+fn localized_build_falls_back_per_route_and_uses_source_language_canonical() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let source = temp_dir.path().join("docs");
+    std::fs::create_dir_all(source.join("en")).unwrap();
+    std::fs::create_dir_all(source.join("pt-BR")).unwrap();
+    std::fs::write(source.join("en/index.md"), "# Documentation\n").unwrap();
+    std::fs::write(source.join("en/guide.md"), "# English guide\n").unwrap();
+    std::fs::write(source.join("pt-BR/index.md"), "# Documentação\n").unwrap();
+    let dictionaries = temp_dir.path().join("dicts");
+    std::fs::create_dir_all(&dictionaries).unwrap();
+    std::fs::write(
+        dictionaries.join("pt-BR.flow"),
+        "search_placeholder: Buscar docs\non_this_page: Nesta página\nprevious: Anterior\nnext: Próxima\nuntranslated_notice: Sem tradução — exibindo {locale}\n",
+    )
+    .unwrap();
+    let config = DocsConfig {
+        source_dir: source,
+        out: temp_dir.path().join("site"),
+        site_url: url::Url::parse("https://example.com/docs/").unwrap(),
+        version: Some(VersionConfig {
+            current: "v0.2".to_string(),
+            latest: "v0.2".to_string(),
+            manifest: PathBuf::from("versions.json"),
+        }),
+        i18n: Some(I18nConfig {
+            default_locale: "en".to_string(),
+            locales: vec!["en".to_string(), "pt-BR".to_string()],
+            dictionaries_dir: Some(PathBuf::from("dicts")),
+        }),
+        ..DocsConfig::default()
+    };
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::new(
+        temp_dir.path(),
+    ));
+    let logger = evin_action_sdk::Logger::new("docs".to_string(), tx, secrets);
+    let mut stats = DocsDebugStats::default();
+    let site = parse_configured_site(temp_dir.path(), &config, &logger, &mut stats).unwrap();
+    let output = render_docs(temp_dir.path(), &config, &site, &logger, &mut stats).unwrap();
+
+    let fallback = std::fs::read_to_string(output.join("v0.2/pt-BR/guide/index.html")).unwrap();
+    assert!(fallback.contains("English guide"));
+    assert!(fallback.contains("Sem tradução — exibindo English"));
+    assert!(fallback.contains("placeholder=\"Buscar docs\""));
+    assert!(fallback.contains("data-docs-version-switcher"));
+    assert!(fallback.contains("<html lang=\"en\""));
+    assert!(fallback.contains("href=\"https://example.com/docs/v0.2/en/guide/\""));
+    let localized = std::fs::read_to_string(output.join("v0.2/pt-BR/index.html")).unwrap();
+    assert!(localized.contains("Documentação"));
+    assert!(localized.contains("<html lang=\"pt-BR\""));
+}
+
+#[test]
 fn malformed_mermaid_fails_even_when_link_validation_is_disabled() {
     let temp_dir = tempfile::tempdir().unwrap();
     let docs_dir = temp_dir.path().join("docs");
@@ -654,9 +781,9 @@ fn malformed_mermaid_fails_even_when_link_validation_is_disabled() {
 
     let output = temp_dir.path().join("site");
     let config = DocsConfig {
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: output.to_string_lossy().to_string(),
-        site_url: "https://example.com/".to_string(),
+        source_dir: docs_dir.to_path_buf(),
+        out: output.to_path_buf(),
+        site_url: url::Url::parse("https://example.com/").unwrap(),
         validate_links: false,
         ..DocsConfig::default()
     };
@@ -700,9 +827,9 @@ fn mermaid_is_offline_in_separated_and_single_file_bundles() {
 
     for bundle in ["separated", "single-file"] {
         let config = DocsConfig {
-            source_dir: docs_dir.to_string_lossy().to_string(),
-            out: temp_dir.path().join(bundle).to_string_lossy().to_string(),
-            site_url: "https://example.com/".to_string(),
+            source_dir: docs_dir.to_path_buf(),
+            out: temp_dir.path().join(bundle),
+            site_url: url::Url::parse("https://example.com/").unwrap(),
             bundle: if bundle == "single-file" {
                 BundleMode::SingleFile
             } else {
@@ -745,9 +872,9 @@ fn tape_fences_render_as_static_code_without_running_shell_commands() {
     .unwrap();
 
     let config = DocsConfig {
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: temp_dir.path().join("site").to_string_lossy().to_string(),
-        site_url: "https://example.com/".to_string(),
+        source_dir: docs_dir.to_path_buf(),
+        out: temp_dir.path().join("site"),
+        site_url: url::Url::parse("https://example.com/").unwrap(),
         ..DocsConfig::default()
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
@@ -781,9 +908,9 @@ fn rebuilding_docs_prunes_removed_page_routes() {
     std::fs::write(docs_dir.join("legacy.md"), "# Legacy\n").unwrap();
 
     let config = DocsConfig {
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: temp_dir.path().join("site").to_string_lossy().to_string(),
-        site_url: "https://example.com/".to_string(),
+        source_dir: docs_dir.to_path_buf(),
+        out: temp_dir.path().join("site"),
+        site_url: url::Url::parse("https://example.com/").unwrap(),
         ..DocsConfig::default()
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
@@ -839,9 +966,9 @@ fn brandless_docs_build_uses_neutral_defaults_without_hardcoded_brand() {
     std::fs::write(docs_dir.join("page-one.md"), "# Page 1\n\nDetails here.\n").unwrap();
 
     let config = DocsConfig {
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: temp_dir.path().join("site").to_string_lossy().to_string(),
-        site_url: "https://example.com/".to_string(),
+        source_dir: docs_dir.to_path_buf(),
+        out: temp_dir.path().join("site"),
+        site_url: url::Url::parse("https://example.com/").unwrap(),
         ..DocsConfig::default()
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
@@ -856,19 +983,10 @@ fn brandless_docs_build_uses_neutral_defaults_without_hardcoded_brand() {
     let index_html = std::fs::read_to_string(output.join("index.html")).unwrap();
     let page_html = std::fs::read_to_string(output.join("page-one/index.html")).unwrap();
 
-    // 1. Check neutral glyph is rendered
-    assert!(
-        index_html.contains("brand-fallback-glyph"),
-        "index.html should have brand-fallback-glyph"
-    );
-    assert!(
-        index_html.contains('🕮'),
-        "index.html should contain neutral glyph"
-    );
-    assert!(
-        page_html.contains("brand-fallback-glyph"),
-        "page-one should have brand-fallback-glyph"
-    );
+    // An unset logo leaves the shell's brand slot empty.
+    assert!(!index_html.contains("brand-fallback-glyph"));
+    assert!(!index_html.contains('🕮'));
+    assert!(!page_html.contains("brand-fallback-glyph"));
 
     // 2. Check no hardcoded vendor branding leaked
     assert!(
@@ -922,9 +1040,9 @@ fn custom_extension_brand_assets_render_in_output() {
     .unwrap();
 
     let config = DocsConfig {
-        source_dir: docs_dir.to_string_lossy().to_string(),
-        out: temp_dir.path().join("site").to_string_lossy().to_string(),
-        site_url: "https://example.com/".to_string(),
+        source_dir: docs_dir.to_path_buf(),
+        out: temp_dir.path().join("site"),
+        site_url: url::Url::parse("https://example.com/").unwrap(),
         ..DocsConfig::default()
     };
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();

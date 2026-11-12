@@ -1,0 +1,35 @@
+%YAML 1.2
+---
+name: ESH
+file_extensions: [esh]
+scope: source.esh
+contexts:
+  main:
+    - match: '#.*$'
+      scope: comment.line.number-sign.esh
+    - match: '"'
+      scope: punctuation.definition.string.begin.esh
+      push: double-quoted-string
+    - match: "'"
+      scope: punctuation.definition.string.begin.esh
+      push: single-quoted-string
+    - match: '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?'
+      scope: variable.other.esh
+    - match: '\b(if|then|else|elif|fi|for|while|until|do|done|case|esac|function|return|break|continue|in)\b'
+      scope: keyword.control.esh
+    - match: '\b(echo|printf|read|export|unset|shift|test|true|false)\b'
+      scope: support.function.builtin.esh
+    - match: '\b[0-9]+\b'
+      scope: constant.numeric.esh
+  double-quoted-string:
+    - meta_scope: string.quoted.double.esh
+    - match: '\\.'
+      scope: constant.character.escape.esh
+    - match: '"'
+      scope: punctuation.definition.string.end.esh
+      pop: true
+  single-quoted-string:
+    - meta_scope: string.quoted.single.esh
+    - match: "'"
+      scope: punctuation.definition.string.end.esh
+      pop: true

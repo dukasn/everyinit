@@ -922,11 +922,54 @@ const App = (() => {
             setTimeout(triggerSearchPreload, 2000);
         }
 
+        initializeVersionSwitcher();
+
         $('#searchToggle, #docs-search-input, .header-search-btn')?.addEventListener('mouseenter', triggerSearchPreload, { once: true });
         $('#searchToggle, #docs-search-input, .header-search-btn')?.addEventListener('touchstart', triggerSearchPreload, { once: true, passive: true });
 
         body.classList.add('no-transition');
         requestAnimationFrame(() => requestAnimationFrame(() => body.classList.remove('no-transition')));
+    };
+
+    const initializeVersionSwitcher = () => {
+        const select = $('[data-docs-version-switcher]');
+        if (!select) return;
+        const base = select.dataset.baseUrl;
+        const registryUrl = new URL(select.dataset.registry, base);
+        fetch(registryUrl).then(response => response.ok ? response.json() : Promise.reject())
+            .then(registry => {
+                const versions = Array.isArray(registry.versions) ? registry.versions : [];
+                if (versions.length < 2) return;
+                versions.forEach(item => {
+                    if (!item || typeof item.version !== 'string') return;
+                    const option = document.createElement('option');
+                    option.value = item.version;
+                    option.textContent = item.version + (item.version === registry.latest ? ' (latest)' : '');
+                    option.selected = item.version === select.dataset.current;
+                    select.append(option);
+                });
+                select.hidden = false;
+            }).catch(() => {});
+        select.addEventListener('change', async () => {
+            const version = select.value;
+            if (!version || version === select.dataset.current) return;
+            try {
+                const manifestUrl = new URL(version + '/manifest.json', base);
+                const response = await fetch(manifestUrl);
+                if (!response.ok) throw new Error('manifest unavailable');
+                const manifest = await response.json();
+                const locale = Array.isArray(manifest.locales) && manifest.locales.includes(select.dataset.locale)
+                    ? select.dataset.locale
+                    : ((manifest.locales || [])[0] || select.dataset.locale);
+                const route = Array.isArray(manifest.routes) && manifest.routes.includes(select.dataset.route)
+                    ? select.dataset.route
+                    : '/';
+                const page = route === '/' ? '' : route.replace(/^\/+|\/+$/g, '') + '/';
+                window.location.assign(new URL(version + '/' + locale + '/' + page, base));
+            } catch (_) {
+                window.location.assign(new URL(version + '/' + select.dataset.locale + '/', base));
+            }
+        });
     };
 
     return { init, ACTIONS };
