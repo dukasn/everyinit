@@ -157,7 +157,10 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   expect(await enumToken.evaluate((element) => getComputedStyle(element).color)).toBe(
     "rgb(167, 207, 140)",
   );
-  await expect(page.locator("header details summary").first()).toContainText("v0.2.5");
+  const latestVersion = (await page.locator("header details summary").first().innerText()).match(
+    /v\d+\.\d+\.\d+/,
+  )?.[0];
+  expect(latestVersion).toBeDefined();
   await expect(page.locator("header details summary").nth(1)).toContainText("en");
   await expect(page.locator(".docs-sidebar-heading", { hasText: "Guides" })).toBeVisible();
 
@@ -178,7 +181,9 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   await page.goto("/docs/book/installation/");
   await page.locator(".docs-variant summary").first().click();
   await expect(page.locator(".docs-variant-menu").first()).toBeVisible();
-  await expect(page.locator(".docs-variant-option.is-selected").first()).toContainText("v0.2.5");
+  await expect(page.locator(".docs-variant-option.is-selected").first()).toContainText(
+    latestVersion,
+  );
   await page.goto("/docs/book/esh/first-script/");
   const eshExample = page.locator(".doc-content code[data-language='esh']").first();
   await expect(eshExample.locator(".syntax-builtin").first()).toContainText("echo");

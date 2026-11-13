@@ -65,8 +65,11 @@ tasks:
               match: '"version":\s*"${previous_version}"'
               write: '"version": "${version}"'
             - path: "docs/.evin/module.flow"
-              match: 'v${previous_version}'
-              write: 'v${version}'
+              match: 'id:\s*v${previous_version}'
+              write: 'id: v${version}'
+            - path: "docs/.evin/module.flow"
+              match: 'latest_version:\s*v${previous_version}'
+              write: 'latest_version: v${version}'
           git:
             commit: true
             tag: true
