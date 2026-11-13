@@ -1,0 +1,18 @@
+---
+import type { EvinDocsRouteData } from "everyinit";
+import docs from "virtual:evin/docs";
+import DocsShell from "../../layouts/DocsShell.astro";
+
+export function getStaticPaths() {
+  return docs.routes
+    .filter((route) => route.path !== "/")
+    .map((route) => ({
+      params: { slug: route.path.slice(1) },
+      props: { route },
+    }));
+}
+
+const { route } = Astro.props as { route: EvinDocsRouteData };
+---
+
+<DocsShell route={route} />

@@ -57,7 +57,7 @@
           "name": "punctuation.separator.key-value.flow"
         }
       },
-      "while": "^(?:[ \\t]+.*|[ \\t]*(?:#.*)?)$",
+      "while": "^(?=[ \\t]+.*$|[ \\t]*(?:#.*)?$)",
       "patterns": [
         {
           "include": "#comment"
@@ -91,7 +91,7 @@
           "name": "punctuation.separator.key-value.flow"
         }
       },
-      "while": "^(?:[ \\t]+.*|[ \\t]*(?:#.*)?)$",
+      "while": "^(?=[ \\t]+.*$|[ \\t]*(?:#.*)?$)",
       "patterns": [
         {
           "include": "#comment"
@@ -131,7 +131,7 @@
           "name": "punctuation.separator.key-value.flow"
         }
       },
-      "while": "^(?:[ \\t]+.*|[ \\t]*(?:#.*)?)$",
+      "while": "^(?=[ \\t]+.*$|[ \\t]*(?:#.*)?$)",
       "patterns": [
         {
           "include": "#comment"
@@ -165,7 +165,7 @@
           "name": "punctuation.separator.key-value.flow"
         }
       },
-      "while": "^(?:[ \\t]+-\\s+.*|[ \\t]*(?:#.*)?)$",
+      "while": "^(?=[ \\t]+-\\s+.*$|[ \\t]*(?:#.*)?$)",
       "patterns": [
         {
           "include": "#comment"
@@ -208,7 +208,7 @@
           "name": "comment.line.number-sign.flow"
         }
       },
-      "while": "^(?:[ \\t]+.*|[ \\t]*)$",
+      "while": "^(?=[ \\t]+.*$|[ \\t]*$)",
       "contentName": "string.unquoted.block.flow",
       "patterns": [
         {
@@ -295,7 +295,7 @@
           "name": "comment.line.number-sign.flow"
         }
       },
-      "while": "^(?:\\1[ \\t]+.*|[ \\t]*)$",
+      "while": "^(?=\\1[ \\t]+.*$|[ \\t]*$)",
       "contentName": "string.unquoted.block.flow",
       "patterns": [
         {
@@ -322,7 +322,7 @@
           "name": "comment.line.number-sign.flow"
         }
       },
-      "while": "^(?:\\1[ \\t]+.*|[ \\t]*)$",
+      "while": "^(?=\\1[ \\t]+.*$|[ \\t]*$)",
       "contentName": "string.unquoted.block.flow",
       "patterns": [
         {
@@ -360,7 +360,7 @@
           "name": "punctuation.separator.key-value.flow"
         }
       },
-      "while": "^(?:\\1[ \\t]+-\\s+.*|[ \\t]*(?:#.*)?)$",
+      "while": "^(?=\\1[ \\t]+-\\s+.*$|[ \\t]*(?:#.*)?$)",
       "patterns": [
         {
           "include": "#comment"
@@ -464,7 +464,7 @@
           "name": "punctuation.separator.key-value.flow"
         }
       },
-      "while": "^(?:\\1[ \\t]+-\\s+[a-zA-Z_][a-zA-Z0-9_]*\\s*(?:#.*)?|[ \\t]*(?:#.*)?)$",
+      "while": "^(?=\\1[ \\t]+-\\s+[a-zA-Z_][a-zA-Z0-9_]*\\s*(?:#.*)?$|[ \\t]*(?:#.*)?$)",
       "patterns": [
         {
           "include": "#comment"

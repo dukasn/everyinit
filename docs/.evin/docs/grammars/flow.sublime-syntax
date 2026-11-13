@@ -5,9 +5,9 @@ file_extensions: [flow]
 scope: source.flow
 contexts:
   main:
-    - match: '^#!.*$'
+    - match: "^#!.*$"
       scope: comment.line.shebang.flow
-    - match: '#.*$'
+    - match: "#.*$"
       scope: comment.line.number-sign.flow
     - match: '\b(on|watch|steps)\b(?=\s*:)'
       scope: keyword.control.flow
@@ -29,6 +29,8 @@ contexts:
       scope: constant.numeric.flow
   double-quoted-string:
     - meta_scope: string.quoted.double.flow
+    - match: '\$\{?[A-Za-z_][A-Za-z0-9_]*\}?'
+      scope: variable.other.flow
     - match: '\\.'
       scope: constant.character.escape.flow
     - match: '"'

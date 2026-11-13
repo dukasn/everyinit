@@ -1,0 +1,947 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "FLOW",
+  "scopeName": "source.flow",
+  "patterns": [
+    {
+      "include": "#shebang"
+    },
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#tasks-section"
+    },
+    {
+      "include": "#values-section"
+    },
+    {
+      "include": "#environments-section"
+    },
+    {
+      "include": "#root-stages-block"
+    },
+    {
+      "include": "#root-stages-inline"
+    },
+    {
+      "include": "#root-block-scalar"
+    },
+    {
+      "include": "#root-key-line"
+    },
+    {
+      "include": "#block-elements"
+    }
+  ],
+  "repository": {
+    "shebang": {
+      "match": "^#!evin(?:/[^\\r\\n]+)?",
+      "name": "comment.line.shebang.flow"
+    },
+    "comment": {
+      "match": "(?:^|(?<=\\s))#.*$",
+      "name": "comment.line.number-sign.flow"
+    },
+    "variable-interpolation": {
+      "match": "\\$\\{[^{}\\r\\n]+\\}",
+      "name": "support.variable.flow"
+    },
+    "tasks-section": {
+      "begin": "^(tasks)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?=[ \\t]+.*$|[ \\t]*(?:#.*)?$)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#task-declaration"
+        },
+        {
+          "include": "#block-elements"
+        }
+      ]
+    },
+    "task-declaration": {
+      "match": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "captures": {
+        "1": {
+          "name": "markup.bold.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      }
+    },
+    "values-section": {
+      "begin": "^(values)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?=[ \\t]+.*$|[ \\t]*(?:#.*)?$)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#value-declaration"
+        },
+        {
+          "include": "#block-elements"
+        }
+      ]
+    },
+    "value-declaration": {
+      "begin": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "support.variable.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "environments-section": {
+      "begin": "^(environments)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?=[ \\t]+.*$|[ \\t]*(?:#.*)?$)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#environment-declaration"
+        },
+        {
+          "include": "#block-elements"
+        }
+      ]
+    },
+    "environment-declaration": {
+      "match": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "captures": {
+        "1": {
+          "name": "support.variable.environment.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      }
+    },
+    "root-stages-block": {
+      "begin": "^(stages)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?=[ \\t]+-\\s+.*$|[ \\t]*(?:#.*)?$)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#enum-list-item"
+        }
+      ]
+    },
+    "root-stages-inline": {
+      "begin": "^(stages)\\s*(:)(?=[ \\t]+[^#\\r\\n\\s])[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#enum-value-elements"
+        }
+      ]
+    },
+    "root-block-scalar": {
+      "begin": "^([a-zA-Z0-9_-]+)\\s*(:)\\s*([|>][-+]?[0-9]*)(?:\\s+(#.*))?\\s*$",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        },
+        "3": {
+          "name": "storage.modifier.chomping-indicator.flow"
+        },
+        "4": {
+          "name": "comment.line.number-sign.flow"
+        }
+      },
+      "while": "^(?=[ \\t]+.*$|[ \\t]*$)",
+      "contentName": "string.unquoted.block.flow",
+      "patterns": [
+        {
+          "include": "#variable-interpolation"
+        }
+      ]
+    },
+    "root-key-line": {
+      "begin": "^([a-zA-Z0-9_-]+)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "comment.block.section.flow"
+        },
+        "2": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "block-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#directive-block-scalar"
+        },
+        {
+          "include": "#block-scalar-property"
+        },
+        {
+          "include": "#directives"
+        },
+        {
+          "include": "#enum-block-list-property"
+        },
+        {
+          "include": "#enum-inline-property"
+        },
+        {
+          "include": "#env-block-list-property"
+        },
+        {
+          "include": "#env-inline-property"
+        },
+        {
+          "include": "#uses-property"
+        },
+        {
+          "include": "#run-property"
+        },
+        {
+          "include": "#path-property"
+        },
+        {
+          "include": "#property-line"
+        },
+        {
+          "include": "#general-list-item"
+        }
+      ]
+    },
+    "directive-block-scalar": {
+      "begin": "^([ \\t]*)(?:(-\\s+))?(steps|on|watch)\\s*(:)\\s*([|>][-+]?[0-9]*)(?:\\s+(#.*))?\\s*$",
+      "beginCaptures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "3": {
+          "name": "entity.name.type.directive.flow"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.flow"
+        },
+        "5": {
+          "name": "storage.modifier.chomping-indicator.flow"
+        },
+        "6": {
+          "name": "comment.line.number-sign.flow"
+        }
+      },
+      "while": "^(?=\\1[ \\t]+.*$|[ \\t]*$)",
+      "contentName": "string.unquoted.block.flow",
+      "patterns": [
+        {
+          "include": "#variable-interpolation"
+        }
+      ]
+    },
+    "block-scalar-property": {
+      "begin": "^([ \\t]*)(?:(-\\s+))?([a-zA-Z0-9_.-]+|\"[^\"\\r\\n]+\"|'[^'\\r\\n]+')\\s*(:)\\s*([|>][-+]?[0-9]*)(?:\\s+(#.*))?\\s*$",
+      "beginCaptures": {
+        "2": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "3": {
+          "name": "keyword.control.property.flow"
+        },
+        "4": {
+          "name": "punctuation.separator.key-value.flow"
+        },
+        "5": {
+          "name": "storage.modifier.chomping-indicator.flow"
+        },
+        "6": {
+          "name": "comment.line.number-sign.flow"
+        }
+      },
+      "while": "^(?=\\1[ \\t]+.*$|[ \\t]*$)",
+      "contentName": "string.unquoted.block.flow",
+      "patterns": [
+        {
+          "include": "#variable-interpolation"
+        }
+      ]
+    },
+    "directives": {
+      "begin": "^\\s*(?:(-\\s+))?(steps|on|watch)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "entity.name.type.directive.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "enum-block-list-property": {
+      "begin": "^([ \\t]*)(stages|presets|hooks|targets|scopes)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?=\\1[ \\t]+-\\s+.*$|[ \\t]*(?:#.*)?$)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#enum-list-item"
+        }
+      ]
+    },
+    "enum-inline-property": {
+      "begin": "^\\s*(?:(-\\s+))?(stage|stages|bump|channel|execution|format|hooks|presets|scope|scopes|strategy|must_be|targets)\\s*(:)(?=[ \\t]+[^#\\r\\n\\s])[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#enum-value-elements"
+        }
+      ]
+    },
+    "enum-list-item": {
+      "begin": "^\\s*(-\\s+)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#enum-value-elements"
+        }
+      ]
+    },
+    "enum-value-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "begin": "\\[",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.begin.flow"
+            }
+          },
+          "end": "\\]|$",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.end.flow"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#variable-interpolation"
+            },
+            {
+              "include": "#strings-quoted"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.sequence.flow"
+            },
+            {
+              "match": "[^\\s,\\[\\]\"'$#]+",
+              "name": "entity.name.tag.enum.flow"
+            }
+          ]
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+",
+          "name": "entity.name.tag.enum.flow"
+        }
+      ]
+    },
+    "env-block-list-property": {
+      "begin": "^([ \\t]+)(env)\\s*(:)(?=\\s*(?:#.*)?$)",
+      "beginCaptures": {
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "while": "^(?=\\1[ \\t]+-\\s+[a-zA-Z_][a-zA-Z0-9_]*\\s*(?:#.*)?$|[ \\t]*(?:#.*)?$)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#env-list-item"
+        }
+      ]
+    },
+    "env-list-item": {
+      "begin": "^\\s*(-\\s+)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#env-value-elements"
+        }
+      ]
+    },
+    "env-inline-property": {
+      "begin": "^\\s*(?:(-\\s+))?(env)\\s*(:)\\s*(?=\\[)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#env-value-elements"
+        }
+      ]
+    },
+    "env-value-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "begin": "\\[",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.begin.flow"
+            }
+          },
+          "end": "\\]|$",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.sequence.end.flow"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#variable-interpolation"
+            },
+            {
+              "include": "#strings-quoted"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.sequence.flow"
+            },
+            {
+              "match": "[^\\s,\\[\\]\"'$#]+",
+              "name": "support.variable.environment.flow"
+            }
+          ]
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+",
+          "name": "support.variable.environment.flow"
+        }
+      ]
+    },
+    "uses-property": {
+      "begin": "^\\s*(?:(-\\s+))?(uses)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "match": "[a-zA-Z0-9_.-]+/[a-zA-Z0-9_./-]+@[a-zA-Z0-9_.-]+",
+          "name": "entity.name.function.action.flow"
+        },
+        {
+          "match": "[^\\s#\\r\\n]+",
+          "name": "entity.name.function.action.flow"
+        }
+      ]
+    },
+    "run-property": {
+      "begin": "^\\s*(?:(-\\s+))?(run)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "match": "[^\\r\\n\"'$#]+|\\$(?!\\{)|(?<!\\s)#",
+          "name": "string.unquoted.command.flow"
+        }
+      ]
+    },
+    "path-property": {
+      "begin": "^\\s*(?:(-\\s+))?(asset_dir|body_path|cwd|exclude|extensions_dir|favicon|files|icon_dir|include|layout_dir|logo|modules|notes_path|out|output_dir|path|paths|rules|source_dir)\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#path-value-elements"
+        }
+      ]
+    },
+    "path-value-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#inline-sequence-path"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "match": "[^\\r\\n\"'$#]+|\\$(?!\\{)|(?<!\\s)#",
+          "name": "string.unquoted.path.flow"
+        }
+      ]
+    },
+    "inline-sequence-path": {
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.sequence.begin.flow"
+        }
+      },
+      "end": "\\]|$",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.sequence.end.flow"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.sequence.flow"
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+|\\$(?!\\{)",
+          "name": "string.unquoted.path.flow"
+        }
+      ]
+    },
+    "property-line": {
+      "begin": "^\\s*(?:(-\\s+))?([a-zA-Z0-9_.-]+|\"[^\"\\r\\n]+\"|'[^'\\r\\n]+')\\s*(:)(?=\\s|$)[ \\t]*",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        },
+        "2": {
+          "name": "keyword.control.property.flow"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "general-list-item": {
+      "begin": "^\\s*(-\\s+)",
+      "beginCaptures": {
+        "1": {
+          "name": "punctuation.definition.list.begin.flow"
+        }
+      },
+      "end": "$",
+      "patterns": [
+        {
+          "include": "#scalar-value-elements"
+        }
+      ]
+    },
+    "scalar-value-elements": {
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#inline-mapping"
+        },
+        {
+          "include": "#inline-sequence"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "include": "#scalar-constants"
+        },
+        {
+          "include": "#scalar-numbers"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "match": "[^\\r\\n\"'$#]+|\\$(?!\\{)|(?<!\\s)#",
+          "name": "string.unquoted.flow"
+        }
+      ]
+    },
+    "inline-mapping": {
+      "begin": "\\{",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.mapping.begin.flow"
+        }
+      },
+      "end": "\\}|$",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.mapping.end.flow"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#inline-mapping"
+        },
+        {
+          "include": "#inline-sequence"
+        },
+        {
+          "match": "([a-zA-Z0-9_.-]+|\"[^\"\\r\\n]+\"|'[^'\\r\\n]+')\\s*(:)(?=\\s|$)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.property.flow"
+            },
+            "2": {
+              "name": "punctuation.separator.key-value.flow"
+            }
+          }
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "include": "#inline-constants"
+        },
+        {
+          "include": "#inline-numbers"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.mapping.flow"
+        },
+        {
+          "match": "[^\\s,\\{\\}\"'$#:]+|\\$(?!\\{)",
+          "name": "string.unquoted.flow"
+        }
+      ]
+    },
+    "inline-sequence": {
+      "begin": "\\[",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.sequence.begin.flow"
+        }
+      },
+      "end": "\\]|$",
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.sequence.end.flow"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#inline-mapping"
+        },
+        {
+          "include": "#inline-sequence"
+        },
+        {
+          "include": "#strings-quoted"
+        },
+        {
+          "include": "#inline-constants"
+        },
+        {
+          "include": "#inline-numbers"
+        },
+        {
+          "include": "#variable-interpolation"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.sequence.flow"
+        },
+        {
+          "match": "[^\\s,\\[\\]\"'$#]+|\\$(?!\\{)",
+          "name": "string.unquoted.flow"
+        }
+      ]
+    },
+    "scalar-constants": {
+      "patterns": [
+        {
+          "match": "(?<=\\s|^)(true|false)(?=\\s*(?:#.*)?$)",
+          "name": "constant.language.boolean.flow"
+        },
+        {
+          "match": "(?<=\\s|^)(null|~)(?=\\s*(?:#.*)?$)",
+          "name": "constant.language.null.flow"
+        }
+      ]
+    },
+    "scalar-numbers": {
+      "match": "(?<=\\s|^)-?[0-9]+(?:\\.[0-9]+)?(?=\\s*(?:#.*)?$)",
+      "name": "constant.numeric.flow"
+    },
+    "inline-constants": {
+      "patterns": [
+        {
+          "match": "(?<=[\\[\\{\\s,])(true|false)(?=[\\]\\}\\s,#]|$)",
+          "name": "constant.language.boolean.flow"
+        },
+        {
+          "match": "(?<=[\\[\\{\\s,])(null|~)(?=[\\]\\}\\s,#]|$)",
+          "name": "constant.language.null.flow"
+        }
+      ]
+    },
+    "inline-numbers": {
+      "match": "(?<=[\\[\\{\\s,])-?[0-9]+(?:\\.[0-9]+)?(?=[\\]\\}\\s,#]|$)",
+      "name": "constant.numeric.flow"
+    },
+    "strings-quoted": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.flow"
+            }
+          },
+          "end": "\"|$",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.flow"
+            }
+          },
+          "name": "string.quoted.double.flow",
+          "patterns": [
+            {
+              "include": "#variable-interpolation"
+            },
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.flow"
+            }
+          ]
+        },
+        {
+          "begin": "'",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.flow"
+            }
+          },
+          "end": "'|$",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.flow"
+            }
+          },
+          "name": "string.quoted.single.flow",
+          "patterns": [
+            {
+              "include": "#variable-interpolation"
+            },
+            {
+              "match": "''|\\\\.",
+              "name": "constant.character.escape.flow"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

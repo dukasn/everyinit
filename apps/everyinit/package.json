@@ -1,0 +1,25 @@
+{
+  "name": "@everyinit/site",
+  "version": "0.2.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "wrangler pages dev dist --local --ip 127.0.0.1 --port 8788",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "everyinit": "*"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@tailwindcss/vite": "^4.3.5",
+    "astro": "^7.4.11",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.23.4"
+  }
+}

@@ -1,0 +1,9 @@
+---
+import docs from "virtual:evin/docs";
+import DocsShell from "../../layouts/DocsShell.astro";
+
+const route = docs.resolveRoute("/");
+if (!route) throw new Error("Evin docs manifest does not contain the root route");
+---
+
+<DocsShell route={route} />

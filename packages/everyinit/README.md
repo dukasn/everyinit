@@ -1,0 +1,77 @@
+# `everyinit`
+
+The official JavaScript package for consuming Evin's generated documentation
+data. Install once, then import the core API or a supported integration by
+subpath:
+
+```sh
+npm install everyinit
+```
+
+```js
+import { createDocsRuntime } from "everyinit";
+import evinDocs from "everyinit/vite";
+```
+
+The framework-neutral entry point provides runtime helpers and types for Evin's
+manifest, page format, and binary search index. `everyinit/vite` provides the
+Vite plugin, `virtual:evin/docs`, and `virtual:evin/search`. The plugin runs the
+configured Evin task, watches documentation sources, and exposes generated
+route, page, locale, version, asset, and search data. Search indexes load only
+when requested:
+
+```js
+import { loadSearchIndex, searchDocs } from "virtual:evin/search";
+
+const index = await loadSearchIndex("latest", "en");
+const results = searchDocs(index, "workspace configuration");
+```
+
+## Flow and ESH code highlighting
+
+`everyinit/highlight` tokenizes Evin Flow and ESH with the same TextMate
+grammars used by the VS Code extension. Initialize one highlighter for the app,
+then render its source-preserving segments as spans, native elements, or theme
+tokens:
+
+```js
+import { createCodeHighlighter } from "everyinit/highlight";
+
+const highlighter = await createCodeHighlighter();
+const tokens = highlighter.tokenizeCode('workspace:\n  name: "site"\n', "flow");
+// [{ text: "workspace", scope: "comment.block.section.flow", scopes: [...] }, ...]
+```
+
+`supportedCodeLanguages` lists the canonical identifiers: `flow` and `esh`
+(also `.flow`, `.esh`, `evin-flow`, and `evin-esh` are accepted). Unknown
+identifiers return the source as one unscoped token so integrations can keep
+their own highlighters as fallback. Tokens include both the most specific
+`scope` and the full `scopes` stack. The package uses Shiki's TextMate engine
+and Oniguruma WASM; framework integrations can use the grammar's full scope
+detail or map it into a smaller visual theme. `tokenizeCode` is also exported
+as an async helper that shares a lazily initialized highlighter.
+
+Framework adapters consume Evin's output; parsing, validation, and route
+semantics remain in the Evin CLI action.
+
+```js
+import { defineConfig } from "vite";
+import evinDocs from "everyinit/vite";
+
+export default defineConfig({
+  plugins: [
+    evinDocs({
+      command: ["evin", "run", "docs:build"],
+      cwd: "../..",
+      watch: ["../../docs"],
+    }),
+  ],
+});
+```
+
+```js
+import docs, { routes, resolveRoute, counterpart } from "virtual:evin/docs";
+```
+
+All public subpaths share the workspace's release version. Integrations are
+included in this package and do not require separate `@everyinit/*` installs.

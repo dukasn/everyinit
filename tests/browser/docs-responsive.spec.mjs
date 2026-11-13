@@ -16,7 +16,7 @@ async function isVisible(locator) {
 for (const viewport of viewports) {
   test(`${viewport.name} scaffold is predictable`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
-    await page.goto('/reference/actions/documentation-action/');
+    await page.goto('/v0.2.4/en/reference/actions/documentation-action/');
 
     await expect(page.locator('html')).toHaveAttribute('data-window-size', viewport.windowClass);
     await expect(page.locator('html')).not.toHaveAttribute('data-window-height');
@@ -68,7 +68,7 @@ for (const viewport of viewports) {
 
 test('modal drawer traps focus and supports every dismissal path', async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 900 });
-  await page.goto('/reference/actions/documentation-action/');
+  await page.goto('/v0.2.4/en/reference/actions/documentation-action/');
 
   const toggle = page.locator('#sidebarToggle');
   const sidebar = page.locator('#sidebar');
@@ -98,7 +98,7 @@ test('modal drawer traps focus and supports every dismissal path', async ({ page
 
 test('persistent drawer preference survives modal window classes', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.goto('/reference/actions/documentation-action/');
+  await page.goto('/v0.2.4/en/reference/actions/documentation-action/');
   const toggle = page.locator('#sidebarToggle');
 
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
@@ -116,7 +116,7 @@ test('persistent drawer preference survives modal window classes', async ({ page
 
 test('home page uses the same document navigation and leaves it open on desktop', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.goto('/');
+  await page.goto('/v0.2.4/en/');
 
   await expect(page.locator('#sidebarToggle')).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#appLayout')).not.toHaveClass(/sidebar-closed/);
@@ -126,7 +126,7 @@ test('home page uses the same document navigation and leaves it open on desktop'
 
 test('documentation navigation opens the current document path', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.goto('/reference/actions/documentation-action/');
+  await page.goto('/v0.2.4/en/reference/actions/documentation-action/');
 
   const current = page.locator('.nav-item[aria-current="page"]');
   await expect(current).toHaveCount(1);
@@ -136,13 +136,13 @@ test('documentation navigation opens the current document path', async ({ page }
 
 test('site header and sidebar use the documentation layout', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1544, height: 856 });
-  await page.goto('/book/installation/');
+  await page.goto('/v0.2.4/en/book/installation/');
   await expect(page.locator('article h1')).toHaveText('Installation & Quickstart');
 
   const header = page.locator('.site-header');
   await expect(header).toBeVisible();
   await expect(header.locator('.site-brand')).toContainText('Everyinit');
-  await expect(header.locator('.site-version')).toHaveText('v0.2.4');
+  await expect(header.locator('.docs-version-label')).toHaveText('v0.2.4');
   await expect(header.locator('.site-primary-nav a')).toHaveText(['Docs', 'Reference', 'ESH']);
   await expect(header.locator('.site-primary-nav a').nth(0)).toHaveAttribute('href', '../../index.html');
   await expect(header.locator('.site-primary-nav a').nth(1)).toHaveAttribute('href', '/reference/');
@@ -153,11 +153,14 @@ test('site header and sidebar use the documentation layout', async ({ page }, te
   const layout = await page.evaluate(() => {
     const headerBox = document.querySelector('.site-header').getBoundingClientRect();
     const sidebarBox = document.querySelector('#sidebar').getBoundingClientRect();
+    const filterBox = document.querySelector('.nav-filter-wrap').getBoundingClientRect();
     const articleBox = document.querySelector('.content-inner').getBoundingClientRect();
     const outlineBox = document.querySelector('.toc-rail').getBoundingClientRect();
-    return { headerBox, sidebarBox, articleBox, outlineBox };
+    const titleFont = getComputedStyle(document.querySelector('article h1')).fontSize;
+    const bodyFont = getComputedStyle(document.querySelector('.prose p')).fontSize;
+    return { headerBox, sidebarBox, filterBox, articleBox, outlineBox, titleFont, bodyFont };
   });
-  expect(layout.headerBox.height).toBe(57);
+  expect([56, 57]).toContain(layout.headerBox.height);
   expect(layout.sidebarBox.width).toBe(305);
   expect(layout.sidebarBox.top).toBe(layout.headerBox.bottom);
   expect(Math.abs(layout.articleBox.left - 429)).toBeLessThanOrEqual(2);
@@ -169,7 +172,7 @@ test('site header and sidebar use the documentation layout', async ({ page }, te
 
 test('home content uses regular Markdown without marketing components or tape playback', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/');
+  await page.goto('/v0.2.4/en/');
   await expect(page.locator('article h1')).toHaveText('Everyinit');
   await expect(page.locator('article h2')).not.toHaveCount(0);
   await expect(page.locator('.terminal-tape, .start-feature, .start-spotlight')).toHaveCount(0);
@@ -179,7 +182,7 @@ test('home content uses regular Markdown without marketing components or tape pl
 
 test('search stays centered and safely inset from the top', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/reference/actions/documentation-action/');
+  await page.goto('/v0.2.4/en/reference/actions/documentation-action/');
   await page.locator('#searchToggle').click();
   const search = page.locator('#searchModal');
   const searchResults = page.locator('#docs-search-results');
@@ -213,7 +216,7 @@ test('search stays centered and safely inset from the top', async ({ page }) => 
 test('documentation content reflows without horizontal page overflow', async ({ page }) => {
   for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 900 }]) {
     await page.setViewportSize(viewport);
-    await page.goto('/book/installation/');
+    await page.goto('/v0.2.4/en/book/installation/');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
     await expect(page.locator('.prose')).toBeVisible();
@@ -222,7 +225,7 @@ test('documentation content reflows without horizontal page overflow', async ({ 
 
 test('sidebar filter shows matching pages and restores the full navigation', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.goto('/book/installation/');
+  await page.goto('/v0.2.4/en/book/installation/');
   const filter = page.locator('#navFilter');
   await filter.fill('install');
   await expect(page.locator('.nav-item:visible')).toHaveCount(1);

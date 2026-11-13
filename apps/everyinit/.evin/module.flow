@@ -1,0 +1,46 @@
+#!evin/v1
+module:
+  name: everyinit-site
+
+tasks:
+  dev:
+    stage: Preview
+    description: "Run the Everyinit Astro site with live documentation data"
+    steps:
+      - run: npm run dev --workspace @everyinit/site
+
+  build:
+    stage: Build
+    description: "Build the Everyinit home page and Evin-powered docs routes"
+    needs: [docs:build]
+    steps:
+      - run: EVIN_DOCS_PREBUILT=1 npm run build --workspace @everyinit/site
+
+  preview:
+    stage: Preview
+    description: "Build and preview at http://127.0.0.1:8788 through Cloudflare Pages"
+    needs: [everyinit-site:build]
+    steps:
+      - run: npm run preview --workspace @everyinit/site
+
+  check:
+    stage: Check
+    description: "Type-check the Everyinit Astro site"
+    steps:
+      - run: npm run check --workspace @everyinit/site
+
+  e2e:
+    stage: Test
+    description: "Run browser tests for the Everyinit home and documentation site"
+    needs: [everyinit-site:verify]
+    steps:
+      - run: npm exec -- playwright test --config ../../playwright.config.mjs tests/site.spec.mjs
+
+  verify:
+    stage: Test
+    description: "Type-check and build the Everyinit site"
+    needs: [docs:build]
+    steps:
+      - run: npm exec -- oxfmt --check src astro.config.mjs functions/_middleware.ts package.json tests/site.spec.mjs README.md tsconfig.json
+      - run: npm run check --workspace @everyinit/site
+      - run: EVIN_DOCS_PREBUILT=1 npm run build --workspace @everyinit/site

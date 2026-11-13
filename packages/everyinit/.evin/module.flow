@@ -1,0 +1,30 @@
+#!evin/v1
+module:
+  name: everyinit-package
+
+tasks:
+  format:
+    stage: Check
+    description: "Check formatting for the Everyinit npm package"
+    steps:
+      - run: npm exec -- oxfmt --check index.js index.d.ts vite.js vite.d.ts virtual.d.ts index.test.js vite.test.js package.json README.md
+
+  test:
+    stage: Test
+    description: "Run the framework-neutral Everyinit package contract tests"
+    steps:
+      - run: npm test --workspace everyinit
+
+  distribution-verify:
+    stage: Test
+    description: "Verify the files included in the unified Everyinit npm package"
+    steps:
+      - run: npm pack --workspace everyinit --dry-run
+
+  verify:
+    stage: Test
+    description: "Run Everyinit package contract and distribution checks"
+    needs:
+      - everyinit-package:format
+      - everyinit-package:test
+      - everyinit-package:distribution-verify

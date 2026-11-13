@@ -1,0 +1,256 @@
+---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import { renderHighlightedCode } from "../lib/render-doc";
+
+const heroCode = `#!evin/v1
+workspace:
+  name: storefront
+  execution: linear
+
+stages: [Check, Test]
+
+tasks:
+  lint:
+    stage: Check
+    run: npm run lint
+
+  test:
+    stage: Test
+    needs: [lint]
+    run: npm test`;
+
+const principles = [
+  { number: "01", title: "One place for project work", text: "Describe the jobs around your code once. Evin resolves the order, dependencies, and shared context before anything runs." },
+  { number: "02", title: "The same checks everywhere", text: "Run a task from your terminal, a Git hook, your editor, or CI. Keep the command and its result tied to the workspace." },
+  { number: "03", title: "Automation that stays readable", text: "Use declarative Flow for the common path and ESH when a task needs real control flow, data, or cleanup." },
+];
+
+const integrations = ["Terminal", "Git hooks", "VS Code", "CI", "Evin actions"];
+
+const projects = [
+  {
+    number: "02",
+    name: "ESH",
+    label: "SCRIPTING",
+    description: "Structured scripts for branching, data, process control, and cleanup.",
+    href: "https://docs.everyinit.dev/book/esh",
+    link: "Read the ESH guide",
+  },
+  {
+    number: "03",
+    name: "VS Code",
+    label: "EDITOR",
+    description: "Flow and ESH syntax support, diagnostics, and workspace task access.",
+    href: "https://docs.everyinit.dev/book/esh/editor-integration",
+    link: "Set up VS Code",
+  },
+  {
+    number: "04",
+    name: "Everyinit for the web",
+    label: "NPM PACKAGE · IN DEVELOPMENT",
+    description: "Framework-neutral docs data with a Vite integration, built for localized and versioned routes.",
+    href: "https://github.com/dukasn/everyinit/tree/main/packages/everyinit",
+    link: "Explore package development",
+  },
+];
+---
+
+<SiteLayout>
+  <header class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8 lg:px-12">
+    <a href="/" class="flex items-center gap-3 font-semibold tracking-tight" aria-label="Everyinit home">
+      <span class="grid size-10 place-items-center rounded-xl bg-ink text-lime shadow-sm">
+        <span class="brand-mark size-6" aria-hidden="true"></span>
+      </span>
+      <span class="text-lg">everyinit</span>
+    </a>
+    <nav class="hidden items-center gap-6 text-sm text-moss lg:flex xl:gap-8" aria-label="Main navigation">
+      <a class="transition hover:text-ink" href="#workflow">How it works</a>
+      <a class="transition hover:text-ink" href="#integrations">Integrations</a>
+      <a class="transition hover:text-ink" href="#projects">Projects</a>
+      <a class="transition hover:text-ink" href="https://docs.everyinit.dev/">Documentation</a>
+      <a class="transition hover:text-ink" href="https://github.com/dukasn/everyinit">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+    <a href="https://docs.everyinit.dev/book/installation" class="hidden shrink-0 rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:bg-moss lg:inline-flex">
+      Get started <span class="ml-2" aria-hidden="true">↗</span>
+    </a>
+    <a href="https://docs.everyinit.dev/" class="shrink-0 rounded-full border border-line px-4 py-2 text-sm font-medium lg:hidden">Docs</a>
+  </header>
+
+  <main>
+    <section class="mx-auto grid max-w-7xl gap-14 px-5 pb-24 pt-12 sm:px-8 sm:pt-20 lg:grid-cols-[1.03fr_.97fr] lg:items-center lg:px-12 lg:pb-32 lg:pt-24">
+      <div class="max-w-2xl">
+        <p class="mb-7 inline-flex items-center gap-2 rounded-full border border-[#d8dfcf] bg-white/60 px-3.5 py-2 text-xs font-medium tracking-wide text-moss">
+          <span class="size-2 rounded-full bg-[#78a467]"></span>
+          OPEN SOURCE · BUILT FOR YOUR REPOSITORY
+        </p>
+        <h1 class="max-w-[12ch] text-[clamp(2.6rem,8vw,6.6rem)] font-semibold leading-[.91] tracking-[-.075em] text-ink">
+          Development,<br /><span class="text-moss">orchestrated.</span>
+        </h1>
+        <p class="mt-8 max-w-xl text-lg leading-8 text-[#566356] sm:text-xl sm:leading-9">
+          Give the work around your code a shared home. Define project tasks once, then run them from the terminal, Git hooks, your editor, or CI.
+        </p>
+        <div class="mt-9 flex flex-wrap items-center gap-3">
+          <a href="https://docs.everyinit.dev/book/installation" class="inline-flex items-center gap-3 rounded-full bg-ink px-6 py-4 text-sm font-semibold text-paper shadow-[0_12px_28px_-16px_#18211b] transition hover:-translate-y-0.5 hover:bg-moss">
+            Start with Evin <span class="text-lime" aria-hidden="true">↗</span>
+          </a>
+          <a href="https://github.com/dukasn/everyinit" class="inline-flex items-center gap-2 rounded-full border border-[#cfd5ca] px-6 py-4 text-sm font-semibold text-ink transition hover:border-moss hover:bg-white/70">
+            Explore the project <span aria-hidden="true">↗</span>
+          </a>
+        </div>
+        <p class="mt-5 text-xs leading-5 text-moss">Early development · Downloads are coming soon · Install from source today</p>
+      </div>
+
+      <div class="relative mx-auto w-full max-w-[590px] lg:ml-auto">
+        <div class="absolute -inset-2 -rotate-2 rounded-[2rem] bg-[#e2e7d8] sm:-inset-4"></div>
+        <div class="relative overflow-hidden rounded-[1.5rem] border border-[#334337] bg-[#17211a] shadow-[0_30px_90px_-35px_rgba(22,34,24,.55)]">
+          <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
+            <div class="flex gap-1.5"><span class="size-2.5 rounded-full bg-[#839278]"></span><span class="size-2.5 rounded-full bg-[#62735c]"></span><span class="size-2.5 rounded-full bg-[#4b5c4b]"></span></div>
+            <span class="font-mono text-[11px] text-[#9eac9a]">storefront · evin</span>
+            <span class="rounded-full bg-[#25372a] px-2.5 py-1 font-mono text-[10px] text-[#c9e3b9]">ready</span>
+          </div>
+          <div class="px-5 py-6 sm:px-7 sm:py-8">
+            <p class="font-mono text-xs text-[#a0ae9b]">.evin/workspace.flow</p>
+            <pre class="home-hero-code mt-5 overflow-x-auto font-mono text-[12px] leading-[1.9] text-[#e5ebdf] sm:text-[13px]"><code set:html={renderHighlightedCode(heroCode, "flow")}></code></pre>
+          </div>
+          <div class="border-t border-white/10 bg-[#1d2a20] px-5 py-4 sm:px-7">
+            <div class="flex items-center justify-between font-mono text-[11px]">
+              <span class="text-[#a7b3a2]">$ evin run test</span><span class="text-[#c3e4a0]">✓ passed</span>
+            </div>
+            <div class="mt-3 flex gap-2"><span class="h-1.5 flex-[2] rounded-full bg-[#91b775]"></span><span class="h-1.5 flex-1 rounded-full bg-[#6c8862]"></span><span class="h-1.5 flex-[3] rounded-full bg-[#4b644b]"></span></div>
+            <p class="mt-3 font-mono text-[10px] text-[#92a18e]">lint  0.42s <span class="px-2">·</span> tests  2.18s <span class="px-2">·</span> workspace clean</p>
+          </div>
+        </div>
+        <div class="absolute -bottom-7 -left-5 hidden rounded-2xl border border-[#d5ddce] bg-surface px-4 py-3 shadow-lg sm:flex sm:items-center sm:gap-3">
+          <span class="grid size-9 place-items-center rounded-full bg-lime text-lg">↳</span>
+          <span><span class="block text-xs font-semibold">One task graph</span><span class="block text-[11px] text-moss">Terminal · hooks · CI</span></span>
+        </div>
+      </div>
+    </section>
+
+    <section id="integrations" class="border-y border-[#dfe3d9] bg-[#eeeee6]">
+      <div class="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-7 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-12">
+        <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">One project workflow, wherever work happens</p>
+        <div class="flex flex-wrap gap-x-7 gap-y-3 text-sm text-[#536052]">
+          {integrations.map((integration) => <span class="inline-flex items-center gap-2"><span class="size-1.5 rounded-full bg-[#8eaa7b]"></span>{integration}</span>)}
+        </div>
+      </div>
+    </section>
+
+    <section id="workflow" class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12 lg:py-28">
+      <div class="grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
+        <div class="max-w-md">
+          <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">Less glue. More flow.</p>
+          <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">Your project has a rhythm. Make it repeatable.</h2>
+          <p class="mt-6 text-base leading-7 text-[#637063]">Evin brings commands, dependencies, scripts, and delivery steps into a workspace your team can understand and keep improving.</p>
+          <a href="https://docs.everyinit.dev/book" class="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-[#a6b69a] underline-offset-4">See how it works <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          {principles.map((item) => <article class="rounded-2xl border border-line bg-surface p-6 sm:p-7">
+            <p class="font-mono text-xs text-moss">{item.number} / WORKFLOW</p>
+            <h3 class="mt-8 text-xl font-semibold tracking-tight">{item.title}</h3>
+            <p class="mt-3 text-sm leading-6 text-[#647064]">{item.text}</p>
+          </article>)}
+          <article class="rounded-2xl bg-[#d9e5cf] p-6 sm:p-7">
+            <p class="font-mono text-xs text-[#435741]">MADE FOR THE WHOLE REPOSITORY</p>
+            <div class="mt-8 flex items-end justify-between gap-4">
+              <p class="max-w-[15rem] text-xl font-semibold leading-snug tracking-tight">One version of the workflow, from laptop to release.</p>
+              <span class="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-xl text-lime">↗</span>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="projects" class="border-y border-[#dfe3d9] bg-[#eeeee6]">
+      <div class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12 lg:py-28">
+        <div class="mb-10 grid gap-6 sm:mb-12 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div class="max-w-2xl">
+            <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">The Everyinit ecosystem</p>
+            <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">One core, connected extensions.</h2>
+          </div>
+          <p class="max-w-md text-sm leading-6 text-[#637063]">The workflow stays at the center. Language, editor, and web tooling build on the same workspace and move forward together.</p>
+        </div>
+
+        <div class="grid overflow-hidden rounded-[1.75rem] border border-[#cbd4c4] bg-surface lg:grid-cols-[.78fr_1.22fr]">
+          <article class="relative flex flex-col justify-between gap-10 bg-ink p-7 text-paper sm:p-10">
+            <div>
+              <p class="font-mono text-xs uppercase tracking-[.14em] text-[#bac8b0]">01 <span class="px-1 text-[#71806e]">/</span> Core</p>
+              <h3 class="mt-8 text-4xl font-semibold tracking-[-.05em] sm:text-5xl">Evin</h3>
+              <p class="mt-4 max-w-sm text-sm leading-6 text-[#c0c9bc]">The Rust command line engine reads the workspace and coordinates each task, action, and integration.</p>
+            </div>
+            <a href="https://docs.everyinit.dev/book/first-workflow" class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#d8eba9] underline decoration-[#829871] underline-offset-4 hover:text-white">
+              Build your first workflow <span aria-hidden="true">↗</span>
+            </a>
+            <span aria-hidden="true" class="pointer-events-none absolute -right-5 top-1/2 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border-[6px] border-[#eeeee6] bg-[#91ad78] text-lg text-ink lg:flex">›</span>
+          </article>
+
+          <div class="divide-y divide-line px-6 sm:px-10">
+            {projects.map((project) => <article class="grid gap-3 py-6 sm:grid-cols-[3.5rem_1fr_auto] sm:items-center sm:gap-5 sm:py-7">
+              <span class="font-mono text-xs text-[#84917f]">{project.number}</span>
+              <div>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <h3 class="text-lg font-semibold tracking-tight text-ink">{project.name}</h3>
+                  <span class="text-[9px] font-semibold uppercase tracking-[.13em] text-[#64735e]">{project.label}</span>
+                </div>
+                <p class="mt-1.5 max-w-xl text-sm leading-6 text-[#637063]">{project.description}</p>
+              </div>
+              <a href={project.href} aria-label={`${project.link} — ${project.name}`} class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-ink underline decoration-[#a6b69a] underline-offset-4 hover:text-moss sm:justify-self-end">
+                <span class="sm:hidden">{project.link}</span><span aria-hidden="true">↗</span>
+              </a>
+            </article>)}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mx-auto max-w-7xl px-5 pt-20 pb-20 sm:px-8 sm:pt-24 lg:px-12 lg:pt-28 lg:pb-28">
+      <div class="overflow-hidden rounded-[2rem] bg-ink text-paper">
+        <div class="grid gap-10 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-end lg:p-14">
+          <div class="max-w-2xl">
+            <p class="text-xs font-semibold uppercase tracking-[.16em] text-[#b1c29e]">Get started with Evin</p>
+            <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">Start with the work you already do.</h2>
+            <p class="mt-5 max-w-xl leading-7 text-[#b5c0b1]">Install from source, add your first task, and keep the commands your project already trusts.</p>
+          </div>
+          <div class="flex flex-col gap-3 sm:flex-row lg:flex-col">
+            <a href="https://docs.everyinit.dev/book/installation" class="inline-flex items-center justify-center gap-3 rounded-full bg-lime px-6 py-4 text-sm font-semibold text-ink transition hover:bg-[#e4f8aa]">Read the install guide <span aria-hidden="true">↗</span></a>
+            <a href="https://github.com/dukasn/everyinit/releases" class="inline-flex items-center justify-center gap-3 rounded-full border border-white/20 px-6 py-4 text-sm font-semibold text-paper transition hover:bg-white/10">Downloads <span class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-normal">Coming soon</span></a>
+          </div>
+        </div>
+        <div class="grid border-t border-white/10 md:grid-cols-3">
+          {["Linux", "macOS", "Windows"].map((platform) => <div class="flex items-center justify-between border-b border-white/10 px-7 py-5 text-sm text-[#bbc6b7] last:border-0 md:border-b-0 md:border-r md:px-10">
+            <span>{platform}</span><span class="font-mono text-[10px] text-[#869583]">DOWNLOAD SOON</span>
+          </div>)}
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="legal" class="border-t border-line bg-[#f0efe8]">
+    <div class="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[1.2fr_1fr_1fr] lg:px-12 lg:py-16">
+      <div>
+        <a href="/" class="inline-flex items-center gap-2 font-semibold text-ink"><span class="brand-mark size-5" aria-hidden="true"></span> everyinit</a>
+        <p class="mt-4 max-w-xs text-xs leading-5 text-[#647064]">Open source tools for the workflows, scripts, and documentation around your code.</p>
+        <p class="mt-5 text-[10px] text-[#788276]">© {new Date().getFullYear()} Everyinit contributors</p>
+      </div>
+      <div>
+        <h2 class="text-[10px] font-semibold uppercase tracking-[.16em] text-[#52634f]">Explore</h2>
+        <div class="mt-4 grid justify-start gap-3 text-xs text-[#647064]">
+          <a href="https://docs.everyinit.dev/">Documentation</a>
+          <a href="https://docs.everyinit.dev/contributing/development">Development guide</a>
+          <a href="https://github.com/dukasn/everyinit">Source code ↗</a>
+          <a href="https://github.com/dukasn/everyinit/issues">Issues and discussions ↗</a>
+        </div>
+      </div>
+      <div>
+        <h2 class="text-[10px] font-semibold uppercase tracking-[.16em] text-[#52634f]">Legal and credits</h2>
+        <div class="mt-4 grid justify-start gap-3 text-xs text-[#647064]">
+          <a href="https://github.com/dukasn/everyinit/blob/main/LICENSE">Project license</a>
+          <a href="https://github.com/dukasn/everyinit/blob/main/THIRD_PARTY_NOTICES.md">Third-party notices</a>
+          <a href="https://github.com/dukasn/everyinit/blob/main/ACKNOWLEDGMENTS.md">Acknowledgments</a>
+          <a href="https://github.com/dukasn/everyinit/blob/main/TRADEMARKS.md">Trademark policy</a>
+          <a href="https://github.com/dukasn/everyinit/tree/main/LICENSES">Bundled license texts ↗</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</SiteLayout>

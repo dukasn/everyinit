@@ -1,0 +1,114 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "ESH (Evin Shell)",
+  "scopeName": "source.esh",
+  "patterns": [
+    {
+      "include": "#shebang"
+    },
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#variables"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#numbers"
+    }
+  ],
+  "repository": {
+    "shebang": {
+      "match": "^#!.*\\besh\\b.*$",
+      "name": "comment.line.shebang.esh"
+    },
+    "comment": {
+      "match": "#.*$",
+      "name": "comment.line.number-sign.esh"
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(if|then|elif|else|fi|for|in|do|done|while|until|case|esac)\\b",
+          "name": "keyword.control.esh"
+        },
+        {
+          "match": "\\b(fn|function|return|exit|export|set|let|unset)\\b",
+          "name": "keyword.declaration.esh"
+        },
+        {
+          "match": "\\b(echo|cd|pwd|true|false|exec|shift|read)\\b",
+          "name": "support.function.builtin.esh"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "match": "\\$\\{[a-zA-Z_][a-zA-Z0-9_]*\\}",
+          "name": "variable.other.bracket.esh"
+        },
+        {
+          "match": "\\$[a-zA-Z_][a-zA-Z0-9_]*",
+          "name": "variable.other.normal.esh"
+        },
+        {
+          "match": "\\$[@*#?$!0-9-]",
+          "name": "variable.language.special.esh"
+        }
+      ]
+    },
+    "operators": {
+      "match": "(&&|\\|\\||\\||;|>>|>|<|2>&1|2>|&>|==|!=|-eq|-ne|-lt|-le|-gt|-ge)",
+      "name": "keyword.operator.esh"
+    },
+    "numbers": {
+      "match": "\\b[0-9]+\\b",
+      "name": "constant.numeric.esh"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.esh" }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.esh" }
+          },
+          "name": "string.quoted.double.esh",
+          "patterns": [
+            {
+              "include": "#variables"
+            },
+            {
+              "match": "\\\\.",
+              "name": "constant.character.escape.esh"
+            }
+          ]
+        },
+        {
+          "begin": "'",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.esh" }
+          },
+          "end": "'",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.esh" }
+          },
+          "name": "string.quoted.single.esh"
+        }
+      ]
+    }
+  }
+}
+

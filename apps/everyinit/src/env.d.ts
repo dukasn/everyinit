@@ -1,0 +1,1 @@
+/// <reference types="everyinit/vite" />

@@ -1,0 +1,64 @@
+{
+  "name": "everyinit",
+  "version": "0.2.4",
+  "description": "Framework-neutral APIs and web framework integrations for Evin",
+  "homepage": "https://everyinit.dev/",
+  "bugs": {
+    "url": "https://github.com/dukasn/everyinit/issues"
+  },
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dukasn/everyinit.git",
+    "directory": "packages/everyinit"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "highlight.js",
+    "highlight.d.ts",
+    "grammars/*.tmLanguage.json",
+    "vite.js",
+    "vite.d.ts",
+    "virtual.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    },
+    "./highlight": {
+      "types": "./highlight.d.ts",
+      "import": "./highlight.js"
+    },
+    "./vite": {
+      "types": "./vite.d.ts",
+      "import": "./vite.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "peerDependencies": {
+    "vite": ">=6"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "shiki": "^4.6.0"
+  }
+}

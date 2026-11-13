@@ -1,9 +1,14 @@
 {
   "name": "everyinit-development",
   "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "type": "module",
   "scripts": {
-    "build": "./.evin/cloudflare-build"
+    "build": "./.evin/cloudflare-build",
+    "test:everyinit": "npm test --workspace everyinit"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
@@ -21,12 +26,12 @@
     },
     "runtime": {
       "name": "node",
-      "version": "22.23.3",
+      "version": "22.23.4",
       "onFail": "error"
     }
   },
   "engines": {
-    "node": "22.23.3",
+    "node": "22.23.4",
     "npm": "10.9.9"
   },
   "packageManager": "npm@10.9.9",
