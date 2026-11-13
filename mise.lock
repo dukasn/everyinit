@@ -17,6 +17,7 @@ backend = "aqua:npm/cli"
 specifiers = ["10.9.9"]
 
 [tools.npm."platforms.linux-x64"]
+checksum = "sha256:c80bd097147cce32e31010b791bab8c71a26a5e10668210ec9d2e7f4c7cea2a1"
 url = "https://registry.npmjs.org/npm/-/npm-10.9.9.tgz"
 
 [[tools.rust]]
