@@ -43,9 +43,10 @@ test("the project home presents Evin and keeps downloads clearly marked as place
       .first()
       .evaluate((element) => getComputedStyle(element).color),
   ).toBe("rgb(232, 121, 114)");
-  for (const project of ["Evin", "ESH", "VS Code", "Everyinit for the web"]) {
+  for (const project of ["Evin", "ESH", "IDE integrations", "Everyinit for the web"]) {
     await expect(page.getByRole("heading", { name: project, exact: true })).toBeVisible();
   }
+  await expect(page.getByText(/VS Code extension packages syntax support/)).toBeVisible();
   await expect(page.getByText("NPM PACKAGE · IN DEVELOPMENT")).toBeVisible();
   const footer = page.getByRole("contentinfo");
   await expect(footer.getByRole("link", { name: "Project license" })).toHaveAttribute(
@@ -95,7 +96,7 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   expect(await enumToken.evaluate((element) => getComputedStyle(element).color)).toBe(
     "rgb(167, 207, 140)",
   );
-  await expect(page.locator("header details summary").first()).toContainText("v0.2.4");
+  await expect(page.locator("header details summary").first()).toContainText("v0.2.5");
   await expect(page.locator("header details summary").nth(1)).toContainText("en");
   await expect(page.locator(".docs-sidebar-heading", { hasText: "Guides" })).toBeVisible();
 
@@ -116,7 +117,7 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   await page.goto("/docs/book/installation/");
   await page.locator(".docs-variant summary").first().click();
   await expect(page.locator(".docs-variant-menu").first()).toBeVisible();
-  await expect(page.locator(".docs-variant-option.is-selected").first()).toContainText("v0.2.4");
+  await expect(page.locator(".docs-variant-option.is-selected").first()).toContainText("v0.2.5");
   await page.goto("/docs/book/esh/first-script/");
   const eshExample = page.locator(".doc-content code[data-language='esh']").first();
   await expect(eshExample.locator(".syntax-builtin").first()).toContainText("echo");

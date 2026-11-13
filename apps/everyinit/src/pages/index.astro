@@ -25,7 +25,7 @@ const principles = [
   { number: "03", title: "Automation that stays readable", text: "Use declarative Flow for the common path and ESH when a task needs real control flow, data, or cleanup." },
 ];
 
-const integrations = ["Terminal", "Git hooks", "VS Code", "CI", "Evin actions"];
+const integrations = ["Terminal", "Git hooks", "IDE integrations", "CI", "Evin actions"];
 
 const projects = [
   {
@@ -38,11 +38,11 @@ const projects = [
   },
   {
     number: "03",
-    name: "VS Code",
-    label: "EDITOR",
-    description: "Flow and ESH syntax support, diagnostics, and workspace task access.",
+    name: "IDE integrations",
+    label: "STANDARD LSP · SHARED SCHEMAS",
+    description: "Connect LSP-capable editors to Evin and ESH language services. The VS Code extension packages syntax support, diagnostics, and workspace task access.",
     href: "https://docs.everyinit.dev/book/esh/editor-integration",
-    link: "Set up VS Code",
+    link: "Connect an IDE",
   },
   {
     number: "04",
