@@ -54,4 +54,6 @@ tasks:
           versions:
             - id: v0.2.4
               source_dir: docs
-          latest_version: v0.2.4
+            - id: v0.2.5
+              source_dir: docs
+          latest_version: v0.2.5
