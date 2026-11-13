@@ -1,0 +1,5 @@
+[settings]
+# Reuse the existing version files so mise, Rust tooling, and Cloudflare Pages
+# all select the same Node.js and Rust toolchains without duplicate pins.
+idiomatic_version_file_enable_tools = ["node", "npm", "rust"]
+idiomatic_version_file_disable_files = ["node:package.json"]

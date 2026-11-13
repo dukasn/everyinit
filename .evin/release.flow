@@ -30,13 +30,15 @@ tasks:
 
   distribution-rehearsal:
     stage: Publish
-    description: "Build and verify all Evin, ESH, and editor extension distribution formats without publishing"
+    description: "Build and verify every release distribution without publishing"
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs:
       - release:changelog-rehearsal
       - evin:package:distribution-verify
       - esh:package:distribution-verify
       - vscode:package:distribution-verify
+      - everyinit-package:distribution-verify
+      - everyinit-site:verify
     steps:
       - run: cargo run --locked -p esh -- scripts/release/check/rehearsal-clean.esh
 
@@ -56,11 +58,21 @@ tasks:
             - path: "editors/vscode/package.json"
               match: '"version":\s*"${previous_version}"'
               write: '"version": "${version}"'
+            - path: "packages/everyinit/package.json"
+              match: '"version":\s*"${previous_version}"'
+              write: '"version": "${version}"'
+            - path: "apps/everyinit/package.json"
+              match: '"version":\s*"${previous_version}"'
+              write: '"version": "${version}"'
+            - path: "docs/.evin/module.flow"
+              match: 'v${previous_version}'
+              write: 'v${version}'
           git:
             commit: true
             tag: true
             defer: true
       - run: cargo update --workspace
+      - run: npm install --package-lock-only
       - run: cargo check --workspace --locked
 
   changelog:
@@ -88,9 +100,11 @@ tasks:
     steps:
       - run: cargo evin-dev run docs:evin-catalog
       - run: cargo evin-dev run docs:catalog
-      - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.json CHANGELOG.md
+      - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.json CHANGELOG.md package-lock.json
       - run: git add crates/evin/assets/config-catalog.json crates/esh/assets/builtins-catalog.json
       - run: git add editors/vscode/package.json
+      - run: git add packages/everyinit/package.json apps/everyinit/package.json
+      - run: git add docs/.evin/module.flow
       - uses: evin/git-release@v1
         with:
           stage: existing
@@ -378,12 +392,13 @@ tasks:
 
   package:
     stage: Publish
-    description: "Build all GitHub release formats for Evin, ESH, and editor extensions"
+    description: "Build release distributions for Evin, ESH, the editor extension, and npm integrations"
     needs:
       - release:tag-verify
       - evin:package:github
       - esh:package:github
       - vscode:package:github
+      - everyinit-package:distribution-verify
 
   package-cloudflare:
     stage: Publish
@@ -403,12 +418,13 @@ tasks:
 
   package-verify:
     stage: Publish
-    description: "Verify all release archives and editor packages"
+    description: "Verify all release archives, editor packages, and the Everyinit npm package"
     needs:
       - release:package
       - evin:package:github-verify
       - esh:package:github-verify
       - vscode:package:github-verify
+      - everyinit-package:distribution-verify
 
   publish-prebuilt:
     stage: Publish

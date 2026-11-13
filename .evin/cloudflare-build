@@ -18,5 +18,7 @@ repository_root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
 install_root="$repository_root/.evin/build"
 "$cargo_command" install --locked --path "$repository_root/crates/evin" --root "$install_root" --force
 export PATH="$install_root/bin${cargo_bin_dir:+:$cargo_bin_dir}:$PATH"
+export EVIN_BIN="$install_root/bin/evin"
+export EVIN_DOCS_PREBUILT=1
 
-exec evin run docs:build
+exec evin run everyinit-site:build

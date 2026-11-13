@@ -3,6 +3,8 @@
 
 # Explicitly allow standard root files and directories
 !/.gitignore
+!/.mise.toml
+!/mise.lock
 !/Cargo.toml
 !/Cargo.lock
 !/rust-toolchain.toml
@@ -36,12 +38,17 @@
 !/playwright.config.mjs
 !/scripts/
 !/tests/
+!/packages/
+!/apps/
 
 # (progress.md and STACK.md remain excluded by the /* rule)
 
 # Standard Rust & editor ignores for allowed directories
 target/
 node_modules/
+**/.astro/
+**/test-results/
+**/playwright-report/
 **/dist/
 **/staging/
 __pycache__/

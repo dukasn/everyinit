@@ -40,9 +40,12 @@ jobs:
           ref: ${{ inputs.commit || github.event.workflow_run.head_sha }}
           fetch-depth: 0
           token: ${{ secrets.RELEASE_BOT_TOKEN }}
-      - uses: dtolnay/rust-toolchain@1.98.0
+      - uses: jdx/mise-action@v5
         with:
-          targets: x86_64-unknown-linux-musl
+          cache: false
+        env:
+          MISE_ENABLE_TOOLS: rust
+          MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: rust
       - uses: Swatinem/rust-cache@v2
       - name: Require exact successful main push CI
         run: cargo evin-dev run --verbose release:require-ci
@@ -52,14 +55,16 @@ jobs:
       - name: Install release packaging tools
         if: steps.proposal.outputs.merged == '1'
         run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
-      - uses: actions/setup-node@v4
+      - name: Install the release Rust target
+        if: steps.proposal.outputs.merged == '1'
+        run: rustup target add x86_64-unknown-linux-musl
+      - uses: jdx/mise-action@v5
         if: steps.proposal.outputs.merged == '1'
         with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            editors/vscode/package-lock.json
+          cache: false
+        env:
+          MISE_ENABLE_TOOLS: node,npm
+          MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: node,npm
       - name: Bootstrap locked workspace dependencies
         if: steps.proposal.outputs.merged == '1'
         run: |

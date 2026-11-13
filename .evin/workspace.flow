@@ -9,6 +9,8 @@ workspace:
     args: [evin-dev]
   modules:
     - docs/
+    - apps/everyinit/
+    - packages/everyinit/
     - crates/evin/
     - crates/esh/
     - infra/
@@ -18,6 +20,7 @@ workspace:
 
 stages:
   - Build
+  - Preview
   - Check
   - Test
   - Docs
@@ -67,10 +70,11 @@ tasks:
 
   e2e:
     stage: Test
-    description: "Run Evin and ESH binary-level integration tests"
+    description: "Run Evin, ESH, and Everyinit site browser integration tests"
     needs:
       - evin:e2e
       - esh:e2e
+      - everyinit-site:e2e
 
   quality:
     stage: Check
@@ -80,6 +84,8 @@ tasks:
       - fmt
       - lint
       - docs:build
+      - everyinit-site:verify
+      - everyinit-package:verify
       - infra:quality:verify
       - vscode:verify
 
