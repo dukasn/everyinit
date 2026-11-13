@@ -66,10 +66,71 @@ test("the project home presents Evin and keeps downloads clearly marked as place
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
     await expectNoHorizontalOverflow(page);
+    const backdrop = await page.locator(".home-hero-backdrop").boundingBox();
+    expect(backdrop?.x).toBeGreaterThanOrEqual(0);
+    expect(backdrop && backdrop.x + backdrop.width).toBeLessThanOrEqual(width);
     if (width < 1024) {
-      await expect(page.getByRole("link", { name: "Docs", exact: true })).toBeVisible();
+      await expect(page.locator(".home-mobile-nav > summary")).toBeVisible();
       await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeHidden();
     }
+  }
+});
+
+test("the home navigation menus work with pointer, keyboard, and touch layouts", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("/");
+
+  const desktopNavigation = page.getByRole("navigation", { name: "Main navigation" });
+  const toolsMenu = desktopNavigation.locator(".home-nav-menu").nth(0);
+  await toolsMenu.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(toolsMenu.getByRole("link", { name: /IDE integrations/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(toolsMenu).not.toHaveAttribute("open", "");
+  await expect(toolsMenu.locator("summary")).toBeFocused();
+
+  const resourcesMenu = desktopNavigation.locator(".home-nav-menu").nth(1);
+  await resourcesMenu.locator("summary").click();
+  await expect(resourcesMenu.getByRole("link", { name: "Documentation" })).toBeVisible();
+  await expect(toolsMenu).not.toHaveAttribute("open", "");
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  const helpMenu = desktopNavigation.locator(".home-nav-menu").nth(2);
+  await helpMenu.locator("summary").click();
+  const helpMenuBounds = await helpMenu.locator(":scope > div").boundingBox();
+  expect(helpMenuBounds?.x).toBeGreaterThanOrEqual(0);
+  expect(helpMenuBounds && helpMenuBounds.x + helpMenuBounds.width).toBeLessThanOrEqual(1024);
+
+  await page.setViewportSize({ width: 320, height: 700 });
+  const mobileMenu = page.locator(".home-mobile-nav");
+  await mobileMenu.locator(":scope > summary").click();
+  const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
+  await expect(mobileNavigation).toBeVisible();
+  const helpGroup = mobileMenu.locator(".home-mobile-nav-group").nth(2);
+  const helpChevron = helpGroup.locator(".home-nav-chevron");
+  expect(await helpChevron.evaluate((icon) => getComputedStyle(icon).transform)).toBe("none");
+  await helpGroup.locator("summary").click();
+  expect(await helpChevron.evaluate((icon) => getComputedStyle(icon).transform)).not.toBe("none");
+  await expect(
+    mobileNavigation.getByRole("link", { name: /Ask or report an issue/ }),
+  ).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.keyboard.press("Escape");
+  await expect(mobileNavigation).toBeHidden();
+
+  await page.setViewportSize({ width: 900, height: 500 });
+  await mobileMenu.locator(":scope > summary").click();
+  const compactMenuSize = await mobileNavigation.evaluate((menu) => ({
+    contentHeight: menu.scrollHeight,
+    visibleHeight: menu.clientHeight,
+  }));
+  expect(compactMenuSize.contentHeight).toBeLessThanOrEqual(compactMenuSize.visibleHeight);
+  for (const group of ["Tools", "Resources", "Help"]) {
+    await expect(
+      mobileNavigation.locator(".home-mobile-nav-group > summary", { hasText: group }),
+    ).toBeVisible();
   }
 });
 
