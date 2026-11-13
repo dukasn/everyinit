@@ -2528,7 +2528,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         },
         Case {
             name: "posix_sort_default_separator_is_part_of_the_following_field",
-            script: "printf 'y\\tb\\nx a\\n' | sort -k 2,2\n",
+            script: "LC_ALL=C; export LC_ALL\nprintf 'y\\tb\\nx a\\n' | sort -k 2,2\n",
             expected_status: 0,
             expected_stdout: "y\tb\nx a\n",
             expected_file: None,
