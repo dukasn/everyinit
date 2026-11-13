@@ -18,7 +18,7 @@ use evin_diagnostic::{Diagnostic, IssueCode};
 use evin_doc::SourceResolver;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 fn default_source_dir() -> PathBuf {
@@ -140,6 +140,7 @@ struct Manifest {
     locales: Vec<String>,
     routes: Vec<RouteRecord>,
     assets: &'static str,
+    search_indexes: Vec<crate::v1::search::SearchArtifactRecord>,
     diagnostics: Vec<BuildDiagnostic>,
 }
 
@@ -792,6 +793,49 @@ fn publish(
             variant.assets.write_to(&asset_root)?;
         }
     }
+    let mut search_indexes = Vec::new();
+    let search_groups = variants
+        .iter()
+        .map(|variant| (variant.version.clone(), variant.locale.clone()))
+        .collect::<BTreeSet<_>>();
+    for (version, locale) in &search_groups {
+        let matching = variants
+            .iter()
+            .filter(|variant| variant.version == *version && variant.locale == *locale)
+            .map(|variant| {
+                (
+                    variant.route.as_str(),
+                    &variant.page,
+                    page_id(version, locale, &variant.page.slug),
+                )
+            })
+            .collect::<Vec<_>>();
+        let binary = crate::v1::search::build_binary(&matching);
+        let relative_path = format!("search/{version}/{locale}.bin");
+        let search_path = out.join(&relative_path);
+        if let Some(parent) = search_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                Diagnostic::new(
+                    format!("Failed to create '{}': {error}", parent.display()),
+                    IssueCode::new("io-error"),
+                )
+            })?;
+        }
+        std::fs::write(&search_path, &binary).map_err(|error| {
+            Diagnostic::new(
+                format!("Failed to write '{}': {error}", search_path.display()),
+                IssueCode::new("io-error"),
+            )
+        })?;
+        let digest = Sha256::digest(&binary);
+        search_indexes.push(crate::v1::search::SearchArtifactRecord {
+            version: version.clone(),
+            locale: locale.clone(),
+            path: relative_path,
+            byte_length: binary.len() as u64,
+            sha256: digest.iter().map(|byte| format!("{byte:02x}")).collect(),
+        });
+    }
     let mut route_records = Vec::new();
     for variant in &variants {
         let id = page_id(&variant.version, &variant.locale, &variant.page.slug);
@@ -858,6 +902,7 @@ fn publish(
             locales,
             routes: route_records,
             assets: "assets.json",
+            search_indexes,
             diagnostics: variants
                 .iter()
                 .filter(|variant| variant.is_fallback)

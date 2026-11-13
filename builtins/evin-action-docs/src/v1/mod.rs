@@ -16,4 +16,5 @@ pub mod assets;
 pub mod ast;
 pub mod headless;
 pub mod reference;
+pub mod search;
 pub mod validator;
