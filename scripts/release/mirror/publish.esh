@@ -98,7 +98,7 @@ for FILE_PATH in $(glob "$MIRROR_ROOT/**"); do
       ;;
   esac
   if test "$MODE" != all && test "$MODE" != "$KIND"; then continue; fi
-  corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE_PATH" --config infra/mirror/wrangler.toml
+  corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE_PATH" --remote --config infra/mirror/wrangler.toml
 done
 
 echo "Published $MODE for $CHANNEL $VERSION mirror objects for Evin and ESH"

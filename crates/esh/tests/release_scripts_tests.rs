@@ -548,6 +548,7 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
     assert_eq!(uploads.lines().count(), 8);
     assert!(uploads.contains("everyinit-preview-artifacts/evin/unstable/v1.2.3/release.json"));
     assert!(uploads.contains("everyinit-preview-artifacts/esh/unstable/v1.2.3/SHA256SUMS.sig"));
+    assert!(uploads.lines().all(|line| line.contains("--remote")));
     assert!(!uploads.contains("channels/unstable.json"));
 }
 
