@@ -1,6 +1,6 @@
 {
   "name": "everyinit",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Framework-neutral APIs and web framework integrations for Evin",
   "homepage": "https://everyinit.dev/",
   "bugs": {

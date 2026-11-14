@@ -1,6 +1,49 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.6]
+
+### Bug Fixes
+
+- **docs:** preserve docs action in generated catalog (2196479)
+- **release:** keep docs version metadata in sync (2a0b36c)
+- **release:** align web versions with workspace tag (253f827)
+- **site:** prevent mobile hero overflow (751da5e)
+- **build:** lock npm checksum for mise CI (607be3b)
+- **docs:** align shell routes and layout with reference (1e570ff)
+
+### Documentation
+
+- **ide:** document editor-neutral language support (3413a1a)
+- **site:** align content and layout with GitHub Markdown (71132b5)
+
+### Features
+
+- **site:** refine responsive homepage navigation (db2587d)
+- **web:** add unified npm integrations and Astro docs site (4cc9e9c)
+- **docs:** emit headless search-ready documentation data (555e3fe)
+- **docs:** add versioned localized builds (ac04384)
+- **docs:** separate editor catalog and simplify page rendering (dd0b0ce)
+- **esh:** publish task state and redact runtime secrets (2e02bab)
+- **esh:** expand POSIX compatibility (755c40e)
+
+### Maintenance
+
+- **package:** format Everyinit manifest (8cde5ba)
+
+### Other Changes
+
+- **workspace:** align mise and web release automation (3523fb7)
+
+### Refactoring
+
+- **docs:** make docs action emit headless data (713470f)
+- **docs:** make layout defaults project agnostic (c7c2060)
+
+### Tests
+
+- **esh:** pin locale in sort differential case (67ddcb8)
+
 ## [v0.2.5]
 
 ### Bug Fixes
