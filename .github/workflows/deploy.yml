@@ -34,8 +34,8 @@ jobs:
         run: npm ci
       - name: Select the token for this deployment environment
         env:
-          PRODUCTION_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PREVIEW_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_API_TOKEN }}
+          PRODUCTION_TOKEN: ${{ secrets.CLOUDFLARE_DEPLOY_API_TOKEN }}
+          PREVIEW_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN }}
         run: |
           if [ "$SITE_BRANCH" = main ]; then
             token="$PRODUCTION_TOKEN"

@@ -72,11 +72,15 @@ Pages project.
 The `Deploy` GitHub Actions workflow deploys the exact commit after its `CI`
 workflow succeeds. Pushes to `main` publish the production branch; pushes to
 `release` publish a Pages preview. Production deployments also update the
-installer and R2 mirror Workers from `infra/`. The `release` GitHub environment
-needs a Cloudflare API token with Pages and Workers edit access; the `unstable`
-environment needs Pages edit access.
-Both environments use `CLOUDFLARE_ACCOUNT_ID`; set `CLOUDFLARE_API_TOKEN` in
-`release` and `CLOUDFLARE_PREVIEW_API_TOKEN` in `unstable`.
+installer and R2 mirror Workers from `infra/`. Keep deployment credentials
+separate from the tokens used to publish release artifacts to R2: set
+`CLOUDFLARE_DEPLOY_API_TOKEN` in the `release` GitHub environment and
+`CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN` in `unstable`. These should be
+user-owned Cloudflare API tokens with `User → Memberships → Read` and
+account-scoped `Cloudflare Pages → Edit`; the production token also needs
+`Developer Platform → Workers → Edit` and `Zone → Workers Routes → Edit` for
+`everyinit.dev`. Both environments use `CLOUDFLARE_ACCOUNT_ID`. The existing
+`CLOUDFLARE_API_TOKEN` remains dedicated to release artifact publication.
 
 The download Workers serve the installer and R2 mirror, while signed release
 archives and channel pointers are published by the existing release workflow.
