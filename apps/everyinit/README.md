@@ -53,9 +53,32 @@ build` command follows the same workspace release flow for Cloudflare Pages.
 
 ## Cloudflare Pages
 
-Set the Pages project root to `apps/everyinit`, the build output directory to
-`dist`, the install command to `cd ../.. && npm ci`, and the build command to
-`../../.evin/cloudflare-build`. The `wrangler.toml` file records the project
-output directory, and `functions/_middleware.ts` maps the documentation host
-to the static `/docs/` route tree. Attach `everyinit.dev` and
-`docs.everyinit.dev` to the same Pages project.
+The `Deploy` GitHub Actions workflow builds the app and uses Wrangler Direct
+Upload, so Cloudflare does not need a separate Git build. Create the Pages
+project once if it does not already exist:
+
+```sh
+corepack npm exec -- wrangler pages project create everyinit-site --production-branch main
+```
+
+The Wrangler deployment runs from `apps/everyinit`, where it can include
+`functions/_middleware.ts` alongside the built `dist/` assets. That function
+maps `docs.everyinit.dev` to the static `/docs/` route tree. Dashboard drag and
+drop uploads do not compile Pages Functions, so the first upload only
+bootstraps the project; the GitHub Actions Wrangler deployment publishes the
+full site behavior. Attach `everyinit.dev` and `docs.everyinit.dev` to this same
+Pages project.
+
+The `Deploy` GitHub Actions workflow deploys the exact commit after its `CI`
+workflow succeeds. Pushes to `main` publish the production branch; pushes to
+`release` publish a Pages preview. Production deployments also update the
+installer and R2 mirror Workers from `infra/`. The `release` GitHub environment
+needs a Cloudflare API token with Pages and Workers edit access; the `unstable`
+environment needs Pages edit access.
+Both environments use `CLOUDFLARE_ACCOUNT_ID`; set `CLOUDFLARE_API_TOKEN` in
+`release` and `CLOUDFLARE_PREVIEW_API_TOKEN` in `unstable`.
+
+The download Workers serve the installer and R2 mirror, while signed release
+archives and channel pointers are published by the existing release workflow.
+Deploying the site does not create release artifacts; a successful release
+proposal is still required before the download links can serve binaries.

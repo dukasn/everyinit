@@ -1,9 +1,18 @@
 #!evin/v1
 namespace:
   name: deploy
-  description: "Deploy Evin's installer and release mirror Workers"
+  description: "Deploy the Everyinit Pages site and public Cloudflare Workers"
 
 tasks:
+  site:
+    stage: Publish
+    description: "Deploy the verified Everyinit site to a Cloudflare Pages branch"
+    cwd: .
+    env: [CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, SITE_BRANCH]
+    needs: [everyinit-site:verify]
+    steps:
+      - run: cd apps/everyinit && corepack npm exec -- wrangler pages deploy dist --project-name everyinit-site --branch "$SITE_BRANCH"
+
   installer:
     stage: Publish
     description: "Deploy the get.everyinit.dev installer Worker"
