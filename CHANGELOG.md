@@ -1,6 +1,13 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.8]
+
+### Bug Fixes
+
+- **mirror:** publish objects to remote R2 (1f120d0)
+- **release:** publish artifacts to the R2 mirror (fa75eec)
+
 ## [v0.2.7]
 
 ### Bug Fixes
