@@ -1,6 +1,16 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.7]
+
+### Bug Fixes
+
+- **deploy:** separate Cloudflare deployment tokens (6e2069b)
+
+### Features
+
+- **deploy:** automate Cloudflare site releases (c5cf494)
+
 ## [v0.2.6]
 
 ### Bug Fixes
