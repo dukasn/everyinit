@@ -56,6 +56,7 @@ fn step(name: &str) -> String {
             .trim()
             .strip_prefix("cargo run --locked -p esh -- ")
         {
+            let script_path = script_path.split_whitespace().next().unwrap();
             return fs::read_to_string(root().join(script_path)).unwrap();
         }
         return task_run;
