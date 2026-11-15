@@ -20,7 +20,7 @@ async function expectNoHorizontalOverflow(page) {
   );
 }
 
-test("the project home presents Evin and keeps downloads clearly marked as placeholders", async ({
+test("the project home presents Evin and links to current installation instructions", async ({
   page,
 }) => {
   await page.goto("/");
@@ -47,7 +47,7 @@ test("the project home presents Evin and keeps downloads clearly marked as place
     await expect(page.getByRole("heading", { name: project, exact: true })).toBeVisible();
   }
   await expect(page.getByText(/VS Code extension packages syntax support/)).toBeVisible();
-  await expect(page.getByText("NPM PACKAGE · IN DEVELOPMENT")).toBeVisible();
+  await expect(page.getByText("NPM PACKAGE · PUBLISHED")).toBeVisible();
   const footer = page.getByRole("contentinfo");
   await expect(footer.getByRole("link", { name: "Project license" })).toHaveAttribute(
     "href",
@@ -60,8 +60,11 @@ test("the project home presents Evin and keeps downloads clearly marked as place
     "href",
     "https://docs.everyinit.dev/",
   );
-  await expect(page.getByRole("link", { name: /Downloads/ })).toContainText("Coming soon");
-  await expect(page.getByText("Coming soon", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Install Everyinit" }).first()).toHaveAttribute(
+    "href",
+    "/docs/book/installation/",
+  );
+  await expect(page.getByText(/Linux x86_64 CLI downloads available/)).toBeVisible();
 
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });

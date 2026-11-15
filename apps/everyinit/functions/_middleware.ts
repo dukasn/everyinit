@@ -6,9 +6,18 @@ type PagesContext = {
 export const onRequest = async ({ request, next }: PagesContext): Promise<Response> => {
   const url = new URL(request.url);
   const pathname = url.pathname;
+  const normalizedPath = pathname.replace(/\/+$/, "") || "/";
   const isAsset = pathname.startsWith("/_astro/") || /\.[a-z0-9]+$/i.test(pathname);
 
   if (isAsset) return next();
+
+  if (normalizedPath === "/install" || normalizedPath === "/docs/install") {
+    url.pathname =
+      url.hostname === "docs.everyinit.dev"
+        ? "/book/installation/"
+        : "/docs/book/installation/";
+    return Response.redirect(url, 308);
+  }
 
   if (url.hostname === "docs.everyinit.dev") {
     if (pathname === "/") url.pathname = "/docs/";
