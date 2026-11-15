@@ -1,6 +1,18 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+## [v0.2.8]
+
+### Bug Fixes
+
+- **release:** use current mirror publisher for backfills (4fe635e)
+- **mirror:** publish objects to remote R2 (1f120d0)
+- **release:** publish artifacts to the R2 mirror (fa75eec)
+
+### Other Changes
+
+- **release:** publish npm package to both registries (89a162a)
+
 ## [v0.2.7]
 
 ### Bug Fixes
