@@ -98,6 +98,8 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         checkout["with"]["token"].as_str(),
         Some("${{ secrets.RELEASE_BOT_TOKEN }}")
     );
+    let publisher_config = workflow_step_run("Load the current release publisher configuration");
+    assert!(publisher_config.contains(".evin/release.flow"));
     let pos = |name| {
         steps
             .iter()
