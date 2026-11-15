@@ -40,6 +40,27 @@ fn config(yaml: &str) -> Result<GitReleaseConfig, evin_flow::ConfigError> {
     GitReleaseConfig::from_with(Some(with))
 }
 
+#[test]
+fn template_resolution_diagnostic_uses_fluent_message() {
+    let error = super::template_resolution_error(
+        evin_locales::t!("git-release-tag-field"),
+        "unknown variable",
+    );
+    assert_eq!(error.code.key, "git-release-template-resolution-failed");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!(
+            "git-release-template-resolution-failed",
+            field = evin_locales::t!("git-release-tag-field"),
+            error = "unknown variable"
+        )
+    );
+    assert_eq!(
+        error.title,
+        evin_locales::t!("git-release-template-resolution-failed-title")
+    );
+}
+
 #[tokio::test]
 async fn disabled_release_does_nothing() {
     let (_temp, work, _remote) = pushing_repository();
@@ -141,11 +162,8 @@ async fn test_git_release_execution_and_recovery() {
 
     let res = super::execute(&ctx, Some(spanned_mapping(with))).await;
     let err = res.unwrap_err();
-    assert!(
-        err.to_string().contains("tag-already-exists"),
-        "Preflight should catch existing tag, got: {}",
-        err
-    );
+    assert_eq!(err.code.key, "tag-already-exists");
+    assert_eq!(err.title, evin_locales::t!("tag-already-exists-title"));
 
     // Make the tag config valid, but we simulate a tag failure by creating it right before tagging
     // Actually, simulating tag failure after commit is hard without mock, but we can verify the error format

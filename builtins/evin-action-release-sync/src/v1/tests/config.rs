@@ -21,18 +21,41 @@ fn validate_default_config() {
 
 #[test]
 fn configuration_errors_use_fluent_messages() {
-    let mut config = ReleaseSyncConfig::default();
-    config.tag = Some("  ".to_string());
+    let mut config = ReleaseSyncConfig {
+        tag: Some("  ".to_string()),
+        ..ReleaseSyncConfig::default()
+    };
     assert_fluent_message(
         config.validate().unwrap_err().message,
         evin_locales::t!("release-sync-tag-must-not-be-empty"),
     );
 
     config.tag = None;
+    config.title = Some("  ".to_string());
+    assert_fluent_message(
+        config.validate().unwrap_err().message,
+        evin_locales::t!("release-sync-title-must-not-be-empty"),
+    );
+
+    config.title = None;
     config.state.clear();
     assert_fluent_message(
         config.validate().unwrap_err().message,
         evin_locales::t!("release-sync-state-path-must-not-be-empty"),
+    );
+
+    config.state = ReleaseSyncConfig::default().state;
+    config.plan_out.clear();
+    assert_fluent_message(
+        config.validate().unwrap_err().message,
+        evin_locales::t!("release-sync-plan-out-path-must-not-be-empty"),
+    );
+
+    config.plan_out = ReleaseSyncConfig::default().plan_out;
+    config.notes_dir.clear();
+    assert_fluent_message(
+        config.validate().unwrap_err().message,
+        evin_locales::t!("release-sync-notes-dir-must-not-be-empty"),
     );
 }
 

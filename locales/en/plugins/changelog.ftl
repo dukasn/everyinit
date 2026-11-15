@@ -1,4 +1,5 @@
 # Changelog plugin locale messages
+changelog-invalid-config-title = Invalid Changelog Configuration
 
 git-execution-failed = Failed to execute git: { $error }
 file-write-failed = Failed to write to '{ $path }': { $error }

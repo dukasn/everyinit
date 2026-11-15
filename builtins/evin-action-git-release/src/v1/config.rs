@@ -81,7 +81,12 @@ impl GitReleaseConfig {
 
     pub(super) fn validate(&self) -> Result<(), String> {
         if let Some(msg) = &self.message {
-            validate_template_syntax(msg).map_err(|e| e.to_string())?;
+            validate_template_syntax(msg).map_err(|error| {
+                evin_locales::t!(
+                    "git-release-template-syntax-invalid",
+                    error = error.to_string()
+                )
+            })?;
             if msg.trim().is_empty() {
                 return Err(evin_locales::t!("message-must-not-be-empty"));
             }
@@ -90,10 +95,20 @@ impl GitReleaseConfig {
             if tag.trim().is_empty() {
                 return Err(evin_locales::t!("tag-must-not-be-empty-when-provided"));
             }
-            validate_template_syntax(tag).map_err(|e| e.to_string())?;
+            validate_template_syntax(tag).map_err(|error| {
+                evin_locales::t!(
+                    "git-release-template-syntax-invalid",
+                    error = error.to_string()
+                )
+            })?;
         }
         if let Enabled::Text(text) = &self.enabled {
-            validate_template_syntax(text).map_err(|e| e.to_string())?;
+            validate_template_syntax(text).map_err(|error| {
+                evin_locales::t!(
+                    "git-release-template-syntax-invalid",
+                    error = error.to_string()
+                )
+            })?;
         }
         if let Some(push) = &self.push {
             if push.remote.trim().is_empty() {

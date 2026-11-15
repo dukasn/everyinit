@@ -22,6 +22,17 @@ use config::{Enabled, GitReleaseConfig, StageMode};
 use evin_flow::template::pipeline::resolve_templates;
 use push::publish;
 
+fn template_resolution_error(
+    field: String,
+    error: impl std::fmt::Display,
+) -> evin_diagnostic::Diagnostic {
+    evin_locales::diagnostic(
+        evin_diagnostic::IssueCode::new("git-release-template-resolution-failed")
+            .arg("field", field)
+            .arg("error", error.to_string()),
+    )
+}
+
 pub fn validate_config(
     with: Option<&evin_flow::SpannedValue>,
 ) -> Result<(), evin_flow::ConfigError> {
@@ -35,9 +46,9 @@ pub async fn execute(
     ctx: &RunnerContext,
     with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let config: GitReleaseConfig = ctx
-        .load_config(with.as_ref())
-        .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string())))?;
+    let config: GitReleaseConfig = ctx.load_config(with.as_ref()).map_err(|error| {
+        error.into_diagnostic(evin_locales::t!("git-release-invalid-config-title"), None)
+    })?;
     config
         .validate()
         .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e)))?;
@@ -45,7 +56,9 @@ pub async fn execute(
     let enabled = match &config.enabled {
         Enabled::Flag(flag) => *flag,
         Enabled::Text(text) => {
-            let resolved = resolve_templates(text, ctx).map_err(|e| e.to_string())?;
+            let resolved = resolve_templates(text, ctx).map_err(|error| {
+                template_resolution_error(evin_locales::t!("git-release-enabled-field"), error)
+            })?;
             match resolved.trim().to_ascii_lowercase().as_str() {
                 "true" => true,
                 "false" => false,
@@ -79,18 +92,29 @@ pub async fn execute(
         )));
     };
 
-    let commit_msg = resolve_templates(&commit_msg_template, ctx).map_err(|e| e.to_string())?;
+    let commit_msg = resolve_templates(&commit_msg_template, ctx).map_err(|error| {
+        template_resolution_error(evin_locales::t!("git-release-commit-message-field"), error)
+    })?;
 
     if config.stage == StageMode::All {
         ctx.git()
             .stage_files(&["-A".to_string()])
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(evin_diagnostic::Diagnostic::from)?;
     }
-    let has_changes = ctx.git().has_staged_changes().await.unwrap_or(false)
+    let has_staged_changes = ctx
+        .git()
+        .has_staged_changes()
+        .await
+        .map_err(evin_diagnostic::Diagnostic::from)?;
+    let has_changes = has_staged_changes
         || (config.stage == StageMode::All
             && ctx.mode == evin_action_sdk::PipelineMode::DryRun
-            && ctx.git().is_dirty().await.unwrap_or(false));
+            && ctx
+                .git()
+                .is_dirty()
+                .await
+                .map_err(evin_diagnostic::Diagnostic::from)?);
     if !has_changes {
         return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
             "no-staged-changes",
@@ -100,15 +124,22 @@ pub async fn execute(
     ctx.git()
         .verify_identity()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(evin_diagnostic::Diagnostic::from)?;
 
     let tag_name = if let Some(tag) = &config.tag {
-        let resolved = resolve_templates(tag, ctx).map_err(|e| e.to_string())?;
+        let resolved = resolve_templates(tag, ctx).map_err(|error| {
+            template_resolution_error(evin_locales::t!("git-release-tag-field"), error)
+        })?;
         ctx.git()
             .validate_tag_name(&resolved)
             .await
-            .map_err(|e| e.to_string())?;
-        if ctx.git().has_tag(&resolved).await.unwrap_or(false) {
+            .map_err(evin_diagnostic::Diagnostic::from)?;
+        if ctx
+            .git()
+            .has_tag(&resolved)
+            .await
+            .map_err(evin_diagnostic::Diagnostic::from)?
+        {
             return Err(evin_locales::diagnostic(
                 evin_diagnostic::IssueCode::new("tag-already-exists").arg("tag", &resolved),
             ));
@@ -123,7 +154,7 @@ pub async fn execute(
     ctx.git()
         .commit(&commit_msg, require_signatures)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(evin_diagnostic::Diagnostic::from)?;
 
     let mut pushed_tag = None;
     if let Some(tag) = tag_name {

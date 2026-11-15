@@ -27,6 +27,20 @@ use config::ReleaseSyncConfig;
 use evin_action_sdk::RunnerContext;
 use evin_release_sync::Reconciler;
 
+fn protocol_error_diagnostic(
+    error: evin_release_sync::ProtocolError,
+) -> evin_diagnostic::Diagnostic {
+    match error {
+        evin_release_sync::ProtocolError::UnsupportedSchemaVersion(version) => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-schema-version-unsupported")
+                    .arg("version", version.to_string()),
+            )
+        }
+        error => evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(error.to_string())),
+    }
+}
+
 pub fn validate_config(
     with: Option<&evin_flow::SpannedValue>,
 ) -> Result<(), evin_flow::ConfigError> {
@@ -38,8 +52,9 @@ pub async fn execute(
     ctx: &RunnerContext,
     with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let config = ReleaseSyncConfig::from_with(with.as_ref())
-        .map_err(|e| evin_diagnostic::Diagnostic::from(e.message))?;
+    let config = ReleaseSyncConfig::from_with(with.as_ref()).map_err(|error| {
+        error.into_diagnostic(evin_locales::t!("release-sync-invalid-config-title"), None)
+    })?;
 
     let root = ctx.fs.workspace_root();
     let state_source = FsRemoteStateSource {
@@ -71,9 +86,7 @@ pub async fn execute(
         &mut plan_sink,
     );
 
-    let plan = reconciler
-        .reconcile()
-        .map_err(|e| evin_diagnostic::Diagnostic::from(e.to_string()))?;
+    let plan = reconciler.reconcile().map_err(protocol_error_diagnostic)?;
 
     ctx.state.set_output("plan", &config.plan_out);
     ctx.state

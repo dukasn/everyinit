@@ -69,14 +69,20 @@ pub(super) fn resolve_package_payloads(
             return Err(diagnostic(evin_locales::t!("archive-payload-mode-invalid")));
         }
         let strip = packaging::safe_relative_path(&mapping.strip_prefix)
-            .map_err(|error| diagnostic(error.to_string()))?;
+            .map_err(evin_diagnostic::Diagnostic::from)?;
         let destination = packaging::normalize_install_dir(&mapping.destination)
-            .map_err(|error| diagnostic(error.to_string()))?;
+            .map_err(evin_diagnostic::Diagnostic::from)?;
         let strip = root.join(strip);
         for source_path in ctx
             .fs
             .matching_files_from(root, &mapping.source)
-            .map_err(|error| diagnostic(error.to_string()))?
+            .map_err(|error| {
+                diagnostic(evin_locales::t!(
+                    "archive-payload-source-discovery-failed",
+                    source = mapping.source.as_str(),
+                    error = error.to_string()
+                ))
+            })?
         {
             let relative = source_path.strip_prefix(&strip).map_err(|_| {
                 diagnostic(evin_locales::t!(
@@ -90,7 +96,7 @@ pub(super) fn resolve_package_payloads(
                 relative.to_string_lossy().replace('\\', "/")
             );
             let destination = packaging::normalize_archive_path(&destination)
-                .map_err(|error| diagnostic(error.to_string()))?;
+                .map_err(evin_diagnostic::Diagnostic::from)?;
             if entries
                 .insert(
                     destination.clone(),
@@ -163,8 +169,8 @@ pub(super) fn load_scripts(
         .into_iter()
         .filter_map(|(name, path)| path.map(|path| (name, path)))
         .map(|(name, path)| {
-            let path = packaging::safe_relative_path(path)
-                .map_err(|error| diagnostic(error.to_string()))?;
+            let path =
+                packaging::safe_relative_path(path).map_err(evin_diagnostic::Diagnostic::from)?;
             let bytes = std::fs::read(ctx.fs.task_cwd().join(path)).map_err(|error| {
                 diagnostic(evin_locales::t!(
                     "archive-package-script-read-failed",
@@ -326,8 +332,7 @@ pub(super) fn validate_package(
         }
         validate_relations("backup", &target.backup)?;
         for path in &target.backup {
-            packaging::normalize_archive_path(path)
-                .map_err(|error| diagnostic(error.to_string()))?;
+            packaging::normalize_archive_path(path).map_err(evin_diagnostic::Diagnostic::from)?;
         }
     }
     if let Some(target) = &package.targets.deb {
@@ -403,6 +408,6 @@ fn validate_script_path(path: &str) -> Result<(), evin_diagnostic::Diagnostic> {
             "archive-package-script-path-empty"
         )));
     }
-    packaging::safe_relative_path(path).map_err(|error| diagnostic(error.to_string()))?;
+    packaging::safe_relative_path(path).map_err(evin_diagnostic::Diagnostic::from)?;
     Ok(())
 }

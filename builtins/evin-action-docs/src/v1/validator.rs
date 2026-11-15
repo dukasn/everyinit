@@ -838,10 +838,19 @@ mod tests {
         );
 
         assert_eq!(diagnostics.len(), 1);
-        assert!(
-            diagnostics[0]
-                .title
-                .contains("Invalid LaTeX math expression")
+        let latex = r"\invalidUnclosed{";
+        let normalized = evin_doc::validation::normalize_latex(latex);
+        let error = latex2mathml::latex_to_mathml(&normalized, latex2mathml::DisplayStyle::Block)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            diagnostics[0].title,
+            evin_locales::t!(
+                "docs-invalid-latex-math",
+                source = "doc.md",
+                error = error,
+                latex = latex
+            )
         );
     }
 

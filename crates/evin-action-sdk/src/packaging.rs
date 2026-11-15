@@ -33,6 +33,31 @@ pub enum PackagingError {
     Archive(#[from] io::Error),
 }
 
+impl From<PackagingError> for evin_diagnostic::Diagnostic {
+    fn from(error: PackagingError) -> Self {
+        use evin_diagnostic::IssueCode;
+
+        let code = match error {
+            PackagingError::InvalidPath(path) => {
+                IssueCode::new("package-path-invalid").arg("path", path)
+            }
+            PackagingError::Collision(path) => {
+                IssueCode::new("package-path-collision").arg("path", path)
+            }
+            PackagingError::Read { path, source } => IssueCode::new("package-input-read-failed")
+                .arg("path", path.display().to_string())
+                .arg("error", source.to_string()),
+            PackagingError::InvalidEpoch(value) => {
+                IssueCode::new("package-source-date-epoch-invalid").arg("value", value)
+            }
+            PackagingError::Archive(error) => {
+                IssueCode::new("package-archive-write-failed").arg("error", error.to_string())
+            }
+        };
+        evin_locales::diagnostic(code)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LinuxArch {
@@ -396,6 +421,56 @@ pub fn safe_relative_path(path: &str) -> Result<PathBuf, PackagingError> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn packaging_errors_render_through_fluent_diagnostics() {
+        let cases = [
+            (
+                PackagingError::InvalidPath("../escape".into()),
+                "package-path-invalid",
+                evin_locales::t!("package-path-invalid", path = "../escape"),
+                evin_locales::t!("package-path-invalid-title"),
+            ),
+            (
+                PackagingError::Collision("usr/bin/tool".into()),
+                "package-path-collision",
+                evin_locales::t!("package-path-collision", path = "usr/bin/tool"),
+                evin_locales::t!("package-path-collision-title"),
+            ),
+            (
+                PackagingError::Read {
+                    path: PathBuf::from("source.tar"),
+                    source: io::Error::other("permission denied"),
+                },
+                "package-input-read-failed",
+                evin_locales::t!(
+                    "package-input-read-failed",
+                    path = "source.tar",
+                    error = "permission denied"
+                ),
+                evin_locales::t!("package-input-read-failed-title"),
+            ),
+            (
+                PackagingError::InvalidEpoch("tomorrow".into()),
+                "package-source-date-epoch-invalid",
+                evin_locales::t!("package-source-date-epoch-invalid", value = "tomorrow"),
+                evin_locales::t!("package-source-date-epoch-invalid-title"),
+            ),
+            (
+                PackagingError::Archive(io::Error::other("disk full")),
+                "package-archive-write-failed",
+                evin_locales::t!("package-archive-write-failed", error = "disk full"),
+                evin_locales::t!("package-archive-write-failed-title"),
+            ),
+        ];
+
+        for (error, key, expected, expected_title) in cases {
+            let diagnostic = evin_diagnostic::Diagnostic::from(error);
+            assert_eq!(diagnostic.code.key, key);
+            assert_eq!(evin_locales::render_issue(&diagnostic.code), expected);
+            assert_eq!(diagnostic.title, expected_title);
+        }
+    }
 
     #[test]
     fn synthesized_directories_are_sorted_and_normalized() {

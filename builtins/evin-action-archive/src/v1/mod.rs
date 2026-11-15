@@ -93,11 +93,9 @@ pub async fn execute(
     ctx: &RunnerContext,
     with_payload: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let mut config: ArchiveConfig = ctx.load_config(with_payload.as_ref()).map_err(|e| {
-        evin_locales::diagnostic(
-            evin_diagnostic::IssueCode::new("invalid-config").arg("error", e.to_string()),
-        )
-    })?;
+    let mut config: ArchiveConfig = ctx
+        .load_config(with_payload.as_ref())
+        .map_err(|e| e.into_diagnostic(evin_locales::t!("invalid-config-title"), None))?;
     config.validate()?;
     validate_format_keys(
         with_payload
@@ -261,7 +259,7 @@ pub async fn execute(
     let epoch = resolve_epoch(ctx).await?;
     let build = if let Some((package, arch, revision, version)) = package_build {
         let context = PackageContext::prepare(epoch, source_entries.clone())
-            .map_err(|error| diagnostic(error.to_string()))?;
+            .map_err(evin_diagnostic::Diagnostic::from)?;
         let scripts = load_scripts(ctx, &package, format)?;
         Some(PackageBuild {
             context,
@@ -294,7 +292,7 @@ pub async fn execute(
                 TarGzArchiver { compression_level }.write_archive(output, &context)
             }
         })
-        .map_err(|error| diagnostic(error.to_string()))?;
+        .map_err(evin_diagnostic::Diagnostic::from)?;
         Ok::<_, evin_diagnostic::Diagnostic>(
             report.expect("archive report is prepared before writing"),
         )

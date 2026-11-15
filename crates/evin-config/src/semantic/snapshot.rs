@@ -176,7 +176,10 @@ impl WorkspaceSnapshot {
                 Ok(ast) => (Some(ast), None),
                 Err(error) => {
                     let diagnostic = error
-                        .into_diagnostic("Flow Syntax Error", Some(path.display().to_string()));
+                        .into_diagnostic(
+                            evin_locales::t!("flow-syntax-error-title"),
+                            Some(path.display().to_string()),
+                        );
                     push_unique(&mut document_diagnostics, diagnostic.clone());
                     push_unique(&mut diagnostics, diagnostic);
                     let recovered = if header_is_valid {

@@ -14,3 +14,22 @@
 
 mod adapters;
 mod config;
+
+#[test]
+fn unsupported_remote_state_version_uses_fluent_diagnostic() {
+    let diagnostic = super::protocol_error_diagnostic(
+        evin_release_sync::ProtocolError::UnsupportedSchemaVersion(2),
+    );
+    assert_eq!(
+        diagnostic.code.key,
+        "release-sync-schema-version-unsupported"
+    );
+    assert_eq!(
+        evin_locales::render_issue(&diagnostic.code),
+        evin_locales::t!("release-sync-schema-version-unsupported", version = "2")
+    );
+    assert_eq!(
+        diagnostic.title,
+        evin_locales::t!("release-sync-schema-version-unsupported-title")
+    );
+}

@@ -53,10 +53,7 @@ impl<'a> Reconciler<'a> {
     pub fn reconcile(&mut self) -> Result<ReleaseSyncPlan, ProtocolError> {
         let remote_state = self.state_source.load_remote_state()?;
         if remote_state.v != 1 {
-            return Err(ProtocolError::SchemaValidation(format!(
-                "Unsupported remote state schema version '{}', expected 1",
-                remote_state.v
-            )));
+            return Err(ProtocolError::UnsupportedSchemaVersion(remote_state.v));
         }
 
         let local_tags = self.git_provider.local_tags()?;

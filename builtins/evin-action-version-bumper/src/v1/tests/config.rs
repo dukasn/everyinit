@@ -25,14 +25,32 @@ fn removed_cargo_option_is_rejected() {
 
 #[test]
 fn initial_version_error_uses_fluent_message() {
-    let mut config = VersionBumperConfig::default();
-    config.initial_version = "invalid".to_string();
+    let config = VersionBumperConfig {
+        initial_version: "invalid".to_string(),
+        ..VersionBumperConfig::default()
+    };
     let error = config.validate().unwrap_err();
     let detail = semver::Version::parse("invalid").unwrap_err().to_string();
     let expected = evin_locales::t!("initial-version-invalid", error = detail);
     assert!(
         !expected.starts_with("<missing locale key:"),
         "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+}
+
+#[test]
+fn invalid_template_syntax_uses_fluent_diagnostic() {
+    let error = super::super::config::validate_tokens("${version", &["version"]).unwrap_err();
+    assert_eq!(error.code.key, "version-bumper-template-syntax-invalid");
+    let expected = evin_locales::t!(
+        "version-bumper-template-syntax-invalid",
+        error = evin_flow::template::pipeline::validate_template_syntax_with_self(
+            "${version",
+            &["version"]
+        )
+        .unwrap_err()
+        .to_string()
     );
     assert_eq!(evin_locales::render_issue(&error.code), expected);
 }

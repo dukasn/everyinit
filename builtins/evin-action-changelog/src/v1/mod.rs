@@ -66,7 +66,14 @@ pub async fn execute(
 ) -> Result<(), evin_diagnostic::Diagnostic> {
     generate_changelog(ctx, with)
         .await
-        .map_err(|e| e.to_string().into())
+        .map_err(|error| match error {
+            ChangelogError::InvalidConfiguration(error) => {
+                error.into_diagnostic(evin_locales::t!("changelog-invalid-config-title"), None)
+            }
+            error => {
+                evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(error.to_string()))
+            }
+        })
 }
 
 async fn generate_changelog(

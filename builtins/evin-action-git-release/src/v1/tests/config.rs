@@ -39,6 +39,16 @@ fn rejects_old_fields_and_invalid_values() {
     }
 }
 
+#[test]
+fn invalid_template_syntax_uses_fluent_message() {
+    let error = config("message: '{{broken}}'").unwrap_err();
+    let detail = evin_flow::template::pipeline::validate_template_syntax("{{broken}}")
+        .unwrap_err()
+        .to_string();
+    let expected = evin_locales::t!("git-release-template-syntax-invalid", error = detail);
+    assert_eq!(error.message, expected);
+}
+
 // These tests would be extremely similar to Version Bumper integration tests
 // so we will test the primary behavior and the recovery message.
 
@@ -54,11 +64,34 @@ fn validates_push_configuration() {
     assert_eq!(error.message, expected);
     for yaml in [
         "message: r\npush:\n  remote: ' '",
-        "message: r\ntag: v1\npush:\n  prune_stale_tags: true",
-        "message: r\npush:\n  prune_stale_tags: true\n  base: main",
-        "message: r\npush:\n  base: main",
         "message: r\npush:\n  unknown: true",
     ] {
         assert!(config(yaml).is_err(), "{yaml}");
     }
+
+    assert_fluent_config_error(
+        "message: r\npush:\n  branch: ' '\n",
+        evin_locales::t!("git-release-push-branch-must-not-be-empty"),
+    );
+    assert_fluent_config_error(
+        "message: r\npush:\n  prune_stale_tags: true\n  base: main",
+        evin_locales::t!("git-release-prune-stale-tags-requires-tag"),
+    );
+    assert_fluent_config_error(
+        "message: r\ntag: v1\npush:\n  prune_stale_tags: true",
+        evin_locales::t!("git-release-prune-stale-tags-requires-base"),
+    );
+    assert_fluent_config_error(
+        "message: r\npush:\n  base: main",
+        evin_locales::t!("git-release-push-base-requires-prune-stale-tags"),
+    );
+}
+
+fn assert_fluent_config_error(yaml: &str, expected: String) {
+    let error = config(yaml).unwrap_err();
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(error.message, expected, "{yaml}");
 }

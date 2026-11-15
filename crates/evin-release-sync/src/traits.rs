@@ -17,6 +17,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ProtocolError {
+    #[error("Unsupported remote state schema version '{0}', expected 1")]
+    UnsupportedSchemaVersion(u32),
+
     #[error("Schema validation failed: {0}")]
     SchemaValidation(String),
 

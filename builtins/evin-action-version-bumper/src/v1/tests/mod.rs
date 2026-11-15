@@ -73,6 +73,78 @@ fn init_repo(root: &Path) {
     }
 }
 
+#[test]
+fn file_and_release_operation_diagnostics_use_fluent_messages() {
+    let cases = [
+        (
+            file_path_error(
+                "version-bumper-file-read-failed",
+                "Cargo.toml",
+                "permission denied",
+            ),
+            "version-bumper-file-read-failed",
+            evin_locales::t!(
+                "version-bumper-file-read-failed",
+                path = "Cargo.toml",
+                error = "permission denied"
+            ),
+            evin_locales::t!("version-bumper-file-read-failed-title"),
+        ),
+        (
+            file_template_error(
+                "package.json",
+                evin_locales::t!("version-bumper-file-match-field"),
+                "unknown variable",
+            ),
+            "version-bumper-file-template-resolution-failed",
+            evin_locales::t!(
+                "version-bumper-file-template-resolution-failed",
+                path = "package.json",
+                field = evin_locales::t!("version-bumper-file-match-field"),
+                error = "unknown variable"
+            ),
+            evin_locales::t!("version-bumper-file-template-resolution-failed-title"),
+        ),
+        (
+            fixed_version_template_error("unknown variable"),
+            "version-bumper-fixed-version-template-resolution-failed",
+            evin_locales::t!(
+                "version-bumper-fixed-version-template-resolution-failed",
+                error = "unknown variable"
+            ),
+            evin_locales::t!("version-bumper-fixed-version-template-resolution-failed-title"),
+        ),
+        (
+            git_message_template_error("unknown variable"),
+            "version-bumper-git-message-template-failed",
+            evin_locales::t!(
+                "version-bumper-git-message-template-failed",
+                error = "unknown variable"
+            ),
+            evin_locales::t!("version-bumper-git-message-template-failed-title"),
+        ),
+        (
+            release_state_error(
+                evin_locales::t!("version-bumper-release-operation-reading-lock"),
+                "permission denied",
+            ),
+            "version-bumper-release-state-operation-failed",
+            evin_locales::t!(
+                "version-bumper-release-state-operation-failed",
+                operation = evin_locales::t!("version-bumper-release-operation-reading-lock"),
+                error = "permission denied"
+            ),
+            evin_locales::t!("version-bumper-release-state-operation-failed-title"),
+        ),
+    ];
+
+    for (diagnostic, key, expected, expected_title) in cases {
+        assert_eq!(diagnostic.code.key, key);
+        assert_eq!(evin_locales::render_issue(&diagnostic.code), expected);
+        assert_eq!(diagnostic.title, expected_title);
+    }
+}
+
 #[tokio::test]
 async fn first_release_accepts_existing_initial_version_when_deferred() {
     let temp = tempfile::TempDir::new().unwrap();

@@ -169,9 +169,17 @@ impl VersionBumperConfig {
     }
 }
 
-fn validate_tokens(text: &str, allowed: &[&str]) -> Result<(), evin_diagnostic::Diagnostic> {
+pub(super) fn validate_tokens(
+    text: &str,
+    allowed: &[&str],
+) -> Result<(), evin_diagnostic::Diagnostic> {
     validate_template_syntax_with_self(text, allowed)
-        .map_err(|e| e.to_string().into())
+        .map_err(|error| {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("version-bumper-template-syntax-invalid")
+                    .arg("error", error),
+            )
+        })
         .and_then(|_| {
             static RE: OnceLock<Regex> = OnceLock::new();
             let regex = RE.get_or_init(|| Regex::new(r"\$\{(?P<body>[^{}]+)\}").unwrap());

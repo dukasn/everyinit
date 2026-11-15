@@ -21,6 +21,18 @@ fn config(yaml: &str) -> Result<ReviewRequestConfig, evin_flow::ConfigError> {
 
 const BASE: &str = "branch: b\nbase: main\ncommands:\n  find: echo 1\n";
 
+#[test]
+fn template_resolution_errors_use_fluent_messages() {
+    assert_eq!(
+        super::template_error("context.release", "unknown variable"),
+        evin_locales::t!(
+            "review-request-template-resolution-failed",
+            field = "context.release",
+            error = "unknown variable"
+        )
+    );
+}
+
 #[tokio::test]
 async fn creates_updates_and_closes() {
     let dir = tempfile::tempdir().unwrap();

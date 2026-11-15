@@ -99,7 +99,12 @@ impl ReviewRequestConfig {
         let wanted_literal = match &self.wanted {
             Wanted::Flag(flag) => Some(*flag),
             Wanted::Text(text) => {
-                validate_template_syntax(text).map_err(|e| e.to_string())?;
+                validate_template_syntax(text).map_err(|error| {
+                    evin_locales::t!(
+                        "review-request-template-syntax-invalid",
+                        error = error.to_string()
+                    )
+                })?;
                 parse_flag(text).ok()
             }
         };
@@ -112,7 +117,12 @@ impl ReviewRequestConfig {
             .flatten()
             .chain(self.context.values())
         {
-            validate_template_syntax(template).map_err(|e| e.to_string())?;
+            validate_template_syntax(template).map_err(|error| {
+                evin_locales::t!(
+                    "review-request-template-syntax-invalid",
+                    error = error.to_string()
+                )
+            })?;
         }
         if let Some(path) = &self.body_path
             && (path.starts_with('/') || path.split(['/', '\\']).any(|part| part == ".."))

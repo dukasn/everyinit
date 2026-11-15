@@ -27,6 +27,56 @@ mod compute;
 use compute::compute_version;
 use config::{json_version_regex, manifest_kind, resolve_local_template, toml_version_regex};
 
+fn file_path_error(
+    key: &'static str,
+    path: &str,
+    error: impl std::fmt::Display,
+) -> evin_diagnostic::Diagnostic {
+    evin_locales::diagnostic(
+        evin_diagnostic::IssueCode::new(key)
+            .arg("path", path)
+            .arg("error", error.to_string()),
+    )
+}
+
+fn file_template_error(
+    path: &str,
+    field: String,
+    error: impl std::fmt::Display,
+) -> evin_diagnostic::Diagnostic {
+    evin_locales::diagnostic(
+        evin_diagnostic::IssueCode::new("version-bumper-file-template-resolution-failed")
+            .arg("path", path)
+            .arg("field", field)
+            .arg("error", error.to_string()),
+    )
+}
+
+fn fixed_version_template_error(error: impl std::fmt::Display) -> evin_diagnostic::Diagnostic {
+    evin_locales::diagnostic(
+        evin_diagnostic::IssueCode::new("version-bumper-fixed-version-template-resolution-failed")
+            .arg("error", error.to_string()),
+    )
+}
+
+fn git_message_template_error(error: impl std::fmt::Display) -> evin_diagnostic::Diagnostic {
+    evin_locales::diagnostic(
+        evin_diagnostic::IssueCode::new("version-bumper-git-message-template-failed")
+            .arg("error", error.to_string()),
+    )
+}
+
+fn release_state_error(
+    operation: String,
+    error: impl std::fmt::Display,
+) -> evin_diagnostic::Diagnostic {
+    evin_locales::diagnostic(
+        evin_diagnostic::IssueCode::new("version-bumper-release-state-operation-failed")
+            .arg("operation", operation)
+            .arg("error", error.to_string()),
+    )
+}
+
 async fn resolve_channel_var(
     var_name: &str,
     ctx: &RunnerContext,
@@ -154,12 +204,15 @@ pub async fn execute(
     ctx: &RunnerContext,
     with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let mut config: VersionBumperConfig = ctx
-        .load_config(with.as_ref())
-        .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string())))?;
+    let mut config: VersionBumperConfig = ctx.load_config(with.as_ref()).map_err(|error| {
+        error.into_diagnostic(
+            evin_locales::t!("version-bumper-invalid-config-title"),
+            None,
+        )
+    })?;
     if let Some(fixed_version) = &config.fixed_version {
         let resolved = resolve_local_template(fixed_version, ctx, &HashMap::new())
-            .map_err(|error| error.to_string())?;
+            .map_err(fixed_version_template_error)?;
         Version::parse(&resolved).map_err(|error| {
             evin_locales::t!(
                 "version-bumper-fixed-version-resolution-invalid",
@@ -168,9 +221,7 @@ pub async fn execute(
         })?;
         config.fixed_version = Some(resolved);
     }
-    config
-        .validate()
-        .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e.to_string())))?;
+    config.validate()?;
     let package_policies = ctx
         .gitrules()
         .releases
@@ -195,13 +246,18 @@ pub async fn execute(
             .git()
             .has_staged_changes()
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(evin_diagnostic::Diagnostic::from)?
         {
             return Err(evin_locales::t!("version-bumper-package-release-index-not-empty").into());
         }
         let dirty = evin_action_sdk::release::dirty_paths(ctx.fs.workspace_root())
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(|error| {
+                release_state_error(
+                    evin_locales::t!("version-bumper-release-operation-dirty-paths"),
+                    error,
+                )
+            })?
             .into_iter()
             .filter(|path| evin_action_sdk::release::path_is_watched(path, &package_policies))
             .collect::<Vec<_>>();
@@ -213,7 +269,11 @@ pub async fn execute(
             .into());
         }
     }
-    let commits = ctx.git().commits().await.map_err(|e| e.to_string())?;
+    let commits = ctx
+        .git()
+        .commits()
+        .await
+        .map_err(evin_diagnostic::Diagnostic::from)?;
 
     let mut previous_version = String::new();
     let mut impacts = Vec::new();
@@ -323,7 +383,13 @@ pub async fn execute(
     args.insert("version", version.as_str());
     let version_with_v = evin_flow::template::format::render(ctx.tag_format(), &args);
 
-    if semantic_change && ctx.git().has_tag(&version_with_v).await.unwrap_or(false) {
+    if semantic_change
+        && ctx
+            .git()
+            .has_tag(&version_with_v)
+            .await
+            .map_err(evin_diagnostic::Diagnostic::from)?
+    {
         return Err(evin_locales::diagnostic(
             evin_diagnostic::IssueCode::new("calculated-tag-already-exists")
                 .arg("version", &version)
@@ -335,13 +401,13 @@ pub async fn execute(
         ctx.git()
             .verify_identity()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(evin_diagnostic::Diagnostic::from)?;
     }
     if config.git.tag && semantic_change {
         ctx.git()
             .validate_tag_name(&version_with_v)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(evin_diagnostic::Diagnostic::from)?;
     }
 
     ctx.log.debug_event(evin_action_sdk::debug::VersionOutput {
@@ -375,19 +441,51 @@ pub async fn execute(
                     "previous_version".to_string(),
                     regex::escape(&previous_version),
                 );
-                let pattern = resolve_local_template(&custom.match_pattern, ctx, &regex_values)?;
-                let regex = Regex::new(&pattern).map_err(|e| e.to_string())?;
+                let pattern = resolve_local_template(&custom.match_pattern, ctx, &regex_values)
+                    .map_err(|error| {
+                        file_template_error(
+                            &custom.path,
+                            evin_locales::t!("version-bumper-file-match-field"),
+                            error,
+                        )
+                    })?;
+                let regex = Regex::new(&pattern).map_err(|error| {
+                    file_template_error(
+                        &custom.path,
+                        evin_locales::t!("version-bumper-file-match-field"),
+                        error,
+                    )
+                })?;
                 let fallback_regex = if !found_tag
                     && custom.match_pattern.contains("${previous_version}")
                 {
                     regex_values.insert("previous_version".to_string(), regex::escape(&version));
-                    let pattern =
-                        resolve_local_template(&custom.match_pattern, ctx, &regex_values)?;
-                    Some(Regex::new(&pattern).map_err(|e| e.to_string())?)
+                    let pattern = resolve_local_template(&custom.match_pattern, ctx, &regex_values)
+                        .map_err(|error| {
+                            file_template_error(
+                                &custom.path,
+                                evin_locales::t!("version-bumper-file-match-field"),
+                                error,
+                            )
+                        })?;
+                    Some(Regex::new(&pattern).map_err(|error| {
+                        file_template_error(
+                            &custom.path,
+                            evin_locales::t!("version-bumper-file-match-field"),
+                            error,
+                        )
+                    })?)
                 } else {
                     None
                 };
-                let replacement = resolve_local_template(&custom.write, ctx, &self_values)?;
+                let replacement = resolve_local_template(&custom.write, ctx, &self_values)
+                    .map_err(|error| {
+                        file_template_error(
+                            &custom.path,
+                            evin_locales::t!("version-bumper-file-write-field"),
+                            error,
+                        )
+                    })?;
                 (custom.path.clone(), regex, fallback_regex, replacement)
             }
         };
@@ -395,10 +493,12 @@ pub async fn execute(
         let physical_path = ctx
             .fs
             .get_safe_physical_path(&path)
-            .map_err(|e| e.to_string())?;
+            .map_err(|error| file_path_error("version-bumper-file-path-unusable", &path, error))?;
         let content = match planned_contents.get(&physical_path) {
             Some(content) => content.clone(),
-            None => ctx.fs.read_to_string(&path).map_err(|e| e.to_string())?,
+            None => ctx.fs.read_to_string(&path).map_err(|error| {
+                file_path_error("version-bumper-file-read-failed", &path, error)
+            })?,
         };
         let regex = if regex.is_match(&content) {
             &regex
@@ -424,7 +524,9 @@ pub async fn execute(
         } else {
             ctx.fs
                 .write(&path, new_content.as_bytes())
-                .map_err(|e| e.to_string())?;
+                .map_err(|error| {
+                    file_path_error("version-bumper-file-write-failed", &path, error)
+                })?;
         }
         modified_files.push(path);
     }
@@ -441,15 +543,25 @@ pub async fn execute(
                 ctx.git()
                     .stage_files(&planned)
                     .await
-                    .map_err(|e| e.to_string())?;
+                    .map_err(evin_diagnostic::Diagnostic::from)?;
             }
         }
         let fingerprints =
             evin_action_sdk::release::fingerprint_index(ctx.fs.workspace_root(), &package_policies)
                 .await
-                .map_err(|e| e.to_string())?;
-        let previous_lock = evin_action_sdk::release::read_lock(ctx.fs.workspace_root())
-            .map_err(|e| e.to_string())?;
+                .map_err(|error| {
+                    release_state_error(
+                        evin_locales::t!("version-bumper-release-operation-fingerprinting"),
+                        error,
+                    )
+                })?;
+        let previous_lock =
+            evin_action_sdk::release::read_lock(ctx.fs.workspace_root()).map_err(|error| {
+                release_state_error(
+                    evin_locales::t!("version-bumper-release-operation-reading-lock"),
+                    error,
+                )
+            })?;
         let lock = evin_action_sdk::release::resolve_lock(
             previous_lock.as_ref(),
             evin_action_sdk::release::ReleaseIdentity {
@@ -459,23 +571,40 @@ pub async fn execute(
             &package_policies,
             &fingerprints,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| {
+            release_state_error(
+                evin_locales::t!("version-bumper-release-operation-resolving-revisions"),
+                error,
+            )
+        })?;
         lock_changed = previous_lock.as_ref() != Some(&lock);
         release_json = Some(
-            serde_json::to_string(
-                &lock
-                    .artifact(&package_policies)
-                    .map_err(|e| e.to_string())?,
-            )
-            .map_err(|e| e.to_string())?,
+            serde_json::to_string(&lock.artifact(&package_policies).map_err(|error| {
+                release_state_error(
+                    evin_locales::t!("version-bumper-release-operation-building-artifact"),
+                    error,
+                )
+            })?)
+            .map_err(|error| {
+                release_state_error(
+                    evin_locales::t!("version-bumper-release-operation-serializing-artifact"),
+                    error,
+                )
+            })?,
         );
         if lock_changed && !config.read_only && ctx.mode != evin_action_sdk::PipelineMode::DryRun {
-            evin_action_sdk::release::write_lock(ctx.fs.workspace_root(), &lock)
-                .map_err(|e| e.to_string())?;
+            evin_action_sdk::release::write_lock(ctx.fs.workspace_root(), &lock).map_err(
+                |error| {
+                    release_state_error(
+                        evin_locales::t!("version-bumper-release-operation-writing-lock"),
+                        error,
+                    )
+                },
+            )?;
             ctx.git()
                 .stage_files(&[evin_action_sdk::release::RELEASE_LOCK_PATH.to_string()])
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(evin_diagnostic::Diagnostic::from)?;
         }
     }
 
@@ -512,7 +641,8 @@ pub async fn execute(
             )));
         };
         let commit_message = if semantic_change {
-            resolve_local_template(&commit_msg_template, ctx, &self_values)?
+            resolve_local_template(&commit_msg_template, ctx, &self_values)
+                .map_err(git_message_template_error)?
         } else {
             format!(
                 "{}\n\n{}",
@@ -546,14 +676,14 @@ pub async fn execute(
             ctx.git()
                 .stage_files(&modified_files)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(evin_diagnostic::Diagnostic::from)?;
         }
 
         let has_staged_changes = ctx
             .git()
             .has_staged_changes()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(evin_diagnostic::Diagnostic::from)?;
         if !has_staged_changes && (found_tag || !config.git.defer) {
             return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
                 "no-staged-changes",
@@ -565,7 +695,7 @@ pub async fn execute(
             ctx.git()
                 .commit(&commit_message, require_signatures)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(evin_diagnostic::Diagnostic::from)?;
 
             if config.git.tag && semantic_change {
                 let result = ctx.git().create_tag(&version_with_v, &commit_message).await;

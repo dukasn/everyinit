@@ -4,6 +4,8 @@ issue-sync-workspace-not-loaded = Workspace configuration not loaded
 issue-sync-execution-failed = { $error }
 issue-env-syntax-error = Invalid key-value format. Expected KEY=VALUE
 issue-yaml-parse-failed = { $error }
+flow-syntax-error-title = Flow Syntax Error
+flow-configuration-error-title = Configuration Error
 issue-evin-header-invalid = Invalid Evin document header: { $error }
 issue-policy-validation-failed = Invalid policy '{ $policy }': { $error }
 issue-watcher-creation-failed = Failed to create watcher: { $error }

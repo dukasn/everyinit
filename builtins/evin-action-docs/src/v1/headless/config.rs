@@ -176,6 +176,14 @@ pub(super) fn validate(config: &HeadlessConfig) -> Result<(), String> {
     Ok(())
 }
 
+fn valid_segment(value: &str) -> bool {
+    !value.is_empty()
+        && !matches!(value, "." | "..")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,12 +201,4 @@ mod tests {
         );
         assert_eq!(actual, expected);
     }
-}
-
-fn valid_segment(value: &str) -> bool {
-    !value.is_empty()
-        && !matches!(value, "." | "..")
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
 }

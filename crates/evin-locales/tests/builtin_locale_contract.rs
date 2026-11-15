@@ -1,3 +1,17 @@
+// Copyright (C) 2026 Eduardo Marques Santos
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, version 3.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use fluent_bundle::FluentResource;
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet};
@@ -111,6 +125,16 @@ fn macro_calls(source: &str) -> Vec<(String, String)> {
     calls
 }
 
+fn issue_code_keys(source: &str) -> Vec<String> {
+    let issue_code =
+        Regex::new(r#"evin_locales::diagnostic\(\s*evin_diagnostic::IssueCode::new\(\s*"([^"]+)""#)
+            .unwrap();
+    issue_code
+        .captures_iter(source)
+        .map(|capture| capture[1].to_string())
+        .collect()
+}
+
 #[test]
 fn builtin_fluent_calls_match_english_keys_and_arguments() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -123,6 +147,13 @@ fn builtin_fluent_calls_match_english_keys_and_arguments() {
     let mut calls = 0;
     for path in files {
         let source = std::fs::read_to_string(&path).expect("read builtin Rust source");
+        for key in issue_code_keys(&source) {
+            assert!(
+                messages.contains_key(&key),
+                "{} references IssueCode key '{key}' without an English Fluent message",
+                path.display()
+            );
+        }
         for (key, arguments) in macro_calls(&source) {
             calls += 1;
             let declared = messages.get(&key).unwrap_or_else(|| {

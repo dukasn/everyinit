@@ -161,12 +161,13 @@ impl ConfigError {
 
     pub fn into_diagnostic(
         self,
-        _title: impl Into<String>,
+        title: impl Into<String>,
         path: Option<String>,
     ) -> evin_diagnostic::Diagnostic {
         let mut diag = evin_locales::diagnostic(
             evin_diagnostic::IssueCode::new("issue-yaml-parse-failed").arg("error", self.message),
         );
+        diag.title = title.into();
         if let Some(span) = self.span
             && let Some(p) = path
         {
@@ -275,14 +276,14 @@ pub trait FlowDocument: serde::de::DeserializeOwned {
         validate_evin_header(content, file_path)?;
         let ast = parse_flow(content).map_err(|e| {
             e.into_diagnostic(
-                "Flow Syntax Error",
+                evin_locales::t!("flow-syntax-error-title"),
                 file_path.map(|p| p.display().to_string()),
             )
         })?;
 
         crate::de::from_spanned_value(ast).map_err(|e| {
             e.into_diagnostic(
-                "Configuration Error",
+                evin_locales::t!("flow-configuration-error-title"),
                 file_path.map(|p| p.display().to_string()),
             )
         })
@@ -422,6 +423,25 @@ pub fn is_comment_at(input: &str, offset: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn config_error_diagnostic_keeps_fluent_issue_and_caller_title() {
+        let diagnostic = ConfigError {
+            message: "unknown field `typo`".into(),
+            span: None,
+        }
+        .into_diagnostic(evin_locales::t!("flow-configuration-error-title"), None);
+
+        assert_eq!(diagnostic.code.key, "issue-yaml-parse-failed");
+        assert_eq!(
+            diagnostic.title,
+            evin_locales::t!("flow-configuration-error-title")
+        );
+        assert_eq!(
+            evin_locales::render_issue(&diagnostic.code),
+            evin_locales::t!("issue-yaml-parse-failed", error = "unknown field `typo`")
+        );
+    }
 
     #[test]
     fn test_is_comment_at() {

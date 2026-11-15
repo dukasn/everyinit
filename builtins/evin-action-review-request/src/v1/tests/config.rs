@@ -26,7 +26,22 @@ fn decision_table() {
 fn parses_flags() {
     assert_eq!(parse_flag("true"), Ok(true));
     assert_eq!(parse_flag(" False "), Ok(false));
-    assert!(parse_flag("yes").is_err());
+    assert_eq!(
+        parse_flag("yes").unwrap_err(),
+        evin_locales::t!("review-request-wanted-must-be-boolean", value = "yes")
+    );
+}
+
+#[test]
+fn invalid_template_syntax_uses_fluent_message() {
+    let error = config(&format!("{BASE}title: '${{version'\n")).unwrap_err();
+    let detail = evin_flow::template::pipeline::validate_template_syntax("${version")
+        .unwrap_err()
+        .to_string();
+    assert_fluent_message(
+        error.message,
+        evin_locales::t!("review-request-template-syntax-invalid", error = detail),
+    );
 }
 
 #[test]
@@ -68,6 +83,41 @@ fn configuration_errors_use_fluent_messages() {
             name = "title"
         ),
     );
+
+    for (yaml, field) in [
+        (
+            "branch: ' '\nbase: main\ncommands:\n  find: echo 1\n",
+            "branch",
+        ),
+        ("branch: b\nbase: ' '\ncommands:\n  find: echo 1\n", "base"),
+        (
+            "branch: b\nbase: main\ncommands:\n  find: ' '\n",
+            "commands.find",
+        ),
+    ] {
+        let error = config(yaml).unwrap_err();
+        assert_fluent_message(
+            error.message,
+            evin_locales::t!("review-request-field-must-not-be-empty", name = field),
+        );
+    }
+
+    let error = config(&format!("{BASE}body_path: ' '\ntitle: t\n")).unwrap_err();
+    assert_fluent_message(
+        error.message,
+        evin_locales::t!(
+            "review-request-field-must-not-be-empty-when-provided",
+            name = "body_path"
+        ),
+    );
+
+    for path in ["../x.md", "/x.md"] {
+        let error = config(&format!("{BASE}title: t\nbody_path: {path}\n")).unwrap_err();
+        assert_fluent_message(
+            error.message,
+            evin_locales::t!("review-request-body-path-must-stay-in-workspace"),
+        );
+    }
 }
 
 fn assert_fluent_message(actual: String, expected: String) {

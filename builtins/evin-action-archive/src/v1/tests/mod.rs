@@ -186,11 +186,10 @@ async fn test_archive_collision() {
 
     assert!(res.is_err());
     let err = res.unwrap_err();
-    assert!(
-        err.to_string().contains("collision"),
-        "Expected collision error, got: {}",
-        err
-    );
+    assert_eq!(err.code.key, "path-collision");
+    assert_eq!(err.title, evin_locales::t!("path-collision-title"));
+    let message = evin_locales::render_issue(&err.code);
+    assert!(!message.starts_with("<missing locale key:"), "{message}");
 }
 
 #[tokio::test]

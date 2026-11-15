@@ -11,3 +11,7 @@ review-request-body-path-unusable = body_path is not usable: { $error }
 review-request-dry-run-skipped-lookup = The existing review request was not looked up in a dry run
 review-request-command-required-for-state = a review request must be { $state } but commands.{ $command } is not configured
 review-request-command-failed = command failed with exit status { $status }: { $command }
+review-request-template-syntax-invalid = Invalid template syntax: { $error }
+review-request-template-resolution-failed = Could not resolve the { $field } template: { $error }
+review-request-template-syntax-invalid-title = Invalid Review Request Template
+review-request-invalid-config-title = Invalid Review Request Configuration
