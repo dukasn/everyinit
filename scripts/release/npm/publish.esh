@@ -36,8 +36,9 @@ fi
 
 PACKAGE_DIR="${RUNNER_TEMP:-target}/everyinit-github-package"
 rm -rf "$PACKAGE_DIR"
-mkdir -p "$PACKAGE_DIR"
-cp -R packages/everyinit/. "$PACKAGE_DIR/"
+mkdir -p "$(dirname "$PACKAGE_DIR")"
+cp -R packages/everyinit "$PACKAGE_DIR"
+test -f "$PACKAGE_DIR/package.json"
 npm pkg set --prefix "$PACKAGE_DIR" name=@dukasn/everyinit
 # `access: public` is an npmjs publish setting; GitHub Packages visibility is
 # managed by GitHub and new packages start private.
