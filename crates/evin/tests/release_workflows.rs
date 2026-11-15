@@ -214,6 +214,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     let yaml = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     assert!(!yaml.contains("github-script"));
     assert!(!yaml.contains("node "));
+    assert!(yaml.contains("NPM_TOKEN: ${{ secrets.NPM_TOKEN }}"));
     assert!(yaml.contains("NODE_AUTH_TOKEN: ${{ github.token }}"));
     let ci = flow(".github/workflows/ci.yml");
     assert!(

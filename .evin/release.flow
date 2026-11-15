@@ -171,7 +171,7 @@ tasks:
   publish-registries:
     stage: Publish
     description: "Publish the Everyinit npm package to npmjs and GitHub Packages"
-    env: [NODE_AUTH_TOKEN, RELEASE_VERSION]
+    env: [NODE_AUTH_TOKEN, NPM_TOKEN, RELEASE_VERSION]
     steps:
       - run: cargo run --locked -p esh -- scripts/release/npm/publish.esh "$RELEASE_VERSION"
 
