@@ -24,7 +24,11 @@ if npm view "everyinit@$VERSION" version --registry=https://registry.npmjs.org >
   echo "everyinit@$VERSION is already on npmjs; skipping publish"
 else
   if [ -n "${NPM_TOKEN:-}" ]; then
-    NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
+    npmrc="${RUNNER_TEMP:-target}/everyinit-npmjs.npmrc"
+    mkdir -p "$(dirname "$npmrc")"
+    umask 077
+    printf '%s\n' '//registry.npmjs.org/:_authToken=${NPM_TOKEN}' > "$npmrc"
+    NPM_CONFIG_USERCONFIG="$npmrc" npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
   else
     npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
   fi
