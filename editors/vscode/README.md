@@ -33,6 +33,7 @@ repository root in VS Code; the extension detects this workspace marker and
 starts Evin's workspace features:
 
 ```flow
+#!evin/v1
 workspace:
   name: my-project
   version: "1.0.0"
@@ -99,7 +100,7 @@ settings above.
 
 ## Links
 
-- [Install and compatibility](https://everyinit.dev/install)
+- [Install and compatibility](https://docs.everyinit.dev/book/installation)
 - [Documentation](https://docs.everyinit.dev/)
 - [Source repository](https://github.com/dukasn/everyinit)
 - [Report an issue](https://github.com/dukasn/everyinit/issues)

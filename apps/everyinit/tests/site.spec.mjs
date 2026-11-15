@@ -170,7 +170,19 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   await page.goto("/docs/book/installation/");
   await expect(page).toHaveTitle(/Installation/);
   await expect(page.locator("main h1")).toHaveText("Installation & Quickstart");
-  await expect(page.locator(".doc-content pre code").first()).toContainText("cargo install");
+  await expect(
+    page.getByRole("link", { name: "Everyinit from the Visual Studio Marketplace" }),
+  ).toHaveAttribute(
+    "href",
+    "https://marketplace.visualstudio.com/items?itemName=everyinit.everyinit",
+  );
+  await expect(page.locator(".doc-content")).toContainText("No official prebuilt binaries");
+  await expect(page.locator(".doc-content")).toContainText(
+    "The Marketplace extension and everyinit npm package follow the regular workspace version train",
+  );
+  await expect(page.locator(".doc-content pre code").first()).toContainText(
+    "get.everyinit.dev/all",
+  );
   await expect(page.getByRole("link", { name: "Installation & Quickstart" }).first()).toBeVisible();
   await expect(page.locator(".docs-page-nav")).toBeVisible();
   await expect(page.locator(".docs-page-previous")).toContainText("The Evin Book");
@@ -187,6 +199,12 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   await expect(page.locator(".docs-variant-option.is-selected").first()).toContainText(
     latestVersion,
   );
+  await page.goto("/install/");
+  await expect(page).toHaveURL(/\/docs\/book\/installation\/$/);
+  await expect(page.locator("main h1")).toHaveText("Installation & Quickstart");
+  await page.goto("/docs/install");
+  await expect(page).toHaveURL(/\/docs\/book\/installation\/$/);
+  await expect(page.locator("main h1")).toHaveText("Installation & Quickstart");
   await page.goto("/docs/book/esh/first-script/");
   const eshExample = page.locator(".doc-content code[data-language='esh']").first();
   await expect(eshExample.locator(".syntax-builtin").first()).toContainText("echo");
@@ -226,7 +244,7 @@ test("documentation navigation and search work at desktop and mobile widths", as
   await page.locator("#docs-search-input").fill("Rustup");
   const bodyResult = page.locator("[data-search-option]:visible").first();
   await expect(bodyResult).toContainText("Rustup");
-  await expect(bodyResult).toHaveAttribute("href", "/book/installation#installation");
+  await expect(bodyResult).toHaveAttribute("href", "/book/installation#build-from-source");
   await page.keyboard.press("Escape");
   await page.locator(".docs-mobile-nav > summary").click();
   await expect(page.locator(".docs-mobile-nav")).toContainText("Workflows");
@@ -395,6 +413,12 @@ test("Pages serves docs at the docs host root and preserves the project home dom
 
   expect(fetchForHost("docs.everyinit.dev", "/")).toContain("Everyinit · Evin Docs");
   expect(fetchForHost("docs.everyinit.dev", "/book/installation")).toContain(
+    "Installation &amp; Quickstart · Evin Docs",
+  );
+  expect(fetchForHost("docs.everyinit.dev", "/install/")).toContain(
+    "Installation &amp; Quickstart · Evin Docs",
+  );
+  expect(fetchForHost("docs.everyinit.dev", "/docs/install")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
   expect(fetchForHost("everyinit.dev", "/")).toContain("Everyinit — development, orchestrated");

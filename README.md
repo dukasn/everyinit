@@ -11,7 +11,7 @@ Everyinit brings repository commands, dependencies, Git hooks, and delivery step
 > **Canary Status · Linux Focus**
 >
 > - **Early Canary Phase**: Everyinit is under active canary-era development. Interfaces, workflow contracts, and command behaviors may evolve or introduce breaking changes between releases as the architecture matures.
-> - **Platform Scope**: While broader cross-platform support (macOS and Windows) is planned for future milestones, current development, CI verification, and release artifacts are focused exclusively on **Linux**. See the [platform policy](CI.md) for roadmap details.
+> - **Platform Scope**: Official Evin and ESH release artifacts and CI target **Linux x86_64**. Other Linux architectures, macOS, and Windows are not currently covered by official binaries or CI; see the [platform policy](CI.md) for details.
 
 [Explore Everyinit](https://everyinit.dev)
 

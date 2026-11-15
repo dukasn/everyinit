@@ -13,9 +13,7 @@ export const onRequest = async ({ request, next }: PagesContext): Promise<Respon
 
   if (normalizedPath === "/install" || normalizedPath === "/docs/install") {
     url.pathname =
-      url.hostname === "docs.everyinit.dev"
-        ? "/book/installation/"
-        : "/docs/book/installation/";
+      url.hostname === "docs.everyinit.dev" ? "/book/installation/" : "/docs/book/installation/";
     return Response.redirect(url, 308);
   }
 
