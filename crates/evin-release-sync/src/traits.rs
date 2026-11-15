@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::models::{CiPlan, CiRemoteState, RemoteRelease};
+use crate::models::{ReleaseSyncPlan, RemoteRelease, RemoteReleaseState};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -67,7 +67,7 @@ pub struct LocalArtifactInfo {
 
 /// Ingestion source trait for remote forge release data
 pub trait RemoteStateSource {
-    fn load_remote_state(&self) -> Result<CiRemoteState, ProtocolError>;
+    fn load_remote_state(&self) -> Result<RemoteReleaseState, ProtocolError>;
 }
 
 /// Provider extracting markdown release notes slices
@@ -95,5 +95,5 @@ pub trait PolicyEvaluator {
 /// Sink responsible for writing notes slices and plan.v1.json
 pub trait PlanSink {
     fn write_notes_file(&mut self, filename: &str, content: &str) -> Result<String, ProtocolError>;
-    fn write_plan(&mut self, plan: &CiPlan) -> Result<(), ProtocolError>;
+    fn write_plan(&mut self, plan: &ReleaseSyncPlan) -> Result<(), ProtocolError>;
 }

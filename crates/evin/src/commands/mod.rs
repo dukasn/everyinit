@@ -109,7 +109,10 @@ pub(crate) fn builtin_actions()
             "evin/catalog@v1",
             Arc::new(evin_action_catalog::CatalogAction),
         ),
-        ("evin/ci@v1", Arc::new(evin_action_ci::CiAction)),
+        (
+            "evin/release-sync@v1",
+            Arc::new(evin_action_release_sync::ReleaseSyncAction),
+        ),
     ]
     .into_iter()
     .map(|(name, action)| (name.to_string(), action))

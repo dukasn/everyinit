@@ -885,9 +885,9 @@ dependencies = [
  "evin-action-archive",
  "evin-action-catalog",
  "evin-action-changelog",
- "evin-action-ci",
  "evin-action-docs",
  "evin-action-git-release",
+ "evin-action-release-sync",
  "evin-action-review-request",
  "evin-action-sdk",
  "evin-action-version-bumper",
@@ -962,36 +962,15 @@ version = "0.2.8"
 dependencies = [
  "async-trait",
  "evin-action-sdk",
- "evin-ci",
  "evin-diagnostic",
  "evin-flow",
  "evin-gitrules",
  "evin-locales",
+ "evin-release-sync",
  "marked-yaml",
  "regex",
  "serde",
  "serde_json",
- "tempfile",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "evin-action-ci"
-version = "0.2.8"
-dependencies = [
- "async-trait",
- "evin-action-sdk",
- "evin-ci",
- "evin-diagnostic",
- "evin-flow",
- "evin-git",
- "evin-gitrules",
- "evin-locales",
- "semver",
- "serde",
- "serde_json",
- "sha2 0.10.9",
  "tempfile",
  "thiserror",
  "tokio",
@@ -1034,6 +1013,27 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "evin-action-release-sync"
+version = "0.2.8"
+dependencies = [
+ "async-trait",
+ "evin-action-sdk",
+ "evin-diagnostic",
+ "evin-flow",
+ "evin-git",
+ "evin-gitrules",
+ "evin-locales",
+ "evin-release-sync",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror",
  "tokio",
 ]
 
@@ -1109,16 +1109,6 @@ version = "0.2.8"
 dependencies = [
  "serde",
  "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "evin-ci"
-version = "0.2.8"
-dependencies = [
- "serde",
- "serde_json",
- "sha2 0.11.0",
  "thiserror",
 ]
 
@@ -1290,6 +1280,16 @@ dependencies = [
  "tokio",
  "tokio-util",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "evin-release-sync"
+version = "0.2.8"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "thiserror",
 ]
 
 [[package]]

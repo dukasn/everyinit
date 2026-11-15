@@ -14,23 +14,24 @@
 
 use serde::{Deserialize, Serialize};
 
-pub const SCHEMA_REMOTE_STATE_V1: &str = "https://everyinit.dev/schemas/v1/ci-remote-state.json";
-pub const SCHEMA_PLAN_V1: &str = "https://everyinit.dev/schemas/v1/ci-plan.json";
+pub const SCHEMA_RELEASE_STATE_V1: &str =
+    "https://everyinit.dev/schemas/v1/release-sync-remote-state.json";
+pub const SCHEMA_RELEASE_PLAN_V1: &str = "https://everyinit.dev/schemas/v1/release-sync-plan.json";
 
 /// ECP-1 Normalized Ingestion State (`remote-state.v1.json`)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CiRemoteState {
+pub struct RemoteReleaseState {
     #[serde(default = "default_remote_state_schema", rename = "$schema")]
     pub schema: Option<String>,
     pub v: u32,
-    pub platform: String,
+    pub provider: String,
     pub repository: String,
     #[serde(default)]
     pub releases: Vec<RemoteRelease>,
 }
 
 fn default_remote_state_schema() -> Option<String> {
-    Some(SCHEMA_REMOTE_STATE_V1.to_string())
+    Some(SCHEMA_RELEASE_STATE_V1.to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,23 +63,24 @@ pub struct RemoteAsset {
 
 /// ECP-1 Reconciliation Plan (`plan.v1.json`)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CiPlan {
+pub struct ReleaseSyncPlan {
     #[serde(default = "default_plan_schema", rename = "$schema")]
     pub schema: Option<String>,
     pub v: u32,
+    pub provider: String,
     pub status: u16,
     pub reconciled: bool,
     pub delta_count: usize,
     #[serde(default)]
-    pub plan: Vec<CiPlanAction>,
+    pub plan: Vec<ReleaseSyncPlanAction>,
 }
 
 fn default_plan_schema() -> Option<String> {
-    Some(SCHEMA_PLAN_V1.to_string())
+    Some(SCHEMA_RELEASE_PLAN_V1.to_string())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CiPlanAction {
+pub struct ReleaseSyncPlanAction {
     pub id: String,
     pub op: u16,
     pub code: ActionOpcode,

@@ -298,7 +298,7 @@ async fn generate_changelog(
                 message: error.to_string(),
             }
         })?;
-        let slicer = evin_ci::ChangelogSlicer::parse(&content);
+        let slicer = evin_release_sync::ChangelogSlicer::parse(&content);
         let notes = slicer
             .get_unique_slice(&section)
             .map_err(ChangelogError::InvalidSection)?

@@ -13,20 +13,21 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod adapter;
+mod adapters;
 pub mod config;
 
 use adapter::{
     CommandGitStateProvider, ContextPolicyEvaluator, FsArtifactInspector, FsNotesExtractor,
     FsPlanSink, FsRemoteStateSource,
 };
-use config::CiConfig;
+use config::ReleaseSyncConfig;
 use evin_action_sdk::RunnerContext;
-use evin_ci::Reconciler;
+use evin_release_sync::Reconciler;
 
 pub fn validate_config(
     with: Option<&evin_flow::SpannedValue>,
 ) -> Result<(), evin_flow::ConfigError> {
-    CiConfig::from_with(with).map(|_| ())
+    ReleaseSyncConfig::from_with(with).map(|_| ())
 }
 
 #[allow(clippy::result_large_err)]
@@ -34,7 +35,7 @@ pub async fn execute(
     ctx: &RunnerContext,
     with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), evin_diagnostic::Diagnostic> {
-    let config = CiConfig::from_with(with.as_ref())
+    let config = ReleaseSyncConfig::from_with(with.as_ref())
         .map_err(|e| evin_diagnostic::Diagnostic::from(e.message))?;
 
     let root = ctx.fs.workspace_root();
@@ -81,11 +82,4 @@ pub async fn execute(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_validate_default_config() {
-        assert!(validate_config(None).is_ok());
-    }
-}
+mod tests;

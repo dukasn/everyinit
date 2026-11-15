@@ -19,8 +19,8 @@ use evin_action_sdk::{
     RunnerContext,
 };
 
-const CI_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
-    summary: "Reconcile remote CI release state.",
+const RELEASE_SYNC_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
+    summary: "Reconcile provider release state with local tags and artifacts.",
     fields: &[
         ActionFieldDescriptor {
             path: "tag",
@@ -33,28 +33,28 @@ const CI_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
             path: "title",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Explicit title for reconciled GitHub releases; defaults to the annotated tag subject.",
+            description: "Explicit title for reconciled releases; defaults to the annotated tag subject.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "plan_out",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Generated CI plan path.",
+            description: "Generated release-sync plan path.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "dry_run",
             kind: ActionFieldKind::Boolean,
             required: false,
-            description: "Plan without publishing changes.",
+            description: "Skip writing generated notes and plan files.",
             condition: None,
         },
         ActionFieldDescriptor {
             path: "state",
             kind: ActionFieldKind::String,
             required: false,
-            description: "Persisted CI state path.",
+            description: "Provider-normalized release state path.",
             condition: None,
         },
         ActionFieldDescriptor {
@@ -89,7 +89,7 @@ const CI_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
     outputs: &[
         ActionOutputDescriptor {
             name: "plan",
-            description: "Generated CI plan.",
+            description: "Generated release-sync plan.",
         },
         ActionOutputDescriptor {
             name: "delta_count",
@@ -102,12 +102,12 @@ const CI_DESCRIPTOR: ActionDescriptor = ActionDescriptor {
     ],
 };
 
-pub struct CiAction;
+pub struct ReleaseSyncAction;
 
 #[async_trait::async_trait]
-impl Action for CiAction {
+impl Action for ReleaseSyncAction {
     fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
-        Some(&CI_DESCRIPTOR)
+        Some(&RELEASE_SYNC_DESCRIPTOR)
     }
     fn validate_config(
         &self,

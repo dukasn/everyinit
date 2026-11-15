@@ -15,15 +15,15 @@
 use serde::Deserialize;
 
 fn default_state_path() -> String {
-    ".evin/actions/ci/remote-state.v1.json".to_string()
+    ".evin/actions/release-sync/remote-state.v1.json".to_string()
 }
 
 fn default_plan_out_path() -> String {
-    ".evin/actions/ci/plan.v1.json".to_string()
+    ".evin/actions/release-sync/plan.v1.json".to_string()
 }
 
 fn default_notes_dir() -> String {
-    ".evin/actions/ci/notes".to_string()
+    ".evin/actions/release-sync/notes".to_string()
 }
 
 fn default_artifacts_dir() -> String {
@@ -36,7 +36,7 @@ fn default_changelog_path() -> String {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct CiConfig {
+pub struct ReleaseSyncConfig {
     #[serde(default)]
     pub tag: Option<String>,
 
@@ -65,7 +65,7 @@ pub struct CiConfig {
     pub prune_orphans: bool,
 }
 
-impl Default for CiConfig {
+impl Default for ReleaseSyncConfig {
     fn default() -> Self {
         Self {
             tag: None,
@@ -81,7 +81,7 @@ impl Default for CiConfig {
     }
 }
 
-impl CiConfig {
+impl ReleaseSyncConfig {
     pub fn from_with(
         with: Option<&evin_flow::SpannedValue>,
     ) -> Result<Self, evin_flow::ConfigError> {

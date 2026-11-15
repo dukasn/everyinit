@@ -1,6 +1,6 @@
 [package]
 license.workspace = true
-name = "evin-ci"
+name = "evin-release-sync"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -12,13 +12,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use evin_action_ci::CiAction;
+use evin_action_release_sync::ReleaseSyncAction;
 use evin_action_sdk::{Action, Logger, RunnerContext, secrets::SecretsProvider};
 use std::sync::Arc;
 use tempfile::tempdir;
 
 #[tokio::test]
-async fn test_ci_action_reconciles_and_emits_plan_in_actions_folder() {
+async fn release_sync_reconciles_and_emits_plan_in_actions_folder() {
     let temp = tempdir().unwrap();
     let root = temp.path();
 
@@ -89,25 +89,25 @@ async fn test_ci_action_reconciles_and_emits_plan_in_actions_folder() {
     )
     .unwrap();
 
-    // 4. Create .evin/actions/ci/remote-state.v1.json (empty remote releases)
-    let ci_dir = root.join(".evin/actions/ci");
-    std::fs::create_dir_all(&ci_dir).unwrap();
+    // 4. Create .evin/actions/release-sync/remote-state.v1.json (empty remote releases)
+    let action_dir = root.join(".evin/actions/release-sync");
+    std::fs::create_dir_all(&action_dir).unwrap();
     let remote_state_json = r#"{
-      "$schema": "https://everyinit.dev/schemas/v1/ci-remote-state.json",
+      "$schema": "https://everyinit.dev/schemas/v1/release-sync-remote-state.json",
       "v": 1,
-      "platform": "github",
+      "provider": "github",
       "repository": "dukasn/everyinit",
       "releases": []
     }"#;
-    std::fs::write(ci_dir.join("remote-state.v1.json"), remote_state_json).unwrap();
+    std::fs::write(action_dir.join("remote-state.v1.json"), remote_state_json).unwrap();
 
     // 5. Run Action
     let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
     let secrets = Arc::new(SecretsProvider::new(root));
-    let logger = Logger::new("ci".to_string(), log_tx.clone(), secrets.clone());
+    let logger = Logger::new("release-sync".to_string(), log_tx.clone(), secrets.clone());
     let ctx = RunnerContext::new(
         None,
-        "ci".to_string(),
+        "release-sync".to_string(),
         false,
         evin_action_sdk::PipelineMode::Normal,
         log_tx,
@@ -124,12 +124,12 @@ async fn test_ci_action_reconciles_and_emits_plan_in_actions_folder() {
         secrets,
     );
 
-    let action = CiAction;
+    let action = ReleaseSyncAction;
     let result = action.execute(&ctx, None).await;
     assert!(result.is_ok(), "Action execution failed: {:?}", result);
 
-    // 6. Verify outputs are in .evin/actions/ci/
-    let plan_path = root.join(".evin/actions/ci/plan.v1.json");
+    // 6. Verify outputs are in .evin/actions/release-sync/
+    let plan_path = root.join(".evin/actions/release-sync/plan.v1.json");
     assert!(
         plan_path.exists(),
         "Plan file was not created at expected location"
@@ -153,7 +153,7 @@ async fn test_ci_action_reconciles_and_emits_plan_in_actions_folder() {
     assert_eq!(actions[0]["ref"], "v1.0.0-canary.1");
     assert_eq!(
         actions[0]["notes_src"],
-        ".evin/actions/ci/notes/v1.0.0-canary.1.md"
+        ".evin/actions/release-sync/notes/v1.0.0-canary.1.md"
     );
 
     // Second action: ART_PUT (301)
@@ -163,7 +163,7 @@ async fn test_ci_action_reconciles_and_emits_plan_in_actions_folder() {
     assert_eq!(actions[1]["dest"], "evin-v1.0.0-canary.1-linux.tar.gz");
 
     // 7. Verify release note slice was created
-    let note_path = root.join(".evin/actions/ci/notes/v1.0.0-canary.1.md");
+    let note_path = root.join(".evin/actions/release-sync/notes/v1.0.0-canary.1.md");
     assert!(note_path.exists(), "Note slice was not written");
     let note_content = std::fs::read_to_string(note_path).unwrap();
     assert!(note_content.contains("added ECP-1 delivery protocol"));

@@ -613,7 +613,7 @@ async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
 }
 
 #[tokio::test]
-async fn github_ci_snapshot_writes_the_reconciler_state() {
+async fn github_release_provider_snapshot_writes_the_reconciler_state() {
     let temp = tempdir().unwrap();
     let bin = temp.path().join("bin");
     fs::create_dir(&bin).unwrap();
@@ -628,6 +628,13 @@ async fn github_ci_snapshot_writes_the_reconciler_state() {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).unwrap();
     }
+    let provider_dir = temp.path().join("scripts/release/providers");
+    fs::create_dir_all(&provider_dir).unwrap();
+    fs::copy(
+        repository_root().join("scripts/release/providers/github.esh"),
+        provider_dir.join("github.esh"),
+    )
+    .unwrap();
 
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -640,17 +647,21 @@ async fn github_ci_snapshot_writes_the_reconciler_state() {
     ctx.set_env("GITHUB_REPOSITORY", "everyinit/test");
     ctx.set_env("GITHUB_TOKEN", "token");
     ctx.set_env("GITHUB_API_URL", "https://api.example.test");
+    ctx.set_env("RELEASE_PROVIDER", "github");
     ctx.set_positional_args(vec!["release.esh".to_string(), "snapshot".to_string()]);
     let code = engine
         .eval_file(
-            &repository_root().join("scripts/release/github/release.esh"),
+            &repository_root().join("scripts/release/provider.esh"),
             &mut ctx,
         )
         .await
         .unwrap();
     assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
-    let state =
-        fs::read_to_string(temp.path().join(".evin/actions/ci/remote-state.v1.json")).unwrap();
+    let state = fs::read_to_string(
+        temp.path()
+            .join(".evin/actions/release-sync/remote-state.v1.json"),
+    )
+    .unwrap();
     assert!(state.contains("\"repository\": \"everyinit/test\""));
     assert!(state.contains("\"tag\": \"v1.2.3\""));
     assert!(state.contains("\"sha256\": \"deadbeef\""));

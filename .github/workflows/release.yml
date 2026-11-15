@@ -34,6 +34,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
       RELEASE_COMMIT: ${{ inputs.commit || github.event.workflow_run.head_sha }}
       RELEASE_BRANCH: automation/release
+      RELEASE_PROVIDER: github
       RELEASE_TARGET: x86_64-unknown-linux-musl
       RELEASE_CHANNEL: canary
       RELEASE_BASE_URL: https://dl.everyinit.dev

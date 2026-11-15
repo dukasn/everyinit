@@ -12,7 +12,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::models::{ActionOpcode, CiPlan, CiPlanAction, ReasonCode, ReleaseFlags};
+use crate::models::{
+    ActionOpcode, ReasonCode, ReleaseFlags, ReleaseSyncPlan, ReleaseSyncPlanAction,
+};
 use crate::traits::{
     ArtifactInspector, GitStateProvider, NotesExtractor, PlanSink, PolicyEvaluator, ProtocolError,
     RemoteStateSource,
@@ -48,7 +50,7 @@ impl<'a> Reconciler<'a> {
         }
     }
 
-    pub fn reconcile(&mut self) -> Result<CiPlan, ProtocolError> {
+    pub fn reconcile(&mut self) -> Result<ReleaseSyncPlan, ProtocolError> {
         let remote_state = self.state_source.load_remote_state()?;
         if remote_state.v != 1 {
             return Err(ProtocolError::SchemaValidation(format!(
@@ -91,7 +93,7 @@ impl<'a> Reconciler<'a> {
                     && !remote_commit.is_empty()
                     && remote_commit != &local.commit
                 {
-                    actions.push(CiPlanAction {
+                    actions.push(ReleaseSyncPlanAction {
                         id: next_id(&mut action_index),
                         op: ActionOpcode::RelRetarget.opcode_number(),
                         code: ActionOpcode::RelRetarget,
@@ -119,7 +121,7 @@ impl<'a> Reconciler<'a> {
                         let notes_path = self
                             .plan_sink
                             .write_notes_file(&slice.sanitized_filename, &slice.body)?;
-                        actions.push(CiPlanAction {
+                        actions.push(ReleaseSyncPlanAction {
                             id: next_id(&mut action_index),
                             op: ActionOpcode::RelNotesSync.opcode_number(),
                             code: ActionOpcode::RelNotesSync,
@@ -145,7 +147,7 @@ impl<'a> Reconciler<'a> {
                 };
 
                 if flags_changed || title_changed {
-                    actions.push(CiPlanAction {
+                    actions.push(ReleaseSyncPlanAction {
                         id: next_id(&mut action_index),
                         op: ActionOpcode::RelMut.opcode_number(),
                         code: ActionOpcode::RelMut,
@@ -181,7 +183,7 @@ impl<'a> Reconciler<'a> {
                         };
 
                         if size_mismatch || hash_mismatch {
-                            actions.push(CiPlanAction {
+                            actions.push(ReleaseSyncPlanAction {
                                 id: next_id(&mut action_index),
                                 op: ActionOpcode::ArtPut.opcode_number(),
                                 code: ActionOpcode::ArtPut,
@@ -197,7 +199,7 @@ impl<'a> Reconciler<'a> {
                         }
                     } else {
                         // Asset absent on remote
-                        actions.push(CiPlanAction {
+                        actions.push(ReleaseSyncPlanAction {
                             id: next_id(&mut action_index),
                             op: ActionOpcode::ArtPut.opcode_number(),
                             code: ActionOpcode::ArtPut,
@@ -215,7 +217,7 @@ impl<'a> Reconciler<'a> {
 
                 // If nothing changed for this existing release, record SYNC_OK
                 if actions.len() == actions_before {
-                    actions.push(CiPlanAction {
+                    actions.push(ReleaseSyncPlanAction {
                         id: next_id(&mut action_index),
                         op: ActionOpcode::SyncOk.opcode_number(),
                         code: ActionOpcode::SyncOk,
@@ -240,7 +242,7 @@ impl<'a> Reconciler<'a> {
                     None
                 };
 
-                actions.push(CiPlanAction {
+                actions.push(ReleaseSyncPlanAction {
                     id: next_id(&mut action_index),
                     op: ActionOpcode::RelInit.opcode_number(),
                     code: ActionOpcode::RelInit,
@@ -259,7 +261,7 @@ impl<'a> Reconciler<'a> {
 
                 // Attach all local artifacts
                 for artifact in &local_artifacts {
-                    actions.push(CiPlanAction {
+                    actions.push(ReleaseSyncPlanAction {
                         id: next_id(&mut action_index),
                         op: ActionOpcode::ArtPut.opcode_number(),
                         code: ActionOpcode::ArtPut,
@@ -281,7 +283,7 @@ impl<'a> Reconciler<'a> {
             if !processed_remote_tags.contains(release.tag.as_str())
                 && self.policy_evaluator.should_prune_remote(release)
             {
-                actions.push(CiPlanAction {
+                actions.push(ReleaseSyncPlanAction {
                     id: next_id(&mut action_index),
                     op: ActionOpcode::RelPrune.opcode_number(),
                     code: ActionOpcode::RelPrune,
@@ -299,9 +301,10 @@ impl<'a> Reconciler<'a> {
 
         let delta_count = actions.iter().filter(|a| a.code.is_mutating()).count();
 
-        let plan = CiPlan {
-            schema: Some(crate::models::SCHEMA_PLAN_V1.to_string()),
+        let plan = ReleaseSyncPlan {
+            schema: Some(crate::models::SCHEMA_RELEASE_PLAN_V1.to_string()),
             v: 1,
+            provider: remote_state.provider.clone(),
             status: 200,
             reconciled: true,
             delta_count,
@@ -316,13 +319,13 @@ impl<'a> Reconciler<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{CiRemoteState, RemoteAsset, RemoteRelease};
+    use crate::models::{RemoteAsset, RemoteRelease, RemoteReleaseState};
     use crate::traits::{LocalArtifactInfo, LocalTagInfo, NoteSlice};
     use std::cell::RefCell;
 
-    struct MockRemoteState(CiRemoteState);
+    struct MockRemoteState(RemoteReleaseState);
     impl RemoteStateSource for MockRemoteState {
-        fn load_remote_state(&self) -> Result<CiRemoteState, ProtocolError> {
+        fn load_remote_state(&self) -> Result<RemoteReleaseState, ProtocolError> {
             Ok(self.0.clone())
         }
     }
@@ -367,7 +370,7 @@ mod tests {
 
     struct MockSink {
         notes: RefCell<HashMap<String, String>>,
-        plan: RefCell<Option<CiPlan>>,
+        plan: RefCell<Option<ReleaseSyncPlan>>,
     }
     impl PlanSink for MockSink {
         fn write_notes_file(
@@ -375,13 +378,13 @@ mod tests {
             filename: &str,
             content: &str,
         ) -> Result<String, ProtocolError> {
-            let path = format!(".evin/actions/ci/notes/{filename}");
+            let path = format!(".evin/actions/release-sync/notes/{filename}");
             self.notes
                 .borrow_mut()
                 .insert(path.clone(), content.to_string());
             Ok(path)
         }
-        fn write_plan(&mut self, plan: &CiPlan) -> Result<(), ProtocolError> {
+        fn write_plan(&mut self, plan: &ReleaseSyncPlan) -> Result<(), ProtocolError> {
             *self.plan.borrow_mut() = Some(plan.clone());
             Ok(())
         }
@@ -389,10 +392,10 @@ mod tests {
 
     #[test]
     fn reconciles_absent_release_and_artifacts() {
-        let state = MockRemoteState(CiRemoteState {
+        let state = MockRemoteState(RemoteReleaseState {
             schema: None,
             v: 1,
-            platform: "github".into(),
+            provider: "github".into(),
             repository: "owner/repo".into(),
             releases: vec![],
         });
@@ -453,7 +456,7 @@ mod tests {
         assert_eq!(plan.plan[0].reason, ReasonCode::DiffAbsent);
         assert_eq!(
             plan.plan[0].notes_src.as_deref(),
-            Some(".evin/actions/ci/notes/v1.0.0-canary.1.md")
+            Some(".evin/actions/release-sync/notes/v1.0.0-canary.1.md")
         );
         assert_eq!(
             plan.plan[0].flags,
@@ -470,10 +473,10 @@ mod tests {
 
     #[test]
     fn reconciles_stale_notes_and_target_drift() {
-        let state = MockRemoteState(CiRemoteState {
+        let state = MockRemoteState(RemoteReleaseState {
             schema: None,
             v: 1,
-            platform: "github".into(),
+            provider: "github".into(),
             repository: "owner/repo".into(),
             releases: vec![RemoteRelease {
                 tag: "v1.0.0".into(),
@@ -531,10 +534,10 @@ mod tests {
 
     #[test]
     fn reconciles_synced_release_as_sync_ok() {
-        let state = MockRemoteState(CiRemoteState {
+        let state = MockRemoteState(RemoteReleaseState {
             schema: None,
             v: 1,
-            platform: "github".into(),
+            provider: "github".into(),
             repository: "owner/repo".into(),
             releases: vec![RemoteRelease {
                 tag: "v1.0.0".into(),
@@ -603,10 +606,10 @@ mod tests {
 
     #[test]
     fn reconciles_metadata_flags_and_channel_desync() {
-        let state = MockRemoteState(CiRemoteState {
+        let state = MockRemoteState(RemoteReleaseState {
             schema: None,
             v: 1,
-            platform: "github".into(),
+            provider: "github".into(),
             repository: "owner/repo".into(),
             releases: vec![RemoteRelease {
                 tag: "v1.0.0-canary.1".into(),
@@ -669,10 +672,10 @@ mod tests {
 
     #[test]
     fn reconciles_orphan_remote_release_prune() {
-        let state = MockRemoteState(CiRemoteState {
+        let state = MockRemoteState(RemoteReleaseState {
             schema: None,
             v: 1,
-            platform: "github".into(),
+            provider: "github".into(),
             repository: "owner/repo".into(),
             releases: vec![RemoteRelease {
                 tag: "v0.0.0-orphaned-draft".into(),
@@ -712,9 +715,9 @@ mod tests {
     #[test]
     fn test_schema_json_roundtrip_spec_conformance() {
         let raw_spec_remote = r#"{
-          "$schema": "https://everyinit.dev/schemas/v1/ci-remote-state.json",
+          "$schema": "https://everyinit.dev/schemas/v1/release-sync-remote-state.json",
           "v": 1,
-          "platform": "github",
+          "provider": "github",
           "repository": "dukasn/everyinit",
           "releases": [
             {
@@ -735,9 +738,9 @@ mod tests {
           ]
         }"#;
 
-        let parsed: CiRemoteState = serde_json::from_str(raw_spec_remote).unwrap();
+        let parsed: RemoteReleaseState = serde_json::from_str(raw_spec_remote).unwrap();
         assert_eq!(parsed.v, 1);
-        assert_eq!(parsed.platform, "github");
+        assert_eq!(parsed.provider, "github");
         assert_eq!(parsed.releases.len(), 1);
         assert_eq!(parsed.releases[0].tag, "v1.0.0-canary.5");
         assert_eq!(parsed.releases[0].assets.len(), 1);
@@ -747,8 +750,9 @@ mod tests {
         );
 
         let raw_spec_plan = r#"{
-          "$schema": "https://everyinit.dev/schemas/v1/ci-plan.json",
+          "$schema": "https://everyinit.dev/schemas/v1/release-sync-plan.json",
           "v": 1,
+          "provider": "github",
           "status": 200,
           "reconciled": true,
           "delta_count": 3,
@@ -761,7 +765,7 @@ mod tests {
               "ref": "v1.0.0-canary.6",
               "commit": "a1b2c3d4e5f67890",
               "title": "v1.0.0-canary.6",
-              "notes_src": ".evin/actions/ci/notes/v1.0.0-canary.6.md",
+              "notes_src": ".evin/actions/release-sync/notes/v1.0.0-canary.6.md",
               "flags": {
                 "draft": false,
                 "prerelease": true
@@ -770,7 +774,7 @@ mod tests {
           ]
         }"#;
 
-        let parsed_plan: CiPlan = serde_json::from_str(raw_spec_plan).unwrap();
+        let parsed_plan: ReleaseSyncPlan = serde_json::from_str(raw_spec_plan).unwrap();
         assert_eq!(parsed_plan.v, 1);
         assert_eq!(parsed_plan.delta_count, 3);
         assert_eq!(parsed_plan.plan[0].code, ActionOpcode::RelInit);

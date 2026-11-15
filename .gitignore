@@ -63,4 +63,4 @@ __pycache__/
 **/.wrangler/
 **/.evin/trace.json
 **/.evin/build/
-/.evin/actions/ci/
+/.evin/actions/release-sync/

@@ -49,7 +49,7 @@ request_json() {
 }
 
 snapshot() {
-  STATE_PATH=.evin/actions/ci/remote-state.v1.json
+  STATE_PATH=.evin/actions/release-sync/remote-state.v1.json
   ENTRIES="$TEMPORARY_DIRECTORY/releases.ndjson"
   touch "$ENTRIES"
   PAGE=1
@@ -67,15 +67,15 @@ snapshot() {
     if test "$PAGE_COUNT" -lt 100; then break; fi
     PAGE=$((PAGE + 1))
   done
-  mkdir -p .evin/actions/ci
-  jq -s --arg repository "$GITHUB_REPOSITORY" '{"$schema":"https://everyinit.dev/schemas/v1/ci-remote-state.json",v:1,platform:"github",repository:$repository,releases:.}' "$ENTRIES" > "$STATE_PATH"
+  mkdir -p .evin/actions/release-sync
+  jq -s --arg repository "$GITHUB_REPOSITORY" '{"$schema":"https://everyinit.dev/schemas/v1/release-sync-remote-state.json",v:1,provider:"github",repository:$repository,releases:.}' "$ENTRIES" > "$STATE_PATH"
   echo "Captured $(jq -s 'length' "$ENTRIES") GitHub releases for $GITHUB_REPOSITORY"
 }
 
 apply_plan() {
   PLAN="$1"
-  assert [ -f "$PLAN" ] "Evin CI plan is missing: $PLAN"
-  assert "jq -e '.v == 1 and (.plan | type == \"array\")' '$PLAN' >/dev/null" -- "Unsupported Evin CI plan: $PLAN"
+  assert [ -f "$PLAN" ] "Evin release sync plan is missing: $PLAN"
+  assert "jq -e '.v == 1 and (.plan | type == \"array\")' '$PLAN' >/dev/null" -- "Unsupported Evin release sync plan: $PLAN"
   for ENCODED in $(jq -r '.plan[] | @base64' "$PLAN"); do
     ACTION="$TEMPORARY_DIRECTORY/action.json"
     printf '%s' "$ENCODED" | base64 --decode > "$ACTION"
@@ -145,12 +145,12 @@ apply_plan() {
         fi
         ;;
       *)
-        echo "Unsupported Evin CI plan action: $CODE" >&2
+        echo "Unsupported Evin release sync plan action: $CODE" >&2
         exit 1
         ;;
     esac
   done
-  echo "Applied $(jq -r '.delta_count' "$PLAN") Evin CI changes from $PLAN"
+  echo "Applied $(jq -r '.delta_count' "$PLAN") Evin release sync changes from $PLAN"
 }
 
 format_size() {

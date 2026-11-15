@@ -12,18 +12,4 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod engine;
-pub mod models;
-pub mod notes;
-pub mod traits;
-
-pub use engine::Reconciler;
-pub use models::{
-    ActionOpcode, CiPlan, CiPlanAction, CiRemoteState, ReasonCode, ReleaseFlags, RemoteAsset,
-    RemoteRelease,
-};
-pub use notes::ChangelogSlicer;
-pub use traits::{
-    ArtifactInspector, GitStateProvider, LocalArtifactInfo, LocalTagInfo, NoteSlice,
-    NotesExtractor, PlanSink, PolicyEvaluator, ProtocolError, RemoteStateSource,
-};
+mod config;

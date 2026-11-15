@@ -1,6 +1,6 @@
 [package]
 license.workspace = true
-name = "evin-action-ci"
+name = "evin-action-release-sync"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 async-trait = { workspace = true }
 evin-action-sdk = { workspace = true }
-evin-ci = { workspace = true }
+evin-release-sync = { workspace = true }
 evin-diagnostic = { workspace = true }
 evin-git = { workspace = true }
 evin-gitrules = { workspace = true }

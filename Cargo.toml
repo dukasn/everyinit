@@ -80,8 +80,8 @@ evin-action-git-release = { path = "builtins/evin-action-git-release" }
 evin-action-review-request = { path = "builtins/evin-action-review-request" }
 evin-action-docs = { path = "builtins/evin-action-docs" }
 evin-action-catalog = { path = "builtins/evin-action-catalog" }
-evin-action-ci = { path = "builtins/evin-action-ci" }
-evin-ci = { path = "crates/evin-ci" }
+evin-action-release-sync = { path = "builtins/evin-action-release-sync" }
+evin-release-sync = { path = "crates/evin-release-sync" }
 evin-config = { path = "crates/evin-config" }
 evin-pipeline = { path = "crates/evin-pipeline" }
 evin-dotenv = { path = "crates/evin-dotenv" }
