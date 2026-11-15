@@ -16,6 +16,9 @@ pub mod adapter;
 mod adapters;
 pub mod config;
 
+mod action;
+pub use action::ReleaseSyncAction;
+
 use adapter::{
     CommandGitStateProvider, ContextPolicyEvaluator, FsArtifactInspector, FsNotesExtractor,
     FsPlanSink, FsRemoteStateSource,

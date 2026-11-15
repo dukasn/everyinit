@@ -2,7 +2,8 @@
 license.workspace = true
 name = "evin-action-version-bumper"
 version.workspace = true
-edition = "2024"
+edition.workspace = true
+authors.workspace = true
 
 [dependencies]
 evin-flow = { workspace = true }
@@ -16,7 +17,7 @@ regex = { workspace = true }
 async-trait = { workspace = true }
 serde_json = { workspace = true }
 semver = { workspace = true }
-chrono = "0.4.45"
+chrono = { workspace = true }
 evin-diagnostic = { workspace = true }
 
 [dev-dependencies]
