@@ -46,9 +46,10 @@ pub(super) async fn execute_command(
         Err(_) => 2,
     };
     if code != 0 {
-        return Err(format!(
-            "command failed with exit status {code}: {}",
-            script.lines().next().unwrap_or(script)
+        return Err(evin_locales::t!(
+            "review-request-command-failed",
+            status = code,
+            command = script.lines().next().unwrap_or(script)
         ));
     }
     Ok(stdout)

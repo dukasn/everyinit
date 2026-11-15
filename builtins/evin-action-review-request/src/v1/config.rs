@@ -74,7 +74,10 @@ impl ReviewRequestConfig {
         ];
         for (name, value) in required {
             if value.trim().is_empty() {
-                return Err(format!("{name} must not be empty"));
+                return Err(evin_locales::t!(
+                    "review-request-field-must-not-be-empty",
+                    name = name
+                ));
             }
         }
         let optional = [
@@ -86,7 +89,10 @@ impl ReviewRequestConfig {
         ];
         for (name, value) in optional {
             if value.is_some_and(|v| v.trim().is_empty()) {
-                return Err(format!("{name} must not be empty when provided"));
+                return Err(evin_locales::t!(
+                    "review-request-field-must-not-be-empty-when-provided",
+                    name = name
+                ));
             }
         }
         // Wanted can only be checked up front when it is a literal.
@@ -98,7 +104,7 @@ impl ReviewRequestConfig {
             }
         };
         if wanted_literal != Some(false) && self.title.is_none() {
-            return Err("title is required when a review request is wanted".to_string());
+            return Err(evin_locales::t!("review-request-title-required"));
         }
         for template in [Some(&self.branch), Some(&self.base), self.title.as_ref()]
             .into_iter()
@@ -111,12 +117,15 @@ impl ReviewRequestConfig {
         if let Some(path) = &self.body_path
             && (path.starts_with('/') || path.split(['/', '\\']).any(|part| part == ".."))
         {
-            return Err("body_path must stay inside the workspace".to_string());
+            return Err(evin_locales::t!(
+                "review-request-body-path-must-stay-in-workspace"
+            ));
         }
         for key in self.context.keys() {
             if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                return Err(format!(
-                    "context key '{key}' may only contain letters, digits, and underscores"
+                return Err(evin_locales::t!(
+                    "review-request-context-key-invalid",
+                    key = key
                 ));
             }
         }
@@ -128,6 +137,9 @@ pub(super) fn parse_flag(text: &str) -> Result<bool, String> {
     match text.trim().to_ascii_lowercase().as_str() {
         "true" => Ok(true),
         "false" => Ok(false),
-        other => Err(format!("wanted must be true or false, got '{other}'")),
+        other => Err(evin_locales::t!(
+            "review-request-wanted-must-be-boolean",
+            value = other
+        )),
     }
 }

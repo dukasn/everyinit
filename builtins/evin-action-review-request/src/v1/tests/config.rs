@@ -51,3 +51,29 @@ fn validates_config() {
     }
     assert!(config("branch: b\nbase: main\ntitle: t").is_err());
 }
+
+#[test]
+fn configuration_errors_use_fluent_messages() {
+    let error = config(&format!("{BASE}title: t\ncontext:\n  bad-key: value\n")).unwrap_err();
+    assert_fluent_message(
+        error.message,
+        evin_locales::t!("review-request-context-key-invalid", key = "bad-key"),
+    );
+
+    let error = config(&format!("{BASE}title: ' '\n")).unwrap_err();
+    assert_fluent_message(
+        error.message,
+        evin_locales::t!(
+            "review-request-field-must-not-be-empty-when-provided",
+            name = "title"
+        ),
+    );
+}
+
+fn assert_fluent_message(actual: String, expected: String) {
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(actual, expected);
+}

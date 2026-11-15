@@ -53,7 +53,18 @@ fn package_validation_rejects_invalid_relations_and_backup_paths() {
         )
         .unwrap();
     let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&invalid_relation)).unwrap();
-    assert!(validate_package(config.package.as_ref().unwrap(), PackageFormat::Arch).is_err());
+    let error =
+        validate_package(config.package.as_ref().unwrap(), PackageFormat::Arch).unwrap_err();
+    let expected = evin_locales::t!(
+        "archive-package-relation-duplicate",
+        field = "depends",
+        value = "glibc"
+    );
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
 
     let unsafe_backup = evin_flow::parse_yaml(
             "format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { arch: { backup: ['../etc/app.conf'] } } }\n",
@@ -61,4 +72,19 @@ fn package_validation_rejects_invalid_relations_and_backup_paths() {
         .unwrap();
     let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&unsafe_backup)).unwrap();
     assert!(validate_package(config.package.as_ref().unwrap(), PackageFormat::Arch).is_err());
+}
+
+#[test]
+fn configuration_error_uses_fluent_message() {
+    let with =
+        evin_flow::parse_yaml("format: tar.gz\npath: out.tar.gz\ninclude: [x]\noutput_dir: dist\n")
+            .unwrap();
+    let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+    let error = config.validate().unwrap_err();
+    let expected = evin_locales::t!("archive-distro-fields-only-on-package-formats");
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
 }

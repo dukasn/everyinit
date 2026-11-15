@@ -12,6 +12,7 @@ evin-action-sdk = { workspace = true }
 evin-diagnostic = { workspace = true }
 evin-doc = { workspace = true }
 evin-flow = { workspace = true }
+evin-locales = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

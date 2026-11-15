@@ -111,7 +111,7 @@ impl ChangelogConfig {
         {
             return Err(ChangelogError::InvalidConfiguration(
                 evin_flow::ConfigError {
-                    message: "notes_path must not be empty when provided".to_string(),
+                    message: evin_locales::t!("notes-path-must-not-be-empty-when-provided"),
                     span: None,
                 },
             ));
@@ -120,14 +120,19 @@ impl ChangelogConfig {
             if section.trim().is_empty() || self.notes_path.is_none() {
                 return Err(ChangelogError::InvalidConfiguration(
                     evin_flow::ConfigError {
-                        message: "section must be non-empty and requires notes_path".to_string(),
+                        message: evin_locales::t!(
+                            "section-must-be-non-empty-and-requires-notes-path"
+                        ),
                         span: None,
                     },
                 ));
             }
             validate_template_syntax(section).map_err(|error| {
                 ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                    message: format!("section contains invalid template syntax: {error}"),
+                    message: evin_locales::t!(
+                        "section-template-invalid",
+                        error = error.to_string()
+                    ),
                     span: None,
                 })
             })?;
@@ -181,14 +186,14 @@ impl ChangelogConfig {
             if label.trim().is_empty() {
                 return Err(ChangelogError::InvalidConfiguration(
                     evin_flow::ConfigError {
-                        message: "label must not be empty when provided".to_string(),
+                        message: evin_locales::t!("label-must-not-be-empty-when-provided"),
                         span: None,
                     },
                 ));
             }
             validate_template_syntax(label).map_err(|e| {
                 ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                    message: format!("label contains invalid template syntax: {e}"),
+                    message: evin_locales::t!("label-template-invalid", error = e.to_string()),
                     span: None,
                 })
             })?;

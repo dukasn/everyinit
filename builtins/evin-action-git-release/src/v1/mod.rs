@@ -49,7 +49,13 @@ pub async fn execute(
             match resolved.trim().to_ascii_lowercase().as_str() {
                 "true" => true,
                 "false" => false,
-                other => return Err(format!("enabled must be true or false, got '{other}'").into()),
+                other => {
+                    return Err(evin_locales::t!(
+                        "git-release-enabled-must-be-boolean",
+                        value = other
+                    )
+                    .into());
+                }
             }
         }
     };

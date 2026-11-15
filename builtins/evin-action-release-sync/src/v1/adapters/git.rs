@@ -31,12 +31,18 @@ impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
             ])
             .current_dir(self.workspace_root)
             .output()
-            .map_err(|e| ProtocolError::GitInspection(format!("Failed to run git tag: {e}")))?;
+            .map_err(|e| {
+                ProtocolError::GitInspection(evin_locales::t!(
+                    "release-sync-git-tag-command-failed",
+                    error = e.to_string()
+                ))
+            })?;
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(ProtocolError::GitInspection(format!(
-                "git tag failed: {err}"
+            return Err(ProtocolError::GitInspection(evin_locales::t!(
+                "release-sync-git-tag-failed",
+                error = err.trim()
             )));
         }
 
@@ -84,8 +90,9 @@ impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
         if let Some(tag) = self.tag {
             tags.retain(|local| local.tag == tag);
             if tags.is_empty() {
-                return Err(ProtocolError::GitInspection(format!(
-                    "Configured release tag '{tag}' does not exist locally"
+                return Err(ProtocolError::GitInspection(evin_locales::t!(
+                    "release-sync-configured-tag-missing",
+                    tag = tag
                 )));
             }
         }

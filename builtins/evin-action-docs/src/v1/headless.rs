@@ -114,14 +114,20 @@ fn parse_source(
 ) -> Result<DocSiteAst, Diagnostic> {
     let source_root = absolute(root, source_dir);
     let files = SourceResolver::resolve_all(&source_root, &config.include, &config.exclude)
-        .map_err(|issue| diagnostic(issue.message, "source-discovery"))?;
+        .map_err(|issue| {
+            diagnostic(
+                evin_locales::t!("docs-source-discovery-failed", error = issue.message),
+                "source-discovery",
+            )
+        })?;
     let mut loaded = Vec::with_capacity(files.len());
     for file in files {
         let content = std::fs::read_to_string(&file.absolute_path).map_err(|error| {
             Diagnostic::new(
-                format!(
-                    "Failed to read documentation source '{}': {error}",
-                    file.absolute_path.display()
+                evin_locales::t!(
+                    "docs-source-read-failed",
+                    path = file.absolute_path.display().to_string(),
+                    error = error.to_string()
                 ),
                 IssueCode::new("io-error"),
             )
@@ -157,7 +163,10 @@ fn parse_source(
         None,
     )
     .map_err(|issue| {
-        let mut diag = Diagnostic::new(issue.message, IssueCode::new(issue.code));
+        let mut diag = Diagnostic::new(
+            evin_locales::t!("docs-source-parse-failed", error = issue.message),
+            IssueCode::new(issue.code),
+        );
         if let Some(path) = issue.source_path {
             diag = diag.with_file_location(path, None, None);
         }
@@ -183,7 +192,7 @@ fn validate_strict_filenames(site: &DocSiteAst) -> Result<(), Diagnostic> {
             if page.reference.is_some() {
                 return Err(strict_filename_error(
                     &page.source_path,
-                    "The root index cannot be a formal reference",
+                    evin_locales::t!("docs-strict-root-index-reference"),
                 ));
             }
             continue;
@@ -195,7 +204,7 @@ fn validate_strict_filenames(site: &DocSiteAst) -> Result<(), Diagnostic> {
         ) {
             return Err(strict_filename_error(
                 &page.source_path,
-                "Strict documentation filenames must use .md or .rst",
+                evin_locales::t!("docs-strict-filename-extension"),
             ));
         }
         let Some(parent) = path
@@ -204,24 +213,27 @@ fn validate_strict_filenames(site: &DocSiteAst) -> Result<(), Diagnostic> {
         else {
             return Err(strict_filename_error(
                 &page.source_path,
-                "Only the root index may live outside a section",
+                evin_locales::t!("docs-strict-filename-requires-section"),
             ));
         };
         let section = parent.to_string_lossy().replace('\\', "/");
         let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
             return Err(strict_filename_error(
                 &page.source_path,
-                "Documentation filename is not valid UTF-8",
+                evin_locales::t!("docs-strict-filename-invalid-utf8"),
             ));
         };
         let Some(captures) = filename.captures(stem) else {
             return Err(strict_filename_error(
                 &page.source_path,
-                "Use <order>.<kebab-case-slug>[.<reference-digits>].<md|rst>",
+                evin_locales::t!("docs-strict-filename-format"),
             ));
         };
         let order = captures[1].parse::<u64>().map_err(|_| {
-            strict_filename_error(&page.source_path, "Navigation order is too large")
+            strict_filename_error(
+                &page.source_path,
+                evin_locales::t!("docs-strict-navigation-order-too-large"),
+            )
         })?;
         let slug = &captures[2];
         let reference_digits = captures.get(3).map(|capture| capture.as_str());
@@ -231,13 +243,17 @@ fn validate_strict_filenames(site: &DocSiteAst) -> Result<(), Diagnostic> {
         {
             return Err(strict_filename_error(
                 &page.source_path,
-                "Section overviews must use 00.index.md or 00.index.rst; order zero is reserved",
+                evin_locales::t!("docs-strict-section-index-name"),
             ));
         }
         if !orders.insert((section.clone(), order)) {
             return Err(strict_filename_error(
                 &page.source_path,
-                format!("Navigation order {order} in section '{section}' is duplicated"),
+                evin_locales::t!(
+                    "docs-strict-navigation-order-duplicate",
+                    order = order,
+                    section = section
+                ),
             ));
         }
         match (reference_digits, page.reference.as_ref()) {
@@ -245,19 +261,19 @@ fn validate_strict_filenames(site: &DocSiteAst) -> Result<(), Diagnostic> {
             (Some(_), Some(_)) => {
                 return Err(strict_filename_error(
                     &page.source_path,
-                    "Formal reference filename digits do not match its identifier",
+                    evin_locales::t!("docs-strict-reference-digits-mismatch"),
                 ));
             }
             (Some(_), None) => {
                 return Err(strict_filename_error(
                     &page.source_path,
-                    "A .NNNN filename suffix must compile as a formal reference",
+                    evin_locales::t!("docs-strict-reference-suffix-invalid"),
                 ));
             }
             (None, Some(_)) => {
                 return Err(strict_filename_error(
                     &page.source_path,
-                    "Formal references must end in .NNNN before the extension",
+                    evin_locales::t!("docs-strict-reference-suffix-required"),
                 ));
             }
             (None, None) => {}
@@ -397,21 +413,29 @@ fn write_json(path: &Path, value: &impl Serialize) -> Result<(), Diagnostic> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
             Diagnostic::new(
-                format!("Failed to create '{}': {error}", parent.display()),
+                evin_locales::t!(
+                    "docs-output-directory-create-failed",
+                    path = parent.display().to_string(),
+                    error = error.to_string()
+                ),
                 IssueCode::new("io-error"),
             )
         })?;
     }
     let mut bytes = serde_json::to_vec_pretty(value).map_err(|error| {
         diagnostic(
-            format!("Failed to serialize docs data: {error}"),
+            evin_locales::t!("docs-data-serialization-failed", error = error.to_string()),
             "serialization-error",
         )
     })?;
     bytes.push(b'\n');
     std::fs::write(path, bytes).map_err(|error| {
         Diagnostic::new(
-            format!("Failed to write '{}': {error}", path.display()),
+            evin_locales::t!(
+                "docs-output-write-failed",
+                path = path.display().to_string(),
+                error = error.to_string()
+            ),
             IssueCode::new("io-error"),
         )
     })
@@ -459,9 +483,10 @@ fn build_variants(
             let site = parse_source(root, config, &locale_root)?;
             if locale == &default_locale && site.pages.is_empty() {
                 return Err(diagnostic(
-                    format!(
-                        "No documentation pages found for default locale '{locale}' in '{}'",
-                        absolute(root, &locale_root).display()
+                    evin_locales::t!(
+                        "docs-default-locale-pages-missing",
+                        locale = locale,
+                        path = absolute(root, &locale_root).display().to_string()
                     ),
                     "no-documents",
                 ));
@@ -566,7 +591,7 @@ fn build_variants(
         };
         if !routes.insert(canonical_route.clone()) {
             return Err(diagnostic(
-                format!("Generated route '{}' is ambiguous", canonical_route),
+                evin_locales::t!("docs-generated-route-ambiguous", route = canonical_route),
                 "route-collision",
             ));
         }
@@ -583,9 +608,11 @@ fn publish(
     for variant in variants.iter().filter(|variant| variant.is_fallback) {
         logger.diagnostic(
             Diagnostic::new(
-                format!(
-                    "No '{}' translation exists for '{}'; using '{}' content",
-                    variant.requested_locale, variant.page.slug, variant.content_locale
+                evin_locales::t!(
+                    "docs-translation-missing",
+                    requested_locale = variant.requested_locale.as_str(),
+                    page = variant.page.slug.as_str(),
+                    content_locale = variant.content_locale.as_str()
                 ),
                 IssueCode::new("missing-translation"),
             )
@@ -661,14 +688,22 @@ fn publish(
         if let Some(parent) = search_path.parent() {
             std::fs::create_dir_all(parent).map_err(|error| {
                 Diagnostic::new(
-                    format!("Failed to create '{}': {error}", parent.display()),
+                    evin_locales::t!(
+                        "docs-output-directory-create-failed",
+                        path = parent.display().to_string(),
+                        error = error.to_string()
+                    ),
                     IssueCode::new("io-error"),
                 )
             })?;
         }
         std::fs::write(&search_path, &binary).map_err(|error| {
             Diagnostic::new(
-                format!("Failed to write '{}': {error}", search_path.display()),
+                evin_locales::t!(
+                    "docs-search-index-write-failed",
+                    path = search_path.display().to_string(),
+                    error = error.to_string()
+                ),
                 IssueCode::new("io-error"),
             )
         })?;
@@ -754,9 +789,11 @@ fn publish(
                 .map(|variant| BuildDiagnostic {
                     severity: "warning",
                     code: "missing-translation",
-                    message: format!(
-                        "No '{}' translation exists for '{}'; using '{}' content",
-                        variant.requested_locale, variant.page.slug, variant.content_locale
+                    message: evin_locales::t!(
+                        "docs-translation-missing",
+                        requested_locale = variant.requested_locale.as_str(),
+                        page = variant.page.slug.as_str(),
+                        content_locale = variant.content_locale.as_str()
                     ),
                     version: variant.version.clone(),
                     locale: variant.requested_locale.clone(),
@@ -787,7 +824,7 @@ pub async fn execute(
 ) -> Result<(), Diagnostic> {
     let config: HeadlessConfig = ctx.load_config(with.as_ref()).map_err(|error| {
         diagnostic(
-            format!("Invalid docs configuration: {}", error.message),
+            evin_locales::t!("docs-invalid-config", error = error.message),
             "invalid-config",
         )
     })?;
@@ -797,7 +834,10 @@ pub async fn execute(
     if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
         let temp = tempfile::tempdir().map_err(|error| {
             diagnostic(
-                format!("Failed to prepare temporary docs data: {error}"),
+                evin_locales::t!(
+                    "docs-temporary-output-prepare-failed",
+                    error = error.to_string()
+                ),
                 "io-error",
             )
         })?;

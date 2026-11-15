@@ -40,16 +40,18 @@ impl<'a> PlanSink for FsPlanSink<'a> {
         if !self.config.dry_run {
             if let Some(parent) = full_path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| {
-                    ProtocolError::PlanWrite(format!(
-                        "Failed to create notes dir '{}': {e}",
-                        parent.display()
+                    ProtocolError::PlanWrite(evin_locales::t!(
+                        "release-sync-notes-directory-create-failed",
+                        path = parent.display().to_string(),
+                        error = e.to_string()
                     ))
                 })?;
             }
             std::fs::write(&full_path, content).map_err(|e| {
-                ProtocolError::PlanWrite(format!(
-                    "Failed to write note file '{}': {e}",
-                    full_path.display()
+                ProtocolError::PlanWrite(evin_locales::t!(
+                    "release-sync-note-write-failed",
+                    path = full_path.display().to_string(),
+                    error = e.to_string()
                 ))
             })?;
         }
@@ -63,19 +65,24 @@ impl<'a> PlanSink for FsPlanSink<'a> {
         if !self.config.dry_run {
             if let Some(parent) = full_path.parent() {
                 std::fs::create_dir_all(parent).map_err(|e| {
-                    ProtocolError::PlanWrite(format!(
-                        "Failed to create plan dir '{}': {e}",
-                        parent.display()
+                    ProtocolError::PlanWrite(evin_locales::t!(
+                        "release-sync-plan-directory-create-failed",
+                        path = parent.display().to_string(),
+                        error = e.to_string()
                     ))
                 })?;
             }
             let serialized = serde_json::to_string_pretty(plan).map_err(|e| {
-                ProtocolError::PlanWrite(format!("Failed to serialize plan JSON: {e}"))
+                ProtocolError::PlanWrite(evin_locales::t!(
+                    "release-sync-plan-serialization-failed",
+                    error = e.to_string()
+                ))
             })?;
             std::fs::write(&full_path, serialized).map_err(|e| {
-                ProtocolError::PlanWrite(format!(
-                    "Failed to write plan file '{}': {e}",
-                    full_path.display()
+                ProtocolError::PlanWrite(evin_locales::t!(
+                    "release-sync-plan-write-failed",
+                    path = full_path.display().to_string(),
+                    error = e.to_string()
                 ))
             })?;
         }

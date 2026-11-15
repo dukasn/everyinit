@@ -58,14 +58,14 @@ async fn resolve_channel_var(
             })
             .map_err(|_| {
                 (
-                    "Failed to resolve git branch".to_string(),
-                    "The {git.branch} variable requires a valid git branch.".to_string(),
+                    evin_locales::t!("version-bumper-git-branch-resolution-failed"),
+                    evin_locales::t!("version-bumper-git-branch-requirement"),
                 )
             }),
         "git.short_sha" => ctx.git().short_sha().await.map_err(|_| {
             (
-                "Failed to resolve git short SHA".to_string(),
-                "The {git.short_sha} variable requires a valid git commit.".to_string(),
+                evin_locales::t!("version-bumper-git-short-sha-resolution-failed"),
+                evin_locales::t!("version-bumper-git-short-sha-requirement"),
             )
         }),
         "date.ymd" => Ok(chrono::Local::now().format("%Y%m%d").to_string()),
@@ -74,10 +74,10 @@ async fn resolve_channel_var(
             let env_val = std::env::var(env_name).unwrap_or_else(|_| "".to_string());
             if env_val.is_empty() {
                 Err((
-                    "Missing required environment variable".to_string(),
-                    format!(
-                        "The environment variable '{}' is required by this template but is not set.",
-                        env_name
+                    evin_locales::t!("version-bumper-environment-variable-missing"),
+                    evin_locales::t!(
+                        "version-bumper-environment-variable-required",
+                        name = env_name
                     ),
                 ))
             } else {
@@ -85,7 +85,7 @@ async fn resolve_channel_var(
             }
         }
         _ => Err((
-            format!("Unknown variable '{{{}}}' in channel template", var_name),
+            evin_locales::t!("version-bumper-channel-variable-unknown", name = var_name),
             String::new(),
         )),
     }
@@ -160,8 +160,12 @@ pub async fn execute(
     if let Some(fixed_version) = &config.fixed_version {
         let resolved = resolve_local_template(fixed_version, ctx, &HashMap::new())
             .map_err(|error| error.to_string())?;
-        Version::parse(&resolved)
-            .map_err(|error| format!("fixed_version must resolve to valid SemVer: {error}"))?;
+        Version::parse(&resolved).map_err(|error| {
+            evin_locales::t!(
+                "version-bumper-fixed-version-resolution-invalid",
+                error = error.to_string()
+            )
+        })?;
         config.fixed_version = Some(resolved);
     }
     config
@@ -173,14 +177,15 @@ pub async fn execute(
         .as_ref()
         .map(|release| release.packages.clone())
         .unwrap_or_default();
-    evin_action_sdk::release::validate_policies(&package_policies).map_err(|e| e.to_string())?;
+    evin_action_sdk::release::validate_policies(&package_policies).map_err(|error| {
+        evin_locales::t!(
+            "version-bumper-package-policy-invalid",
+            error = error.to_string()
+        )
+    })?;
     if !package_policies.is_empty() && !config.read_only && (!config.git.commit || !config.git.tag)
     {
-        return Err(
-            "package-managed releases require git.commit and git.tag to be true"
-                .to_string()
-                .into(),
-        );
+        return Err(evin_locales::t!("version-bumper-package-release-requires-git").into());
     }
     if !package_policies.is_empty()
         && !config.read_only
@@ -192,11 +197,7 @@ pub async fn execute(
             .await
             .map_err(|e| e.to_string())?
         {
-            return Err(
-                "package release requires an empty Git index before generated files are staged"
-                    .to_string()
-                    .into(),
-            );
+            return Err(evin_locales::t!("version-bumper-package-release-index-not-empty").into());
         }
         let dirty = evin_action_sdk::release::dirty_paths(ctx.fs.workspace_root())
             .await
@@ -205,9 +206,9 @@ pub async fn execute(
             .filter(|path| evin_action_sdk::release::path_is_watched(path, &package_policies))
             .collect::<Vec<_>>();
         if !dirty.is_empty() {
-            return Err(format!(
-                "package release requires a clean worktree and index; dirty paths: {}",
-                dirty.join(", ")
+            return Err(evin_locales::t!(
+                "version-bumper-package-release-worktree-dirty",
+                paths = dirty.join(", ")
             )
             .into());
         }
@@ -404,7 +405,7 @@ pub async fn execute(
         } else if let Some(fallback) = fallback_regex.as_ref().filter(|r| r.is_match(&content)) {
             fallback
         } else {
-            return Err(format!("version replacement did not match file: {path}").into());
+            return Err(evin_locales::t!("version-bumper-replacement-missing", path = path).into());
         };
         let new_content = regex.replace(&content, replacement.as_str()).to_string();
         if content != new_content {
@@ -486,10 +487,9 @@ pub async fn execute(
             ctx.state.set_output("release", &release);
         }
         if config.require_change {
-            return Err(evin_diagnostic::Diagnostic::new(
-                "No qualifying commits or package state changes since the previous release",
-                evin_diagnostic::IssueCode::new("no-version-change"),
-            ));
+            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+                "no-version-change",
+            )));
         }
         return Ok(());
     }
@@ -507,10 +507,9 @@ pub async fn execute(
             args.insert("version", "${version}");
             evin_flow::template::format::render(&m, &args)
         } else {
-            return Err(evin_diagnostic::Diagnostic::new(
-                "Action Failed",
-                evin_diagnostic::IssueCode::new("git-message-must-not-be-empty"),
-            ));
+            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+                "git-message-must-not-be-empty",
+            )));
         };
         let commit_message = if semantic_change {
             resolve_local_template(&commit_msg_template, ctx, &self_values)?
@@ -531,7 +530,7 @@ pub async fn execute(
                     tag: version_with_v.clone(),
                 });
             }
-            ctx.mark_unverified("version bumping and git operations bypassed in dry-run");
+            ctx.mark_unverified(evin_locales::t!("version-bumper-dry-run-skipped-mutations"));
             ctx.state.set_output("version", &version);
             ctx.state.set_output("tag", &version_with_v);
             ctx.state
@@ -556,10 +555,9 @@ pub async fn execute(
             .await
             .map_err(|e| e.to_string())?;
         if !has_staged_changes && (found_tag || !config.git.defer) {
-            return Err(evin_diagnostic::Diagnostic::new(
-                "Action Failed",
-                evin_diagnostic::IssueCode::new("no-staged-changes"),
-            ));
+            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+                "no-staged-changes",
+            )));
         }
 
         if !config.git.defer {
@@ -577,8 +575,7 @@ pub async fn execute(
                         .get_last_commit_id()
                         .await
                         .unwrap_or_else(|_| "HEAD".to_string());
-                    return Err(evin_diagnostic::Diagnostic::new(
-                        "Action Failed",
+                    return Err(evin_locales::diagnostic(
                         evin_diagnostic::IssueCode::new("tag-recovery-failed")
                             .arg("commit_id", commit_id)
                             .arg("tag", &version_with_v)

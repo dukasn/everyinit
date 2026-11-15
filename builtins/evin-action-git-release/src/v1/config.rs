@@ -97,20 +97,30 @@ impl GitReleaseConfig {
         }
         if let Some(push) = &self.push {
             if push.remote.trim().is_empty() {
-                return Err("push.remote must not be empty".to_string());
+                return Err(evin_locales::t!(
+                    "git-release-push-remote-must-not-be-empty"
+                ));
             }
             if push.branch.as_deref().is_some_and(|b| b.trim().is_empty()) {
-                return Err("push.branch must not be empty when provided".to_string());
+                return Err(evin_locales::t!(
+                    "git-release-push-branch-must-not-be-empty"
+                ));
             }
             if push.prune_stale_tags {
                 if self.tag.is_none() {
-                    return Err("push.prune_stale_tags requires tag".to_string());
+                    return Err(evin_locales::t!(
+                        "git-release-prune-stale-tags-requires-tag"
+                    ));
                 }
                 if push.base.as_deref().is_none_or(|b| b.trim().is_empty()) {
-                    return Err("push.prune_stale_tags requires push.base".to_string());
+                    return Err(evin_locales::t!(
+                        "git-release-prune-stale-tags-requires-base"
+                    ));
                 }
             } else if push.base.is_some() {
-                return Err("push.base is only valid with push.prune_stale_tags".to_string());
+                return Err(evin_locales::t!(
+                    "git-release-push-base-requires-prune-stale-tags"
+                ));
             }
         }
         Ok(())

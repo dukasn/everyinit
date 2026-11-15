@@ -93,7 +93,7 @@ impl ReleaseSyncConfig {
     pub fn validate(&self) -> Result<(), evin_flow::ConfigError> {
         if self.tag.as_ref().is_some_and(|tag| tag.trim().is_empty()) {
             return Err(evin_flow::ConfigError {
-                message: "tag must not be empty when provided".to_string(),
+                message: evin_locales::t!("release-sync-tag-must-not-be-empty"),
                 span: None,
             });
         }
@@ -103,25 +103,25 @@ impl ReleaseSyncConfig {
             .is_some_and(|title| title.trim().is_empty())
         {
             return Err(evin_flow::ConfigError {
-                message: "title must not be empty when provided".to_string(),
+                message: evin_locales::t!("release-sync-title-must-not-be-empty"),
                 span: None,
             });
         }
         if self.state.trim().is_empty() {
             return Err(evin_flow::ConfigError {
-                message: "state file path must not be empty".to_string(),
+                message: evin_locales::t!("release-sync-state-path-must-not-be-empty"),
                 span: None,
             });
         }
         if self.plan_out.trim().is_empty() {
             return Err(evin_flow::ConfigError {
-                message: "plan_out path must not be empty".to_string(),
+                message: evin_locales::t!("release-sync-plan-out-path-must-not-be-empty"),
                 span: None,
             });
         }
         if self.notes_dir.trim().is_empty() {
             return Err(evin_flow::ConfigError {
-                message: "notes_dir path must not be empty".to_string(),
+                message: evin_locales::t!("release-sync-notes-dir-must-not-be-empty"),
                 span: None,
             });
         }

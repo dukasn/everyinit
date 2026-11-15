@@ -97,35 +97,39 @@ pub fn validate_config(
 pub(super) fn validate(config: &HeadlessConfig) -> Result<(), String> {
     let prefix = config.reference_prefix.trim();
     if prefix.is_empty() || !prefix.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
-        return Err("reference_prefix must contain only ASCII letters and digits".into());
+        return Err(evin_locales::t!("docs-reference-prefix-invalid"));
     }
     if let Some(i18n) = &config.i18n {
         if i18n.locales.is_empty() {
-            return Err("i18n.locales must contain at least one locale".into());
+            return Err(evin_locales::t!("docs-i18n-locales-required"));
         }
         let mut locales = HashSet::new();
         for locale in &i18n.locales {
             let parsed = locale
                 .parse::<unic_langid::LanguageIdentifier>()
-                .map_err(|_| format!("i18n locale '{locale}' is not a valid language tag"))?;
+                .map_err(|_| evin_locales::t!("docs-i18n-locale-invalid", locale = locale))?;
             if parsed.to_string() != *locale {
-                return Err(format!(
-                    "i18n locale '{locale}' must use canonical language-tag casing"
+                return Err(evin_locales::t!(
+                    "docs-i18n-locale-noncanonical",
+                    locale = locale
                 ));
             }
             if !locales.insert(parsed.to_string()) {
-                return Err(format!("i18n.locales contains duplicate locale '{locale}'"));
+                return Err(evin_locales::t!(
+                    "docs-i18n-locale-duplicate",
+                    locale = locale
+                ));
             }
         }
         let default = i18n
             .default_locale
             .parse::<unic_langid::LanguageIdentifier>()
-            .map_err(|_| "i18n.default_locale is not a valid language tag".to_string())?;
+            .map_err(|_| evin_locales::t!("docs-i18n-default-locale-invalid"))?;
         if default.to_string() != i18n.default_locale {
-            return Err("i18n.default_locale must use canonical language-tag casing".into());
+            return Err(evin_locales::t!("docs-i18n-default-locale-noncanonical"));
         }
         if !locales.contains(&default.to_string()) {
-            return Err("i18n.default_locale must be included in i18n.locales".into());
+            return Err(evin_locales::t!("docs-i18n-default-locale-missing"));
         }
     }
     if config.versions.is_empty() {
@@ -134,36 +138,61 @@ pub(super) fn validate(config: &HeadlessConfig) -> Result<(), String> {
             .as_deref()
             .is_some_and(|id| id != "latest")
         {
-            return Err("latest_version must be omitted when versions is empty".into());
+            return Err(evin_locales::t!(
+                "docs-latest-version-requires-version-list"
+            ));
         }
     } else {
         let mut ids = HashSet::new();
         for version in &config.versions {
             if !valid_segment(&version.id) {
-                return Err(format!(
-                    "version id '{}' must be a path-safe identifier",
-                    version.id
+                return Err(evin_locales::t!(
+                    "docs-version-id-invalid",
+                    version = version.id.as_str()
                 ));
             }
             if !ids.insert(version.id.clone()) {
-                return Err(format!("versions contains duplicate id '{}'", version.id));
+                return Err(evin_locales::t!(
+                    "docs-version-id-duplicate",
+                    version = version.id.as_str()
+                ));
             }
         }
         let latest = config
             .latest_version
             .as_deref()
-            .ok_or_else(|| "latest_version is required when versions is configured".to_string())?;
+            .ok_or_else(|| evin_locales::t!("docs-latest-version-required"))?;
         if !ids.contains(latest) {
-            return Err(format!(
-                "latest_version '{latest}' is not listed in versions"
+            return Err(evin_locales::t!(
+                "docs-latest-version-unlisted",
+                version = latest
             ));
         }
     }
     if config.out.as_os_str().is_empty() {
-        return Err("out must not be empty".into());
+        return Err(evin_locales::t!("docs-output-path-must-not-be-empty"));
     }
     crate::v1::assets::validate_asset_dir(&config.asset_dir)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_locale_error_uses_fluent_message() {
+        let with =
+            evin_flow::parse_yaml("i18n:\n  default_locale: en\n  locales: [en, pt_br]\n").unwrap();
+        let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+        let actual = validate(&config).unwrap_err();
+        let expected = evin_locales::t!("docs-i18n-locale-noncanonical", locale = "pt_br");
+        assert!(
+            !expected.starts_with("<missing locale key:"),
+            "expected Fluent message to exist: {expected}"
+        );
+        assert_eq!(actual, expected);
+    }
 }
 
 fn valid_segment(value: &str) -> bool {

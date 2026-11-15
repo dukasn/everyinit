@@ -70,12 +70,12 @@ pub fn validate_task_config(
         return Ok(());
     };
     let task = release_reference_task(&release).ok_or_else(|| evin_flow::ConfigError {
-        message: "release must be exactly '${task.release}'".into(),
+        message: evin_locales::t!("archive-release-reference-format-invalid"),
         span: None,
     })?;
     if !ctx.needs.iter().any(|need| need == task) {
         return Err(evin_flow::ConfigError {
-            message: format!("release references '{task}', but that task is not declared in needs"),
+            message: evin_locales::t!("archive-release-reference-missing-need", task = task),
             span: None,
         });
     }
@@ -123,23 +123,38 @@ pub async fn execute(
         let architecture = config.architecture.expect("validated architecture");
         match format {
             PackageFormat::Deb if package.targets.deb.is_none() => {
-                return Err(diagnostic("package has no deb target"));
+                return Err(diagnostic(evin_locales::t!(
+                    "archive-package-target-missing",
+                    format = "deb"
+                )));
             }
             PackageFormat::Apk if package.targets.apk.is_none() => {
-                return Err(diagnostic("package has no apk target"));
+                return Err(diagnostic(evin_locales::t!(
+                    "archive-package-target-missing",
+                    format = "apk"
+                )));
             }
             PackageFormat::Arch if package.targets.arch.is_none() => {
-                return Err(diagnostic("package has no arch target"));
+                return Err(diagnostic(evin_locales::t!(
+                    "archive-package-target-missing",
+                    format = "arch"
+                )));
             }
             _ => {}
         }
-        let artifact: evin_action_sdk::release::ReleaseArtifact =
-            serde_json::from_str(config.release.as_deref().expect("validated release"))
-                .map_err(|error| diagnostic(format!("invalid release output: {error}")))?;
+        let artifact: evin_action_sdk::release::ReleaseArtifact = serde_json::from_str(
+            config.release.as_deref().expect("validated release"),
+        )
+        .map_err(|error| {
+            diagnostic(evin_locales::t!(
+                "archive-release-output-invalid",
+                error = error.to_string()
+            ))
+        })?;
         if artifact.schema != 1 {
-            return Err(diagnostic(format!(
-                "unsupported release schema {}",
-                artifact.schema
+            return Err(diagnostic(evin_locales::t!(
+                "archive-release-schema-unsupported",
+                schema = artifact.schema
             )));
         }
         let target_name = format.as_str();
@@ -148,15 +163,16 @@ pub async fn execute(
             .get(&package.name)
             .and_then(|package| package.revisions.get(target_name))
             .ok_or_else(|| {
-                diagnostic(format!(
-                    "release has no resolved '{target_name}' revision for package '{}'",
-                    package.name
+                diagnostic(evin_locales::t!(
+                    "archive-release-revision-missing",
+                    target = target_name,
+                    package = package.name.as_str()
                 ))
             })?;
         if release_state.revision == 0 || release_state.version.trim().is_empty() {
-            return Err(diagnostic(
-                "release contains an invalid version or revision",
-            ));
+            return Err(diagnostic(evin_locales::t!(
+                "archive-release-version-revision-invalid"
+            )));
         }
         let revision = release_state.revision;
         let arch = match format {
@@ -188,9 +204,9 @@ pub async fn execute(
     let archive_path = config.path.as_deref().expect("validated archive path");
     if source_entries.is_empty() {
         if ctx.mode == evin_action_sdk::PipelineMode::DryRun && !ctx.uncertainty().is_empty() {
-            ctx.mark_unverified(format!(
-                "Archive inputs could not be verified: {}",
-                config.include.as_deref().unwrap_or_default().join(", ")
+            ctx.mark_unverified(evin_locales::t!(
+                "archive-dry-run-inputs-unverified",
+                includes = config.include.as_deref().unwrap_or_default().join(", ")
             ));
             ctx.log
                 .plan(evin_action_sdk::activity::ArchivePlanUnresolved {
@@ -285,9 +301,9 @@ pub async fn execute(
     })
     .await
     .map_err(|e| {
-        evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(format!(
-            "Blocking task failed: {}",
-            e
+        evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(evin_locales::t!(
+            "archive-blocking-task-failed",
+            error = e.to_string()
         )))
     })??;
 
@@ -351,9 +367,10 @@ fn validate_format_keys(
         ],
     };
     if let Some(key) = forbidden.iter().find(|key| keys.contains(**key)) {
-        return Err(diagnostic(format!(
-            "'{key}' is not valid when format is '{}'",
-            format.as_str()
+        return Err(diagnostic(evin_locales::t!(
+            "archive-field-invalid-for-format",
+            field = *key,
+            format = format.as_str()
         )));
     }
     Ok(())
@@ -365,12 +382,16 @@ fn diagnostic(message: impl Into<String>) -> evin_diagnostic::Diagnostic {
 
 async fn resolve_epoch(ctx: &RunnerContext) -> Result<u64, evin_diagnostic::Diagnostic> {
     match ctx.env.get("SOURCE_DATE_EPOCH") {
-        Some(value) => {
-            packaging::parse_source_date_epoch(value).map_err(|error| diagnostic(error.to_string()))
-        }
+        Some(value) => packaging::parse_source_date_epoch(value).map_err(|error| {
+            diagnostic(evin_locales::t!(
+                "archive-source-date-epoch-invalid",
+                error = error.to_string()
+            ))
+        }),
         None => ctx.git.head_commit_epoch().await.map_err(|error| {
-            diagnostic(format!(
-                "SOURCE_DATE_EPOCH is absent and Git HEAD timestamp is unavailable: {error}"
+            diagnostic(evin_locales::t!(
+                "archive-source-date-epoch-unavailable",
+                error = error.to_string()
             ))
         }),
     }

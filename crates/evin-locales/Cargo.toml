@@ -9,3 +9,6 @@ evin-diagnostic = { workspace = true }
 evin-io = { workspace = true }
 fluent-bundle = { workspace = true }
 unic-langid = { workspace = true }
+
+[dev-dependencies]
+regex = { workspace = true }

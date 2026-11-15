@@ -950,6 +950,7 @@ dependencies = [
  "evin-diagnostic",
  "evin-doc",
  "evin-flow",
+ "evin-locales",
  "serde",
  "serde_json",
  "tempfile",
@@ -985,6 +986,7 @@ dependencies = [
  "evin-diagnostic",
  "evin-doc",
  "evin-flow",
+ "evin-locales",
  "image",
  "latex2mathml",
  "ravif",
@@ -1223,6 +1225,7 @@ dependencies = [
  "evin-diagnostic",
  "evin-io",
  "fluent-bundle",
+ "regex",
  "unic-langid",
 ]
 

@@ -35,7 +35,10 @@ enum ChangelogError {
         evin_locales::t!("file-write-failed", path = path, error = message)
     )]
     WriteFileFailed { path: String, message: String },
-    #[error("Failed to read changelog '{path}': {message}")]
+    #[error(
+        "{}",
+        evin_locales::t!("changelog-file-read-failed", path = path, error = message)
+    )]
     ReadFileFailed { path: String, message: String },
     #[error("{0}")]
     InvalidSection(String),
@@ -76,12 +79,16 @@ async fn generate_changelog(
     config.validate()?;
 
     if let Some(section) = &config.section {
-        let section = resolve_templates(section, ctx)
-            .map_err(|error| ChangelogError::InvalidSection(format!("Invalid section: {error}")))?;
+        let section = resolve_templates(section, ctx).map_err(|error| {
+            ChangelogError::InvalidSection(evin_locales::t!(
+                "changelog-section-template-invalid",
+                error = error.to_string()
+            ))
+        })?;
         if section.trim().is_empty() {
-            return Err(ChangelogError::InvalidSection(
-                "Changelog section must not be empty".to_string(),
-            ));
+            return Err(ChangelogError::InvalidSection(evin_locales::t!(
+                "changelog-section-empty"
+            )));
         }
         let notes_path = config.notes_path.as_deref().expect("validated notes_path");
         let input_path = ctx
@@ -98,9 +105,9 @@ async fn generate_changelog(
             }
         })?;
         if input_path == output_path {
-            return Err(ChangelogError::InvalidSection(
-                "Changelog and notes paths must differ".to_string(),
-            ));
+            return Err(ChangelogError::InvalidSection(evin_locales::t!(
+                "changelog-section-paths-must-differ"
+            )));
         }
         let content = ctx.fs.read_to_string(&config.path).map_err(|error| {
             ChangelogError::ReadFileFailed {
@@ -111,10 +118,16 @@ async fn generate_changelog(
         let slicer = evin_release_sync::ChangelogSlicer::parse(&content);
         let notes = slicer
             .get_unique_slice(&section)
-            .map_err(ChangelogError::InvalidSection)?
+            .map_err(|error| {
+                ChangelogError::InvalidSection(evin_locales::t!(
+                    "changelog-section-invalid",
+                    error = error
+                ))
+            })?
             .ok_or_else(|| {
-                ChangelogError::InvalidSection(format!(
-                    "Missing or empty changelog section for {section}"
+                ChangelogError::InvalidSection(evin_locales::t!(
+                    "changelog-section-missing",
+                    section = section.as_str()
                 ))
             })?;
         ctx.fs
@@ -214,7 +227,10 @@ async fn generate_changelog(
         .transpose()
         .map_err(|e| {
             ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                message: e.to_string(),
+                message: evin_locales::t!(
+                    "changelog-template-resolution-failed",
+                    error = e.to_string()
+                ),
                 span: None,
             })
         })?;
@@ -236,7 +252,10 @@ async fn generate_changelog(
         .transpose()
         .map_err(|e| {
             ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                message: e.to_string(),
+                message: evin_locales::t!(
+                    "changelog-template-resolution-failed",
+                    error = e.to_string()
+                ),
                 span: None,
             })
         })?
@@ -338,7 +357,7 @@ async fn generate_changelog(
             sections: format!("{rendered_blocks:?}"),
         });
         ctx.state.set_output("path", &config.path);
-        ctx.mark_unverified("changelog generation bypassed in dry-run");
+        ctx.mark_unverified(evin_locales::t!("changelog-dry-run-skipped-generation"));
         return Ok(());
     }
 

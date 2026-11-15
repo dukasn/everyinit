@@ -171,7 +171,7 @@ impl ArchiveConfig {
                     || self.package.is_some()
                 {
                     return Err(evin_locales::diagnostic(IssueCode::custom(
-                        "output_dir, architecture, release, and package are only valid for distro package formats",
+                        evin_locales::t!("archive-distro-fields-only-on-package-formats"),
                     )));
                 }
                 if self.include.as_ref().is_none_or(Vec::is_empty) {
@@ -187,7 +187,7 @@ impl ArchiveConfig {
                     || self.package.is_none()
                 {
                     return Err(evin_locales::diagnostic(IssueCode::custom(
-                        "output_dir, architecture, release, and package are required for distro package formats",
+                        evin_locales::t!("archive-distro-fields-required"),
                     )));
                 }
                 if self.path.is_some()
@@ -198,7 +198,7 @@ impl ArchiveConfig {
                     || self.layout != LayoutMode::Flat
                 {
                     return Err(evin_locales::diagnostic(IssueCode::custom(
-                        "path, include, exclude, prefix, layout, and compression_level are only valid for tar.gz",
+                        evin_locales::t!("archive-tar-gz-fields-only-on-tar-gz"),
                     )));
                 }
             }

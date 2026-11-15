@@ -63,7 +63,16 @@ async fn reports_failures_and_missing_commands() {
     )
     .await
     .unwrap_err();
-    assert!(err.to_string().contains("exit status 3"), "{err}");
+    let expected = evin_locales::t!(
+        "review-request-command-failed",
+        status = 3,
+        command = "exit 3"
+    );
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(evin_locales::render_issue(&err.code), expected);
 
     let err = execute(
         &ctx,
@@ -71,7 +80,16 @@ async fn reports_failures_and_missing_commands() {
     )
     .await
     .unwrap_err();
-    assert!(err.to_string().contains("commands.create"), "{err}");
+    let expected = evin_locales::t!(
+        "review-request-command-required-for-state",
+        state = "created",
+        command = "create"
+    );
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(evin_locales::render_issue(&err.code), expected);
 }
 
 #[tokio::test]

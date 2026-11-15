@@ -31,23 +31,35 @@ impl<'a> ArtifactInspector for FsArtifactInspector<'a> {
 
         let mut artifacts = Vec::new();
         let entries = std::fs::read_dir(&dir).map_err(|e| {
-            ProtocolError::ArtifactInspection(format!("Failed to read artifacts dir: {e}"))
+            ProtocolError::ArtifactInspection(evin_locales::t!(
+                "release-sync-artifacts-directory-read-failed",
+                error = e.to_string()
+            ))
         })?;
 
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
                 let metadata = entry.metadata().map_err(|e| {
-                    ProtocolError::ArtifactInspection(format!("Failed to read metadata: {e}"))
+                    ProtocolError::ArtifactInspection(evin_locales::t!(
+                        "release-sync-artifact-metadata-read-failed",
+                        error = e.to_string()
+                    ))
                 })?;
                 let mut file = std::fs::File::open(&path).map_err(|e| {
-                    ProtocolError::ArtifactInspection(format!("Failed to open artifact: {e}"))
+                    ProtocolError::ArtifactInspection(evin_locales::t!(
+                        "release-sync-artifact-open-failed",
+                        error = e.to_string()
+                    ))
                 })?;
                 let mut hasher = Sha256::new();
                 let mut buffer = [0; 64 * 1024];
                 loop {
                     let read = file.read(&mut buffer).map_err(|e| {
-                        ProtocolError::ArtifactInspection(format!("Failed to hash artifact: {e}"))
+                        ProtocolError::ArtifactInspection(evin_locales::t!(
+                            "release-sync-artifact-hash-failed",
+                            error = e.to_string()
+                        ))
                     })?;
                     if read == 0 {
                         break;

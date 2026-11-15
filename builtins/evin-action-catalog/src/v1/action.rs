@@ -99,7 +99,7 @@ impl Action for CatalogAction {
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         let config: CatalogConfig = ctx.load_config(with.as_ref()).map_err(|error| {
             issue(
-                format!("Invalid catalog configuration: {}", error.message),
+                evin_locales::t!("catalog-invalid-config", error = error.message),
                 "invalid-config",
             )
         })?;
@@ -111,13 +111,21 @@ impl Action for CatalogAction {
         };
         let json = serde_json::to_string_pretty(&catalog).map_err(|error| {
             issue(
-                format!("Failed to serialize catalog: {error}"),
+                evin_locales::t!(
+                    "catalog-json-serialization-failed",
+                    error = error.to_string()
+                ),
                 "json-error",
             )
         })?;
         ctx.fs
             .write(&output.to_string_lossy(), json)
-            .map_err(|error| issue(format!("Failed to write catalog: {error}"), "io-error"))?;
+            .map_err(|error| {
+                issue(
+                    evin_locales::t!("catalog-output-write-failed", error = error.to_string()),
+                    "io-error",
+                )
+            })?;
         let entry_count = catalog.symbols.len() + catalog.keywords.len();
         ctx.state
             .set_output("output_file", &output.to_string_lossy());

@@ -17,5 +17,11 @@ use super::*;
 #[test]
 fn rejects_an_empty_notes_path() {
     let with = evin_flow::parse_yaml("notes_path: \"  \"\n").unwrap();
-    assert!(validate_config(Some(&with)).is_err());
+    let error = validate_config(Some(&with)).unwrap_err();
+    let expected = evin_locales::t!("notes-path-must-not-be-empty-when-provided");
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(error.message, expected);
 }

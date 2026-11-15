@@ -61,12 +61,12 @@ pub(super) fn resolve_package_payloads(
     let root = ctx.fs.task_cwd();
     for mapping in &package.payload {
         if mapping.source.trim().is_empty() || mapping.strip_prefix.trim().is_empty() {
-            return Err(diagnostic(
-                "package payload source and strip_prefix must not be empty",
-            ));
+            return Err(diagnostic(evin_locales::t!(
+                "archive-payload-source-prefix-required"
+            )));
         }
         if mapping.mode.is_some_and(|mode| mode > 0o777) {
-            return Err(diagnostic("package payload mode must be at most 0777"));
+            return Err(diagnostic(evin_locales::t!("archive-payload-mode-invalid")));
         }
         let strip = packaging::safe_relative_path(&mapping.strip_prefix)
             .map_err(|error| diagnostic(error.to_string()))?;
@@ -79,10 +79,10 @@ pub(super) fn resolve_package_payloads(
             .map_err(|error| diagnostic(error.to_string()))?
         {
             let relative = source_path.strip_prefix(&strip).map_err(|_| {
-                diagnostic(format!(
-                    "payload '{}' does not lie below strip_prefix '{}'",
-                    source_path.display(),
-                    strip.display()
+                diagnostic(evin_locales::t!(
+                    "archive-payload-outside-strip-prefix",
+                    source = source_path.display().to_string(),
+                    prefix = strip.display().to_string()
                 ))
             })?;
             let destination = format!(
@@ -102,8 +102,9 @@ pub(super) fn resolve_package_payloads(
                 )
                 .is_some()
             {
-                return Err(diagnostic(format!(
-                    "package payload collision at '{destination}'"
+                return Err(diagnostic(evin_locales::t!(
+                    "archive-payload-collision",
+                    destination = destination
                 )));
             }
         }
@@ -164,8 +165,12 @@ pub(super) fn load_scripts(
         .map(|(name, path)| {
             let path = packaging::safe_relative_path(path)
                 .map_err(|error| diagnostic(error.to_string()))?;
-            let bytes = std::fs::read(ctx.fs.task_cwd().join(path))
-                .map_err(|error| diagnostic(format!("failed to read package script: {error}")))?;
+            let bytes = std::fs::read(ctx.fs.task_cwd().join(path)).map_err(|error| {
+                diagnostic(evin_locales::t!(
+                    "archive-package-script-read-failed",
+                    error = error.to_string()
+                ))
+            })?;
             Ok((name.to_string(), bytes))
         })
         .collect()
@@ -307,7 +312,7 @@ pub(super) fn validate_package(
             || character == '_'
             || character == '.'
     }) {
-        return Err(diagnostic("package name contains unsupported characters"));
+        return Err(diagnostic(evin_locales::t!("archive-package-name-invalid")));
     }
     if let Some(target) = &package.targets.arch {
         for (field, values) in [
@@ -364,8 +369,9 @@ pub(super) fn validate_package(
 
 fn validate_metadata_string(field: &str, value: &str) -> Result<(), evin_diagnostic::Diagnostic> {
     if value.trim().is_empty() || value.contains(['\n', '\r', '\0']) {
-        return Err(diagnostic(format!(
-            "package {field} must be non-empty and contain no line breaks"
+        return Err(diagnostic(evin_locales::t!(
+            "archive-package-metadata-invalid",
+            field = field
         )));
     }
     Ok(())
@@ -375,13 +381,16 @@ fn validate_relations(field: &str, values: &[String]) -> Result<(), evin_diagnos
     let mut seen = std::collections::BTreeSet::new();
     for value in values {
         if value.trim().is_empty() || value.contains(['\n', '\r', '\0']) {
-            return Err(diagnostic(format!(
-                "package {field} entries must be non-empty single-line strings"
+            return Err(diagnostic(evin_locales::t!(
+                "archive-package-relation-invalid",
+                field = field
             )));
         }
         if !seen.insert(value) {
-            return Err(diagnostic(format!(
-                "package {field} contains '{value}' more than once"
+            return Err(diagnostic(evin_locales::t!(
+                "archive-package-relation-duplicate",
+                field = field,
+                value = value
             )));
         }
     }
@@ -390,7 +399,9 @@ fn validate_relations(field: &str, values: &[String]) -> Result<(), evin_diagnos
 
 fn validate_script_path(path: &str) -> Result<(), evin_diagnostic::Diagnostic> {
     if path.trim().is_empty() {
-        return Err(diagnostic("package script path must not be empty"));
+        return Err(diagnostic(evin_locales::t!(
+            "archive-package-script-path-empty"
+        )));
     }
     packaging::safe_relative_path(path).map_err(|error| diagnostic(error.to_string()))?;
     Ok(())

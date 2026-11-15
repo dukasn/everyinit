@@ -116,6 +116,9 @@ async fn first_release_without_staged_changes_cannot_commit() {
         .unwrap();
     let error = execute(&ctx, Some(with)).await.unwrap_err();
     assert_eq!(error.code.key, "no-staged-changes");
+    let expected = evin_locales::t!("no-staged-changes");
+    assert!(!expected.starts_with("<missing locale key:"));
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
     assert!(!ctx.git().has_tag("v0.1.0").await.unwrap());
 }
 
@@ -276,12 +279,9 @@ async fn unmatched_replacements_fail_with_and_without_existing_tag() {
             let error = execute(&ctx, Some(evin_flow::parse_yaml(files).unwrap()))
                 .await
                 .unwrap_err();
-            assert!(
-                error
-                    .to_string()
-                    .contains("version replacement did not match file"),
-                "{error}"
-            );
+            let expected = evin_locales::t!("version-bumper-replacement-missing", path = filename);
+            assert!(!expected.starts_with("<missing locale key:"));
+            assert_eq!(evin_locales::render_issue(&error.code), expected);
             assert_eq!(
                 std::fs::read_to_string(temp.path().join(filename)).unwrap(),
                 "unrelated\n"

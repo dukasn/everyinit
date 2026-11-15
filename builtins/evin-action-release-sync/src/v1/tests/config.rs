@@ -12,9 +12,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use super::super::validate_config;
+use super::super::{config::ReleaseSyncConfig, validate_config};
 
 #[test]
 fn validate_default_config() {
     assert!(validate_config(None).is_ok());
+}
+
+#[test]
+fn configuration_errors_use_fluent_messages() {
+    let mut config = ReleaseSyncConfig::default();
+    config.tag = Some("  ".to_string());
+    assert_fluent_message(
+        config.validate().unwrap_err().message,
+        evin_locales::t!("release-sync-tag-must-not-be-empty"),
+    );
+
+    config.tag = None;
+    config.state.clear();
+    assert_fluent_message(
+        config.validate().unwrap_err().message,
+        evin_locales::t!("release-sync-state-path-must-not-be-empty"),
+    );
+}
+
+fn assert_fluent_message(actual: String, expected: String) {
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(actual, expected);
 }

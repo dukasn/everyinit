@@ -16,6 +16,27 @@ use super::super::compiler::compile;
 use super::super::config::CatalogConfig;
 
 #[test]
+fn reference_prefix_error_uses_fluent_message() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(temp.path().join("docs")).unwrap();
+    let config = CatalogConfig {
+        source_dir: "docs".into(),
+        out: "dist/catalog.json".into(),
+        include: Vec::new(),
+        exclude: Vec::new(),
+        extract_frontmatter: true,
+        reference_prefix: " ".into(),
+    };
+    let error = compile(temp.path(), &config).unwrap_err();
+    let expected = evin_locales::t!("catalog-reference-prefix-invalid");
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(error.title, expected);
+}
+
+#[test]
 fn catalog_compiles_without_web_site_settings() {
     let temp = tempfile::tempdir().unwrap();
     let docs = temp.path().join("docs");

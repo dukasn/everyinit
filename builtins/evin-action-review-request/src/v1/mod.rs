@@ -59,7 +59,7 @@ async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), St
     };
     let title = config.title.as_deref().map(resolve).transpose()?;
     if wanted && title.as_deref().is_none_or(|t| t.trim().is_empty()) {
-        return Err("the review request title resolved to an empty string".to_string());
+        return Err(evin_locales::t!("review-request-title-resolved-empty"));
     }
 
     let mut env = HashMap::new();
@@ -72,7 +72,9 @@ async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), St
         let physical = ctx
             .fs
             .get_safe_physical_path(&resolve(path)?)
-            .map_err(|e| format!("body_path is not usable: {e}"))?;
+            .map_err(|e| {
+                evin_locales::t!("review-request-body-path-unusable", error = e.to_string())
+            })?;
         env.insert(
             "EVIN_REVIEW_BODY_FILE".to_string(),
             physical.to_string_lossy().into_owned(),
@@ -89,7 +91,7 @@ async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), St
         ctx.log.plan(evin_action_sdk::activity::ShellPlan {
             script: config.commands.find.clone(),
         });
-        ctx.mark_unverified("The existing review request was not looked up in a dry run");
+        ctx.mark_unverified(evin_locales::t!("review-request-dry-run-skipped-lookup"));
         ctx.state.set_output("state", "none");
         return Ok(());
     }
@@ -116,8 +118,10 @@ async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), St
         }
         None => {
             if decision != Decision::Nothing && decision != Decision::Update {
-                return Err(format!(
-                    "a review request must be {state} but commands.{name} is not configured"
+                return Err(evin_locales::t!(
+                    "review-request-command-required-for-state",
+                    state = state,
+                    command = name
                 ));
             }
             ctx.state.set_output("state", "none");

@@ -45,6 +45,13 @@ fn rejects_old_fields_and_invalid_values() {
 #[test]
 fn validates_push_configuration() {
     assert!(config("message: r\ntag: v1\npush:\n  prune_stale_tags: true\n  base: main").is_ok());
+    let error = config("message: r\ntag: v1\npush:\n  remote: ' '\n").unwrap_err();
+    let expected = evin_locales::t!("git-release-push-remote-must-not-be-empty");
+    assert!(
+        !expected.starts_with("<missing locale key:"),
+        "expected Fluent message to exist: {expected}"
+    );
+    assert_eq!(error.message, expected);
     for yaml in [
         "message: r\npush:\n  remote: ' '",
         "message: r\ntag: v1\npush:\n  prune_stale_tags: true",

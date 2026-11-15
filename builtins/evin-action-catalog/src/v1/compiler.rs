@@ -37,7 +37,11 @@ pub(super) fn compile(
     for file in files {
         let content = std::fs::read_to_string(&file.absolute_path).map_err(|error| {
             issue(
-                format!("Failed to read {}: {error}", file.absolute_path.display()),
+                evin_locales::t!(
+                    "catalog-source-read-failed",
+                    path = file.absolute_path.display().to_string(),
+                    error = error.to_string()
+                ),
                 "io-error",
             )
         })?;
@@ -62,7 +66,7 @@ pub(super) fn compile(
     let prefix = config.reference_prefix.trim().to_ascii_uppercase();
     if prefix.is_empty() || !prefix.chars().all(|ch| ch.is_ascii_alphanumeric()) {
         return Err(issue(
-            "reference_prefix must contain only ASCII letters and digits",
+            evin_locales::t!("catalog-reference-prefix-invalid"),
             "invalid-config",
         ));
     }
@@ -90,7 +94,7 @@ pub(super) fn compile(
     );
     catalog.validate().map_err(|error| {
         issue(
-            format!("Generated catalog is invalid: {error}"),
+            evin_locales::t!("catalog-output-invalid", error = error.to_string()),
             "invalid-catalog",
         )
     })?;

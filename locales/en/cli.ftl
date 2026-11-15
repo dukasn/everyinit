@@ -26,9 +26,6 @@ run-sequential-help = Run ready tasks sequentially
 dry-run-help = Plan the workflow without filesystem, Git, or shell side effects
 debug-help = Show detailed workflow diagnostics and metrics
 verbose-help = Show successful task output too
-phase-resolving-configuration = Resolving configuration
-phase-checking-workspace = Checking workspace
-phase-initialize-workspace = Initializing workspace
 
 
 

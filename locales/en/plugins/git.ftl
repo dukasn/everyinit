@@ -8,6 +8,12 @@ tag-recovery-failed = Commit '{ $commit_id }' succeeded, but tagging '{ $tag }' 
 calculated-tag-already-exists = The version bumper calculated a new version '{ $version }', but the tag '{ $tag }' already exists in the repository. This usually happens if the tag is orphaned or points to a commit outside the current branch history.
 message-must-not-be-empty = message must not be empty
 tag-must-not-be-empty-when-provided = tag must not be empty when provided
+git-release-enabled-must-be-boolean = enabled must be true or false, got '{ $value }'
+git-release-push-remote-must-not-be-empty = push.remote must not be empty
+git-release-push-branch-must-not-be-empty = push.branch must not be empty when provided
+git-release-prune-stale-tags-requires-tag = push.prune_stale_tags requires tag
+git-release-prune-stale-tags-requires-base = push.prune_stale_tags requires push.base
+git-release-push-base-requires-prune-stale-tags = push.base is only valid with push.prune_stale_tags
 
 identity-not-configured-title = Git Identity Error
 tag-already-exists-title = Tag Exists

@@ -20,6 +20,7 @@ image = { workspace = true }
 ravif = { workspace = true }
 rayon = { workspace = true }
 evin-doc = { workspace = true }
+evin-locales = { workspace = true }
 unicode-width = { workspace = true }
 latex2mathml = { workspace = true }
 tempfile = { workspace = true }

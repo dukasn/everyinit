@@ -97,7 +97,7 @@ impl VersionBumperConfig {
 
     pub(super) fn validate(&self) -> Result<(), evin_diagnostic::Diagnostic> {
         Version::parse(&self.initial_version)
-            .map_err(|e| format!("initial_version must be valid SemVer: {e}"))?;
+            .map_err(|e| evin_locales::t!("initial-version-invalid", error = e.to_string()))?;
         if self.stable && self.prerelease.is_some() {
             return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
                 "stable-and-prerelease-conflict",
@@ -120,7 +120,7 @@ impl VersionBumperConfig {
                 )));
             }
             Prerelease::new(&format!("{prerelease}.1"))
-                .map_err(|e| format!("prerelease is invalid: {e}"))?;
+                .map_err(|e| evin_locales::t!("prerelease-invalid", error = e.to_string()))?;
         }
         if self.git.tag && !self.git.commit {
             return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
@@ -128,9 +128,7 @@ impl VersionBumperConfig {
             )));
         }
         if self.git.defer && (!self.git.commit || !self.git.tag) {
-            return Err("git.defer requires both git.commit and git.tag to be true"
-                .to_string()
-                .into());
+            return Err(evin_locales::t!("git-defer-requires-commit-and-tag").into());
         }
         if self.read_only
             && (!self.files.is_empty()
@@ -139,21 +137,16 @@ impl VersionBumperConfig {
                 || self.git.defer
                 || !self.git.include.is_empty())
         {
-            return Err(
-                "read_only cannot be combined with file updates or Git mutation"
-                    .to_string()
-                    .into(),
-            );
+            return Err(evin_locales::t!("read-only-conflicts-with-mutations").into());
         }
         if let Some(version) = &self.fixed_version {
             if !version.contains("${") {
-                Version::parse(version)
-                    .map_err(|error| format!("fixed_version must be valid SemVer: {error}"))?;
+                Version::parse(version).map_err(|error| {
+                    evin_locales::t!("fixed-version-invalid", error = error.to_string())
+                })?;
             }
             if !self.read_only {
-                return Err("fixed_version is only valid with read_only: true"
-                    .to_string()
-                    .into());
+                return Err(evin_locales::t!("fixed-version-requires-read-only").into());
             }
         }
         if let Some(msg) = &self.git.message {
@@ -234,7 +227,7 @@ fn validate_file(file: &FileConfig) -> Result<(), evin_diagnostic::Diagnostic> {
                 )));
             }
             manifest_kind(path).ok_or_else(|| {
-                format!("automatic version detection is unsupported for '{path}'")
+                evin_locales::t!("automatic-version-detection-unsupported", path = path)
             })?;
         }
         FileConfig::Custom(config) => {
@@ -258,7 +251,9 @@ fn validate_file(file: &FileConfig) -> Result<(), evin_diagnostic::Diagnostic> {
             let pattern = config
                 .match_pattern
                 .replace("${previous_version}", &regex::escape("0.0.0"));
-            Regex::new(&pattern).map_err(|e| format!("custom file match is invalid: {e}"))?;
+            Regex::new(&pattern).map_err(|e| {
+                evin_locales::t!("custom-file-match-invalid", error = e.to_string())
+            })?;
         }
     }
     Ok(())
