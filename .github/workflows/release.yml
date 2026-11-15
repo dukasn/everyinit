@@ -24,6 +24,10 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     timeout-minutes: 90
     env:
       GH_TOKEN: ${{ secrets.RELEASE_BOT_TOKEN }}
@@ -116,6 +120,22 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: cargo run --locked -p esh -- scripts/release/mirror/publish.esh canary "$RELEASE_VERSION" pointers dist/mirror
+      - name: Use npm CLI with trusted publishing support
+        if: steps.proposal.outputs.merged == '1'
+        run: npm install --global npm@11.5.1
+      - name: Configure GitHub Packages authentication
+        if: steps.proposal.outputs.merged == '1'
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22.23.4
+          registry-url: https://npm.pkg.github.com
+          scope: '@dukasn'
+          package-manager-cache: false
+      - name: Publish the npm package to both registries
+        if: steps.proposal.outputs.merged == '1'
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: cargo evin-dev run --verbose release:publish-registries
       - name: Require merged releases to be published before proposing
         run: cargo evin-dev run --verbose release:audit-published
       - name: Maintain the release pull request

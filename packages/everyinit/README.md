@@ -8,6 +8,11 @@ subpath:
 npm install everyinit
 ```
 
+The release workflow publishes `everyinit` to npmjs and the same package files
+as `@dukasn/everyinit` to GitHub Packages. To install the GitHub Packages copy,
+configure the `@dukasn` scope to use `https://npm.pkg.github.com` and authenticate
+with a token that can read the package.
+
 ```js
 import { createDocsRuntime } from "everyinit";
 import evinDocs from "everyinit/vite";

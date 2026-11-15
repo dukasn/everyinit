@@ -81,6 +81,14 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         workflow["jobs"]["release"]["env"]["GH_TOKEN"].as_str(),
         Some("${{ secrets.RELEASE_BOT_TOKEN }}")
     );
+    assert_eq!(
+        workflow["jobs"]["release"]["permissions"]["id-token"].as_str(),
+        Some("write")
+    );
+    assert_eq!(
+        workflow["jobs"]["release"]["permissions"]["packages"].as_str(),
+        Some("write")
+    );
     let steps = workflow["jobs"]["release"]["steps"].as_sequence().unwrap();
     let checkout = steps
         .iter()
@@ -111,6 +119,10 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     );
     assert!(
         pos("Tag and publish the merged release")
+            < pos("Publish the npm package to both registries")
+    );
+    assert!(
+        pos("Publish the npm package to both registries")
             < pos("Require merged releases to be published before proposing")
     );
     assert!(
@@ -143,6 +155,10 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         (
             "Tag and publish the merged release",
             "release:publish-merged",
+        ),
+        (
+            "Publish the npm package to both registries",
+            "release:publish-registries",
         ),
         (
             "Require merged releases to be published before proposing",
@@ -198,7 +214,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     let yaml = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     assert!(!yaml.contains("github-script"));
     assert!(!yaml.contains("node "));
-    assert!(!yaml.contains("github.token"));
+    assert!(yaml.contains("NODE_AUTH_TOKEN: ${{ github.token }}"));
     let ci = flow(".github/workflows/ci.yml");
     assert!(
         ci["on"]["pull_request"]["branches"]
