@@ -26,6 +26,7 @@ tasks:
         with:
           path: target/release-rehearsal/CHANGELOG.md
           version: "${env.RELEASE_VERSION}"
+      - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh target/release-rehearsal/CHANGELOG.md
       - run: cargo run --locked -p esh -- scripts/release/check/changelog.esh target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
 
   distribution-rehearsal:
@@ -92,6 +93,8 @@ tasks:
           path: CHANGELOG.md
           version: ${release:bump.version}
           notes_path: target/release-notes.md
+      - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh target/release-notes.md
 
   propose:
     stage: Publish
@@ -160,6 +163,7 @@ tasks:
         with:
           section: "${env.RELEASE_TAG}"
           notes_path: target/release-notes.md
+      - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh target/release-notes.md
 
   publish-merged:
     stage: Publish

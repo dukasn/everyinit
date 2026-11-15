@@ -8,6 +8,10 @@ subpath:
 npm install everyinit
 ```
 
+Everyinit is in canary-era development, so APIs may change between releases.
+This package follows the workspace's regular version train; the `canary`
+channel applies to CLI and ESH downloads, not npm package versioning.
+
 The release workflow publishes `everyinit` to npmjs and the same package files
 as `@dukasn/everyinit` to GitHub Packages. To install the GitHub Packages copy,
 configure the `@dukasn` scope to use `https://npm.pkg.github.com` and authenticate

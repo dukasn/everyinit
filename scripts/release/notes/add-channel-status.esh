@@ -1,0 +1,40 @@
+#!/usr/bin/env esh
+# Copyright (C) 2026 Eduardo Marques Santos
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -euo pipefail
+
+assert [ "$#" -eq 1 ] "usage: add-channel-status.esh <notes-file>"
+NOTES_FILE="$1"
+assert [ -f "$NOTES_FILE" ] "release notes file is missing: $NOTES_FILE"
+
+STATUS="Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release."
+if grep -Fqx -- "$STATUS" "$NOTES_FILE"; then
+  exit 0
+fi
+
+TEMP_FILE="$(mktemp "${NOTES_FILE}.tmp.XXXXXX")"
+if [ "$(head -n 1 "$NOTES_FILE")" = "# Changelog" ]; then
+  {
+    head -n 2 "$NOTES_FILE"
+    printf '\n%s\n\n' "$STATUS"
+    tail -n +4 "$NOTES_FILE"
+  } > "$TEMP_FILE"
+else
+  {
+    printf '%s\n\n' "$STATUS"
+    cat "$NOTES_FILE"
+  } > "$TEMP_FILE"
+fi
+mv "$TEMP_FILE" "$NOTES_FILE"
