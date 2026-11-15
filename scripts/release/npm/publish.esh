@@ -23,7 +23,7 @@ assert [ -f packages/everyinit/package.json ] "run this script from the reposito
 if npm view "everyinit@$VERSION" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
   echo "everyinit@$VERSION is already on npmjs; skipping publish"
 else
-  npm publish packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
+  npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
 fi
 
 PACKAGE_DIR="${RUNNER_TEMP:-target}/everyinit-github-package"

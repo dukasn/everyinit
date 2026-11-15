@@ -46,10 +46,10 @@ jobs:
           ref: ${{ inputs.commit || github.event.workflow_run.head_sha }}
           fetch-depth: 0
           token: ${{ secrets.RELEASE_BOT_TOKEN }}
-      - name: Load the current R2 publisher
+      - name: Load the current release publishers
         run: |
           git fetch origin main --no-tags
-          git checkout origin/main -- scripts/release/mirror/publish.esh
+          git checkout origin/main -- scripts/release/mirror/publish.esh scripts/release/npm/publish.esh
       - uses: jdx/mise-action@v5
         with:
           cache: false
