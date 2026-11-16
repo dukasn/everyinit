@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "build-vscode-extension",
+      "label": "build-vscode-debug",
       "type": "process",
       "command": "sh",
       "args": ["../../scripts/dev/build-vscode-extension.sh"],

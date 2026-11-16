@@ -40,6 +40,10 @@
 !/tests/
 !/packages/
 !/apps/
+!/.vscode/
+/.vscode/*
+!/.vscode/launch.json
+!/.vscode/tasks.json
 
 # (progress.md and STACK.md remain excluded by the /* rule)
 

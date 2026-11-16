@@ -26,6 +26,15 @@ early-stage canary software; interfaces may change before a stable release.
 The canary label applies to the CLI download channel. The Marketplace extension
 uses regular extension versioning and is not published as a VS Code pre-release.
 
+## Run the extension from source
+
+Open the repository root in VS Code and press F5 (`Launch Everyinit Extension`).
+The pre-launch task builds the `evin` and `esh` debug binaries and bundles the
+extension. In the VS Code Flatpak setup, it runs those commands through the
+`dev` toolbox with the versions selected by mise. The Extension Development
+Host opens the repository root, where the extension finds the freshly built
+servers under `target/debug`.
+
 ## Try it in a project
 
 In a repository with Evin installed, create `.evin/workspace.flow`. Open the

@@ -7,12 +7,13 @@
       "request": "launch",
       "runtimeExecutable": "${execPath}",
       "args": [
+        "--folder-uri=file://${workspaceFolder}/../..",
         "--extensionDevelopmentPath=${workspaceFolder}"
       ],
       "outFiles": [
-        "${workspaceFolder}/editors/vscode/dist/**/*.js"
+        "${workspaceFolder}/dist/**/*.js"
       ],
-      "preLaunchTask": "build-vscode-extension"
+      "preLaunchTask": "build-vscode-debug"
     }
   ]
 }
