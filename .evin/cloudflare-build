@@ -21,4 +21,4 @@ export PATH="$install_root/bin${cargo_bin_dir:+:$cargo_bin_dir}:$PATH"
 export EVIN_BIN="$install_root/bin/evin"
 export EVIN_DOCS_PREBUILT=1
 
-exec evin run everyinit-site:build
+exec evin run site:build

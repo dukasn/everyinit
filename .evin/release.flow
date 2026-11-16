@@ -10,17 +10,17 @@ tasks:
     steps:
       - run: cargo run --locked -p esh -- scripts/release/check/doctor.esh
 
-  rehearsal-start:
+  rehearse-start:
     stage: Publish
     description: "Record repository status before generating the release rehearsal"
     steps:
       - run: cargo run --locked -p esh -- scripts/release/check/rehearsal-clean.esh --snapshot
 
-  changelog-rehearsal:
+  changelog-rehearse:
     stage: Publish
     description: "Generate and verify the candidate changelog in ignored output"
     env: [RELEASE_VERSION]
-    needs: [release:rehearsal-start]
+    needs: [release:rehearse-start]
     steps:
       - uses: evin/changelog@v1
         with:
@@ -29,17 +29,17 @@ tasks:
       - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh target/release-rehearsal/CHANGELOG.md
       - run: cargo run --locked -p esh -- scripts/release/check/changelog.esh target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
 
-  distribution-rehearsal:
+  rehearse:
     stage: Publish
     description: "Build and verify every release distribution without publishing"
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs:
-      - release:changelog-rehearsal
-      - evin:package:distribution-verify
-      - esh:package:distribution-verify
-      - vscode:package:distribution-verify
-      - everyinit-package:distribution-verify
-      - everyinit-site:verify
+      - release:changelog-rehearse
+      - evin:pkg:dist-verify
+      - esh:pkg:dist-verify
+      - vscode:pkg:dist-verify
+      - npm:dist-verify
+      - site:verify
     steps:
       - run: cargo run --locked -p esh -- scripts/release/check/rehearsal-clean.esh
 
@@ -105,7 +105,7 @@ tasks:
       - release:bump
     steps:
       - run: cargo evin-dev run docs:evin-catalog
-      - run: cargo evin-dev run docs:catalog
+      - run: cargo evin-dev run docs:esh-catalog
       - run: git add Cargo.toml Cargo.lock .evin/workspace.flow .evin/release-lock.json CHANGELOG.md package-lock.json
       - run: git add crates/evin/assets/config-catalog.json crates/esh/assets/builtins-catalog.json
       - run: git add editors/vscode/package.json
@@ -133,28 +133,7 @@ tasks:
             update: gh pr edit "$EVIN_REVIEW_ID" --title "$EVIN_REVIEW_TITLE" --body-file "$EVIN_REVIEW_BODY_FILE"
             close: gh pr close "$EVIN_REVIEW_ID" --delete-branch --comment "Nothing left to release."
 
-  require-ci:
-    stage: Publish
-    description: "Require exact successful main push CI for the target release commit"
-    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_COMMIT]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/github/require-ci.esh
-
-  identify-proposal:
-    stage: Publish
-    description: "Check whether the target main commit is a merged release proposal"
-    env: [GH_TOKEN, GITHUB_OUTPUT, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/github/identify-proposal.esh
-
-  resolve-version:
-    stage: Publish
-    description: "Resolve the verified stable workspace release version and tag"
-    env: [GITHUB_ENV, GITHUB_OUTPUT]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/github/resolve-version.esh
-
-  release-notes:
+  notes:
     stage: Publish
     description: "Export the merged changelog section for the release"
     env: [RELEASE_TAG]
@@ -165,35 +144,7 @@ tasks:
           notes_path: target/release-notes.md
       - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh target/release-notes.md
 
-  publish-merged:
-    stage: Publish
-    description: "Create or verify the annotated release tag and publish the GitHub Release"
-    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_COMMIT, RELEASE_TAG, RELEASE_TARGET, RELEASE_VERSION]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/github/publish-merged.esh
-
-  publish-registries:
-    stage: Publish
-    description: "Publish the Everyinit npm package to npmjs and GitHub Packages"
-    env: [NODE_AUTH_TOKEN, NPM_TOKEN, RELEASE_VERSION]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/npm/publish.esh "$RELEASE_VERSION"
-
-  audit-published:
-    stage: Publish
-    description: "Verify that all merged release commits on main are tagged and published"
-    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT, RELEASE_TARGET]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/github/audit-published.esh
-
-  reconcile-proposal:
-    stage: Publish
-    description: "Maintain the automated release proposal branch and pull request"
-    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/github/reconcile-proposal.esh
-
-  release-stage:
+  stage:
     stage: Publish
     description: "Build and stage the two release binaries"
     env: [RELEASE_TARGET, RELEASE_VERSION]
@@ -206,12 +157,12 @@ tasks:
       - run: cargo run --locked -p esh -- scripts/release/package/stage.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
       - run: cargo run --locked -p esh -- scripts/release/package/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
 
-  release-archives:
+  archives:
     stage: Publish
     description: "Archive Linux tar.gz release binaries"
     cwd: target/release-staging
     env: [RELEASE_TARGET, RELEASE_VERSION]
-    needs: [release:release-stage]
+    needs: [release:stage]
     steps:
       - uses: evin/archive@v1
         with:
@@ -224,20 +175,20 @@ tasks:
           include: ["esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"]
           layout: relative
 
-  release-native-packages:
+  native:
     stage: Publish
     description: "Build Evin and ESH Debian and Arch packages"
     env: [RELEASE_TARGET, RELEASE_VERSION]
     needs:
-      - release:release-stage
-      - release:package-state
+      - release:stage
+      - release:pkg:state
     steps:
       - uses: evin/archive@v1
         with:
           format: deb
           output_dir: target/release-archives
           architecture: x86_64
-          release: "${release:package-state.release}"
+          release: "${release:pkg:state.release}"
           package:
             name: evin
             summary: Evin workflow engine
@@ -265,7 +216,7 @@ tasks:
           format: arch
           output_dir: target/release-archives
           architecture: x86_64
-          release: "${release:package-state.release}"
+          release: "${release:pkg:state.release}"
           package:
             name: evin
             summary: Evin workflow engine
@@ -293,7 +244,7 @@ tasks:
           format: deb
           output_dir: target/release-archives
           architecture: x86_64
-          release: "${release:package-state.release}"
+          release: "${release:pkg:state.release}"
           package:
             name: esh
             summary: ESH portable shell runtime
@@ -321,7 +272,7 @@ tasks:
           format: arch
           output_dir: target/release-archives
           architecture: x86_64
-          release: "${release:package-state.release}"
+          release: "${release:pkg:state.release}"
           package:
             name: esh
             summary: ESH portable shell runtime
@@ -345,188 +296,44 @@ tasks:
             targets:
               arch: {}
 
-  release-vscode:
+  vscode:
     stage: Publish
     description: "Package Everyinit VS Code extension for release"
     env: [RELEASE_VERSION]
     # Staging clears the shared archive directory before any package is written.
-    needs: [release:release-stage]
+    needs: [release:stage]
     steps:
       - run: npm --prefix editors/vscode run package
       - run: mkdir -p target/release-archives
       - run: cp editors/vscode/dist/github/everyinit-${RELEASE_VERSION}.vsix target/release-archives/
 
-  release-sign:
+  sign:
     stage: Publish
     description: "Cryptographically sign all release packages and manifests"
     env: [RELEASE_VERSION, EVERYINIT_RELEASE_SIGNING_KEY, RELEASE_SIGNING_KEY, RELEASE_SIGNING_KEY_FILE]
     needs:
-      - release:release-archives
-      - release:release-native-packages
-      - release:release-vscode
+      - release:archives
+      - release:native
+      - release:vscode
     steps:
       - run: cargo run --locked -p esh -- scripts/release/package/sign.esh target/release-archives "$RELEASE_VERSION"
 
-  release-archives-verify:
+  archives-verify:
     stage: Publish
     description: "Inspect all release archives, native packages, VS Code extension, and cryptographic signatures"
     env: [RELEASE_TARGET, RELEASE_VERSION]
-    needs: [release:release-sign]
+    needs: [release:sign]
     steps:
       - run: cargo run --locked -p esh -- scripts/release/check/archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
       - run: cargo run --locked -p esh -- scripts/release/check/archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
       - run: cargo run --locked -p esh -- scripts/release/check/release-packages.esh target/release-archives "$RELEASE_VERSION" "$RELEASE_TARGET"
 
-  tag-verify:
-    stage: Publish
-    description: "Verify the tag and shared workspace version"
-    env: [RELEASE_TAG, RELEASE_VERSION]
-    needs:
-      - test
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/check/tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
-
-  candidate-validate:
-    stage: Publish
-    description: "Validate a tagged release candidate before it can merge"
-    env: [RELEASE_BASE_SHA, RELEASE_COMMIT, RELEASE_TAG, RELEASE_VERSION]
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/candidate/validate.esh "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"
-
-  package-state:
-    stage: Publish
-    description: "Resolve package revisions without changing the checkout"
-    env: [RELEASE_VERSION]
-    steps:
-      - uses: evin/version-bumper@v1
-        with:
-          initial_version: "0.1.0"
-          read_only: true
-          fixed_version: "${env.RELEASE_VERSION}"
-
-  package:
+  pkg:
     stage: Publish
     description: "Build release distributions for Evin, ESH, the editor extension, and npm integrations"
     needs:
-      - release:tag-verify
-      - evin:package:github
-      - esh:package:github
-      - vscode:package:github
-      - everyinit-package:distribution-verify
-
-  package-cloudflare:
-    stage: Publish
-    description: "Build only the tar.gz artifacts used by the Cloudflare mirror"
-    needs:
-      - release:tag-verify
-      - evin:package:cloudflare
-      - esh:package:cloudflare
-
-  package-cloudflare-verify:
-    stage: Publish
-    description: "Verify the tar.gz artifacts used by the Cloudflare mirror"
-    needs:
-      - release:package-cloudflare
-      - evin:package:cloudflare-verify
-      - esh:package:cloudflare-verify
-
-  package-verify:
-    stage: Publish
-    description: "Verify all release archives, editor packages, and the Everyinit npm package"
-    needs:
-      - release:package
-      - evin:package:github-verify
-      - esh:package:github-verify
-      - vscode:package:github-verify
-      - everyinit-package:distribution-verify
-
-  publish-prebuilt:
-    stage: Publish
-    description: "Publish the prebuilt release and move the canary mirror pointers last"
-    needs: [infra:mirror:publish-pointers]
-
-  github-publish:
-    stage: Publish
-    description: "Reconcile and publish the release through Evin release-sync actions"
-    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_PROVIDER, RELEASE_TAG, RELEASE_VERSION]
-    needs:
-      - release:package-verify
-      - infra:mirror:metadata
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
-      - uses: evin/release-sync@v1
-        with:
-          tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG}"
-          state: .evin/actions/release-sync/remote-state.v1.json
-          plan_out: .evin/actions/release-sync/evin-plan.v1.json
-          notes_dir: .evin/actions/release-sync/notes/evin
-          artifacts_dir: crates/evin/dist/github
-          changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/evin-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
-      - uses: evin/release-sync@v1
-        with:
-          tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG}"
-          state: .evin/actions/release-sync/remote-state.v1.json
-          plan_out: .evin/actions/release-sync/esh-plan.v1.json
-          notes_dir: .evin/actions/release-sync/notes/esh
-          artifacts_dir: crates/esh/dist/github
-          changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/esh-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
-      - uses: evin/release-sync@v1
-        with:
-          tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG}"
-          state: .evin/actions/release-sync/remote-state.v1.json
-          plan_out: .evin/actions/release-sync/vscode-plan.v1.json
-          notes_dir: .evin/actions/release-sync/notes/vscode
-          artifacts_dir: editors/vscode/dist/github
-          changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/vscode-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh summary "$RELEASE_TAG"
-
-  github-publish-prebuilt:
-    stage: Publish
-    description: "Publish verified downloaded artifacts without rebuilding them"
-    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_PROVIDER, RELEASE_TAG]
-    needs:
-      - infra:mirror:metadata-prebuilt
-      - infra:mirror:publish-objects
-    steps:
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
-      - uses: evin/release-sync@v1
-        with:
-          tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG}"
-          state: .evin/actions/release-sync/remote-state.v1.json
-          plan_out: .evin/actions/release-sync/evin-plan.v1.json
-          notes_dir: .evin/actions/release-sync/notes/evin
-          artifacts_dir: crates/evin/dist/github
-          changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/evin-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
-      - uses: evin/release-sync@v1
-        with:
-          tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG}"
-          state: .evin/actions/release-sync/remote-state.v1.json
-          plan_out: .evin/actions/release-sync/esh-plan.v1.json
-          notes_dir: .evin/actions/release-sync/notes/esh
-          artifacts_dir: crates/esh/dist/github
-          changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/esh-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
-      - uses: evin/release-sync@v1
-        with:
-          tag: "${env.RELEASE_TAG}"
-          title: "${env.RELEASE_TAG}"
-          state: .evin/actions/release-sync/remote-state.v1.json
-          plan_out: .evin/actions/release-sync/vscode-plan.v1.json
-          notes_dir: .evin/actions/release-sync/notes/vscode
-          artifacts_dir: editors/vscode/dist/github
-          changelog: CHANGELOG.md
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/vscode-plan.v1.json
-      - run: cargo run --locked -p esh -- scripts/release/provider.esh summary "$RELEASE_TAG"
+      - release:ci:tag-verify
+      - evin:pkg:gh
+      - esh:pkg:gh
+      - vscode:pkg:gh
+      - npm:dist-verify

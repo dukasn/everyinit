@@ -16,7 +16,10 @@ workspace:
     - infra/
     - editors/vscode/
   include:
-    - .evin/release.flow
+    release: .evin/release.flow
+    "release:ci": .evin/release/ci.flow
+    "release:pkg": .evin/release/pkg.flow
+    "release:pub": .evin/release/pub.flow
 
 stages:
   - Build
@@ -74,7 +77,7 @@ tasks:
     needs:
       - evin:e2e
       - esh:e2e
-      - everyinit-site:e2e
+      - site:e2e
 
   quality:
     stage: Check
@@ -84,9 +87,9 @@ tasks:
       - fmt
       - lint
       - docs:build
-      - everyinit-site:verify
-      - everyinit-package:verify
-      - infra:quality:verify
+      - site:verify
+      - npm:verify
+      - infra:verify
       - vscode:verify
 
   verify:

@@ -23,7 +23,7 @@ site validates Fluent syntax and matching message IDs with:
 npm run check:locales --workspace @everyinit/site
 ```
 
-The verifier is part of `everyinit-site:verify`. A complete non-English catalog
+The verifier is part of `site:verify`. A complete non-English catalog
 automatically adds a localized homepage at `/<locale>/`; documentation chrome
 uses the current documentation route's locale and falls back to English when
 that locale has no site catalog. Keep message IDs stable when editing English
@@ -34,7 +34,7 @@ copy so translation catalogs remain aligned.
 From the repository root, start the live Astro development server:
 
 ```sh
-cargo evin-dev run everyinit-site:dev
+cargo evin-dev run site:dev
 ```
 
 Open `http://localhost:4321/` for the project home and
@@ -47,7 +47,7 @@ For a production-style preview, including the Cloudflare Pages middleware that
 maps the docs host to `/`, run:
 
 ```sh
-cargo evin-dev run everyinit-site:preview
+cargo evin-dev run site:preview
 ```
 
 This builds the site and starts Wrangler at `http://127.0.0.1:8788/`. The home
@@ -59,13 +59,13 @@ with Ctrl-C.
 
 ```sh
 cargo evin-dev run docs:build
-cargo evin-dev run everyinit-site:check
-cargo evin-dev run everyinit-site:verify
-cargo evin-dev run everyinit-site:e2e
+cargo evin-dev run site:check
+cargo evin-dev run site:verify
+cargo evin-dev run site:e2e
 ```
 
-`everyinit-site:verify` type-checks and statically builds the app. The focused
-`everyinit-site:e2e` task runs the home, generated docs, responsive layout,
+`site:verify` type-checks and statically builds the app. The focused
+`site:e2e` task runs the home, generated docs, responsive layout,
 search, and Cloudflare host-routing browser checks. `cargo evin-dev run e2e`
 runs those alongside the Evin and ESH end-to-end suites. The root `npm run
 build` command follows the same workspace release flow for Cloudflare Pages.

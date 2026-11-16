@@ -1,0 +1,110 @@
+#!evin/v1
+namespace:
+  name: pub
+  description: "Release publication tasks"
+
+tasks:
+  merged:
+    stage: Publish
+    description: "Create or verify the annotated release tag and publish the GitHub Release"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_COMMIT, RELEASE_TAG, RELEASE_TARGET, RELEASE_VERSION]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/publish-merged.esh
+
+  registries:
+    stage: Publish
+    description: "Publish the Everyinit npm package to npmjs and GitHub Packages"
+    env: [NODE_AUTH_TOKEN, NPM_TOKEN, RELEASE_VERSION]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/npm/publish.esh "$RELEASE_VERSION"
+
+  prebuilt:
+    stage: Publish
+    description: "Publish the prebuilt release and move the canary mirror pointers last"
+    needs: [infra:mirror:pub-ptrs]
+
+  gh:
+    stage: Publish
+    description: "Reconcile and publish the release through Evin release-sync actions"
+    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_PROVIDER, RELEASE_TAG, RELEASE_VERSION]
+    needs:
+      - release:pkg:verify
+      - infra:mirror:meta
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
+      - uses: evin/release-sync@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/release-sync/remote-state.v1.json
+          plan_out: .evin/actions/release-sync/evin-plan.v1.json
+          notes_dir: .evin/actions/release-sync/notes/evin
+          artifacts_dir: crates/evin/dist/github
+          changelog: CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/evin-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
+      - uses: evin/release-sync@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/release-sync/remote-state.v1.json
+          plan_out: .evin/actions/release-sync/esh-plan.v1.json
+          notes_dir: .evin/actions/release-sync/notes/esh
+          artifacts_dir: crates/esh/dist/github
+          changelog: CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/esh-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
+      - uses: evin/release-sync@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/release-sync/remote-state.v1.json
+          plan_out: .evin/actions/release-sync/vscode-plan.v1.json
+          notes_dir: .evin/actions/release-sync/notes/vscode
+          artifacts_dir: editors/vscode/dist/github
+          changelog: CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/vscode-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh summary "$RELEASE_TAG"
+
+  gh-prebuilt:
+    stage: Publish
+    description: "Publish verified downloaded artifacts without rebuilding them"
+    env: [GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_API_URL, GITHUB_STEP_SUMMARY, RELEASE_PROVIDER, RELEASE_TAG]
+    needs:
+      - infra:mirror:meta-prebuilt
+      - infra:mirror:pub-objects
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
+      - uses: evin/release-sync@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/release-sync/remote-state.v1.json
+          plan_out: .evin/actions/release-sync/evin-plan.v1.json
+          notes_dir: .evin/actions/release-sync/notes/evin
+          artifacts_dir: crates/evin/dist/github
+          changelog: CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/evin-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
+      - uses: evin/release-sync@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/release-sync/remote-state.v1.json
+          plan_out: .evin/actions/release-sync/esh-plan.v1.json
+          notes_dir: .evin/actions/release-sync/notes/esh
+          artifacts_dir: crates/esh/dist/github
+          changelog: CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/esh-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh snapshot "$RELEASE_TAG"
+      - uses: evin/release-sync@v1
+        with:
+          tag: "${env.RELEASE_TAG}"
+          title: "${env.RELEASE_TAG}"
+          state: .evin/actions/release-sync/remote-state.v1.json
+          plan_out: .evin/actions/release-sync/vscode-plan.v1.json
+          notes_dir: .evin/actions/release-sync/notes/vscode
+          artifacts_dir: editors/vscode/dist/github
+          changelog: CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh apply .evin/actions/release-sync/vscode-plan.v1.json
+      - run: cargo run --locked -p esh -- scripts/release/provider.esh summary "$RELEASE_TAG"

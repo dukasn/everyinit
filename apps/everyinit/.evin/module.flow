@@ -1,6 +1,6 @@
 #!evin/v1
 module:
-  name: everyinit-site
+  name: site
 
 tasks:
   dev:
@@ -19,7 +19,7 @@ tasks:
   preview:
     stage: Preview
     description: "Build and preview at http://127.0.0.1:8788 through Cloudflare Pages"
-    needs: [everyinit-site:build]
+    needs: [site:build]
     steps:
       - run: npm run preview --workspace @everyinit/site
 
@@ -32,7 +32,7 @@ tasks:
   e2e:
     stage: Test
     description: "Run browser tests for the Everyinit home and documentation site"
-    needs: [everyinit-site:verify]
+    needs: [site:verify]
     steps:
       - run: npm exec -- playwright test --config ../../playwright.config.mjs tests/site.spec.mjs
 

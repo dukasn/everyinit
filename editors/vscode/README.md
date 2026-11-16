@@ -34,6 +34,17 @@ extension. In the VS Code Flatpak setup, it runs those commands through the
 `dev` toolbox with the versions selected by mise. The Extension Development
 Host opens the repository root, where the extension finds the freshly built
 servers under `target/debug`.
+To prepare those binaries and run the extension's checks and tests without
+launching the host, run `vscode:e2e` from the Everyinit task view.
+It builds Evin and ESH into the configured `target/debug` paths before running
+the extension checks.
+
+Task execution uses the Evin server started from `everyinit.evin.path`. When
+the default Linux terminal profile enters a Flatpak Toolbox, the extension
+runs that configured executable in its managed integrated terminal so task
+steps inherit the toolbox environment. The extension test task is launched
+through the configured Evin binary; its build dependencies use Cargo to place
+fresh servers at the configured paths.
 
 ## Try it in a project
 
@@ -55,9 +66,13 @@ tasks:
     run: esh scripts/hello.esh
 ```
 
-Then run `Everyinit: Run Task in Workspace` from the Command Palette. Evin
-reads the workspace manifest and runs the `hello` task, which invokes this ESH
-script:
+Then run `Everyinit: Run Task…` from the Command Palette. Choose a task and an
+execution mode (normal, dry run, parallel, or sequential). The task tree's Run
+button runs immediately in normal mode. The status bar follows active runs and
+keeps a failed run visible until the next run; task rows show the last result.
+Set `everyinit.execution.promptForMode` to `false` to skip the mode picker.
+Evin reads the workspace manifest and runs the `hello` task, which invokes
+this ESH script:
 
 ```esh
 #!/usr/bin/env esh

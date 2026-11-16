@@ -29,7 +29,7 @@ jobs:
       - name: Install locked JavaScript dependencies
         run: npm ci
       - name: Verify and build the site
-        run: cargo evin-dev run everyinit-site:verify
+        run: cargo evin-dev run site:verify
       - name: Upload the built site
         uses: actions/upload-artifact@v4
         with:
@@ -124,7 +124,7 @@ jobs:
       - name: Install locked JavaScript dependencies
         run: npm ci
       - name: Verify and build the current site
-        run: cargo evin-dev run everyinit-site:verify
+        run: cargo evin-dev run site:verify
       - name: Upload current site build
         uses: actions/upload-artifact@v4
         with:

@@ -28,6 +28,17 @@ tasks:
     steps:
       - run: npm test
 
+  e2e:
+    stage: Test
+    description: "Build the configured debug language servers and test the VS Code extension"
+    needs: [evin:build, esh:build]
+    presets: [node]
+    steps:
+      - run: npm run build:dev
+      - run: npm run check
+      - run: npm run lint
+      - run: npm test
+
   verify:
     stage: Test
     description: "Verify Everyinit VS Code extension"

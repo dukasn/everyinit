@@ -23,7 +23,7 @@ supported.
 
 - Pull requests and pushes targeting `main` or `release`, and manual CI
   dispatches, run workspace tests, binary E2E, quality checks, and
-  `release:distribution-rehearsal`.
+  `release:rehearse`.
 - CI builds and verifies every release format—Evin and ESH tarballs, Debian
   packages, Arch packages, and the Everyinit VS Code extension package (`.vsix`).
   All packages are cryptographically signed with SHA-256 checksum manifests and

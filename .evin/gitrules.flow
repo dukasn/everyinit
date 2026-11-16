@@ -72,6 +72,7 @@ releases:
         - scripts/release/**
         - .evin/gitrules.flow
         - .evin/release.flow
+        - .evin/release/**
         - LICENSE
         - THIRD_PARTY_NOTICES.md
         - LICENSES/**
@@ -87,6 +88,7 @@ releases:
         - scripts/release/**
         - .evin/gitrules.flow
         - .evin/release.flow
+        - .evin/release/**
         - LICENSE
         - THIRD_PARTY_NOTICES.md
         - LICENSES/**

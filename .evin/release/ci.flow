@@ -1,0 +1,56 @@
+#!evin/v1
+namespace:
+  name: ci
+  description: "Release automation and CI gates"
+
+tasks:
+  require:
+    stage: Publish
+    description: "Require exact successful main push CI for the target release commit"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_COMMIT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/require-ci.esh
+
+  proposal:
+    stage: Publish
+    description: "Check whether the target main commit is a merged release proposal"
+    env: [GH_TOKEN, GITHUB_OUTPUT, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/identify-proposal.esh
+
+  state:
+    stage: Publish
+    description: "Resolve the verified stable workspace release version and tag"
+    env: [GITHUB_ENV, GITHUB_OUTPUT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/resolve-version.esh
+
+  audit:
+    stage: Publish
+    description: "Verify that all merged release commits on main are tagged and published"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT, RELEASE_TARGET]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/audit-published.esh
+
+  reconcile:
+    stage: Publish
+    description: "Maintain the automated release proposal branch and pull request"
+    env: [GH_TOKEN, GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_BRANCH, RELEASE_COMMIT]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/github/reconcile-proposal.esh
+
+  tag-verify:
+    stage: Publish
+    description: "Verify the tag and shared workspace version"
+    env: [RELEASE_TAG, RELEASE_VERSION]
+    needs:
+      - test
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/check/tag.esh "$RELEASE_TAG" "$RELEASE_VERSION"
+
+  validate:
+    stage: Publish
+    description: "Validate a tagged release candidate before it can merge"
+    env: [RELEASE_BASE_SHA, RELEASE_COMMIT, RELEASE_TAG, RELEASE_VERSION]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/candidate/validate.esh "$RELEASE_TAG" "$RELEASE_VERSION" "$RELEASE_COMMIT" "$RELEASE_BASE_SHA"

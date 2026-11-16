@@ -1,6 +1,6 @@
 #!evin/v1
 namespace:
-  name: package
+  name: pkg
   description: "Esh binary packaging and distribution tasks"
 
 tasks:
@@ -9,13 +9,13 @@ tasks:
     description: "Build, verify, and stage the ESH release binary"
     cwd: .
     env: [RELEASE_TARGET, RELEASE_VERSION]
-    needs: [release:rehearsal-start]
+    needs: [release:rehearse-start]
     steps:
       - run: cargo build --release --locked --target "$RELEASE_TARGET" -p esh
       - run: cargo run --locked -p esh -- scripts/release/check/binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
       - run: cargo run --locked -p esh -- scripts/release/package/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/staging
 
-  cloudflare:
+  cf:
     stage: Publish
     description: "Create ESH's Cloudflare tar.gz artifact"
     cwd: crates/esh/dist/staging
@@ -33,12 +33,12 @@ tasks:
           layout: relative
           compression_level: 9
 
-  cloudflare-verify:
+  cf-verify:
     stage: Publish
     description: "Verify ESH's Cloudflare tar.gz artifact"
     cwd: .
     env: [RELEASE_TARGET, RELEASE_VERSION]
-    needs: [cloudflare]
+    needs: [cf]
     steps:
       - run: cargo run --locked -p esh -- scripts/release/check/archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" crates/esh/dist/github
 
@@ -65,7 +65,7 @@ tasks:
       licenses_source: LICENSES/**/*
       licenses_strip_prefix: LICENSES
       licenses_dir: /usr/share/licenses/esh/LICENSES
-    needs: [stage, release:package-state]
+    needs: [stage, release:pkg:state]
     steps:
       - run: rm -f "crates/esh/dist/packages/esh_${RELEASE_VERSION}-"*_amd64.deb "crates/esh/dist/packages/esh-${RELEASE_VERSION}-r"*.apk "crates/esh/dist/packages/esh-${RELEASE_VERSION}-"*-x86_64.pkg.tar.zst
       - uses: evin/archive@v1
@@ -73,7 +73,7 @@ tasks:
           format: deb
           output_dir: ${package_output_dir}
           architecture: x86_64
-          release: "${release:package-state.release}"
+          release: "${release:pkg:state.release}"
           package:
             name: ${binary_name}
             summary: ${package_summary}
@@ -101,7 +101,7 @@ tasks:
           format: apk
           output_dir: ${package_output_dir}
           architecture: x86_64
-          release: "${release:package-state.release}"
+          release: "${release:pkg:state.release}"
           package:
             name: ${binary_name}
             summary: ${package_summary}
@@ -129,7 +129,7 @@ tasks:
           format: arch
           output_dir: ${package_output_dir}
           architecture: x86_64
-          release: "${release:package-state.release}"
+          release: "${release:pkg:state.release}"
           package:
             name: ${binary_name}
             summary: ${package_summary}
@@ -162,22 +162,22 @@ tasks:
     steps:
       - run: cargo run --locked -p esh -- scripts/release/check/native-artifacts.esh esh "$RELEASE_VERSION" crates/esh/dist/packages
 
-  github:
+  gh:
     stage: Publish
     description: "Create every ESH artifact format for GitHub Releases"
-    needs: [cloudflare, native]
+    needs: [cf, native]
 
-  github-verify:
+  gh-verify:
     stage: Publish
     description: "Verify every ESH artifact format for GitHub Releases"
-    needs: [github, cloudflare-verify, native-verify]
+    needs: [gh, cf-verify, native-verify]
 
   verify:
     stage: Publish
     description: "Verify all ESH release package formats"
-    needs: [github-verify]
+    needs: [gh-verify]
 
-  distribution-verify:
+  dist-verify:
     stage: Publish
     description: "Build and verify esh's complete distribution set for rehearsal"
     cwd: .

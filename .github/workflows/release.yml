@@ -59,10 +59,10 @@ jobs:
           MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: rust
       - uses: Swatinem/rust-cache@v2
       - name: Require exact successful main push CI
-        run: cargo evin-dev run --verbose release:require-ci
+        run: cargo evin-dev run --verbose release:ci:require
       - name: Identify merged release proposal
         id: proposal
-        run: cargo evin-dev run --verbose release:identify-proposal
+        run: cargo evin-dev run --verbose release:ci:proposal
       - name: Install release packaging tools
         if: steps.proposal.outputs.merged == '1'
         run: sudo apt-get update && sudo apt-get install --yes musl-tools zstd
@@ -83,19 +83,19 @@ jobs:
           npm --prefix editors/vscode ci
       - name: Determine release version
         if: steps.proposal.outputs.merged == '1'
-        run: cargo evin-dev run --verbose release:resolve-version
+        run: cargo evin-dev run --verbose release:ci:state
       - name: Extract merged release notes with Evin
         if: steps.proposal.outputs.merged == '1'
-        run: cargo evin-dev run --verbose release:release-notes
+        run: cargo evin-dev run --verbose release:notes
       - name: Build and verify release archives with Evin
         if: steps.proposal.outputs.merged == '1'
         env:
           EVERYINIT_RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY }}
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY || secrets.RELEASE_SIGNING_KEY }}
-        run: cargo evin-dev run --verbose release:release-archives-verify
+        run: cargo evin-dev run --verbose release:archives-verify
       - name: Build and verify the Cloudflare mirror archives
         if: steps.proposal.outputs.merged == '1'
-        run: cargo evin-dev run --verbose release:package-cloudflare-verify
+        run: cargo evin-dev run --verbose release:pkg:cf-verify
       - name: Prepare the mirror signing key
         if: steps.proposal.outputs.merged == '1'
         env:
@@ -111,10 +111,10 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: cargo evin-dev run --verbose infra:mirror:publish-objects
+        run: cargo evin-dev run --verbose infra:mirror:pub-objects
       - name: Tag and publish the merged release
         if: steps.proposal.outputs.merged == '1'
-        run: cargo evin-dev run --verbose release:publish-merged
+        run: cargo evin-dev run --verbose release:pub:merged
       - name: Publish the canary channel pointer to R2
         if: steps.proposal.outputs.merged == '1'
         env:
@@ -137,11 +137,11 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ github.token }}
-        run: cargo evin-dev run --verbose release:publish-registries
+        run: cargo evin-dev run --verbose release:pub:registries
       - name: Publish the VS Code extension to the Visual Studio Marketplace
         if: steps.proposal.outputs.merged == '1'
         run: ./editors/vscode/node_modules/.bin/vsce publish --oidc --packagePath "editors/vscode/dist/github/everyinit-${RELEASE_VERSION}.vsix" --skip-duplicate
       - name: Require merged releases to be published before proposing
-        run: cargo evin-dev run --verbose release:audit-published
+        run: cargo evin-dev run --verbose release:ci:audit
       - name: Maintain the release pull request
-        run: cargo evin-dev run --verbose release:reconcile-proposal
+        run: cargo evin-dev run --verbose release:ci:reconcile

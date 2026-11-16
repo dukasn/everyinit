@@ -1,9 +1,9 @@
 #!evin/v1
 module:
-  name: everyinit-package
+  name: npm
 
 tasks:
-  format:
+  fmt:
     stage: Check
     description: "Check formatting for the Everyinit npm package"
     steps:
@@ -15,7 +15,7 @@ tasks:
     steps:
       - run: npm test --workspace everyinit
 
-  distribution-verify:
+  dist-verify:
     stage: Test
     description: "Verify the files included in the unified Everyinit npm package"
     steps:
@@ -25,6 +25,6 @@ tasks:
     stage: Test
     description: "Run Everyinit package contract and distribution checks"
     needs:
-      - everyinit-package:format
-      - everyinit-package:test
-      - everyinit-package:distribution-verify
+      - npm:fmt
+      - npm:test
+      - npm:dist-verify

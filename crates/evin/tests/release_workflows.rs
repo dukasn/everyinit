@@ -48,7 +48,11 @@ fn step(name: &str) -> String {
         .strip_prefix("cargo evin-dev run --verbose release:")
         .or_else(|| trimmed.strip_prefix("cargo evin-dev run release:"))
     {
-        let task_run = flow(".evin/release.flow")["tasks"][task]["steps"][0]["run"]
+        let (flow_path, task_name) = match task.split_once(':') {
+            Some((namespace, task_name)) => (format!(".evin/release/{namespace}.flow"), task_name),
+            None => (".evin/release.flow".to_owned(), task),
+        };
+        let task_run = flow(&flow_path)["tasks"][task_name]["steps"][0]["run"]
             .as_str()
             .unwrap()
             .to_owned();
@@ -140,37 +144,25 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     for (step_name, expected_task) in [
         (
             "Require exact successful main push CI",
-            "release:require-ci",
+            "release:ci:require",
         ),
-        (
-            "Identify merged release proposal",
-            "release:identify-proposal",
-        ),
-        ("Determine release version", "release:resolve-version"),
-        (
-            "Extract merged release notes with Evin",
-            "release:release-notes",
-        ),
+        ("Identify merged release proposal", "release:ci:proposal"),
+        ("Determine release version", "release:ci:state"),
+        ("Extract merged release notes with Evin", "release:notes"),
         (
             "Build and verify release archives with Evin",
-            "release:release-archives-verify",
+            "release:archives-verify",
         ),
-        (
-            "Tag and publish the merged release",
-            "release:publish-merged",
-        ),
+        ("Tag and publish the merged release", "release:pub:merged"),
         (
             "Publish the npm package to both registries",
-            "release:publish-registries",
+            "release:pub:registries",
         ),
         (
             "Require merged releases to be published before proposing",
-            "release:audit-published",
+            "release:ci:audit",
         ),
-        (
-            "Maintain the release pull request",
-            "release:reconcile-proposal",
-        ),
+        ("Maintain the release pull request", "release:ci:reconcile"),
     ] {
         assert_eq!(
             workflow_step_run(step_name),
@@ -205,7 +197,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     assert_eq!(git["enabled"].as_str(), Some("${release:bump.changed}"));
     assert!(release.contains("evin/review-request@v1"));
     assert!(release.contains("evin/archive@v1"));
-    let notes = &tasks["tasks"]["release-notes"]["steps"][0]["with"];
+    let notes = &tasks["tasks"]["notes"]["steps"][0]["with"];
     assert_eq!(notes["section"].as_str(), Some("${env.RELEASE_TAG}"));
     assert_eq!(
         notes["notes_path"].as_str(),
@@ -240,19 +232,15 @@ fn automation_only_publishes_merged_proposals_after_ci() {
 fn release_package_producers_wait_for_archive_directory_cleanup() {
     let release = flow(".evin/release.flow");
     let tasks = &release["tasks"];
-    let sign_needs = tasks["release-sign"]["needs"].as_sequence().unwrap();
+    let sign_needs = tasks["sign"]["needs"].as_sequence().unwrap();
 
-    for producer in [
-        "release-archives",
-        "release-native-packages",
-        "release-vscode",
-    ] {
+    for producer in ["archives", "native", "vscode"] {
         assert!(
             tasks[producer]["needs"]
                 .as_sequence()
                 .is_some_and(|needs| needs
                     .iter()
-                    .any(|dependency| dependency.as_str() == Some("release:release-stage"))),
+                    .any(|dependency| dependency.as_str() == Some("release:stage"))),
             "{producer} must wait until the archive directory is cleaned"
         );
         assert!(

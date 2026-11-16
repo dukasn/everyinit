@@ -9,7 +9,7 @@ tasks:
     description: "Deploy the verified Everyinit site to a Cloudflare Pages branch"
     cwd: .
     env: [CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, SITE_BRANCH]
-    needs: [everyinit-site:verify]
+    needs: [site:verify]
     steps:
       - run: cd apps/everyinit && corepack npm exec -- wrangler pages deploy dist --project-name everyinit-site --branch "$SITE_BRANCH"
 
@@ -17,7 +17,7 @@ tasks:
     stage: Publish
     description: "Deploy the get.everyinit.dev installer Worker"
     cwd: .
-    needs: [infra:quality:verify]
+    needs: [infra:verify]
     steps:
       - run: corepack npm exec -- wrangler deploy --config infra/get/wrangler.toml
 
@@ -25,7 +25,7 @@ tasks:
     stage: Publish
     description: "Deploy the dl.everyinit.dev R2 mirror Worker"
     cwd: .
-    needs: [infra:quality:verify]
+    needs: [infra:verify]
     steps:
       - run: corepack npm exec -- wrangler deploy --config infra/mirror/wrangler.toml
 

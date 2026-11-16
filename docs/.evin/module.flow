@@ -27,7 +27,7 @@ tasks:
             - actions/70.review-request-action.5160.md
           out: crates/evin/assets/config-catalog.json
 
-  catalog:
+  esh-catalog:
     stage: Docs
     description: "Generate the tracked ESH runtime catalog intentionally"
     needs: [main:build]

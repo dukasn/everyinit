@@ -1,0 +1,42 @@
+#!evin/v1
+namespace:
+  name: pkg
+  description: "Release package build and verification tasks"
+
+tasks:
+  state:
+    stage: Publish
+    description: "Resolve package revisions without changing the checkout"
+    env: [RELEASE_VERSION]
+    steps:
+      - uses: evin/version-bumper@v1
+        with:
+          initial_version: "0.1.0"
+          read_only: true
+          fixed_version: "${env.RELEASE_VERSION}"
+
+  cf:
+    stage: Publish
+    description: "Build only the tar.gz artifacts used by the Cloudflare mirror"
+    needs:
+      - release:ci:tag-verify
+      - evin:pkg:cf
+      - esh:pkg:cf
+
+  cf-verify:
+    stage: Publish
+    description: "Verify the tar.gz artifacts used by the Cloudflare mirror"
+    needs:
+      - release:pkg:cf
+      - evin:pkg:cf-verify
+      - esh:pkg:cf-verify
+
+  verify:
+    stage: Publish
+    description: "Verify all release archives, editor packages, and the Everyinit npm package"
+    needs:
+      - release:pkg
+      - evin:pkg:gh-verify
+      - esh:pkg:gh-verify
+      - vscode:pkg:gh-verify
+      - npm:dist-verify

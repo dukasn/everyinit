@@ -1,6 +1,6 @@
 #!evin/v1
 namespace:
-  name: quality
+  name: infra
   description: "Infrastructure formatting, linting, type checks, and Worker builds"
 
 tasks:
@@ -26,7 +26,7 @@ tasks:
     steps:
       - run: corepack npm exec -- oxlint --config infra/.oxlintrc.json --deny-warnings infra/get/src/index.ts infra/mirror/src/index.ts
 
-  typecheck:
+  check:
     stage: Check
     description: "Check generated Worker types and TypeScript sources"
     cwd: .
@@ -40,7 +40,7 @@ tasks:
     stage: Build
     description: "Build both Cloudflare Workers with Wrangler"
     cwd: .
-    needs: [infra:quality:fmt, infra:quality:lint, infra:quality:typecheck]
+    needs: [infra:fmt, infra:lint, infra:check]
     steps:
       - run: corepack npm exec -- wrangler deploy --dry-run --outdir dist/infra/get --config infra/get/wrangler.toml
       - run: corepack npm exec -- wrangler deploy --dry-run --outdir dist/infra/mirror --config infra/mirror/wrangler.toml
@@ -49,6 +49,6 @@ tasks:
     stage: Check
     description: "Run infrastructure formatting, lint, type, and Worker build checks"
     cwd: .
-    needs: [infra:quality:build]
+    needs: [infra:build]
     steps:
       - run: cargo test --locked -p esh --test release_scripts_tests

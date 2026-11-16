@@ -4,20 +4,20 @@ namespace:
   description: "Prepare and publish signed artifacts to the Cloudflare R2 mirror"
 
 tasks:
-  metadata:
+  meta:
     stage: Publish
     description: "Build and sign both local mirror release manifests"
     cwd: .
     env: [RELEASE_CHANNEL, RELEASE_COMMIT, RELEASE_BASE_URL, RELEASE_TARGET, RELEASE_VERSION, RELEASE_SIGNING_KEY_FILE]
     needs:
-      - evin:package:cloudflare-verify
-      - esh:package:cloudflare-verify
+      - evin:pkg:cf-verify
+      - esh:pkg:cf-verify
     steps:
       - run: cargo run --locked -p esh -- scripts/release/mirror/metadata.esh evin "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/evin/dist/github
       - run: cargo run --locked -p esh -- scripts/release/mirror/metadata.esh esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github
       - run: cargo run --locked -p esh -- scripts/release/mirror/channel-manifest.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror
 
-  metadata-prebuilt:
+  meta-prebuilt:
     stage: Publish
     description: "Sign mirror metadata from verified artifacts downloaded from the build job"
     cwd: .
@@ -27,21 +27,21 @@ tasks:
       - run: cargo run --locked -p esh -- scripts/release/mirror/metadata.esh esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror crates/esh/dist/github
       - run: cargo run --locked -p esh -- scripts/release/mirror/channel-manifest.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" "$RELEASE_TARGET" dist/mirror
 
-  publish-objects:
+  pub-objects:
     stage: Publish
     description: "Publish verified immutable archives and metadata without moving channel pointers"
     cwd: .
     env: [CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, RELEASE_CHANNEL, RELEASE_VERSION]
-    needs: [infra:mirror:metadata-prebuilt]
+    needs: [infra:mirror:meta-prebuilt]
     steps:
       - run: cargo run --locked -p esh -- scripts/release/mirror/publish.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" objects dist/mirror
 
-  publish-pointers:
+  pub-ptrs:
     stage: Publish
     description: "Move the shared channel pointer after GitHub and mirror objects are ready"
     cwd: .
     env: [CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, RELEASE_CHANNEL, RELEASE_VERSION]
-    needs: [release:github-publish-prebuilt]
+    needs: [release:pub:gh-prebuilt]
     steps:
       - run: cargo run --locked -p esh -- scripts/release/mirror/publish.esh "$RELEASE_CHANNEL" "$RELEASE_VERSION" pointers dist/mirror
 
@@ -49,11 +49,11 @@ tasks:
     stage: Publish
     description: "Seed generated channel objects into Wrangler's local R2 storage"
     cwd: .
-    needs: [infra:mirror:metadata]
+    needs: [infra:mirror:meta]
     steps:
       - run: cargo run --locked -p esh -- scripts/release/mirror/seed-local.esh dist/mirror
 
-  publish:
+  pub:
     stage: Publish
     description: "Publish both binaries and move the channel pointer last"
     cwd: .
