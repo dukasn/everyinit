@@ -92,11 +92,19 @@ available.
 
 The `Deploy` GitHub Actions workflow deploys the exact commit after its `CI`
 workflow succeeds. Pushes to `main` publish the production branch; pushes to
-`release` publish a Pages preview. Production deployments also update the
+`release` publish a shared Pages preview. To review the latest shared preview,
+push the changes to `release`, wait for CI and then the `Deploy` workflow to
+finish, and open the URL reported by the Wrangler deploy step in that run's
+logs. Pull requests from the repository's `automation/release` branch into
+`main` also get a PR-specific preview and an updated preview comment; closing
+that PR retires its deployment history. Other pull requests do not get an
+automatic Pages preview. Production deployments also update the
 installer and R2 mirror Workers from `infra/`. Keep deployment credentials
 separate from the tokens used to publish release artifacts to R2: set
 `CLOUDFLARE_DEPLOY_API_TOKEN` in the `release` GitHub environment and
-`CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN` in `unstable`. These should be
+`CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN` in the GitHub `unstable` environment. That
+environment name is only used for the shared Pages preview deployment; it is
+not a binary download channel. These should be
 user-owned Cloudflare API tokens with `User → Memberships → Read` and
 account-scoped `Cloudflare Pages → Edit`; the production token also needs
 `Developer Platform → Workers → Edit` and `Zone → Workers Routes → Edit` for

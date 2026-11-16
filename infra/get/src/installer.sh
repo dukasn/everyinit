@@ -64,7 +64,7 @@ Usage: install.sh --package evin|esh|all [options]
 
 Options:
   --package NAME     Select evin, esh, or all (required)
-  --channel NAME     Select unstable or canary (default: canary)
+  --channel NAME     Select the canary channel (default: canary)
   --version VERSION  Install a specific version from the selected channel
   --prefix DIR       Install under DIR (default: ~/.local)
   --base-url URL     Use another release mirror
@@ -72,7 +72,7 @@ Options:
 
 Examples:
   install.sh --package evin
-  install.sh --package all --channel unstable
+  install.sh --package all --channel canary
 USAGE
 }
 
@@ -234,7 +234,7 @@ validate_config() {
   esac
 
   case "$CHANNEL" in
-    canary|unstable)
+    canary)
       ;;
     *)
       die "unsupported channel: $CHANNEL" 2

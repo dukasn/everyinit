@@ -18,33 +18,16 @@ set -e
 if test "$#" -eq 0; then set -- dist/mirror; fi
 CONFIG="infra/mirror/wrangler.toml"
 COUNT=0
-HAS_ARTIFACTS=false
-HAS_PREVIEW=false
 
 for ROOT; do
   assert [ -d "$ROOT" ] "$ROOT is missing; generate release metadata before seeding local R2"
   for FILE in $(glob "$ROOT/**"); do
     if ! test -f "$FILE"; then continue; fi
     KEY=$(path -r "$FILE" "$ROOT")
-    case "$KEY" in
-      */unstable/*|channels/unstable.json)
-        BUCKET="everyinit-preview-artifacts"
-        HAS_PREVIEW=true
-        ;;
-      *)
-        BUCKET="everyinit-artifacts"
-        HAS_ARTIFACTS=true
-        ;;
-    esac
-    corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE" --local --config "$CONFIG"
+    corepack npm exec -- wrangler r2 object put "everyinit-artifacts/$KEY" --file "$FILE" --local --config "$CONFIG"
     COUNT=$((COUNT + 1))
   done
 done
 
 assert [ "$COUNT" -gt 0 ] "No mirror objects were found; generate release metadata before seeding local R2"
-BUCKETS=""
-if test "$HAS_ARTIFACTS" = true; then BUCKETS="everyinit-artifacts"; fi
-if test "$HAS_PREVIEW" = true; then
-  if test -n "$BUCKETS"; then BUCKETS="$BUCKETS, everyinit-preview-artifacts"; else BUCKETS="everyinit-preview-artifacts"; fi
-fi
-echo "Seeded $COUNT objects into local R2 buckets $BUCKETS"
+echo "Seeded $COUNT objects into local R2 bucket everyinit-artifacts"

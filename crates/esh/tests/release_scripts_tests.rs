@@ -277,9 +277,9 @@ async fn validate_candidate_accepts_the_next_annotated_release_tag() {
 async fn seed_local_mirror_uploads_each_file_to_its_local_bucket() {
     let temp = tempdir().unwrap();
     let mirror = temp.path().join("mirror");
-    fs::create_dir_all(mirror.join("evin/unstable/v1.2.3")).unwrap();
+    fs::create_dir_all(mirror.join("evin/canary/v1.2.3")).unwrap();
     fs::create_dir_all(mirror.join("channels")).unwrap();
-    fs::write(mirror.join("evin/unstable/v1.2.3/release.json"), "release").unwrap();
+    fs::write(mirror.join("evin/canary/v1.2.3/release.json"), "release").unwrap();
     fs::write(mirror.join("channels/canary.json"), "channel").unwrap();
 
     let bin = temp.path().join("bin");
@@ -319,10 +319,10 @@ async fn seed_local_mirror_uploads_each_file_to_its_local_bucket() {
     assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        "Seeded 2 objects into local R2 buckets everyinit-artifacts, everyinit-preview-artifacts\n"
+        "Seeded 2 objects into local R2 bucket everyinit-artifacts\n"
     );
     let uploads = fs::read_to_string(log).unwrap();
-    assert!(uploads.contains("everyinit-preview-artifacts/evin/unstable/v1.2.3/release.json"));
+    assert!(uploads.contains("everyinit-artifacts/evin/canary/v1.2.3/release.json"));
     assert!(uploads.contains("everyinit-artifacts/channels/canary.json"));
     assert!(uploads.contains("--local --config infra/mirror/wrangler.toml"));
 }
@@ -434,7 +434,7 @@ async fn metadata_and_channel_manifest_publish_signed_release_pointers() {
             temp.path(),
             &[
                 binary,
-                "unstable",
+                "canary",
                 "1.2.3",
                 "x86_64-unknown-linux-musl",
                 "mirror",
@@ -452,22 +452,22 @@ async fn metadata_and_channel_manifest_publish_signed_release_pointers() {
     let (code, output, error) = run_script_with_env(
         "mirror/channel-manifest.esh",
         temp.path(),
-        &["unstable", "1.2.3", "x86_64-unknown-linux-musl", "mirror"],
+        &["canary", "1.2.3", "x86_64-unknown-linux-musl", "mirror"],
         &[("RELEASE_COMMIT", commit)],
     )
     .await;
     assert_eq!(code, 0, "{error}");
-    assert!(output.contains("shared unstable channel pointer"));
-    let pointer = fs::read_to_string(temp.path().join("mirror/channels/unstable.json")).unwrap();
+    assert!(output.contains("shared canary channel pointer"));
+    let pointer = fs::read_to_string(temp.path().join("mirror/channels/canary.json")).unwrap();
     assert!(pointer.contains(commit));
-    assert!(pointer.contains("https://dl.everyinit.dev/esh/unstable/v1.2.3/release.json"));
+    assert!(pointer.contains("https://dl.everyinit.dev/esh/canary/v1.2.3/release.json"));
 
     let mut verify_context = ExecutionContext::new();
     verify_context.set_cwd(temp.path()).unwrap();
     assert_eq!(
         engine
             .eval_str(
-                "base64 --decode mirror/evin/unstable/v1.2.3/SHA256SUMS.sig > signature\ncrypto --verify --pubkey infra/get/release-key.pub --sig signature mirror/evin/unstable/v1.2.3/SHA256SUMS",
+                "base64 --decode mirror/evin/canary/v1.2.3/SHA256SUMS.sig > signature\ncrypto --verify --pubkey infra/get/release-key.pub --sig signature mirror/evin/canary/v1.2.3/SHA256SUMS",
                 &mut verify_context,
             )
             .await
@@ -481,7 +481,7 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
     let temp = tempdir().unwrap();
     let mirror = temp.path().join("mirror");
     for binary in ["evin", "esh"] {
-        let directory = mirror.join(format!("{binary}/unstable/v1.2.3"));
+        let directory = mirror.join(format!("{binary}/canary/v1.2.3"));
         fs::create_dir_all(&directory).unwrap();
         fs::write(
             directory.join(format!("{binary}-v1.2.3-x86_64-unknown-linux-musl.tar.gz")),
@@ -493,15 +493,15 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
         fs::write(
             directory.join("release.json"),
             format!(
-                "{{\"name\":\"{binary}\",\"version\":\"1.2.3\",\"channel\":\"unstable\",\"git_commit\":\"0123456789abcdef0123456789abcdef01234567\"}}\n"
+                "{{\"name\":\"{binary}\",\"version\":\"1.2.3\",\"channel\":\"canary\",\"git_commit\":\"0123456789abcdef0123456789abcdef01234567\"}}\n"
             ),
         )
         .unwrap();
     }
     fs::create_dir_all(mirror.join("channels")).unwrap();
     fs::write(
-        mirror.join("channels/unstable.json"),
-        "{\"channel\":\"unstable\",\"version\":\"1.2.3\",\"git_commit\":\"0123456789abcdef0123456789abcdef01234567\",\"binaries\":{\"evin\":{\"version\":\"1.2.3\",\"release_url\":\"https://dl.everyinit.dev/evin/unstable/v1.2.3/release.json\"},\"esh\":{\"version\":\"1.2.3\",\"release_url\":\"https://dl.everyinit.dev/esh/unstable/v1.2.3/release.json\"}}}\n",
+        mirror.join("channels/canary.json"),
+        "{\"channel\":\"canary\",\"version\":\"1.2.3\",\"git_commit\":\"0123456789abcdef0123456789abcdef01234567\",\"binaries\":{\"evin\":{\"version\":\"1.2.3\",\"release_url\":\"https://dl.everyinit.dev/evin/canary/v1.2.3/release.json\"},\"esh\":{\"version\":\"1.2.3\",\"release_url\":\"https://dl.everyinit.dev/esh/canary/v1.2.3/release.json\"}}}\n",
     )
     .unwrap();
 
@@ -531,7 +531,7 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
     ctx.set_env("PUBLISH_LOG", log.to_str().unwrap());
     ctx.set_positional_args(vec![
         "publish.esh".to_string(),
-        "unstable".to_string(),
+        "canary".to_string(),
         "1.2.3".to_string(),
         "objects".to_string(),
         "mirror".to_string(),
@@ -546,10 +546,10 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
     assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
     let uploads = fs::read_to_string(log).unwrap();
     assert_eq!(uploads.lines().count(), 8);
-    assert!(uploads.contains("everyinit-preview-artifacts/evin/unstable/v1.2.3/release.json"));
-    assert!(uploads.contains("everyinit-preview-artifacts/esh/unstable/v1.2.3/SHA256SUMS.sig"));
+    assert!(uploads.contains("everyinit-artifacts/evin/canary/v1.2.3/release.json"));
+    assert!(uploads.contains("everyinit-artifacts/esh/canary/v1.2.3/SHA256SUMS.sig"));
     assert!(uploads.lines().all(|line| line.contains("--remote")));
-    assert!(!uploads.contains("channels/unstable.json"));
+    assert!(!uploads.contains("channels/canary.json"));
 }
 
 #[tokio::test]
@@ -570,7 +570,7 @@ async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
     .unwrap();
     let commit = "0123456789abcdef0123456789abcdef01234567";
     for binary in ["evin", "esh"] {
-        let directory = remote.join(format!("{binary}/unstable/v1.2.3"));
+        let directory = remote.join(format!("{binary}/canary/v1.2.3"));
         fs::create_dir_all(&directory).unwrap();
         let filename = format!("{binary}-v1.2.3-x86_64-unknown-linux-musl.tar.gz");
         let archive = format!("{binary} archive").into_bytes();
@@ -589,7 +589,7 @@ async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
         fs::write(
             directory.join("release.json"),
             format!(
-                "{{\"name\":\"{binary}\",\"version\":\"1.2.3\",\"channel\":\"unstable\",\"git_commit\":\"{commit}\",\"artifacts\":[{{\"filename\":\"{filename}\",\"sha256\":\"{digest}\"}}]}}\n"
+                "{{\"name\":\"{binary}\",\"version\":\"1.2.3\",\"channel\":\"canary\",\"git_commit\":\"{commit}\",\"artifacts\":[{{\"filename\":\"{filename}\",\"sha256\":\"{digest}\"}}]}}\n"
             ),
         )
         .unwrap();
@@ -599,12 +599,12 @@ async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
     let (code, output, error) = run_script_with_env(
         "mirror/verify-candidate.esh",
         temp.path(),
-        &["unstable", "1.2.3", commit],
+        &["canary", "1.2.3", commit],
         &[("RELEASE_BASE_URL", &base_url)],
     )
     .await;
     assert_eq!(code, 0, "{error}");
-    assert!(output.contains("Verified public unstable artifacts"));
+    assert!(output.contains("Verified public canary artifacts"));
     assert!(
         temp.path()
             .join("crates/esh/dist/github/esh-v1.2.3-x86_64-unknown-linux-musl.tar.gz")

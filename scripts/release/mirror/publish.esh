@@ -15,23 +15,14 @@
 
 set -e
 
-assert [ "$#" -ge 3 ] "usage: publish.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
-assert [ "$#" -le 4 ] "usage: publish.esh <unstable|canary> <version> <all|objects|pointers> [mirror-root]"
+assert [ "$#" -ge 3 ] "usage: publish.esh <canary> <version> <all|objects|pointers> [mirror-root]"
+assert [ "$#" -le 4 ] "usage: publish.esh <canary> <version> <all|objects|pointers> [mirror-root]"
 CHANNEL="$1"
 VERSION="$2"
 MODE="$3"
 MIRROR_ROOT="${4:-dist/mirror}"
-case "$CHANNEL" in
-  unstable)
-    BUCKET=everyinit-preview-artifacts
-    ;;
-  canary)
-    BUCKET=everyinit-artifacts
-    ;;
-  *)
-    exit 1
-    ;;
-esac
+assert [ "$CHANNEL" = canary ] "unsupported channel: $CHANNEL"
+BUCKET=everyinit-artifacts
 case "$MODE" in
   all|objects|pointers)
     ;;

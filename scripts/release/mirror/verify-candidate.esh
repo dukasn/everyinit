@@ -15,14 +15,14 @@
 
 set -e
 
-assert [ "$#" -ge 3 ] "usage: verify-candidate.esh <unstable|canary> <version> <commit> [--check-pointer]"
-assert [ "$#" -le 4 ] "usage: verify-candidate.esh <unstable|canary> <version> <commit> [--check-pointer]"
+assert [ "$#" -ge 3 ] "usage: verify-candidate.esh <canary> <version> <commit> [--check-pointer]"
+assert [ "$#" -le 4 ] "usage: verify-candidate.esh <canary> <version> <commit> [--check-pointer]"
 CHANNEL="$1"
 VERSION="$2"
 COMMIT="$3"
 POINTER_FLAG="$4"
 case "$CHANNEL" in
-  unstable|canary)
+  canary)
     ;;
   *)
     exit 1
@@ -31,7 +31,7 @@ esac
 assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "a valid release version is required"
 assert "echo '$COMMIT' | grep -Eq '^[0-9a-f]{40,64}$'" -- "candidate commit is required"
 if test -n "$POINTER_FLAG" && test "$POINTER_FLAG" != --check-pointer; then
-  echo "usage: verify-candidate.esh <unstable|canary> <version> <commit> [--check-pointer]" >&2
+  echo "usage: verify-candidate.esh <canary> <version> <commit> [--check-pointer]" >&2
   exit 1
 fi
 

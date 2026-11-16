@@ -1,4 +1,4 @@
-const CHANNELS = new Set(["canary", "unstable"]);
+const CHANNELS = new Set(["canary"]);
 const VERSION_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const TARGET_PATTERN = /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+$/;
 
@@ -65,11 +65,7 @@ export default {
       return new Response("Not found\n", { status: 404, headers: responseHeaders() });
     }
 
-    const bucket =
-      key.startsWith("channels/unstable.json") || key.includes("/unstable/")
-        ? env.PREVIEWS
-        : env.ARTIFACTS;
-    const object = await bucket.get(key);
+    const object = await env.ARTIFACTS.get(key);
     if (object === null) {
       return new Response("Not found\n", { status: 404, headers: responseHeaders() });
     }

@@ -1,0 +1,215 @@
+name: Site preview
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, closed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build the PR site preview
+    if: >-
+      github.event.pull_request.head.ref == 'automation/release' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: jdx/mise-action@v5
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Verify and build the site
+        run: cargo evin-dev run everyinit-site:verify
+      - name: Upload the built site
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-preview-${{ github.event.pull_request.number }}
+          path: apps/everyinit/dist/
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy the PR site preview
+    if: >-
+      github.event.pull_request.head.ref == 'automation/release' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.action != 'closed'
+    permissions:
+      contents: read
+      pull-requests: write
+    needs: build
+    runs-on: ubuntu-latest
+    environment: unstable
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: jdx/mise-action@v5
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Download the verified site build
+        uses: actions/download-artifact@v4
+        with:
+          name: site-preview-${{ github.event.pull_request.number }}
+          path: apps/everyinit/dist/
+      - name: Deploy to the PR branch alias
+        env:
+          SITE_BRANCH: pr-${{ github.event.pull_request.number }}
+        run: |
+          cd apps/everyinit
+          corepack npm exec -- wrangler pages deploy dist \
+            --project-name everyinit-site \
+            --branch "$SITE_BRANCH" \
+            --commit-hash "$PR_HEAD_SHA" \
+            --commit-message "Website preview for PR #$PR_NUMBER"
+      - name: Update the PR preview comment
+        env:
+          GH_REPO: ${{ github.repository }}
+          PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.everyinit-site.pages.dev
+        run: |
+          marker='<!-- everyinit-site-preview -->'
+          body=$(cat <<EOF
+          $marker
+          ## Everyinit site preview
+
+          Preview for commit `$PR_HEAD_SHA`: $PREVIEW_URL
+
+          This preview updates when the release pull request changes.
+          EOF
+          )
+          comment_id=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.body | contains("<!-- everyinit-site-preview -->")) | .id' | head -n 1)
+          if [ -n "$comment_id" ]; then
+            gh api --method PATCH "repos/$GH_REPO/issues/comments/$comment_id" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
+          fi
+          {
+            echo "## Everyinit site preview"
+            echo
+            echo "[$PREVIEW_URL]($PREVIEW_URL)"
+            echo
+            echo "Built from `$PR_HEAD_SHA`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-current-site:
+    name: Build current main site for preview retirement
+    if: >-
+      github.event.pull_request.head.ref == 'automation/release' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - uses: jdx/mise-action@v5
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Verify and build the current site
+        run: cargo evin-dev run everyinit-site:verify
+      - name: Upload current site build
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-preview-retirement-${{ github.event.pull_request.number }}
+          path: apps/everyinit/dist/
+          if-no-files-found: error
+
+  retire-preview:
+    name: Retire the closed PR site preview
+    if: >-
+      github.event.pull_request.head.ref == 'automation/release' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.action == 'closed'
+    permissions:
+      contents: read
+      pull-requests: write
+    needs: build-current-site
+    runs-on: ubuntu-latest
+    environment: unstable
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Record the main commit used for retirement
+        id: main
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: jdx/mise-action@v5
+      - name: Install locked JavaScript dependencies
+        run: npm ci
+      - name: Download the current site build
+        uses: actions/download-artifact@v4
+        with:
+          name: site-preview-retirement-${{ github.event.pull_request.number }}
+          path: apps/everyinit/dist/
+      - name: Replace the preview alias and delete its old deployments
+        env:
+          SITE_BRANCH: pr-${{ github.event.pull_request.number }}
+          MAIN_SHA: ${{ steps.main.outputs.sha }}
+        run: |
+          cd apps/everyinit
+          corepack npm exec -- wrangler pages deploy dist \
+            --project-name everyinit-site \
+            --branch "$SITE_BRANCH" \
+            --commit-hash "$MAIN_SHA" \
+            --commit-message "Retire preview for closed PR #$PR_NUMBER"
+
+          page=1
+          while :; do
+            response=$(curl --fail --silent --show-error \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/everyinit-site/deployments?env=preview&per_page=100&page=$page")
+            printf '%s' "$response" | jq -e '.success == true' >/dev/null
+            printf '%s' "$response" | jq -r \
+              --arg branch "$SITE_BRANCH" --arg main_sha "$MAIN_SHA" \
+              '.result[] | select(.deployment_trigger.metadata.branch == $branch) | select(.deployment_trigger.metadata.commit_hash != $main_sha) | .id' |
+              while IFS= read -r deployment_id; do
+                [ -n "$deployment_id" ] || continue
+                curl --fail --silent --show-error --request DELETE \
+                  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/everyinit-site/deployments/$deployment_id?force=true" \
+                  | jq -e '.success == true' >/dev/null
+              done
+            total_pages=$(printf '%s' "$response" | jq -r '.result_info.total_pages // 1')
+            [ "$page" -lt "$total_pages" ] || break
+            page=$((page + 1))
+          done
+      - name: Mark the PR preview as retired
+        run: |
+          marker='<!-- everyinit-site-preview -->'
+          comment_id=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
+            --jq '.[] | select(.body | contains("<!-- everyinit-site-preview -->")) | .id' | head -n 1)
+          if [ -n "$comment_id" ]; then
+            body=$(cat <<EOF
+          $marker
+          ## Everyinit site preview
+
+          This preview was retired when the pull request closed. Its deployments were deleted, and the branch alias now serves the current `main` site.
+          EOF
+          )
+            gh api --method PATCH "repos/$GH_REPO/issues/comments/$comment_id" -f body="$body" >/dev/null
+          fi

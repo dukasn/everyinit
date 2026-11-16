@@ -7,10 +7,6 @@ workers_dev = false
 binding = "ARTIFACTS"
 bucket_name = "everyinit-artifacts"
 
-[[r2_buckets]]
-binding = "PREVIEWS"
-bucket_name = "everyinit-preview-artifacts"
-
 [[routes]]
 pattern = "dl.everyinit.dev"
 custom_domain = true

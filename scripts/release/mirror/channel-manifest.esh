@@ -15,14 +15,14 @@
 
 set -e
 
-assert [ "$#" -ge 3 ] "usage: channel-manifest.esh <unstable|canary> <version> <target> [mirror-root]"
-assert [ "$#" -le 4 ] "usage: channel-manifest.esh <unstable|canary> <version> <target> [mirror-root]"
+assert [ "$#" -ge 3 ] "usage: channel-manifest.esh <canary> <version> <target> [mirror-root]"
+assert [ "$#" -le 4 ] "usage: channel-manifest.esh <canary> <version> <target> [mirror-root]"
 CHANNEL="$1"
 VERSION="$2"
 TARGET="$3"
 MIRROR_ROOT="${4:-dist/mirror}"
 case "$CHANNEL" in
-  unstable|canary)
+  canary)
     ;;
   *)
     exit 1

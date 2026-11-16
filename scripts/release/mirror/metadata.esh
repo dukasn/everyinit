@@ -15,8 +15,8 @@
 
 set -e
 
-assert [ "$#" -ge 4 ] "usage: metadata.esh <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root]"
-assert [ "$#" -le 6 ] "usage: metadata.esh <evin|esh> <unstable|canary> <version> <target> [output-root] [archive-root]"
+assert [ "$#" -ge 4 ] "usage: metadata.esh <evin|esh> <canary> <version> <target> [output-root] [archive-root]"
+assert [ "$#" -le 6 ] "usage: metadata.esh <evin|esh> <canary> <version> <target> [output-root] [archive-root]"
 BINARY="$1"
 CHANNEL="$2"
 VERSION="$3"
@@ -32,7 +32,7 @@ case "$BINARY" in
     ;;
 esac
 case "$CHANNEL" in
-  unstable|canary)
+  canary)
     ;;
   *)
     exit 1
