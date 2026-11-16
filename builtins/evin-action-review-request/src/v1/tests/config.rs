@@ -26,20 +26,22 @@ fn decision_table() {
 fn parses_flags() {
     assert_eq!(parse_flag("true"), Ok(true));
     assert_eq!(parse_flag(" False "), Ok(false));
+    let issue = parse_flag("yes").unwrap_err();
+    assert_eq!(issue.key, "review-request-wanted-must-be-boolean");
     assert_eq!(
-        parse_flag("yes").unwrap_err(),
+        evin_locales::render_issue(&issue),
         evin_locales::t!("review-request-wanted-must-be-boolean", value = "yes")
     );
 }
 
 #[test]
 fn invalid_template_syntax_uses_fluent_message() {
-    let error = config(&format!("{BASE}title: '${{version'\n")).unwrap_err();
     let detail = evin_flow::template::pipeline::validate_template_syntax("${version")
         .unwrap_err()
         .to_string();
-    assert_fluent_message(
-        error.message,
+    assert_fluent_config_error(
+        &format!("{BASE}title: '${{version'\n"),
+        "review-request-template-syntax-invalid",
         evin_locales::t!("review-request-template-syntax-invalid", error = detail),
     );
 }
@@ -54,30 +56,25 @@ fn validates_config() {
         ))
         .is_ok()
     );
-    for extra in [
-        "",
-        "title: t\nbody_path: ../x.md",
-        "title: t\nbody_path: /x.md",
-        "title: t\nunknown: 1",
-        "title: t\ncontext:\n  bad-key: v",
-        "title: ' '",
-    ] {
-        assert!(config(&format!("{BASE}{extra}")).is_err(), "{extra}");
-    }
-    assert!(config("branch: b\nbase: main\ntitle: t").is_err());
+    assert!(config(&format!("{BASE}title: t\nunknown: 1")).is_err());
+    assert_fluent_config_error(
+        BASE,
+        "review-request-title-required",
+        evin_locales::t!("review-request-title-required"),
+    );
 }
 
 #[test]
 fn configuration_errors_use_fluent_messages() {
-    let error = config(&format!("{BASE}title: t\ncontext:\n  bad-key: value\n")).unwrap_err();
-    assert_fluent_message(
-        error.message,
+    assert_fluent_config_error(
+        &format!("{BASE}title: t\ncontext:\n  bad-key: value\n"),
+        "review-request-context-key-invalid",
         evin_locales::t!("review-request-context-key-invalid", key = "bad-key"),
     );
 
-    let error = config(&format!("{BASE}title: ' '\n")).unwrap_err();
-    assert_fluent_message(
-        error.message,
+    assert_fluent_config_error(
+        &format!("{BASE}title: ' '\n"),
+        "review-request-field-must-not-be-empty-when-provided",
         evin_locales::t!(
             "review-request-field-must-not-be-empty-when-provided",
             name = "title"
@@ -95,16 +92,16 @@ fn configuration_errors_use_fluent_messages() {
             "commands.find",
         ),
     ] {
-        let error = config(yaml).unwrap_err();
-        assert_fluent_message(
-            error.message,
+        assert_fluent_config_error(
+            yaml,
+            "review-request-field-must-not-be-empty",
             evin_locales::t!("review-request-field-must-not-be-empty", name = field),
         );
     }
 
-    let error = config(&format!("{BASE}body_path: ' '\ntitle: t\n")).unwrap_err();
-    assert_fluent_message(
-        error.message,
+    assert_fluent_config_error(
+        &format!("{BASE}body_path: ' '\ntitle: t\n"),
+        "review-request-field-must-not-be-empty-when-provided",
         evin_locales::t!(
             "review-request-field-must-not-be-empty-when-provided",
             name = "body_path"
@@ -112,18 +109,25 @@ fn configuration_errors_use_fluent_messages() {
     );
 
     for path in ["../x.md", "/x.md"] {
-        let error = config(&format!("{BASE}title: t\nbody_path: {path}\n")).unwrap_err();
-        assert_fluent_message(
-            error.message,
+        assert_fluent_config_error(
+            &format!("{BASE}title: t\nbody_path: {path}\n"),
+            "review-request-body-path-must-stay-in-workspace",
             evin_locales::t!("review-request-body-path-must-stay-in-workspace"),
         );
     }
 }
 
-fn assert_fluent_message(actual: String, expected: String) {
+fn assert_fluent_config_error(yaml: &str, key: &str, expected: String) {
     assert!(
         !expected.starts_with("<missing locale key:"),
         "expected Fluent message to exist: {expected}"
     );
-    assert_eq!(actual, expected);
+    let with = evin_flow::parse_yaml(yaml).expect("valid YAML");
+    let parsed: ReviewRequestConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+    let issue = parsed.validate().unwrap_err();
+    assert_eq!(issue.key, key, "{yaml}");
+    assert_eq!(evin_locales::render_issue(&issue), expected, "{yaml}");
+
+    let error = ReviewRequestConfig::from_with(Some(with)).unwrap_err();
+    assert_eq!(error.message, expected, "{yaml}");
 }

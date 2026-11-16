@@ -121,22 +121,22 @@ pub async fn execute(
         let architecture = config.architecture.expect("validated architecture");
         match format {
             PackageFormat::Deb if package.targets.deb.is_none() => {
-                return Err(diagnostic(evin_locales::t!(
-                    "archive-package-target-missing",
-                    format = "deb"
-                )));
+                return Err(diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-package-target-missing")
+                        .arg("format", "deb"),
+                ));
             }
             PackageFormat::Apk if package.targets.apk.is_none() => {
-                return Err(diagnostic(evin_locales::t!(
-                    "archive-package-target-missing",
-                    format = "apk"
-                )));
+                return Err(diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-package-target-missing")
+                        .arg("format", "apk"),
+                ));
             }
             PackageFormat::Arch if package.targets.arch.is_none() => {
-                return Err(diagnostic(evin_locales::t!(
-                    "archive-package-target-missing",
-                    format = "arch"
-                )));
+                return Err(diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-package-target-missing")
+                        .arg("format", "arch"),
+                ));
             }
             _ => {}
         }
@@ -144,16 +144,16 @@ pub async fn execute(
             config.release.as_deref().expect("validated release"),
         )
         .map_err(|error| {
-            diagnostic(evin_locales::t!(
-                "archive-release-output-invalid",
-                error = error.to_string()
-            ))
+            diagnostic(
+                evin_diagnostic::IssueCode::new("archive-release-output-invalid")
+                    .arg("error", error.to_string()),
+            )
         })?;
         if artifact.schema != 1 {
-            return Err(diagnostic(evin_locales::t!(
-                "archive-release-schema-unsupported",
-                schema = artifact.schema
-            )));
+            return Err(diagnostic(
+                evin_diagnostic::IssueCode::new("archive-release-schema-unsupported")
+                    .arg("schema", artifact.schema),
+            ));
         }
         let target_name = format.as_str();
         let release_state = artifact
@@ -161,15 +161,15 @@ pub async fn execute(
             .get(&package.name)
             .and_then(|package| package.revisions.get(target_name))
             .ok_or_else(|| {
-                diagnostic(evin_locales::t!(
-                    "archive-release-revision-missing",
-                    target = target_name,
-                    package = package.name.as_str()
-                ))
+                diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-release-revision-missing")
+                        .arg("target", target_name)
+                        .arg("package", package.name.as_str()),
+                )
             })?;
         if release_state.revision == 0 || release_state.version.trim().is_empty() {
-            return Err(diagnostic(evin_locales::t!(
-                "archive-release-version-revision-invalid"
+            return Err(diagnostic(evin_diagnostic::IssueCode::new(
+                "archive-release-version-revision-invalid",
             )));
         }
         let revision = release_state.revision;
@@ -298,11 +298,11 @@ pub async fn execute(
         )
     })
     .await
-    .map_err(|e| {
-        evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(evin_locales::t!(
-            "archive-blocking-task-failed",
-            error = e.to_string()
-        )))
+    .map_err(|error| {
+        evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("archive-blocking-task-failed")
+                .arg("error", error.to_string()),
+        )
     })??;
 
     ctx.state.set_output("path", archive_path);
@@ -365,32 +365,32 @@ fn validate_format_keys(
         ],
     };
     if let Some(key) = forbidden.iter().find(|key| keys.contains(**key)) {
-        return Err(diagnostic(evin_locales::t!(
-            "archive-field-invalid-for-format",
-            field = *key,
-            format = format.as_str()
-        )));
+        return Err(diagnostic(
+            evin_diagnostic::IssueCode::new("archive-field-invalid-for-format")
+                .arg("field", *key)
+                .arg("format", format.as_str()),
+        ));
     }
     Ok(())
 }
 
-fn diagnostic(message: impl Into<String>) -> evin_diagnostic::Diagnostic {
-    evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(message.into()))
+fn diagnostic(code: evin_diagnostic::IssueCode) -> evin_diagnostic::Diagnostic {
+    evin_locales::diagnostic(code)
 }
 
 async fn resolve_epoch(ctx: &RunnerContext) -> Result<u64, evin_diagnostic::Diagnostic> {
     match ctx.env.get("SOURCE_DATE_EPOCH") {
         Some(value) => packaging::parse_source_date_epoch(value).map_err(|error| {
-            diagnostic(evin_locales::t!(
-                "archive-source-date-epoch-invalid",
-                error = error.to_string()
-            ))
+            diagnostic(
+                evin_diagnostic::IssueCode::new("archive-source-date-epoch-invalid")
+                    .arg("error", error.to_string()),
+            )
         }),
         None => ctx.git.head_commit_epoch().await.map_err(|error| {
-            diagnostic(evin_locales::t!(
-                "archive-source-date-epoch-unavailable",
-                error = error.to_string()
-            ))
+            diagnostic(
+                evin_diagnostic::IssueCode::new("archive-source-date-epoch-unavailable")
+                    .arg("error", error.to_string()),
+            )
         }),
     }
 }

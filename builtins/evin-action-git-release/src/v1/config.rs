@@ -70,71 +70,65 @@ impl GitReleaseConfig {
         with: Option<evin_flow::SpannedValue>,
     ) -> Result<Self, evin_flow::ConfigError> {
         let config: Self = evin_action_sdk::parse_config(with.as_ref())?;
-        config
-            .validate()
-            .map_err(|message| evin_flow::ConfigError {
-                message,
-                span: None,
-            })?;
+        config.validate().map_err(|issue| evin_flow::ConfigError {
+            message: evin_locales::render_issue(&issue),
+            span: None,
+        })?;
         Ok(config)
     }
 
-    pub(super) fn validate(&self) -> Result<(), String> {
+    pub(super) fn validate(&self) -> Result<(), evin_diagnostic::IssueCode> {
         if let Some(msg) = &self.message {
             validate_template_syntax(msg).map_err(|error| {
-                evin_locales::t!(
-                    "git-release-template-syntax-invalid",
-                    error = error.to_string()
-                )
+                evin_diagnostic::IssueCode::new("git-release-template-syntax-invalid")
+                    .arg("error", error.to_string())
             })?;
             if msg.trim().is_empty() {
-                return Err(evin_locales::t!("message-must-not-be-empty"));
+                return Err(evin_diagnostic::IssueCode::new("message-must-not-be-empty"));
             }
         }
         if let Some(tag) = &self.tag {
             if tag.trim().is_empty() {
-                return Err(evin_locales::t!("tag-must-not-be-empty-when-provided"));
+                return Err(evin_diagnostic::IssueCode::new(
+                    "tag-must-not-be-empty-when-provided",
+                ));
             }
             validate_template_syntax(tag).map_err(|error| {
-                evin_locales::t!(
-                    "git-release-template-syntax-invalid",
-                    error = error.to_string()
-                )
+                evin_diagnostic::IssueCode::new("git-release-template-syntax-invalid")
+                    .arg("error", error.to_string())
             })?;
         }
         if let Enabled::Text(text) = &self.enabled {
             validate_template_syntax(text).map_err(|error| {
-                evin_locales::t!(
-                    "git-release-template-syntax-invalid",
-                    error = error.to_string()
-                )
+                evin_diagnostic::IssueCode::new("git-release-template-syntax-invalid")
+                    .arg("error", error.to_string())
             })?;
         }
         if let Some(push) = &self.push {
             if push.remote.trim().is_empty() {
-                return Err(evin_locales::t!(
-                    "git-release-push-remote-must-not-be-empty"
+                return Err(evin_diagnostic::IssueCode::new(
+                    "git-release-push-remote-must-not-be-empty",
                 ));
             }
             if push.branch.as_deref().is_some_and(|b| b.trim().is_empty()) {
-                return Err(evin_locales::t!(
-                    "git-release-push-branch-must-not-be-empty"
+                return Err(evin_diagnostic::IssueCode::new(
+                    "git-release-push-branch-must-not-be-empty",
                 ));
             }
             if push.prune_stale_tags {
                 if self.tag.is_none() {
-                    return Err(evin_locales::t!(
-                        "git-release-prune-stale-tags-requires-tag"
+                    return Err(evin_diagnostic::IssueCode::new(
+                        "git-release-prune-stale-tags-requires-tag",
                     ));
                 }
                 if push.base.as_deref().is_none_or(|b| b.trim().is_empty()) {
-                    return Err(evin_locales::t!(
-                        "git-release-prune-stale-tags-requires-base"
+                    return Err(evin_diagnostic::IssueCode::new(
+                        "git-release-prune-stale-tags-requires-base",
                     ));
                 }
             } else if push.base.is_some() {
-                return Err(evin_locales::t!(
-                    "git-release-push-base-requires-prune-stale-tags"
+                return Err(evin_diagnostic::IssueCode::new(
+                    "git-release-push-base-requires-prune-stale-tags",
                 ));
             }
         }

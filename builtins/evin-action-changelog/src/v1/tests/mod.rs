@@ -192,6 +192,7 @@ async fn export_rejects_missing_empty_duplicate_and_same_path() {
         let with = evin_flow::parse_yaml("section: v1.0.1\nnotes_path: notes.md\n").unwrap();
         let error = execute(&ctx, Some(with)).await.unwrap_err();
         if changelog == "## [v1.0.0]\n- older\n" {
+            assert_eq!(error.code.key, "changelog-section-missing");
             let expected = evin_locales::t!("changelog-section-missing", section = "v1.0.1");
             assert!(!expected.starts_with("<missing locale key:"));
             assert_eq!(evin_locales::render_issue(&error.code), expected);
@@ -200,7 +201,12 @@ async fn export_rejects_missing_empty_duplicate_and_same_path() {
     }
     std::fs::write(&path, "## [v1.0.1]\n- keep\n").unwrap();
     let with = evin_flow::parse_yaml("section: v1.0.1\nnotes_path: ./CHANGELOG.md\n").unwrap();
-    assert!(execute(&ctx, Some(with)).await.is_err());
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "changelog-section-paths-must-differ");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("changelog-section-paths-must-differ")
+    );
     assert_eq!(
         std::fs::read_to_string(path).unwrap(),
         "## [v1.0.1]\n- keep\n"

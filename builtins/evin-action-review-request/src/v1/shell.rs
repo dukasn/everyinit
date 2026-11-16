@@ -21,7 +21,7 @@ pub(super) async fn execute_command(
     script: &str,
     env: &HashMap<String, String>,
     show_stdout: bool,
-) -> Result<String, String> {
+) -> Result<String, evin_diagnostic::IssueCode> {
     let mut esh_ctx = match &ctx.cancel_token {
         Some(token) => esh::ExecutionContext::new().with_token(token.clone()),
         None => esh::ExecutionContext::new(),
@@ -46,11 +46,11 @@ pub(super) async fn execute_command(
         Err(_) => 2,
     };
     if code != 0 {
-        return Err(evin_locales::t!(
-            "review-request-command-failed",
-            status = code,
-            command = script.lines().next().unwrap_or(script)
-        ));
+        return Err(
+            evin_diagnostic::IssueCode::new("review-request-command-failed")
+                .arg("status", code)
+                .arg("command", script.lines().next().unwrap_or(script)),
+        );
     }
     Ok(stdout)
 }

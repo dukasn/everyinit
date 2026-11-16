@@ -61,12 +61,14 @@ pub(super) fn resolve_package_payloads(
     let root = ctx.fs.task_cwd();
     for mapping in &package.payload {
         if mapping.source.trim().is_empty() || mapping.strip_prefix.trim().is_empty() {
-            return Err(diagnostic(evin_locales::t!(
-                "archive-payload-source-prefix-required"
+            return Err(diagnostic(evin_diagnostic::IssueCode::new(
+                "archive-payload-source-prefix-required",
             )));
         }
         if mapping.mode.is_some_and(|mode| mode > 0o777) {
-            return Err(diagnostic(evin_locales::t!("archive-payload-mode-invalid")));
+            return Err(diagnostic(evin_diagnostic::IssueCode::new(
+                "archive-payload-mode-invalid",
+            )));
         }
         let strip = packaging::safe_relative_path(&mapping.strip_prefix)
             .map_err(evin_diagnostic::Diagnostic::from)?;
@@ -77,19 +79,19 @@ pub(super) fn resolve_package_payloads(
             .fs
             .matching_files_from(root, &mapping.source)
             .map_err(|error| {
-                diagnostic(evin_locales::t!(
-                    "archive-payload-source-discovery-failed",
-                    source = mapping.source.as_str(),
-                    error = error.to_string()
-                ))
+                diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-payload-source-discovery-failed")
+                        .arg("source", mapping.source.as_str())
+                        .arg("error", error.to_string()),
+                )
             })?
         {
             let relative = source_path.strip_prefix(&strip).map_err(|_| {
-                diagnostic(evin_locales::t!(
-                    "archive-payload-outside-strip-prefix",
-                    source = source_path.display().to_string(),
-                    prefix = strip.display().to_string()
-                ))
+                diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-payload-outside-strip-prefix")
+                        .arg("source", source_path.display())
+                        .arg("prefix", strip.display()),
+                )
             })?;
             let destination = format!(
                 "{destination}/{}",
@@ -108,10 +110,10 @@ pub(super) fn resolve_package_payloads(
                 )
                 .is_some()
             {
-                return Err(diagnostic(evin_locales::t!(
-                    "archive-payload-collision",
-                    destination = destination
-                )));
+                return Err(diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-payload-collision")
+                        .arg("destination", destination),
+                ));
             }
         }
     }
@@ -172,10 +174,10 @@ pub(super) fn load_scripts(
             let path =
                 packaging::safe_relative_path(path).map_err(evin_diagnostic::Diagnostic::from)?;
             let bytes = std::fs::read(ctx.fs.task_cwd().join(path)).map_err(|error| {
-                diagnostic(evin_locales::t!(
-                    "archive-package-script-read-failed",
-                    error = error.to_string()
-                ))
+                diagnostic(
+                    evin_diagnostic::IssueCode::new("archive-package-script-read-failed")
+                        .arg("error", error.to_string()),
+                )
             })?;
             Ok((name.to_string(), bytes))
         })
@@ -318,7 +320,9 @@ pub(super) fn validate_package(
             || character == '_'
             || character == '.'
     }) {
-        return Err(diagnostic(evin_locales::t!("archive-package-name-invalid")));
+        return Err(diagnostic(evin_diagnostic::IssueCode::new(
+            "archive-package-name-invalid",
+        )));
     }
     if let Some(target) = &package.targets.arch {
         for (field, values) in [
@@ -374,10 +378,9 @@ pub(super) fn validate_package(
 
 fn validate_metadata_string(field: &str, value: &str) -> Result<(), evin_diagnostic::Diagnostic> {
     if value.trim().is_empty() || value.contains(['\n', '\r', '\0']) {
-        return Err(diagnostic(evin_locales::t!(
-            "archive-package-metadata-invalid",
-            field = field
-        )));
+        return Err(diagnostic(
+            evin_diagnostic::IssueCode::new("archive-package-metadata-invalid").arg("field", field),
+        ));
     }
     Ok(())
 }
@@ -386,17 +389,17 @@ fn validate_relations(field: &str, values: &[String]) -> Result<(), evin_diagnos
     let mut seen = std::collections::BTreeSet::new();
     for value in values {
         if value.trim().is_empty() || value.contains(['\n', '\r', '\0']) {
-            return Err(diagnostic(evin_locales::t!(
-                "archive-package-relation-invalid",
-                field = field
-            )));
+            return Err(diagnostic(
+                evin_diagnostic::IssueCode::new("archive-package-relation-invalid")
+                    .arg("field", field),
+            ));
         }
         if !seen.insert(value) {
-            return Err(diagnostic(evin_locales::t!(
-                "archive-package-relation-duplicate",
-                field = field,
-                value = value
-            )));
+            return Err(diagnostic(
+                evin_diagnostic::IssueCode::new("archive-package-relation-duplicate")
+                    .arg("field", field)
+                    .arg("value", value),
+            ));
         }
     }
     Ok(())
@@ -404,8 +407,8 @@ fn validate_relations(field: &str, values: &[String]) -> Result<(), evin_diagnos
 
 fn validate_script_path(path: &str) -> Result<(), evin_diagnostic::Diagnostic> {
     if path.trim().is_empty() {
-        return Err(diagnostic(evin_locales::t!(
-            "archive-package-script-path-empty"
+        return Err(diagnostic(evin_diagnostic::IssueCode::new(
+            "archive-package-script-path-empty",
         )));
     }
     packaging::safe_relative_path(path).map_err(evin_diagnostic::Diagnostic::from)?;

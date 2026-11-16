@@ -746,15 +746,21 @@ mod tests {
         };
         let audit = LinkValidator::validate(&site);
         assert_eq!(audit.diagnostics.len(), 1);
-        assert!(
-            audit.diagnostics[0]
-                .title
-                .contains("registered local asset")
+        assert_eq!(
+            audit.diagnostics[0].title,
+            evin_locales::t!(
+                "docs-invalid-media",
+                label = "source",
+                slug = "guide",
+                requirement = "use a registered local asset or an absolute HTTPS URL"
+            )
         );
     }
 
     #[test]
     fn test_diagram_validator_detects_box_width_mismatch() {
+        use unicode_width::UnicodeWidthStr;
+
         let bad_code = "\
 +-------------------------------+
 |             Box A             |
@@ -770,7 +776,20 @@ mod tests {
         );
 
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].title.contains("column width mismatch"));
+        let expected_width = UnicodeWidthStr::width("+-------------------------------+");
+        let actual_width = UnicodeWidthStr::width("|  Too long content line inside  |");
+        assert_eq!(
+            diagnostics[0].title,
+            evin_locales::t!(
+                "docs-svgbob-box-width-mismatch",
+                diagram = "Mismatch Test",
+                source = "guide.rst",
+                line = 3,
+                expected = expected_width,
+                actual = actual_width,
+                box_start_line = 1
+            )
+        );
     }
 
     #[test]
@@ -789,7 +808,15 @@ mod tests {
         );
 
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].title.contains("Unpaired double quote"));
+        assert_eq!(
+            diagnostics[0].title,
+            evin_locales::t!(
+                "docs-svgbob-unpaired-quote",
+                line = 2,
+                diagram = "Quote Test",
+                source = "guide.rst"
+            )
+        );
     }
 
     #[test]

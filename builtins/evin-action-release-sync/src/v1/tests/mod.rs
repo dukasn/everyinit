@@ -16,20 +16,74 @@ mod adapters;
 mod config;
 
 #[test]
-fn unsupported_remote_state_version_uses_fluent_diagnostic() {
-    let diagnostic = super::protocol_error_diagnostic(
-        evin_release_sync::ProtocolError::UnsupportedSchemaVersion(2),
-    );
-    assert_eq!(
-        diagnostic.code.key,
-        "release-sync-schema-version-unsupported"
-    );
-    assert_eq!(
-        evin_locales::render_issue(&diagnostic.code),
-        evin_locales::t!("release-sync-schema-version-unsupported", version = "2")
-    );
-    assert_eq!(
-        diagnostic.title,
-        evin_locales::t!("release-sync-schema-version-unsupported-title")
-    );
+fn protocol_errors_keep_fluent_issue_keys_and_messages() {
+    let cases = [
+        (
+            evin_release_sync::ProtocolError::UnsupportedSchemaVersion(2),
+            "release-sync-schema-version-unsupported",
+            evin_locales::t!("release-sync-schema-version-unsupported", version = "2"),
+            evin_locales::t!("release-sync-schema-version-unsupported-title"),
+        ),
+        (
+            evin_release_sync::ProtocolError::SchemaValidation("bad schema".into()),
+            "release-sync-schema-validation-failed",
+            evin_locales::t!(
+                "release-sync-schema-validation-failed",
+                error = "bad schema"
+            ),
+            evin_locales::t!("release-sync-schema-validation-failed-title"),
+        ),
+        (
+            evin_release_sync::ProtocolError::StateIngestion("bad state".into()),
+            "release-sync-state-ingestion-failed",
+            evin_locales::t!("release-sync-state-ingestion-failed", error = "bad state"),
+            evin_locales::t!("release-sync-state-ingestion-failed-title"),
+        ),
+        (
+            evin_release_sync::ProtocolError::GitInspection("git failed".into()),
+            "release-sync-git-inspection-failed",
+            evin_locales::t!("release-sync-git-inspection-failed", error = "git failed"),
+            evin_locales::t!("release-sync-git-inspection-failed-title"),
+        ),
+        (
+            evin_release_sync::ProtocolError::NotesExtraction("notes failed".into()),
+            "release-sync-notes-extraction-failed",
+            evin_locales::t!(
+                "release-sync-notes-extraction-failed",
+                error = "notes failed"
+            ),
+            evin_locales::t!("release-sync-notes-extraction-failed-title"),
+        ),
+        (
+            evin_release_sync::ProtocolError::ArtifactInspection("artifact failed".into()),
+            "release-sync-artifact-inspection-failed",
+            evin_locales::t!(
+                "release-sync-artifact-inspection-failed",
+                error = "artifact failed"
+            ),
+            evin_locales::t!("release-sync-artifact-inspection-failed-title"),
+        ),
+        (
+            evin_release_sync::ProtocolError::PlanWrite("plan failed".into()),
+            "release-sync-plan-operation-failed",
+            evin_locales::t!("release-sync-plan-operation-failed", error = "plan failed"),
+            evin_locales::t!("release-sync-plan-operation-failed-title"),
+        ),
+        (
+            evin_release_sync::ProtocolError::Io(std::io::Error::other("disk failed")),
+            "release-sync-io-failed",
+            evin_locales::t!("release-sync-io-failed", error = "disk failed"),
+            evin_locales::t!("release-sync-io-failed-title"),
+        ),
+    ];
+
+    for (error, key, expected_message, expected_title) in cases {
+        let diagnostic = super::protocol_error_diagnostic(error);
+        assert_eq!(diagnostic.code.key, key);
+        assert_eq!(
+            evin_locales::render_issue(&diagnostic.code),
+            expected_message
+        );
+        assert_eq!(diagnostic.title, expected_title);
+    }
 }

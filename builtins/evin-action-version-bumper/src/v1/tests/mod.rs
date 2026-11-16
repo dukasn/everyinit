@@ -61,6 +61,71 @@ fn context(root: &Path) -> RunnerContext {
     )
 }
 
+#[tokio::test]
+async fn workspace_name_channel_variable_errors_use_fluent_messages() {
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = context(temp.path());
+
+    let failure = resolve_channel_var("workspace.name", &ctx)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        failure.message.key,
+        "version-bumper-workspace-name-resolution-failed"
+    );
+    assert_eq!(
+        evin_locales::render_issue(&failure.message),
+        evin_locales::t!("version-bumper-workspace-name-resolution-failed")
+    );
+    let hint = failure.hint.as_ref().unwrap();
+    assert_eq!(hint.key, "version-bumper-workspace-name-requirement");
+    assert_eq!(
+        evin_locales::render_issue(hint),
+        evin_locales::t!("version-bumper-workspace-name-requirement")
+    );
+
+    let failure = resolve_channel_var("not.a.real.variable", &ctx)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        failure.message.key,
+        "version-bumper-channel-variable-unknown"
+    );
+    assert_eq!(
+        evin_locales::render_issue(&failure.message),
+        evin_locales::t!(
+            "version-bumper-channel-variable-unknown",
+            name = "not.a.real.variable"
+        )
+    );
+    assert!(failure.hint.is_none());
+    assert_eq!(
+        evin_locales::t!("version-bumper-channel-variable-location-hint"),
+        "missing variable here"
+    );
+}
+
+#[tokio::test]
+async fn undefined_channel_errors_use_fluent_diagnostic() {
+    let temp = tempfile::tempdir().unwrap();
+    init_repo(temp.path());
+    std::fs::write(temp.path().join("version.txt"), "0.1.0\n").unwrap();
+    git(temp.path(), &["add", "version.txt"]);
+    git(temp.path(), &["commit", "-m", "feat: initialize project"]);
+    let ctx = context(temp.path());
+    let config = evin_flow::parse_yaml("channel: unknown-channel\n").unwrap();
+
+    let error = execute(&ctx, Some(config)).await.unwrap_err();
+    assert_eq!(error.code.key, "version-bumper-channel-undefined");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!(
+            "version-bumper-channel-undefined",
+            channel = "unknown-channel"
+        )
+    );
+}
+
 fn init_repo(root: &Path) {
     for args in [
         &["init", "-q"][..],

@@ -96,8 +96,12 @@ impl VersionBumperConfig {
     }
 
     pub(super) fn validate(&self) -> Result<(), evin_diagnostic::Diagnostic> {
-        Version::parse(&self.initial_version)
-            .map_err(|e| evin_locales::t!("initial-version-invalid", error = e.to_string()))?;
+        Version::parse(&self.initial_version).map_err(|error| {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("initial-version-invalid")
+                    .arg("error", error.to_string()),
+            )
+        })?;
         if self.stable && self.prerelease.is_some() {
             return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
                 "stable-and-prerelease-conflict",
@@ -119,8 +123,12 @@ impl VersionBumperConfig {
                     "prerelease-must-not-be-empty",
                 )));
             }
-            Prerelease::new(&format!("{prerelease}.1"))
-                .map_err(|e| evin_locales::t!("prerelease-invalid", error = e.to_string()))?;
+            Prerelease::new(&format!("{prerelease}.1")).map_err(|error| {
+                evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("prerelease-invalid")
+                        .arg("error", error.to_string()),
+                )
+            })?;
         }
         if self.git.tag && !self.git.commit {
             return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
@@ -128,7 +136,9 @@ impl VersionBumperConfig {
             )));
         }
         if self.git.defer && (!self.git.commit || !self.git.tag) {
-            return Err(evin_locales::t!("git-defer-requires-commit-and-tag").into());
+            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+                "git-defer-requires-commit-and-tag",
+            )));
         }
         if self.read_only
             && (!self.files.is_empty()
@@ -137,16 +147,23 @@ impl VersionBumperConfig {
                 || self.git.defer
                 || !self.git.include.is_empty())
         {
-            return Err(evin_locales::t!("read-only-conflicts-with-mutations").into());
+            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+                "read-only-conflicts-with-mutations",
+            )));
         }
         if let Some(version) = &self.fixed_version {
             if !version.contains("${") {
                 Version::parse(version).map_err(|error| {
-                    evin_locales::t!("fixed-version-invalid", error = error.to_string())
+                    evin_locales::diagnostic(
+                        evin_diagnostic::IssueCode::new("fixed-version-invalid")
+                            .arg("error", error.to_string()),
+                    )
                 })?;
             }
             if !self.read_only {
-                return Err(evin_locales::t!("fixed-version-requires-read-only").into());
+                return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+                    "fixed-version-requires-read-only",
+                )));
             }
         }
         if let Some(msg) = &self.git.message {
@@ -235,7 +252,10 @@ fn validate_file(file: &FileConfig) -> Result<(), evin_diagnostic::Diagnostic> {
                 )));
             }
             manifest_kind(path).ok_or_else(|| {
-                evin_locales::t!("automatic-version-detection-unsupported", path = path)
+                evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("automatic-version-detection-unsupported")
+                        .arg("path", path),
+                )
             })?;
         }
         FileConfig::Custom(config) => {
@@ -260,7 +280,10 @@ fn validate_file(file: &FileConfig) -> Result<(), evin_diagnostic::Diagnostic> {
                 .match_pattern
                 .replace("${previous_version}", &regex::escape("0.0.0"));
             Regex::new(&pattern).map_err(|e| {
-                evin_locales::t!("custom-file-match-invalid", error = e.to_string())
+                evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("custom-file-match-invalid")
+                        .arg("error", e.to_string()),
+                )
             })?;
         }
     }

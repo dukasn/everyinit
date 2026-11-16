@@ -49,9 +49,7 @@ pub async fn execute(
     let config: GitReleaseConfig = ctx.load_config(with.as_ref()).map_err(|error| {
         error.into_diagnostic(evin_locales::t!("git-release-invalid-config-title"), None)
     })?;
-    config
-        .validate()
-        .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e)))?;
+    config.validate().map_err(evin_locales::diagnostic)?;
 
     let enabled = match &config.enabled {
         Enabled::Flag(flag) => *flag,
@@ -63,11 +61,10 @@ pub async fn execute(
                 "true" => true,
                 "false" => false,
                 other => {
-                    return Err(evin_locales::t!(
-                        "git-release-enabled-must-be-boolean",
-                        value = other
-                    )
-                    .into());
+                    return Err(evin_locales::diagnostic(
+                        evin_diagnostic::IssueCode::new("git-release-enabled-must-be-boolean")
+                            .arg("value", other),
+                    ));
                 }
             }
         }

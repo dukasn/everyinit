@@ -126,9 +126,10 @@ fn macro_calls(source: &str) -> Vec<(String, String)> {
 }
 
 fn issue_code_keys(source: &str) -> Vec<String> {
-    let issue_code =
-        Regex::new(r#"evin_locales::diagnostic\(\s*evin_diagnostic::IssueCode::new\(\s*"([^"]+)""#)
-            .unwrap();
+    let issue_code = Regex::new(
+        r#"(?:evin_locales::)?diagnostic\(\s*(?:evin_diagnostic::)?IssueCode::new\(\s*"([^"]+)""#,
+    )
+    .unwrap();
     issue_code
         .captures_iter(source)
         .map(|capture| capture[1].to_string())

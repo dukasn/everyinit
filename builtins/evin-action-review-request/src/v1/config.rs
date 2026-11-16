@@ -57,16 +57,14 @@ impl ReviewRequestConfig {
         with: Option<evin_flow::SpannedValue>,
     ) -> Result<Self, evin_flow::ConfigError> {
         let config: Self = evin_action_sdk::parse_config(with.as_ref())?;
-        config
-            .validate()
-            .map_err(|message| evin_flow::ConfigError {
-                message,
-                span: None,
-            })?;
+        config.validate().map_err(|issue| evin_flow::ConfigError {
+            message: evin_locales::render_issue(&issue),
+            span: None,
+        })?;
         Ok(config)
     }
 
-    pub(super) fn validate(&self) -> Result<(), String> {
+    pub(super) fn validate(&self) -> Result<(), evin_diagnostic::IssueCode> {
         let required = [
             ("branch", &self.branch),
             ("base", &self.base),
@@ -74,10 +72,10 @@ impl ReviewRequestConfig {
         ];
         for (name, value) in required {
             if value.trim().is_empty() {
-                return Err(evin_locales::t!(
+                return Err(evin_diagnostic::IssueCode::new(
                     "review-request-field-must-not-be-empty",
-                    name = name
-                ));
+                )
+                .arg("name", name));
             }
         }
         let optional = [
@@ -89,10 +87,10 @@ impl ReviewRequestConfig {
         ];
         for (name, value) in optional {
             if value.is_some_and(|v| v.trim().is_empty()) {
-                return Err(evin_locales::t!(
+                return Err(evin_diagnostic::IssueCode::new(
                     "review-request-field-must-not-be-empty-when-provided",
-                    name = name
-                ));
+                )
+                .arg("name", name));
             }
         }
         // Wanted can only be checked up front when it is a literal.
@@ -100,16 +98,16 @@ impl ReviewRequestConfig {
             Wanted::Flag(flag) => Some(*flag),
             Wanted::Text(text) => {
                 validate_template_syntax(text).map_err(|error| {
-                    evin_locales::t!(
-                        "review-request-template-syntax-invalid",
-                        error = error.to_string()
-                    )
+                    evin_diagnostic::IssueCode::new("review-request-template-syntax-invalid")
+                        .arg("error", error.to_string())
                 })?;
                 parse_flag(text).ok()
             }
         };
         if wanted_literal != Some(false) && self.title.is_none() {
-            return Err(evin_locales::t!("review-request-title-required"));
+            return Err(evin_diagnostic::IssueCode::new(
+                "review-request-title-required",
+            ));
         }
         for template in [Some(&self.branch), Some(&self.base), self.title.as_ref()]
             .into_iter()
@@ -118,38 +116,36 @@ impl ReviewRequestConfig {
             .chain(self.context.values())
         {
             validate_template_syntax(template).map_err(|error| {
-                evin_locales::t!(
-                    "review-request-template-syntax-invalid",
-                    error = error.to_string()
-                )
+                evin_diagnostic::IssueCode::new("review-request-template-syntax-invalid")
+                    .arg("error", error.to_string())
             })?;
         }
         if let Some(path) = &self.body_path
             && (path.starts_with('/') || path.split(['/', '\\']).any(|part| part == ".."))
         {
-            return Err(evin_locales::t!(
-                "review-request-body-path-must-stay-in-workspace"
+            return Err(evin_diagnostic::IssueCode::new(
+                "review-request-body-path-must-stay-in-workspace",
             ));
         }
         for key in self.context.keys() {
             if key.is_empty() || !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
-                return Err(evin_locales::t!(
-                    "review-request-context-key-invalid",
-                    key = key
-                ));
+                return Err(
+                    evin_diagnostic::IssueCode::new("review-request-context-key-invalid")
+                        .arg("key", key),
+                );
             }
         }
         Ok(())
     }
 }
 
-pub(super) fn parse_flag(text: &str) -> Result<bool, String> {
+pub(super) fn parse_flag(text: &str) -> Result<bool, evin_diagnostic::IssueCode> {
     match text.trim().to_ascii_lowercase().as_str() {
         "true" => Ok(true),
         "false" => Ok(false),
-        other => Err(evin_locales::t!(
-            "review-request-wanted-must-be-boolean",
-            value = other
-        )),
+        other => Err(
+            evin_diagnostic::IssueCode::new("review-request-wanted-must-be-boolean")
+                .arg("value", other),
+        ),
     }
 }

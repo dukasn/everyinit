@@ -25,12 +25,10 @@ use policy::{Decision, decide};
 use shell::execute_command;
 use std::collections::HashMap;
 
-fn template_error(field: &str, error: impl std::fmt::Display) -> String {
-    evin_locales::t!(
-        "review-request-template-resolution-failed",
-        field = field,
-        error = error.to_string()
-    )
+fn template_error(field: &str, error: impl std::fmt::Display) -> evin_diagnostic::IssueCode {
+    evin_diagnostic::IssueCode::new("review-request-template-resolution-failed")
+        .arg("field", field)
+        .arg("error", error.to_string())
 }
 
 pub fn validate_config(
@@ -52,16 +50,15 @@ pub async fn execute(
             None,
         )
     })?;
-    config
-        .validate()
-        .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e)))?;
+    config.validate().map_err(evin_locales::diagnostic)?;
 
-    run(ctx, &config)
-        .await
-        .map_err(|e| evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(e)))
+    run(ctx, &config).await.map_err(evin_locales::diagnostic)
 }
 
-async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), String> {
+async fn run(
+    ctx: &RunnerContext,
+    config: &ReviewRequestConfig,
+) -> Result<(), evin_diagnostic::IssueCode> {
     let resolve = |field: &str, value: &str| {
         resolve_templates(value, ctx).map_err(|error| template_error(field, error))
     };
@@ -76,7 +73,9 @@ async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), St
         .map(|value| resolve("title", value))
         .transpose()?;
     if wanted && title.as_deref().is_none_or(|t| t.trim().is_empty()) {
-        return Err(evin_locales::t!("review-request-title-resolved-empty"));
+        return Err(evin_diagnostic::IssueCode::new(
+            "review-request-title-resolved-empty",
+        ));
     }
 
     let mut env = HashMap::new();
@@ -95,8 +94,9 @@ async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), St
         let physical = ctx
             .fs
             .get_safe_physical_path(&resolve("body_path", path)?)
-            .map_err(|e| {
-                evin_locales::t!("review-request-body-path-unusable", error = e.to_string())
+            .map_err(|error| {
+                evin_diagnostic::IssueCode::new("review-request-body-path-unusable")
+                    .arg("error", error.to_string())
             })?;
         env.insert(
             "EVIN_REVIEW_BODY_FILE".to_string(),
@@ -141,11 +141,11 @@ async fn run(ctx: &RunnerContext, config: &ReviewRequestConfig) -> Result<(), St
         }
         None => {
             if decision != Decision::Nothing && decision != Decision::Update {
-                return Err(evin_locales::t!(
+                return Err(evin_diagnostic::IssueCode::new(
                     "review-request-command-required-for-state",
-                    state = state,
-                    command = name
-                ));
+                )
+                .arg("state", state)
+                .arg("command", name));
             }
             ctx.state.set_output("state", "none");
         }

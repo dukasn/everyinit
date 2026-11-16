@@ -14,6 +14,14 @@
 
 use super::*;
 
+macro_rules! assert_fluent_error {
+    ($config:expr, $key:expr, $expected:expr) => {{
+        let error = $config.validate().unwrap_err();
+        assert_eq!(error.code.key, $key);
+        assert_eq!(evin_locales::render_issue(&error.code), $expected);
+    }};
+}
+
 #[test]
 fn removed_cargo_option_is_rejected() {
     assert!(VersionBumperConfig::from_with(None).is_ok());
@@ -37,6 +45,187 @@ fn initial_version_error_uses_fluent_message() {
         "expected Fluent message to exist: {expected}"
     );
     assert_eq!(evin_locales::render_issue(&error.code), expected);
+}
+
+#[test]
+fn configuration_validation_errors_use_fluent_messages() {
+    assert_fluent_error!(
+        VersionBumperConfig {
+            stable: true,
+            prerelease: Some("rc".into()),
+            ..VersionBumperConfig::default()
+        },
+        "stable-and-prerelease-conflict",
+        evin_locales::t!("stable-and-prerelease-conflict")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            stable: true,
+            channel: Some("canary".into()),
+            ..VersionBumperConfig::default()
+        },
+        "stable-and-channel-conflict",
+        evin_locales::t!("stable-and-channel-conflict")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            prerelease: Some("rc".into()),
+            channel: Some("canary".into()),
+            ..VersionBumperConfig::default()
+        },
+        "prerelease-and-channel-conflict",
+        evin_locales::t!("prerelease-and-channel-conflict")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            prerelease: Some("  ".into()),
+            ..VersionBumperConfig::default()
+        },
+        "prerelease-must-not-be-empty",
+        evin_locales::t!("prerelease-must-not-be-empty")
+    );
+
+    let prerelease = VersionBumperConfig {
+        prerelease: Some("bad tag".into()),
+        ..VersionBumperConfig::default()
+    };
+    let prerelease_error = semver::Prerelease::new("bad tag.1")
+        .unwrap_err()
+        .to_string();
+    assert_fluent_error!(
+        prerelease,
+        "prerelease-invalid",
+        evin_locales::t!("prerelease-invalid", error = prerelease_error)
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            git: GitConfig {
+                tag: true,
+                ..GitConfig::default()
+            },
+            ..VersionBumperConfig::default()
+        },
+        "git-tag-requires-git-commit",
+        evin_locales::t!("git-tag-requires-git-commit")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            git: GitConfig {
+                defer: true,
+                ..GitConfig::default()
+            },
+            ..VersionBumperConfig::default()
+        },
+        "git-defer-requires-commit-and-tag",
+        evin_locales::t!("git-defer-requires-commit-and-tag")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            read_only: true,
+            files: vec![FileConfig::Auto("Cargo.toml".into())],
+            ..VersionBumperConfig::default()
+        },
+        "read-only-conflicts-with-mutations",
+        evin_locales::t!("read-only-conflicts-with-mutations")
+    );
+
+    let fixed_version_error = semver::Version::parse("invalid").unwrap_err().to_string();
+    assert_fluent_error!(
+        VersionBumperConfig {
+            fixed_version: Some("invalid".into()),
+            ..VersionBumperConfig::default()
+        },
+        "fixed-version-invalid",
+        evin_locales::t!("fixed-version-invalid", error = fixed_version_error)
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            fixed_version: Some("1.2.3".into()),
+            ..VersionBumperConfig::default()
+        },
+        "fixed-version-requires-read-only",
+        evin_locales::t!("fixed-version-requires-read-only")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            git: GitConfig {
+                message: Some("  ".into()),
+                ..GitConfig::default()
+            },
+            ..VersionBumperConfig::default()
+        },
+        "git-message-must-not-be-empty",
+        evin_locales::t!("git-message-must-not-be-empty")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            git: GitConfig {
+                include: vec!["  ".into()],
+                ..GitConfig::default()
+            },
+            ..VersionBumperConfig::default()
+        },
+        "git-include-paths-must-not-be-empty",
+        evin_locales::t!("git-include-paths-must-not-be-empty")
+    );
+
+    assert_fluent_error!(
+        VersionBumperConfig {
+            files: vec![FileConfig::Auto("  ".into())],
+            ..VersionBumperConfig::default()
+        },
+        "file-path-must-not-be-empty",
+        evin_locales::t!("file-path-must-not-be-empty")
+    );
+    assert_fluent_error!(
+        VersionBumperConfig {
+            files: vec![FileConfig::Auto("release.txt".into())],
+            ..VersionBumperConfig::default()
+        },
+        "automatic-version-detection-unsupported",
+        evin_locales::t!(
+            "automatic-version-detection-unsupported",
+            path = "release.txt"
+        )
+    );
+    for (config, key, expected) in [
+        (
+            CustomFileConfig {
+                path: " ".into(),
+                match_pattern: "v${previous_version}".into(),
+                write: "${version}".into(),
+            },
+            "custom-file-path-must-not-be-empty",
+            evin_locales::t!("custom-file-path-must-not-be-empty"),
+        ),
+        (
+            CustomFileConfig {
+                path: "release.txt".into(),
+                match_pattern: " ".into(),
+                write: "${version}".into(),
+            },
+            "custom-file-match-must-not-be-empty",
+            evin_locales::t!("custom-file-match-must-not-be-empty"),
+        ),
+        (
+            CustomFileConfig {
+                path: "release.txt".into(),
+                match_pattern: "v${previous_version}".into(),
+                write: " ".into(),
+            },
+            "custom-file-write-must-not-be-empty",
+            evin_locales::t!("custom-file-write-must-not-be-empty"),
+        ),
+    ] {
+        assert_fluent_error!(
+            VersionBumperConfig {
+                files: vec![FileConfig::Custom(config)],
+                ..VersionBumperConfig::default()
+            },
+            key,
+            expected
+        );
+    }
 }
 
 #[test]

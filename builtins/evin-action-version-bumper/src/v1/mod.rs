@@ -77,19 +77,28 @@ fn release_state_error(
     )
 }
 
+struct ChannelVariableFailure {
+    message: evin_diagnostic::IssueCode,
+    hint: Option<evin_diagnostic::IssueCode>,
+}
+
 async fn resolve_channel_var(
     var_name: &str,
     ctx: &RunnerContext,
-) -> Result<String, (String, String)> {
+) -> Result<String, ChannelVariableFailure> {
     match var_name {
         "n" => Ok("{n}".to_string()),
-        "workspace.name" => ctx.workspace_name.clone().ok_or_else(|| {
-            (
-                "Missing workspace name".to_string(),
-                "The {workspace.name} variable is required but no workspace name is configured."
-                    .to_string(),
-            )
-        }),
+        "workspace.name" => ctx
+            .workspace_name
+            .clone()
+            .ok_or_else(|| ChannelVariableFailure {
+                message: evin_diagnostic::IssueCode::new(
+                    "version-bumper-workspace-name-resolution-failed",
+                ),
+                hint: Some(evin_diagnostic::IssueCode::new(
+                    "version-bumper-workspace-name-requirement",
+                )),
+            }),
         "git.branch" => ctx
             .git()
             .current_branch()
@@ -106,38 +115,51 @@ async fn resolve_channel_var(
                     })
                     .collect()
             })
-            .map_err(|_| {
-                (
-                    evin_locales::t!("version-bumper-git-branch-resolution-failed"),
-                    evin_locales::t!("version-bumper-git-branch-requirement"),
-                )
+            .map_err(|_| ChannelVariableFailure {
+                message: evin_diagnostic::IssueCode::new(
+                    "version-bumper-git-branch-resolution-failed",
+                ),
+                hint: Some(evin_diagnostic::IssueCode::new(
+                    "version-bumper-git-branch-requirement",
+                )),
             }),
-        "git.short_sha" => ctx.git().short_sha().await.map_err(|_| {
-            (
-                evin_locales::t!("version-bumper-git-short-sha-resolution-failed"),
-                evin_locales::t!("version-bumper-git-short-sha-requirement"),
-            )
-        }),
+        "git.short_sha" => ctx
+            .git()
+            .short_sha()
+            .await
+            .map_err(|_| ChannelVariableFailure {
+                message: evin_diagnostic::IssueCode::new(
+                    "version-bumper-git-short-sha-resolution-failed",
+                ),
+                hint: Some(evin_diagnostic::IssueCode::new(
+                    "version-bumper-git-short-sha-requirement",
+                )),
+            }),
         "date.ymd" => Ok(chrono::Local::now().format("%Y%m%d").to_string()),
         s if s.starts_with("env.") => {
             let env_name = &s[4..];
             let env_val = std::env::var(env_name).unwrap_or_else(|_| "".to_string());
             if env_val.is_empty() {
-                Err((
-                    evin_locales::t!("version-bumper-environment-variable-missing"),
-                    evin_locales::t!(
-                        "version-bumper-environment-variable-required",
-                        name = env_name
+                Err(ChannelVariableFailure {
+                    message: evin_diagnostic::IssueCode::new(
+                        "version-bumper-environment-variable-missing",
                     ),
-                ))
+                    hint: Some(
+                        evin_diagnostic::IssueCode::new(
+                            "version-bumper-environment-variable-required",
+                        )
+                        .arg("name", env_name),
+                    ),
+                })
             } else {
                 Ok(env_val)
             }
         }
-        _ => Err((
-            evin_locales::t!("version-bumper-channel-variable-unknown", name = var_name),
-            String::new(),
-        )),
+        _ => Err(ChannelVariableFailure {
+            message: evin_diagnostic::IssueCode::new("version-bumper-channel-variable-unknown")
+                .arg("name", var_name),
+            hint: None,
+        }),
     }
 }
 
@@ -145,7 +167,7 @@ async fn hydrate_channel(
     ctx: &RunnerContext,
     _channel_name: &str,
     template: &str,
-) -> Result<String, String> {
+) -> Result<String, evin_diagnostic::Diagnostic> {
     let mut hydrated = String::new();
     let mut chars = template.char_indices().peekable();
     let mut missing_vars = Vec::new();
@@ -166,11 +188,11 @@ async fn hydrate_channel(
 
             match resolve_channel_var(&var_content, ctx).await {
                 Ok(val) => hydrated.push_str(&val),
-                Err((msg, help)) => {
-                    if help.is_empty() {
-                        return Err(msg);
+                Err(failure) => {
+                    if failure.hint.is_none() {
+                        return Err(evin_locales::diagnostic(failure.message));
                     }
-                    missing_vars.push((var_content, i, end_idx - i + 1, msg, help));
+                    missing_vars.push((var_content, i, end_idx - i + 1, failure));
                 }
             }
         } else {
@@ -178,23 +200,29 @@ async fn hydrate_channel(
         }
     }
 
-    if let Some((_missing_name, span_start, span_length, msg, help_msg)) = missing_vars.first() {
+    if let Some((_missing_name, span_start, span_length, failure)) = missing_vars.first() {
         if let Ok(source) = std::fs::read_to_string(".evin/gitrules.flow") {
             // Find the offset of this string in the file
             if let Some(file_offset) = source.find(template) {
-                ctx.log.diagnostic(
-                    evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(msg.clone()))
-                        .with_hint(help_msg.clone())
-                        .with_file_span(
-                            ".evin/gitrules.flow",
-                            file_offset + span_start,
-                            *span_length,
-                            Some("missing variable here".to_string()),
-                        ),
-                );
+                let diagnostic = evin_locales::diagnostic(failure.message.clone())
+                    .with_hint(evin_locales::render_issue(
+                        failure.hint.as_ref().expect("hinted variable failures"),
+                    ))
+                    .with_file_span(
+                        ".evin/gitrules.flow",
+                        file_offset + span_start,
+                        *span_length,
+                        Some(evin_locales::t!(
+                            "version-bumper-channel-variable-location-hint"
+                        )),
+                    );
+                ctx.log.diagnostic(diagnostic.clone());
+                return Err(diagnostic);
             }
         }
-        return Err(msg.clone());
+        return Err(evin_locales::diagnostic(failure.message.clone()).with_hint(
+            evin_locales::render_issue(failure.hint.as_ref().expect("hinted variable failures")),
+        ));
     }
 
     Ok(hydrated)
@@ -229,14 +257,16 @@ pub async fn execute(
         .map(|release| release.packages.clone())
         .unwrap_or_default();
     evin_action_sdk::release::validate_policies(&package_policies).map_err(|error| {
-        evin_locales::t!(
-            "version-bumper-package-policy-invalid",
-            error = error.to_string()
+        evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("version-bumper-package-policy-invalid")
+                .arg("error", error.to_string()),
         )
     })?;
     if !package_policies.is_empty() && !config.read_only && (!config.git.commit || !config.git.tag)
     {
-        return Err(evin_locales::t!("version-bumper-package-release-requires-git").into());
+        return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+            "version-bumper-package-release-requires-git",
+        )));
     }
     if !package_policies.is_empty()
         && !config.read_only
@@ -248,7 +278,9 @@ pub async fn execute(
             .await
             .map_err(evin_diagnostic::Diagnostic::from)?
         {
-            return Err(evin_locales::t!("version-bumper-package-release-index-not-empty").into());
+            return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+                "version-bumper-package-release-index-not-empty",
+            )));
         }
         let dirty = evin_action_sdk::release::dirty_paths(ctx.fs.workspace_root())
             .await
@@ -262,11 +294,10 @@ pub async fn execute(
             .filter(|path| evin_action_sdk::release::path_is_watched(path, &package_policies))
             .collect::<Vec<_>>();
         if !dirty.is_empty() {
-            return Err(evin_locales::t!(
-                "version-bumper-package-release-worktree-dirty",
-                paths = dirty.join(", ")
-            )
-            .into());
+            return Err(evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("version-bumper-package-release-worktree-dirty")
+                    .arg("paths", dirty.join(", ")),
+            ));
         }
     }
     let commits = ctx
@@ -310,9 +341,9 @@ pub async fn execute(
         let template = prerelease_config
             .and_then(|p| p.channels.get(channel_name))
             .ok_or_else(|| {
-                format!(
-                    "Prerelease channel '{}' is not defined in gitrules.flow",
-                    channel_name
+                evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("version-bumper-channel-undefined")
+                        .arg("channel", channel_name),
                 )
             })?;
         let start_at_one = prerelease_config.map(|p| p.start_at_one).unwrap_or(false);
@@ -505,7 +536,10 @@ pub async fn execute(
         } else if let Some(fallback) = fallback_regex.as_ref().filter(|r| r.is_match(&content)) {
             fallback
         } else {
-            return Err(evin_locales::t!("version-bumper-replacement-missing", path = path).into());
+            return Err(evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("version-bumper-replacement-missing")
+                    .arg("path", path),
+            ));
         };
         let new_content = regex.replace(&content, replacement.as_str()).to_string();
         if content != new_content {

@@ -37,7 +37,33 @@ fn protocol_error_diagnostic(
                     .arg("version", version.to_string()),
             )
         }
-        error => evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(error.to_string())),
+        evin_release_sync::ProtocolError::SchemaValidation(error) => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-schema-validation-failed")
+                .arg("error", error),
+        ),
+        evin_release_sync::ProtocolError::StateIngestion(error) => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-state-ingestion-failed")
+                .arg("error", error),
+        ),
+        evin_release_sync::ProtocolError::GitInspection(error) => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-git-inspection-failed")
+                .arg("error", error),
+        ),
+        evin_release_sync::ProtocolError::NotesExtraction(error) => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-notes-extraction-failed")
+                .arg("error", error),
+        ),
+        evin_release_sync::ProtocolError::ArtifactInspection(error) => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-artifact-inspection-failed")
+                .arg("error", error),
+        ),
+        evin_release_sync::ProtocolError::PlanWrite(error) => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-plan-operation-failed")
+                .arg("error", error),
+        ),
+        evin_release_sync::ProtocolError::Io(error) => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-io-failed").arg("error", error),
+        ),
     }
 }
 
