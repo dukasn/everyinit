@@ -1,6 +1,53 @@
 # Changelog
 All notable changes to this project will be documented in this file.
 
+Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
+
+## [v0.2.9]
+
+### Bug Fixes
+
+- **esh:** honor mktemp template paths (7b1747c)
+- **esh:** honor mktemp template directories (b80688f)
+- **vscode:** build F5 with the pinned Node toolchain (9242808)
+- **test:** parse release script arguments (c69f09b)
+- **release:** stage GitHub package copy correctly (af3b3e6)
+- **release:** avoid shell umask in npm publisher (8f4921e)
+- **release:** scope bootstrap token to npmjs (5407d17)
+- **release:** load current publisher configuration (0180056)
+- **release:** bootstrap npmjs publishing with token (8065daf)
+- **release:** publish npm package from local path (84b749d)
+
+### Documentation
+
+- **install:** clarify supported platforms and routes (0268f4e)
+
+### Features
+
+- **release:** preview release PRs and remove unstable channel (e18d6eb)
+- **site:** localize pages and move docs host (7632bbd)
+- **site:** add current install and platform links (cb6da08)
+- **release:** publish VS Code extension with OIDC (8d0d6c2)
+
+### Maintenance
+
+- **licenses:** remove unused Tabler notice (f02721c)
+- **github:** add GitHub Sponsors username in FUNDING.yml (b52abe3)
+
+### Refactoring
+
+- **i18n:** map builtin diagnostics through Fluent (bcc7f9e)
+- **i18n:** preserve localized builtin issue codes (34b68fd)
+- **i18n:** localize builtin diagnostics (4e3e333)
+- **i18n:** route builtin messages through Fluent (c7a6ba2)
+- **builtins:** align action module versioning (737dd23)
+- **release-sync:** decouple provider workflow (6b45d48)
+
+### Tests
+
+- **site:** keep host routing checks local (aa37af8)
+- **builtins:** assert fluent diagnostics across actions (bb756e3)
+
 ## [v0.2.8]
 
 ### Bug Fixes
