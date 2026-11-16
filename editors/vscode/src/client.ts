@@ -58,6 +58,8 @@ export class EveryinitClientManager implements vscode.Disposable {
   private readonly taskRunFinishedEmitter = new vscode.EventEmitter<{
     readonly taskName: string;
     readonly runId?: string;
+    readonly success?: boolean;
+    readonly cancelled?: boolean;
   }>();
   public readonly onDidFinishTaskRun = this.taskRunFinishedEmitter.event;
 
@@ -300,7 +302,12 @@ export class EveryinitClientManager implements vscode.Disposable {
       );
       return null;
     } finally {
-      this.taskRunFinishedEmitter.fire({ taskName, runId: result?.runId });
+      this.taskRunFinishedEmitter.fire({
+        taskName,
+        runId: result?.runId,
+        success: result?.success,
+        cancelled: result?.cancelled,
+      });
     }
   }
 

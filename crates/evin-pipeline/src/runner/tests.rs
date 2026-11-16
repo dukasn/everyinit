@@ -91,7 +91,7 @@ async fn test_shell_runner_failure() {
         error,
         evin_diagnostic::IssueCode::new("issue-task-exit-failed")
             .arg("task_name", "test_fail")
-            .arg("status", "exit status: 1")
+            .arg("status", "1")
     );
 }
 

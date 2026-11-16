@@ -221,7 +221,7 @@
       },
       {
         "command": "everyinit.runTask",
-        "title": "Run Task in Workspace",
+        "title": "Run Task…",
         "category": "Everyinit",
         "icon": "$(play)"
       },
@@ -459,16 +459,6 @@
           "group": "1_run@2"
         },
         {
-          "command": "everyinit.runTaskParallel",
-          "when": "view == everyinit.tasksView && viewItem == taskItem",
-          "group": "1_run@3"
-        },
-        {
-          "command": "everyinit.runTaskSequential",
-          "when": "view == everyinit.tasksView && viewItem == taskItem",
-          "group": "1_run@4"
-        },
-        {
           "command": "everyinit.explainTask",
           "when": "view == everyinit.tasksView && viewItem == taskItem",
           "group": "2_inspect@1"
@@ -607,6 +597,11 @@
           ],
           "default": "off",
           "description": "Traces the communication between VS Code and the language servers."
+        },
+        "everyinit.execution.promptForMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "When Run Task is started from the command palette or status bar, ask whether to run normally, dry-run, in parallel, or sequentially. Task tree Run actions always use normal mode."
         }
       }
     }

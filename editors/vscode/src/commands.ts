@@ -48,12 +48,35 @@ export async function executeEvinTask(
   taskName: string,
   options: { readonly dryRun?: boolean; readonly parallel?: boolean; readonly sequential?: boolean } = {}
 ): Promise<void> {
+  if (usesToolboxTerminalProfile()) {
+    const args = options.dryRun
+      ? ["--dry-run", "run", taskName]
+      : [
+          "run",
+          ...(options.parallel ? ["--parallel"] : []),
+          ...(options.sequential ? ["--sequential"] : []),
+          taskName,
+        ];
+    await executeEvinCli(args);
+    return;
+  }
+
   const result = await clientManager.runTask(taskName, options);
   if (result) {
     if (!result.success && !result.cancelled) {
-      vscode.window.showErrorMessage(
-        `Evin task '${taskName}' failed${result.exitCode === null ? "" : ` (exit code ${result.exitCode})`}.`
+      const action = await vscode.window.showErrorMessage(
+        `Evin task '${taskName}' failed${result.exitCode === null ? "" : ` (exit code ${result.exitCode})`}.`,
+        "Open Trace",
+        "Show Problems",
+        "Show Language Server Output"
       );
+      if (action === "Open Trace") {
+        await vscode.commands.executeCommand("everyinit.openTraceTimeline", taskName);
+      } else if (action === "Show Problems") {
+        await vscode.commands.executeCommand("workbench.actions.view.problems");
+      } else if (action === "Show Language Server Output") {
+        await vscode.commands.executeCommand("everyinit.showOutput");
+      }
     }
     return;
   }
@@ -62,6 +85,38 @@ export async function executeEvinTask(
     ? ["--dry-run", "run", taskName]
     : ["run", ...(options.parallel ? ["--parallel"] : []), ...(options.sequential ? ["--sequential"] : []), taskName];
   await executeEvinCli(args);
+}
+
+function usesToolboxTerminalProfile(): boolean {
+  if (process.platform !== "linux") return false;
+
+  const terminalConfig = vscode.workspace.getConfiguration("terminal.integrated");
+  const profileName = terminalConfig.get<string>("defaultProfile.linux");
+  if (!profileName) return false;
+
+  const profiles = terminalConfig.get<Record<string, LinuxTerminalProfileConfig | null>>(
+    "profiles.linux"
+  );
+  const profile = profiles?.[profileName];
+  if (!profile || typeof profile !== "object") return false;
+
+  const profilePath =
+    typeof profile.path === "string"
+      ? profile.path
+      : Array.isArray(profile.path)
+        ? profile.path.find((entry): entry is string => typeof entry === "string")
+        : undefined;
+  const args = Array.isArray(profile.args)
+    ? profile.args.filter((arg): arg is string => typeof arg === "string")
+    : [];
+
+  return Boolean(
+    profilePath &&
+      path.basename(profilePath) === "flatpak-spawn" &&
+      args.includes("--host") &&
+      args.includes("toolbox") &&
+      (args.includes("enter") || args.includes("run"))
+  );
 }
 
 export async function executeEshFile(scriptFsPath: string): Promise<void> {
@@ -153,7 +208,12 @@ export function registerCommands(
       if (!taskName) {
         return;
       }
-      await executeEvinTask(clientManager, taskName);
+      const runOptions = directTask
+        ? {}
+        : await promptForRunOptions();
+      if (runOptions) {
+        await executeEvinTask(clientManager, taskName, runOptions);
+      }
     })
   );
 
@@ -356,6 +416,28 @@ async function promptForTaskName(clientManager: EveryinitClientManager): Promise
     placeHolder: "task-name",
   });
   return entered?.trim() || null;
+}
+
+async function promptForRunOptions(): Promise<
+  { readonly dryRun?: boolean; readonly parallel?: boolean; readonly sequential?: boolean } | null
+> {
+  const promptForMode = vscode.workspace
+    .getConfiguration("everyinit.execution")
+    .get<boolean>("promptForMode", true);
+  if (!promptForMode) {
+    return {};
+  }
+
+  const choice = await vscode.window.showQuickPick(
+    [
+      { label: "$(play) Run normally", description: "Use the workspace's default execution behavior", options: {} },
+      { label: "$(beaker) Dry run", description: "Show the planned work without executing it", options: { dryRun: true } },
+      { label: "$(run-all) Run in parallel", description: "Allow independent tasks to run concurrently", options: { parallel: true } },
+      { label: "$(list-ordered) Run sequentially", description: "Run tasks one at a time", options: { sequential: true } },
+    ],
+    { title: "Everyinit: Choose Run Mode", placeHolder: "How should this task run?" }
+  );
+  return choice?.options ?? null;
 }
 
 async function runInManagedTerminal(

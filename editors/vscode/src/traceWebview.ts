@@ -842,11 +842,19 @@ export function buildTraceHtml(
       padding: 4px 8px;
       background: rgba(248, 81, 73, 0.1);
       border-left: 2px solid var(--evin-fail);
-      color: var(--evin-fail);
-      font-family: var(--vscode-editor-font-family, monospace);
+      color: var(--vscode-foreground);
       font-size: 11px;
       white-space: pre-wrap;
-      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+
+    .task-issue {
+      margin: 14px 0 0;
+      padding: 9px 12px;
+      background: rgba(248, 81, 73, 0.1);
+      border-left: 2px solid var(--evin-fail);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     .empty-state {
@@ -1094,6 +1102,11 @@ export function buildTraceHtml(
           \`
           : "";
 
+      const taskIssue = selectedSpan?.args.issue;
+      const taskIssueHtml = taskIssue && !selectedSpan.steps?.some((step) => step.issue)
+        ? \`<div class="task-issue">\${escapeHtml(taskIssue)}</div>\`
+        : "";
+
       const inspectorHtml = selectedSpan
         ? \`
           <div class="inspector">
@@ -1131,6 +1144,7 @@ export function buildTraceHtml(
                 <div class="detail-val">\${escapeHtml(selectedSpan.source)}</div>
               </div>\` : ""}
             </div>
+            \${taskIssueHtml}
             \${stepsHtml}
           </div>
         \`

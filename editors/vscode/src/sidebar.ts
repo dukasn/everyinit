@@ -127,12 +127,9 @@ export class EveryinitSidebarController implements vscode.Disposable {
         this.traceWebview.onPipelineEvent(event);
         const payload = event.payload;
         const name = typeof payload.name === "string" ? payload.name : null;
-        if (!name) {
-          return;
-        }
-        if (event.kind === "task_started") {
+        if (name && event.kind === "task_started") {
           this.runningTasks.set(name, { runId: event.run_id, state: "running" });
-        } else if (event.kind === "task_step_started") {
+        } else if (name && event.kind === "task_step_started") {
           this.runningTasks.set(
             name,
             {
@@ -140,25 +137,64 @@ export class EveryinitSidebarController implements vscode.Disposable {
               state: `step ${String(payload.step_number ?? "?")}/${String(payload.step_count ?? "?")}`,
             }
           );
-        } else if (event.kind === "task_ended" || event.kind === "daemon_stopped") {
+        } else if (name && event.kind === "task_ended") {
+          const cancelled = payload.cancelled === true;
+          const failed = payload.failed === true;
+          const unverified = payload.unverified === true;
+          this.runningTasks.set(name, {
+            runId: event.run_id,
+            state: cancelled
+              ? "cancelled"
+              : failed
+                ? "failed"
+                : unverified
+                  ? "unverified"
+                  : "succeeded",
+          });
+        } else if (name && event.kind === "daemon_stopped") {
           if (this.runningTasks.get(name)?.runId === event.run_id) {
-            this.runningTasks.delete(name);
+            const failed = payload.failed === true;
+            this.runningTasks.set(name, {
+              runId: event.run_id,
+              state: failed ? "failed" : "stopped",
+            });
           }
-        } else if (event.kind === "daemon_started") {
+        } else if (name && event.kind === "daemon_started") {
           this.runningTasks.set(name, { runId: event.run_id, state: "daemon starting" });
-        } else if (event.kind === "daemon_status" && typeof payload.status === "string") {
+        } else if (name && event.kind === "daemon_status" && typeof payload.status === "string") {
           this.runningTasks.set(name, { runId: event.run_id, state: payload.status });
+        }
+        if (event.kind === "run_completed") {
+          const succeeded = payload.succeeded === true;
+          for (const [taskName, taskState] of this.runningTasks) {
+            if (taskState.runId === event.run_id && !isTerminalTaskState(taskState.state)) {
+              this.runningTasks.set(taskName, {
+                runId: event.run_id,
+                state: succeeded ? "succeeded" : "failed",
+              });
+            }
+          }
         }
         this.tasksProvider.refresh();
       })
     );
     this.disposables.push(
-      this.clientManager.onDidFinishTaskRun(({ taskName, runId }) => {
+      this.clientManager.onDidFinishTaskRun(({ taskName, runId, success, cancelled }) => {
         this.traceWebview.onTaskRunFinished(taskName, runId);
-        for (const [name, running] of this.runningTasks) {
-          if (runId ? running.runId === runId : name === taskName) {
-            this.runningTasks.delete(name);
-          }
+        for (const [name, taskState] of this.runningTasks) {
+          if (runId && taskState.runId !== runId) continue;
+          if (!runId && name !== taskName) continue;
+          if (isTerminalTaskState(taskState.state)) continue;
+          this.runningTasks.set(name, {
+            runId: taskState.runId,
+            state: cancelled
+              ? "cancelled"
+              : success === true
+                ? "succeeded"
+                : success === false
+                  ? "failed"
+                  : "unknown",
+          });
         }
         this.tasksProvider.refresh();
       })
@@ -523,9 +559,7 @@ export class TaskItemNode extends vscode.TreeItem {
 
     this.taskName = task.name;
     this.contextValue = "taskItem";
-    this.iconPath = runningState
-      ? new vscode.ThemeIcon("sync~spin")
-      : resolveTaskIcon(task, latestSpan);
+    this.iconPath = resolveTaskStateIcon(runningState) ?? resolveTaskIcon(task, latestSpan);
 
     const badges: string[] = [];
     if (runningState) {
@@ -665,6 +699,20 @@ function filterTasks(
       (task.description?.toLowerCase().includes(query) ?? false) ||
       task.hooks.some((hook) => hook.toLowerCase().includes(query))
   );
+}
+
+function isTerminalTaskState(state: string): boolean {
+  return ["succeeded", "failed", "cancelled", "unverified", "stopped", "unknown"].includes(state);
+}
+
+function resolveTaskStateIcon(state?: string): vscode.ThemeIcon | undefined {
+  if (!state) return undefined;
+  if (state === "failed") return new vscode.ThemeIcon("error");
+  if (state === "unverified") return new vscode.ThemeIcon("warning");
+  if (state === "unknown") return new vscode.ThemeIcon("question");
+  if (state === "succeeded" || state === "stopped") return new vscode.ThemeIcon("pass");
+  if (state === "cancelled") return new vscode.ThemeIcon("circle-slash");
+  return new vscode.ThemeIcon("sync~spin");
 }
 
 function buildModuleGroups(

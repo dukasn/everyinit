@@ -635,7 +635,7 @@ impl PipelineEngine {
                 if let Err(ref err) = res {
                     step_args.insert(
                         "issue".to_string(),
-                        serde_json::Value::String(err.to_string()),
+                        serde_json::Value::String(evin_locales::render_issue(err)),
                     );
                 }
 
@@ -920,7 +920,7 @@ fn build_trace_event(task_result: &super::types::TaskResult) -> TraceEvent {
     if let Err(ref issue) = task_result.result {
         args.insert(
             "issue".to_string(),
-            serde_json::Value::String(issue.to_string()),
+            serde_json::Value::String(evin_locales::render_issue(issue)),
         );
     }
 

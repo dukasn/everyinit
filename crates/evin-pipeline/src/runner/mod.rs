@@ -214,7 +214,7 @@ impl ShellRunner<EshRunner> {
         if exit_code != 0 {
             return Err(evin_diagnostic::IssueCode::new("issue-task-exit-failed")
                 .arg("task_name", &ctx.task_name)
-                .arg("status", format!("exit status: {}", exit_code)));
+                .arg("status", exit_code.to_string()));
         }
 
         Ok(())
@@ -347,7 +347,13 @@ impl<S: RunnerStrategy> ShellRunner<S> {
         if !status.success() {
             return Err(evin_diagnostic::IssueCode::new("issue-task-exit-failed")
                 .arg("task_name", &ctx.task_name)
-                .arg("status", status.to_string()));
+                .arg(
+                    "status",
+                    status
+                        .code()
+                        .map(|code| code.to_string())
+                        .unwrap_or_else(|| status.to_string()),
+                ));
         }
 
         Ok(())
