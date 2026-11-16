@@ -836,7 +836,7 @@ dependencies = [
 
 [[package]]
 name = "esh"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "base64",
  "bumpalo",
@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "evin"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "chrono",
@@ -921,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-archive"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "evin-action-sdk",
@@ -942,7 +942,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-catalog"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "chrono",
@@ -959,7 +959,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-changelog"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "evin-action-sdk",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-docs"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "evin-action-sdk",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-git-release"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "evin-action-sdk",
@@ -1021,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-release-sync"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "evin-action-sdk",
@@ -1042,7 +1042,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-review-request"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "esh",
@@ -1059,7 +1059,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-sdk"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "evin-diagnostic",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "evin-action-version-bumper"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1108,7 +1108,7 @@ dependencies = [
 
 [[package]]
 name = "evin-catalog"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "serde",
  "serde_json",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "evin-config"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "evin-action-sdk",
@@ -1139,7 +1139,7 @@ dependencies = [
 
 [[package]]
 name = "evin-diagnostic"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "serde",
  "tokio",
@@ -1147,7 +1147,7 @@ dependencies = [
 
 [[package]]
 name = "evin-doc"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "criterion",
  "evin-catalog",
@@ -1165,7 +1165,7 @@ dependencies = [
 
 [[package]]
 name = "evin-dotenv"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "evin-diagnostic",
  "evin-locales",
@@ -1173,7 +1173,7 @@ dependencies = [
 
 [[package]]
 name = "evin-flow"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "evin-diagnostic",
  "evin-locales",
@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "evin-git"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "evin-locales",
  "tempfile",
@@ -1195,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "evin-gitrules"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "evin-diagnostic",
  "evin-flow",
@@ -1211,7 +1211,7 @@ dependencies = [
 
 [[package]]
 name = "evin-io"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "glob",
  "include_dir",
@@ -1221,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "evin-locales"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "evin-diagnostic",
  "evin-io",
@@ -1232,7 +1232,7 @@ dependencies = [
 
 [[package]]
 name = "evin-lsp"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -1241,7 +1241,7 @@ dependencies = [
 
 [[package]]
 name = "evin-pipeline"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "esh",
@@ -1264,7 +1264,7 @@ dependencies = [
 
 [[package]]
 name = "evin-policy"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "evin-action-sdk",
  "evin-diagnostic",
@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "evin-process"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "libc",
  "tempfile",
@@ -1288,7 +1288,7 @@ dependencies = [
 
 [[package]]
 name = "evin-release-sync"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "serde",
  "serde_json",
@@ -1298,7 +1298,7 @@ dependencies = [
 
 [[package]]
 name = "evin-ui"
-version = "0.2.9"
+version = "0.2.10"
 dependencies = [
  "async-trait",
  "console",

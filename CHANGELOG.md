@@ -3,6 +3,26 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.2.10]
+
+### Bug Fixes
+
+- **vscode:** improve task execution feedback (9163381)
+- **vscode:** open repository workspace on F5 (fd52eb9)
+
+### Documentation
+
+- **site:** move documentation to the main domain (77b39ca)
+
+### Features
+
+- **config:** allow nested namespace task files (eca033d)
+- **lsp:** relay task events and defer workspace analysis (c49cfee)
+
+### Refactoring
+
+- **tasks:** streamline workspace task names (cdfe608)
+
 ## [v0.2.9]
 
 ### Bug Fixes
