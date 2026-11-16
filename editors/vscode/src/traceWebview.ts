@@ -16,11 +16,18 @@ interface WebviewInboundMessage {
   taskName?: unknown;
 }
 
+interface LiveRunStatus {
+  readonly runId: string;
+  readonly message: string;
+  readonly active: boolean;
+}
+
 export class EveryinitTraceWebviewManager implements vscode.Disposable {
   private panel: vscode.WebviewPanel | null = null;
   private latestReport: ParsedTraceReport | null = null;
   private latestWorkspaceName: string | null = null;
   private selectedTaskName: string | null = null;
+  private liveRun: LiveRunStatus | null = null;
 
   constructor(private readonly actions: TraceWebviewActions) {}
 
@@ -30,6 +37,44 @@ export class EveryinitTraceWebviewManager implements vscode.Disposable {
     if (this.panel) {
       this.render();
     }
+  }
+
+  public onPipelineEvent(event: {
+    readonly run_id: string;
+    readonly kind: string;
+    readonly payload: Readonly<Record<string, unknown>>;
+  }): void {
+    const payload = event.payload;
+    let message: string | null = null;
+    let active = true;
+    if (event.kind === "run_started") {
+      message = Array.isArray(payload.tasks) ? `Starting ${payload.tasks.join(", ")}` : "Run started";
+    } else if (event.kind === "phase_started" && typeof payload.phase === "string") {
+      message = payload.phase;
+    } else if (event.kind === "task_started" && typeof payload.name === "string") {
+      message = `Running ${payload.name}`;
+    } else if (event.kind === "task_step_started" && typeof payload.name === "string") {
+      message = `${payload.name} · step ${String(payload.step_number ?? "?")}/${String(payload.step_count ?? "?")}`;
+    } else if (event.kind === "daemon_status" && typeof payload.name === "string") {
+      message = `${payload.name}: ${String(payload.status ?? "status changed")}`;
+    } else if (event.kind === "task_ended" && typeof payload.name === "string") {
+      message = `${payload.name}: ${payload.cancelled ? "cancelled" : payload.failed ? "failed" : "completed"}`;
+    } else if (event.kind === "run_completed") {
+      message = payload.succeeded === true ? "Run completed" : "Run failed";
+      active = false;
+    }
+    if (!message) return;
+    this.liveRun = { runId: event.run_id, message, active };
+    if (this.panel) void this.panel.webview.postMessage({ type: "liveRun", liveRun: this.liveRun });
+  }
+
+  public onTaskRunFinished(taskName: string, runId?: string): void {
+    if (
+      !this.liveRun?.active ||
+      (runId ? this.liveRun.runId !== runId : !this.liveRun.message.includes(taskName))
+    ) return;
+    this.liveRun = { ...this.liveRun, message: `${taskName}: finished`, active: false };
+    if (this.panel) void this.panel.webview.postMessage({ type: "liveRun", liveRun: this.liveRun });
   }
 
   public show(
@@ -117,7 +162,8 @@ export class EveryinitTraceWebviewManager implements vscode.Disposable {
       nonce,
       report,
       this.latestWorkspaceName,
-      this.selectedTaskName
+      this.selectedTaskName,
+      this.liveRun
     );
   }
 }
@@ -127,7 +173,8 @@ export function buildTraceHtml(
   nonce: string,
   report: ParsedTraceReport | null,
   workspaceName: string | null,
-  selectedTaskName: string | null
+  selectedTaskName: string | null,
+  liveRun: LiveRunStatus | null
 ): string {
   const payload = report
     ? {
@@ -206,6 +253,7 @@ export function buildTraceHtml(
     : null;
 
   const serializedData = JSON.stringify(payload).replace(/</g, "\\u003c");
+  const serializedLiveRun = JSON.stringify(liveRun).replace(/</g, "\\u003c");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -271,6 +319,16 @@ export function buildTraceHtml(
       color: var(--evin-muted);
       font-size: 12px;
     }
+
+    .live-run {
+      margin: 0 0 16px;
+      padding: 9px 12px;
+      border: 1px solid var(--evin-border);
+      border-radius: 6px;
+      color: var(--vscode-foreground);
+      background: var(--evin-surface);
+    }
+    .live-run.active { border-color: var(--evin-accent); }
 
     .btn-row {
       display: flex;
@@ -807,10 +865,24 @@ export function buildTraceHtml(
   </style>
 </head>
 <body>
+  <div id="live-run"></div>
   <div id="app"></div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const traceData = ${serializedData};
+    const liveRun = ${serializedLiveRun};
+
+    function renderLiveRun(status) {
+      const liveRunElement = document.getElementById("live-run");
+      liveRunElement.innerHTML = status
+        ? '<div class="live-run ' + (status.active ? 'active' : '') + '">' +
+          (status.active ? '◌ ' : '') + escapeHtml(status.message) + '</div>'
+        : '';
+    }
+    renderLiveRun(liveRun);
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "liveRun") renderLiveRun(event.data.liveRun);
+    });
 
     const state = {
       query: "",

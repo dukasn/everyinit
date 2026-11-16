@@ -13,7 +13,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use evin_lsp::protocol::{
-    CompletionItem, DocumentSymbol, Hover, Location, Position, SemanticTokens, WorkspaceSymbol,
+    CodeLens, CompletionItem, DocumentSymbol, Hover, Location, Position, SemanticTokens,
+    WorkspaceSymbol,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -88,6 +89,13 @@ impl LspRequest for DocumentSymbolRequest {
     const METHOD: &'static str = "textDocument/documentSymbol";
     type Params = DocumentUriParams;
     type Result = Vec<DocumentSymbol>;
+}
+
+pub struct CodeLensRequest;
+impl LspRequest for CodeLensRequest {
+    const METHOD: &'static str = "textDocument/codeLens";
+    type Params = DocumentUriParams;
+    type Result = Vec<CodeLens>;
 }
 
 pub struct WorkspaceSymbolRequest;

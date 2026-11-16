@@ -21,8 +21,8 @@ use evin_config::source::{OverlaySource, normalize};
 use evin_diagnostic::{Diagnostic as EvinDiagnostic, FileLocation, Severity};
 use evin_lsp::LspDocument;
 use evin_lsp::protocol::{
-    CompletionItem, DocumentSymbol, Hover, Location, MarkupContent, Position, Range,
-    SemanticTokens, TextEdit, WorkspaceSymbol,
+    CodeLens, CodeLensCommand, CompletionItem, DocumentSymbol, Hover, Location, MarkupContent,
+    Position, Range, SemanticTokens, TextEdit, WorkspaceSymbol,
 };
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, HashSet};
@@ -45,6 +45,11 @@ impl EvinLspServer {
             .pointer("/textDocument/completion/completionItem/snippetSupport")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        self.work_done_progress = params
+            .capabilities
+            .pointer("/window/workDoneProgress")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         self.initialized = true;
         self.needs_initial_rebuild = true;
 
@@ -56,7 +61,11 @@ impl EvinLspServer {
                 "definitionProvider": true,
                 "referencesProvider": true,
                 "documentSymbolProvider": true,
+                "codeLensProvider": { "resolveProvider": false },
                 "workspaceSymbolProvider": true,
+                "executeCommandProvider": {
+                    "commands": ["everyinit.lspRunTask", "everyinit.lspRunTaskDryRun"]
+                },
                 "semanticTokensProvider": {
                     "legend": {
                         "tokenTypes": STANDARD_SEMANTIC_TOKEN_TYPES,
@@ -243,6 +252,47 @@ impl EvinLspServer {
             })
             .unwrap_or_default();
         Ok(symbols)
+    }
+
+    pub(super) fn on_code_lens(
+        &mut self,
+        params: DocumentUriParams,
+    ) -> Result<Vec<CodeLens>, LspError> {
+        let lenses = self
+            .relative_path(&params.text_document.uri)
+            .map(|path| {
+                self.index()
+                    .symbols
+                    .iter()
+                    .filter(|symbol| symbol.kind == SemanticKind::Task && symbol.range.path == path)
+                    .filter_map(|symbol| {
+                        let range = self.range(&symbol.range)?;
+                        Some([
+                            CodeLens {
+                                range,
+                                command: Some(CodeLensCommand {
+                                    title: "▶ Run Task".into(),
+                                    command: "everyinit.lspRunTask".into(),
+                                    arguments: Some(vec![Value::String(symbol.name.clone())]),
+                                }),
+                                data: None,
+                            },
+                            CodeLens {
+                                range,
+                                command: Some(CodeLensCommand {
+                                    title: "Dry Run".into(),
+                                    command: "everyinit.lspRunTaskDryRun".into(),
+                                    arguments: Some(vec![Value::String(symbol.name.clone())]),
+                                }),
+                                data: None,
+                            },
+                        ])
+                    })
+                    .flatten()
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(lenses)
     }
 
     pub(super) fn on_workspace_symbols(
@@ -458,7 +508,7 @@ impl EvinLspServer {
             params.text_document.version,
             params.text_document.text,
         ));
-        self.rebuild_and_publish(writer)
+        self.schedule_analysis(writer)
     }
 
     pub(super) fn on_did_change<W: Write>(
@@ -475,11 +525,18 @@ impl EvinLspServer {
         let Ok(path) = self.relative_path(&params.text_document.uri) else {
             return Ok(());
         };
+        if self
+            .documents
+            .get(&params.text_document.uri)
+            .is_some_and(|document| params.text_document.version <= document.version)
+        {
+            return Ok(());
+        }
         self.source.insert(&path, change.text.clone());
         if let Some(document) = self.documents.get_mut(&params.text_document.uri) {
             document.update(params.text_document.version, change.text);
         }
-        self.rebuild_and_publish(writer)
+        self.schedule_analysis(writer)
     }
 
     pub(super) fn on_did_close<W: Write>(
@@ -491,7 +548,7 @@ impl EvinLspServer {
             self.source.remove(&path);
         }
         self.documents.close(&params.text_document.uri);
-        self.rebuild_and_publish(writer)
+        self.schedule_analysis(writer)
     }
 
     pub(super) fn on_exit<W: Write>(&mut self, _params: Value, _writer: &mut W) -> io::Result<()> {

@@ -3,7 +3,6 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { EveryinitClientManager } from "./client.js";
 import { getConfiguration, resolveBinaryPath, resolveConfiguredBinaryDirs } from "./config.js";
-import { findFlowTaskAtLine, parseFlowDocumentTasks } from "./flowTasks.js";
 import { LspLocation } from "./types.js";
 
 interface ManagedTerminal {
@@ -42,6 +41,27 @@ export async function executeEvinCli(subcommandArgs: readonly string[]): Promise
   taskTerminal = await runInManagedTerminal(taskTerminal, "Everyinit Task", (fallbackEnv) =>
     formatCommandWithPath(binDirs, [binaryPath, ...subcommandArgs], fallbackEnv)
   );
+}
+
+export async function executeEvinTask(
+  clientManager: EveryinitClientManager,
+  taskName: string,
+  options: { readonly dryRun?: boolean; readonly parallel?: boolean; readonly sequential?: boolean } = {}
+): Promise<void> {
+  const result = await clientManager.runTask(taskName, options);
+  if (result) {
+    if (!result.success && !result.cancelled) {
+      vscode.window.showErrorMessage(
+        `Evin task '${taskName}' failed${result.exitCode === null ? "" : ` (exit code ${result.exitCode})`}.`
+      );
+    }
+    return;
+  }
+
+  const args = options.dryRun
+    ? ["--dry-run", "run", taskName]
+    : ["run", ...(options.parallel ? ["--parallel"] : []), ...(options.sequential ? ["--sequential"] : []), taskName];
+  await executeEvinCli(args);
 }
 
 export async function executeEshFile(scriptFsPath: string): Promise<void> {
@@ -133,7 +153,7 @@ export function registerCommands(
       if (!taskName) {
         return;
       }
-      await executeEvinCli(["run", taskName]);
+      await executeEvinTask(clientManager, taskName);
     })
   );
 
@@ -144,7 +164,7 @@ export function registerCommands(
       if (!taskName) {
         return;
       }
-      await executeEvinCli(["--dry-run", "run", taskName]);
+      await executeEvinTask(clientManager, taskName, { dryRun: true });
     })
   );
 
@@ -155,7 +175,7 @@ export function registerCommands(
       if (!taskName) {
         return;
       }
-      await executeEvinCli(["run", "--parallel", taskName]);
+      await executeEvinTask(clientManager, taskName, { parallel: true });
     })
   );
 
@@ -166,7 +186,7 @@ export function registerCommands(
       if (!taskName) {
         return;
       }
-      await executeEvinCli(["run", "--sequential", taskName]);
+      await executeEvinTask(clientManager, taskName, { sequential: true });
     })
   );
 
@@ -231,7 +251,7 @@ export function registerCommands(
       // 1. If explicit task argument is provided, execute directly
       const directTask = extractTaskNameArg(arg);
       if (directTask) {
-        await executeEvinCli(["run", directTask]);
+        await executeEvinTask(clientManager, directTask);
         return;
       }
 
@@ -243,24 +263,36 @@ export function registerCommands(
         // Fallback to general task picker if not inside a flow file
         const taskName = await promptForTaskName(clientManager);
         if (taskName) {
-          await executeEvinCli(["run", taskName]);
+          await executeEvinTask(clientManager, taskName);
         }
         return;
       }
 
-      const tasks = parseFlowDocumentTasks(editor.document);
+      const codeLenses =
+        (await vscode.commands.executeCommand<vscode.CodeLens[]>(
+          "vscode.executeCodeLensProvider",
+          editor.document.uri
+        )) ?? [];
+      const taskByName = new Map<string, { name: string; startLine: number }>();
+      for (const lens of codeLenses) {
+        const taskName = extractTaskNameArg(lens.command?.arguments?.[0]);
+        if (taskName) {
+          taskByName.set(taskName, { name: taskName, startLine: lens.range.start.line });
+        }
+      }
+      const tasks = [...taskByName.values()];
       const cursorLine = editor.selection.active.line;
-      const taskAtCursor = findFlowTaskAtLine(tasks, cursorLine);
+      const taskAtCursor = tasks.find((task) => task.startLine === cursorLine);
 
       // 2. If cursor is inside a task declaration, run that task immediately
       if (taskAtCursor) {
-        await executeEvinCli(["run", taskAtCursor.name]);
+        await executeEvinTask(clientManager, taskAtCursor.name);
         return;
       }
 
       // 3. If there is only one task in the file, run it
       if (tasks.length === 1) {
-        await executeEvinCli(["run", tasks[0].name]);
+        await executeEvinTask(clientManager, tasks[0].name);
         return;
       }
 
@@ -269,8 +301,6 @@ export function registerCommands(
         const picked = await vscode.window.showQuickPick(
           tasks.map((t) => ({
             label: t.name,
-            description: t.stage ? `[${t.stage}]` : undefined,
-            detail: t.description ?? undefined,
             taskName: t.name,
           })),
           {
@@ -279,7 +309,7 @@ export function registerCommands(
           }
         );
         if (picked?.taskName) {
-          await executeEvinCli(["run", picked.taskName]);
+          await executeEvinTask(clientManager, picked.taskName);
         }
         return;
       }
@@ -287,7 +317,7 @@ export function registerCommands(
       // 5. If no tasks defined in this file, prompt for any workspace task
       const fallbackTask = await promptForTaskName(clientManager);
       if (fallbackTask) {
-        await executeEvinCli(["run", fallbackTask]);
+        await executeEvinTask(clientManager, fallbackTask);
       }
     })
   );

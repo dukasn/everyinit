@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
+  NotificationType,
   ServerOptions,
   Trace,
 } from "vscode-languageclient/node";
@@ -23,6 +24,22 @@ interface LspWorkspaceSymbol {
   containerName?: string | null;
 }
 
+export interface PipelineEventEnvelope {
+  readonly schema_version: number;
+  readonly run_id: string;
+  readonly seq: number;
+  readonly timestamp: string;
+  readonly kind: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+}
+
+export interface RunTaskResult {
+  readonly runId: string;
+  readonly success: boolean;
+  readonly cancelled: boolean;
+  readonly exitCode: number | null;
+}
+
 export class EveryinitClientManager implements vscode.Disposable {
   private evinClient: LanguageClient | null = null;
   private eshClient: LanguageClient | null = null;
@@ -31,9 +48,18 @@ export class EveryinitClientManager implements vscode.Disposable {
   private evinMissingNotified = false;
   private eshMissingNotified = false;
   private stateChangeTimer: ReturnType<typeof setTimeout> | null = null;
+  private pipelineEventListener: vscode.Disposable | null = null;
 
   private readonly stateEmitter = new vscode.EventEmitter<void>();
   public readonly onDidChangeState: vscode.Event<void> = this.stateEmitter.event;
+  private readonly pipelineEventEmitter = new vscode.EventEmitter<PipelineEventEnvelope>();
+  public readonly onDidReceivePipelineEvent: vscode.Event<PipelineEventEnvelope> =
+    this.pipelineEventEmitter.event;
+  private readonly taskRunFinishedEmitter = new vscode.EventEmitter<{
+    readonly taskName: string;
+    readonly runId?: string;
+  }>();
+  public readonly onDidFinishTaskRun = this.taskRunFinishedEmitter.event;
 
   private outputChannel: vscode.OutputChannel;
 
@@ -131,6 +157,10 @@ export class EveryinitClientManager implements vscode.Disposable {
       client.setTrace(this.resolveTrace(trace));
       await client.start();
       this.evinClient = client;
+      this.pipelineEventListener = client.onNotification(
+        new NotificationType<PipelineEventEnvelope>("evin/pipelineEvent"),
+        (event) => this.pipelineEventEmitter.fire(event)
+      );
       this.outputChannel.appendLine("[evin] Language server started successfully.");
       this.scheduleStateChange();
     } catch (error) {
@@ -238,6 +268,42 @@ export class EveryinitClientManager implements vscode.Disposable {
     }
   }
 
+  public async runTask(
+    taskName: string,
+    options: {
+      readonly dryRun?: boolean;
+      readonly includeOutput?: boolean;
+      readonly parallel?: boolean;
+      readonly sequential?: boolean;
+    } = {}
+  ): Promise<RunTaskResult | null> {
+    await this.startEvinClient();
+    const client = this.evinClient;
+    if (!client) {
+      return null;
+    }
+    let result: RunTaskResult | null = null;
+    try {
+      result = await client.sendRequest<RunTaskResult>("workspace/executeCommand", {
+        command: options.dryRun ? "everyinit.lspRunTaskDryRun" : "everyinit.lspRunTask",
+        arguments: [{
+          taskName,
+          includeOutput: options.includeOutput ?? false,
+          parallel: options.parallel ?? false,
+          sequential: options.sequential ?? false,
+        }],
+      });
+      return result;
+    } catch (error) {
+      this.outputChannel.appendLine(
+        `[evin] LSP task execution failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return null;
+    } finally {
+      this.taskRunFinishedEmitter.fire({ taskName, runId: result?.runId });
+    }
+  }
+
   private async fetchFallbackCatalog(client: LanguageClient): Promise<WorkspaceCatalogResult | null> {
     try {
       const symbols =
@@ -334,6 +400,8 @@ export class EveryinitClientManager implements vscode.Disposable {
     if (this.evinClient) {
       const client = this.evinClient;
       this.evinClient = null;
+      this.pipelineEventListener?.dispose();
+      this.pipelineEventListener = null;
       stops.push(
         client.stop(2000).catch((err) => {
           this.outputChannel.appendLine(`[evin] Error stopping client: ${String(err)}`);
@@ -370,6 +438,8 @@ export class EveryinitClientManager implements vscode.Disposable {
     }
     void this.stopAll();
     this.stateEmitter.dispose();
+    this.pipelineEventEmitter.dispose();
+    this.taskRunFinishedEmitter.dispose();
     this.outputChannel.dispose();
   }
 

@@ -127,6 +127,23 @@ pub struct WorkspaceSymbol {
     pub container_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeLens {
+    pub range: Range,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<CodeLensCommand>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodeLensCommand {
+    pub title: String,
+    pub command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Vec<Value>>,
+}
+
 pub fn read_message<R: Read + BufRead>(reader: &mut R) -> io::Result<Option<String>> {
     let mut content_length = None;
     loop {

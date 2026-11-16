@@ -62,7 +62,7 @@ impl<'a, W: Write> RequestDispatcher<'a, W> {
                     self.server.respond(self.writer, id, &result)?;
                     if self.server.needs_initial_rebuild {
                         self.server.needs_initial_rebuild = false;
-                        self.server.rebuild_and_publish(self.writer)?;
+                        self.server.schedule_analysis(self.writer)?;
                     }
                 }
                 Err(err) => {

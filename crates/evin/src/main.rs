@@ -17,10 +17,11 @@
 #[global_allocator]
 static ALLOCATOR: peak_alloc::PeakAlloc = peak_alloc::PeakAlloc;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 pub mod commands;
 pub mod engine;
+pub mod event_stream;
 pub mod events;
 mod lsp;
 pub mod phases;
@@ -47,6 +48,11 @@ struct Cli {
 
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum EventFormat {
+    Ndjson,
 }
 
 #[derive(Subcommand)]
@@ -115,6 +121,16 @@ enum Commands {
         #[arg(long, conflicts_with = "parallel", help = evin_locales::t!("run-sequential-help"))]
         sequential: bool,
 
+        #[arg(long, value_enum, help = evin_locales::t!("run-events-help"))]
+        events: Option<EventFormat>,
+
+        #[arg(
+            long,
+            requires = "events",
+            help = evin_locales::t!("run-events-output-help")
+        )]
+        events_output: bool,
+
         #[arg(
             last = true,
             allow_hyphen_values = true,
@@ -135,7 +151,7 @@ async fn main() {
     }
     let cli = Cli::parse();
     if matches!(cli.command, Commands::Lsp) {
-        if let Err(error) = crate::lsp::run_lsp_server() {
+        if let Err(error) = crate::lsp::run_lsp_server().await {
             eprintln!("evin: lsp server error: {error}");
             std::process::exit(1);
         }
@@ -191,15 +207,40 @@ async fn main() {
     };
     let watch_mode = initial_watch_spec.is_some();
 
-    // The UI is the sole consumer and lifecycle events must not be dropped
-    // when a verbose command publishes a large burst of captured output.
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<crate::events::PipelineEvent>();
+    let (event_format, include_event_output) = match &cli.command {
+        Commands::Run {
+            events,
+            events_output,
+            ..
+        } => (*events, *events_output),
+        _ => (None, false),
+    };
+    let run_id = event_format.map(|_| crate::event_stream::new_run_id());
+    let (event_publisher, event_writer) = if let Some(run_id) = &run_id {
+        let (publisher, subscriber) =
+            crate::event_stream::public_event_channel(run_id.clone(), include_event_output);
+        let writer = tokio::spawn(crate::event_stream::write_ndjson(subscriber));
+        (Some(publisher), Some(writer))
+    } else {
+        (None, None)
+    };
+
+    // Keep the internal pipeline stream lossless for lifecycle events. The
+    // dispatcher fans the same events out to the terminal and optional public
+    // event subscriber.
+    let (tx, event_rx) = tokio::sync::mpsc::unbounded_channel::<crate::events::PipelineEvent>();
+    let (ui_tx, ui_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let ui_handle = tokio::spawn(crate::events::run_ui_reporter(
-        rx,
+        ui_rx,
         presentation_mode,
         verbose,
         watch_mode,
+    ));
+    let dispatcher_handle = tokio::spawn(crate::event_stream::dispatch_pipeline_events(
+        event_rx,
+        ui_tx,
+        event_publisher.clone(),
     ));
     tokio::task::yield_now().await;
 
@@ -264,6 +305,7 @@ async fn main() {
             parallel,
             sequential,
             ref args,
+            ..
         } => {
             ctx.targets = vec![target.clone()];
             ctx.run_payload = args.clone();
@@ -297,6 +339,16 @@ async fn main() {
         }
     };
 
+    let public_run_started = std::time::Instant::now();
+    if let Some(publisher) = &event_publisher {
+        publisher.publish(crate::event_stream::PublicEvent::RunStarted {
+            workspace: std::env::current_dir()
+                .ok()
+                .map(|path| path.display().to_string()),
+            tasks: ctx.targets.clone(),
+        });
+    }
+
     if let Some(request) = run_session {
         if let Some(spec) = initial_watch_spec {
             crate::watch::supervise(tx.clone(), request, spec).await;
@@ -322,7 +374,28 @@ async fn main() {
         });
     }
 
+    drop(tx);
+    let _ = dispatcher_handle.await;
     let success = ui_handle.await.unwrap_or(false);
+
+    if let Some(publisher) = event_publisher {
+        publisher.publish(crate::event_stream::PublicEvent::RunCompleted {
+            duration_ms: public_run_started
+                .elapsed()
+                .as_millis()
+                .min(u64::MAX as u128) as u64,
+            succeeded: success,
+        });
+        drop(publisher);
+    }
+    if let Some(writer) = event_writer
+        && let Err(error) = writer
+            .await
+            .unwrap_or_else(|error| Err(std::io::Error::other(error)))
+    {
+        eprintln!("evin: event stream error: {error}");
+        std::process::exit(1);
+    }
 
     if !success {
         std::process::exit(1);
@@ -530,5 +603,36 @@ mod tests {
             resolve_verbosity_flags(&cli, None, Some("true")),
             (true, true)
         );
+    }
+
+    #[test]
+    fn ndjson_events_are_opt_in_and_output_requires_the_stream() {
+        let cli = Cli::try_parse_from(["evin", "run", "--events", "ndjson", "test"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Run {
+                events: Some(EventFormat::Ndjson),
+                events_output: false,
+                ..
+            }
+        ));
+
+        assert!(Cli::try_parse_from(["evin", "run", "--events-output", "test"]).is_err());
+        let cli = Cli::try_parse_from([
+            "evin",
+            "run",
+            "--events",
+            "ndjson",
+            "--events-output",
+            "test",
+        ])
+        .unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::Run {
+                events_output: true,
+                ..
+            }
+        ));
     }
 }

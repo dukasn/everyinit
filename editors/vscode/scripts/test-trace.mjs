@@ -19,35 +19,6 @@ const moduleUrl = `data:text/javascript;base64,${Buffer.from(
 ).toString("base64")}`;
 const { parseTraceDocument, formatDurationUs, normalizeTraceStatus } = await import(moduleUrl);
 
-const flowTasksBundle = await esbuild.build({
-  entryPoints: [resolve(vscodeRoot, "src/flowTasks.ts")],
-  bundle: true,
-  write: false,
-  format: "esm",
-  platform: "node",
-  target: "node20",
-  plugins: [
-    {
-      name: "mock-vscode",
-      setup(build) {
-        build.onResolve({ filter: /^vscode$/ }, () => ({
-          path: "vscode",
-          namespace: "mock-vscode",
-        }));
-        build.onLoad({ filter: /.*/, namespace: "mock-vscode" }, () => ({
-          contents:
-            "export class EventEmitter { event = () => {}; fire() {} }; export class Range { constructor(a,b,c,d) {} }; export class CodeLens { constructor(r, c) {} };",
-          loader: "js",
-        }));
-      },
-    },
-  ],
-});
-const flowTasksUrl = `data:text/javascript;base64,${Buffer.from(
-  flowTasksBundle.outputFiles[0].text
-).toString("base64")}`;
-const { parseFlowDocumentTasks, findFlowTaskAtLine } = await import(flowTasksUrl);
-
 test("parseTraceDocument computes wall duration, parallelism, and task statuses", () => {
   const sample = JSON.stringify({
     traceEvents: [
@@ -198,63 +169,4 @@ test("formatDurationUs and normalizeTraceStatus format expected units", () => {
   assert.equal(normalizeTraceStatus("unverified"), "unverified");
   assert.equal(normalizeTraceStatus(undefined), "unknown");
 });
-
-test("parseFlowDocumentTasks detects root tasks, ranges, stages, and descriptions", () => {
-  const content = `#!evin/v1
-workspace:
-  name: main
-stages: [Build, Check]
-
-tasks:
-  build:
-    stage: Build
-    description: "Build binary"
-    steps:
-      - run: cargo build
-
-  check:
-    stage: Check
-    run: cargo check
-`;
-
-  const tasks = parseFlowDocumentTasks({ getText: () => content });
-  assert.equal(tasks.length, 2);
-  assert.equal(tasks[0].name, "build");
-  assert.equal(tasks[0].shortName, "build");
-  assert.equal(tasks[0].module, null);
-  assert.equal(tasks[0].stage, "Build");
-  assert.equal(tasks[0].description, "Build binary");
-  assert.equal(tasks[0].startLine, 6);
-  assert.equal(tasks[0].endLine, 11);
-
-  assert.equal(tasks[1].name, "check");
-  assert.equal(tasks[1].stage, "Check");
-  assert.equal(tasks[1].startLine, 12);
-
-  // findFlowTaskAtLine
-  assert.equal(findFlowTaskAtLine(tasks, 0), null);
-  assert.equal(findFlowTaskAtLine(tasks, 7)?.name, "build");
-  assert.equal(findFlowTaskAtLine(tasks, 11)?.name, "build");
-  assert.equal(findFlowTaskAtLine(tasks, 14)?.name, "check");
-});
-
-test("parseFlowDocumentTasks detects module qualified tasks", () => {
-  const content = `#!evin/v1
-module:
-  name: vscode
-
-tasks:
-  test:
-    stage: Test
-    run: npm test
-`;
-
-  const tasks = parseFlowDocumentTasks({ getText: () => content });
-  assert.equal(tasks.length, 1);
-  assert.equal(tasks[0].name, "vscode:test");
-  assert.equal(tasks[0].shortName, "test");
-  assert.equal(tasks[0].module, "vscode");
-  assert.equal(tasks[0].stage, "Test");
-});
-
 

@@ -38,6 +38,12 @@ pub struct EvinLspServer {
     pub(super) initialized: bool,
     pub(super) shutdown_requested: bool,
     pub(super) needs_initial_rebuild: bool,
+    pub(super) defer_analysis: bool,
+    pub(super) analysis_pending: bool,
+    pub(super) analysis_generation: u64,
+    pub(super) analysis_in_flight: Option<u64>,
+    pub(super) work_done_progress: bool,
+    pub(super) active_progress_tokens: BTreeSet<u64>,
     pub(super) root: Option<PathBuf>,
     pub(super) canonical_root: Option<PathBuf>,
     pub(super) source: OverlaySource,
@@ -65,7 +71,25 @@ impl EvinLspServer {
             }
         };
 
+        if value.get("id").is_some() && value.get("method").is_none() {
+            let _: JsonRpcResponse = match serde_json::from_value(value) {
+                Ok(response) => response,
+                Err(error) => {
+                    return self.respond_error(
+                        writer,
+                        Value::Null,
+                        LspError::INVALID_REQUEST,
+                        error.to_string(),
+                    );
+                }
+            };
+            return Ok(());
+        }
+
         if value.get("id").is_some() {
+            if self.analysis_pending || self.analysis_in_flight == Some(self.analysis_generation) {
+                self.rebuild_and_publish(writer)?;
+            }
             match serde_json::from_value::<JsonRpcRequest>(value) {
                 Ok(request) => self.handle_request(request, writer),
                 Err(error) => self.respond_error(
@@ -111,6 +135,7 @@ impl EvinLspServer {
             .on::<GotoDefinitionRequest, _>(Self::on_definition)?
             .on::<ReferencesRequest, _>(Self::on_references)?
             .on::<DocumentSymbolRequest, _>(Self::on_document_symbols)?
+            .on::<CodeLensRequest, _>(Self::on_code_lens)?
             .on::<WorkspaceSymbolRequest, _>(Self::on_workspace_symbols)?
             .on::<WorkspaceCatalogRequest, _>(Self::on_workspace_catalog)?
             .finish()
@@ -127,7 +152,7 @@ impl EvinLspServer {
             .on::<DidChangeNotification, _>(Self::on_did_change)?
             .on::<DidCloseNotification, _>(Self::on_did_close)?
             .on::<DidChangeWatchedFilesNotification, _>(|server, _, writer| {
-                server.rebuild_and_publish(writer)
+                server.schedule_analysis(writer)
             })?
             .on::<ExitNotification, _>(Self::on_exit)?
             .finish()
@@ -138,11 +163,115 @@ impl EvinLspServer {
     // -----------------------------------------------------------------------
 
     pub(super) fn rebuild_and_publish<W: Write>(&mut self, writer: &mut W) -> io::Result<()> {
+        self.end_all_analysis_progress(writer)?;
+        self.analysis_generation = self.analysis_generation.saturating_add(1);
+        self.analysis_pending = false;
+        self.analysis_in_flight = None;
+        let generation = self.analysis_generation;
+        self.begin_analysis_progress(generation, writer)?;
         self.source_indices.borrow_mut().clear();
         let analysis = WorkspaceSemanticAnalysis::build(
             WorkspaceSnapshot::load_sync(&self.source),
             &builtin_actions(),
         );
+        self.commit_analysis(analysis);
+        self.publish_diagnostics(writer)?;
+        self.end_analysis_progress(generation, writer)
+    }
+
+    pub(super) fn take_analysis_job(&mut self) -> Option<(u64, OverlaySource)> {
+        if !self.analysis_pending {
+            return None;
+        }
+        self.analysis_pending = false;
+        self.analysis_in_flight = Some(self.analysis_generation);
+        Some((self.analysis_generation, self.source.clone()))
+    }
+
+    pub(super) fn apply_background_analysis<W: Write>(
+        &mut self,
+        generation: u64,
+        analysis: WorkspaceSemanticAnalysis,
+        writer: &mut W,
+    ) -> io::Result<bool> {
+        if generation != self.analysis_generation || self.analysis_in_flight != Some(generation) {
+            return Ok(false);
+        }
+        self.analysis_in_flight = None;
+        self.source_indices.borrow_mut().clear();
+        self.commit_analysis(analysis);
+        self.publish_diagnostics(writer)?;
+        self.end_analysis_progress(generation, writer)?;
+        Ok(true)
+    }
+
+    pub(super) fn fail_background_analysis<W: Write>(
+        &mut self,
+        generation: u64,
+        writer: &mut W,
+    ) -> io::Result<()> {
+        if self.analysis_in_flight == Some(generation) {
+            self.analysis_in_flight = None;
+        }
+        self.end_analysis_progress(generation, writer)
+    }
+
+    pub(super) fn begin_analysis_progress<W: Write>(
+        &mut self,
+        generation: u64,
+        writer: &mut W,
+    ) -> io::Result<()> {
+        if !self.work_done_progress || !self.active_progress_tokens.insert(generation) {
+            return Ok(());
+        }
+        let token = format!("evin-analysis-{generation}");
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": format!("evin-progress-create-{generation}"),
+            "method": "window/workDoneProgress/create",
+            "params": { "token": token },
+        });
+        write_message(writer, &request.to_string())?;
+        let begin = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "$/progress",
+            "params": {
+                "token": token,
+                "value": { "kind": "begin", "title": "Analyzing Evin workspace" }
+            }
+        });
+        write_message(writer, &begin.to_string())
+    }
+
+    pub(super) fn end_analysis_progress<W: Write>(
+        &mut self,
+        generation: u64,
+        writer: &mut W,
+    ) -> io::Result<()> {
+        if !self.work_done_progress || !self.active_progress_tokens.remove(&generation) {
+            return Ok(());
+        }
+        let notification = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "$/progress",
+            "params": {
+                "token": format!("evin-analysis-{generation}"),
+                "value": { "kind": "end" }
+            }
+        });
+        write_message(writer, &notification.to_string())
+    }
+
+    fn end_all_analysis_progress<W: Write>(&mut self, writer: &mut W) -> io::Result<()> {
+        let active = std::mem::take(&mut self.active_progress_tokens);
+        for generation in active {
+            self.active_progress_tokens.insert(generation);
+            self.end_analysis_progress(generation, writer)?;
+        }
+        Ok(())
+    }
+
+    fn commit_analysis(&mut self, analysis: WorkspaceSemanticAnalysis) {
         if let Some(config) = analysis.config {
             self.config = Some(config);
             self.config_stale = false;
@@ -151,7 +280,19 @@ impl EvinLspServer {
         }
         self.findings = analysis.findings;
         self.session.update_index(analysis.index);
-        self.publish_diagnostics(writer)
+    }
+
+    pub(super) fn schedule_analysis<W: Write>(&mut self, writer: &mut W) -> io::Result<()> {
+        if self.defer_analysis {
+            if let Some(generation) = self.analysis_in_flight.take() {
+                self.end_analysis_progress(generation, writer)?;
+            }
+            self.analysis_generation = self.analysis_generation.saturating_add(1);
+            self.analysis_pending = true;
+            Ok(())
+        } else {
+            self.rebuild_and_publish(writer)
+        }
     }
 
     fn publish_diagnostics<W: Write>(&mut self, writer: &mut W) -> io::Result<()> {

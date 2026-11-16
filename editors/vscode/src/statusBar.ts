@@ -5,12 +5,46 @@ export class EveryinitStatusBar implements vscode.Disposable {
   private item: vscode.StatusBarItem;
   private clientManager: EveryinitClientManager;
   private disposables: vscode.Disposable[] = [];
+  private readonly runningTasks = new Map<string, string>();
 
   constructor(clientManager: EveryinitClientManager) {
     this.clientManager = clientManager;
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.item.command = "everyinit.statusMenu";
     this.disposables.push(this.item);
+    this.disposables.push(
+      this.clientManager.onDidReceivePipelineEvent((event) => {
+        if (event.kind === "run_started") {
+          const tasks = event.payload.tasks;
+          this.runningTasks.set(
+            event.run_id,
+            Array.isArray(tasks) && tasks.every((task) => typeof task === "string")
+              ? tasks.join(", ")
+              : "task"
+          );
+        } else if (event.kind === "task_started") {
+          const name = event.payload.name;
+          if (typeof name === "string") {
+            this.runningTasks.set(event.run_id, name);
+          }
+        } else if (event.kind === "run_completed") {
+          this.runningTasks.delete(event.run_id);
+        }
+        this.update(vscode.window.activeTextEditor?.document.languageId);
+      })
+    );
+    this.disposables.push(
+      this.clientManager.onDidFinishTaskRun(({ taskName, runId }) => {
+        if (runId) {
+          this.runningTasks.delete(runId);
+        } else {
+          for (const [activeRunId, runningTask] of this.runningTasks) {
+            if (runningTask === taskName) this.runningTasks.delete(activeRunId);
+          }
+        }
+        this.update(vscode.window.activeTextEditor?.document.languageId);
+      })
+    );
 
     // Register status bar menu command
     this.disposables.push(
@@ -62,8 +96,15 @@ export class EveryinitStatusBar implements vscode.Disposable {
   public update(languageId?: string): void {
     if (languageId === "flow") {
       const running = this.clientManager.isEvinRunning();
-      this.item.text = running ? "$(everyinit-logo) FLOW" : "$(circle-slash) FLOW (offline)";
-      this.item.tooltip = "Everyinit: FLOW Language Server";
+      const taskRun = [...this.runningTasks.values()].at(-1);
+      this.item.text = taskRun
+        ? `$(sync~spin) ${taskRun}`
+        : running
+          ? "$(everyinit-logo) FLOW"
+          : "$(circle-slash) FLOW (offline)";
+      this.item.tooltip = taskRun
+        ? `Everyinit: Running ${taskRun}`
+        : "Everyinit: FLOW Language Server";
       this.item.show();
     } else if (languageId === "esh") {
       const running = this.clientManager.isEshRunning();
@@ -82,4 +123,3 @@ export class EveryinitStatusBar implements vscode.Disposable {
     this.disposables = [];
   }
 }
-

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { EveryinitClientManager } from "./client.js";
 import {
-  executeEvinCli,
+  executeEvinTask,
   extractTaskNameArg,
   openLocationInEditor,
 } from "./commands.js";
@@ -41,6 +41,7 @@ export class EveryinitSidebarController implements vscode.Disposable {
   private readonly workspaceView: vscode.TreeView<WorkspaceTreeNode>;
 
   private catalog: WorkspaceCatalogResult | null = null;
+  private readonly runningTasks = new Map<string, { readonly runId: string; readonly state: string }>();
   private traceReport: ParsedTraceReport | null = null;
   private eshScripts: vscode.Uri[] = [];
   private taskGrouping: TaskGroupingMode;
@@ -67,6 +68,7 @@ export class EveryinitSidebarController implements vscode.Disposable {
       traceReport: this.traceReport,
       grouping: this.taskGrouping,
       filter: this.taskFilter,
+      runningTasks: this.runningTasks,
     }));
 
     this.traceProvider = new TraceTreeProvider(() => ({
@@ -82,10 +84,10 @@ export class EveryinitSidebarController implements vscode.Disposable {
 
     this.traceWebview = new EveryinitTraceWebviewManager({
       onRunTask: (taskName) => {
-        void executeEvinCli(["run", taskName]);
+        void executeEvinTask(this.clientManager, taskName);
       },
       onDryRunTask: (taskName) => {
-        void executeEvinCli(["--dry-run", "run", taskName]);
+        void executeEvinTask(this.clientManager, taskName, { dryRun: true });
       },
       onOpenTaskDefinition: (taskName) => {
         void this.openTaskByName(taskName);
@@ -118,6 +120,48 @@ export class EveryinitSidebarController implements vscode.Disposable {
       this.tasksProvider,
       this.traceProvider,
       this.workspaceProvider
+    );
+
+    this.disposables.push(
+      this.clientManager.onDidReceivePipelineEvent((event) => {
+        this.traceWebview.onPipelineEvent(event);
+        const payload = event.payload;
+        const name = typeof payload.name === "string" ? payload.name : null;
+        if (!name) {
+          return;
+        }
+        if (event.kind === "task_started") {
+          this.runningTasks.set(name, { runId: event.run_id, state: "running" });
+        } else if (event.kind === "task_step_started") {
+          this.runningTasks.set(
+            name,
+            {
+              runId: event.run_id,
+              state: `step ${String(payload.step_number ?? "?")}/${String(payload.step_count ?? "?")}`,
+            }
+          );
+        } else if (event.kind === "task_ended" || event.kind === "daemon_stopped") {
+          if (this.runningTasks.get(name)?.runId === event.run_id) {
+            this.runningTasks.delete(name);
+          }
+        } else if (event.kind === "daemon_started") {
+          this.runningTasks.set(name, { runId: event.run_id, state: "daemon starting" });
+        } else if (event.kind === "daemon_status" && typeof payload.status === "string") {
+          this.runningTasks.set(name, { runId: event.run_id, state: payload.status });
+        }
+        this.tasksProvider.refresh();
+      })
+    );
+    this.disposables.push(
+      this.clientManager.onDidFinishTaskRun(({ taskName, runId }) => {
+        this.traceWebview.onTaskRunFinished(taskName, runId);
+        for (const [name, running] of this.runningTasks) {
+          if (runId ? running.runId === runId : name === taskName) {
+            this.runningTasks.delete(name);
+          }
+        }
+        this.tasksProvider.refresh();
+      })
     );
 
     this.registerSidebarCommands();
@@ -437,6 +481,7 @@ interface TasksTreeState {
   traceReport: ParsedTraceReport | null;
   grouping: TaskGroupingMode;
   filter: string;
+  runningTasks: ReadonlyMap<string, { readonly runId: string; readonly state: string }>;
 }
 
 type TaskTreeNode = TaskGroupNode | TaskItemNode | TaskDetailNode;
@@ -464,7 +509,8 @@ export class TaskItemNode extends vscode.TreeItem {
   constructor(
     public readonly task: CatalogTaskItem,
     displayLabel: string,
-    latestSpan: ParsedTraceSpan | undefined
+    latestSpan: ParsedTraceSpan | undefined,
+    runningState?: string
   ) {
     const hasDetails =
       task.needs.length > 0 || task.hooks.length > 0 || task.watchPaths.length > 0;
@@ -477,9 +523,14 @@ export class TaskItemNode extends vscode.TreeItem {
 
     this.taskName = task.name;
     this.contextValue = "taskItem";
-    this.iconPath = resolveTaskIcon(task, latestSpan);
+    this.iconPath = runningState
+      ? new vscode.ThemeIcon("sync~spin")
+      : resolveTaskIcon(task, latestSpan);
 
     const badges: string[] = [];
+    if (runningState) {
+      badges.push(runningState);
+    }
     if (task.stage) {
       badges.push(task.stage);
     }
@@ -551,7 +602,7 @@ class TasksTreeProvider implements vscode.TreeDataProvider<TaskTreeNode>, vscode
   }
 
   public getChildren(element?: TaskTreeNode): TaskTreeNode[] {
-    const { catalog, traceReport, grouping, filter } = this.getState();
+    const { catalog, traceReport, grouping, filter, runningTasks } = this.getState();
     if (!catalog) {
       return [];
     }
@@ -572,7 +623,12 @@ class TasksTreeProvider implements vscode.TreeDataProvider<TaskTreeNode>, vscode
       return element.tasks.map((task) => {
         const displayLabel = grouping === "module" ? task.shortName : task.name;
         const latestSpan = traceReport?.latestByTask.get(task.name);
-        return new TaskItemNode(task, displayLabel, latestSpan);
+        return new TaskItemNode(
+          task,
+          displayLabel,
+          latestSpan,
+          runningTasks.get(task.name)?.state
+        );
       });
     }
 
@@ -1070,4 +1126,3 @@ function statusThemeIcon(status: TraceTaskStatus): vscode.ThemeIcon {
       return new vscode.ThemeIcon("circle-outline");
   }
 }
-

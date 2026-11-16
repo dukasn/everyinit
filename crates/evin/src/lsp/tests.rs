@@ -124,10 +124,167 @@ fn initialize_advertises_workspace_capabilities_and_stdout_is_framed() {
         messages[0]["result"]["capabilities"]["semanticTokensProvider"]["full"],
         true
     );
+    assert_eq!(
+        messages[0]["result"]["capabilities"]["codeLensProvider"]["resolveProvider"],
+        false
+    );
     assert!(
         messages
             .iter()
             .any(|message| message["method"] == "textDocument/publishDiagnostics")
+    );
+}
+
+#[test]
+fn code_lenses_come_from_workspace_task_semantics() {
+    let directory = tempfile::tempdir().unwrap();
+    workspace(directory.path());
+    let mut server = EvinLspServer::default();
+    initialize(&mut server, directory.path(), false);
+
+    let mut output = Vec::new();
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "textDocument/codeLens",
+                "params": { "textDocument": { "uri": uri(directory.path(), ".evin/workspace.flow") } }
+            })
+            .to_string(),
+            &mut output,
+        )
+        .unwrap();
+
+    let result = bodies(output).pop().unwrap()["result"].clone();
+    let lenses = result.as_array().unwrap();
+    assert_eq!(lenses.len(), 2);
+    assert_eq!(lenses[0]["command"]["command"], "everyinit.lspRunTask");
+    assert_eq!(lenses[0]["command"]["arguments"][0], "build");
+    assert_eq!(
+        lenses[1]["command"]["command"],
+        "everyinit.lspRunTaskDryRun"
+    );
+    assert_eq!(lenses[1]["command"]["arguments"][0], "build");
+    assert_eq!(lenses[0]["range"]["start"]["line"], 4);
+}
+
+#[test]
+fn analysis_work_done_progress_is_created_and_closed() {
+    let directory = tempfile::tempdir().unwrap();
+    workspace(directory.path());
+    let mut server = EvinLspServer::default();
+    let mut output = Vec::new();
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "rootUri": root_uri(directory.path()),
+                    "capabilities": { "window": { "workDoneProgress": true } }
+                }
+            })
+            .to_string(),
+            &mut output,
+        )
+        .unwrap();
+    let messages = bodies(output);
+    assert!(messages.iter().any(|message| {
+        message["method"] == "window/workDoneProgress/create"
+            && message["params"]["token"] == "evin-analysis-1"
+    }));
+    assert!(messages.iter().any(|message| {
+        message["method"] == "$/progress" && message["params"]["value"]["kind"] == "begin"
+    }));
+    assert!(messages.iter().any(|message| {
+        message["method"] == "$/progress" && message["params"]["value"]["kind"] == "end"
+    }));
+
+    let mut response_output = Vec::new();
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": "evin-progress-create-1",
+                "result": null
+            })
+            .to_string(),
+            &mut response_output,
+        )
+        .unwrap();
+    assert!(response_output.is_empty());
+}
+
+#[test]
+fn deferred_analysis_coalesces_edits_and_flushes_before_requests() {
+    let directory = tempfile::tempdir().unwrap();
+    workspace(directory.path());
+    let document_uri = uri(directory.path(), ".evin/workspace.flow");
+    let mut server = EvinLspServer {
+        defer_analysis: true,
+        ..Default::default()
+    };
+    initialize(&mut server, directory.path(), false);
+
+    let changed = "workspace: { name: app, version: 1.0.0 }\nstages: [Test]\ntasks:\n  fresh:\n    run: echo fresh\n";
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didOpen",
+                "params": { "textDocument": { "uri": document_uri, "version": 5, "text": changed } }
+            })
+            .to_string(),
+            &mut Vec::new(),
+        )
+        .unwrap();
+    assert!(server.analysis_pending);
+
+    // An out-of-order change is ignored and leaves the current document intact.
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/didChange",
+                "params": {
+                    "textDocument": { "uri": document_uri, "version": 4 },
+                    "contentChanges": [{ "text": "stale" }]
+                }
+            })
+            .to_string(),
+            &mut Vec::new(),
+        )
+        .unwrap();
+    assert_eq!(server.documents.get(&document_uri).unwrap().version, 5);
+    assert_eq!(server.documents.get(&document_uri).unwrap().text, changed);
+
+    let mut output = Vec::new();
+    server
+        .handle_message(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "textDocument/codeLens",
+                "params": { "textDocument": { "uri": document_uri } }
+            })
+            .to_string(),
+            &mut output,
+        )
+        .unwrap();
+    let messages = bodies(output);
+    assert!(messages.iter().any(|message| message["id"] == 3));
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["method"] == "textDocument/publishDiagnostics")
+    );
+    assert!(!server.analysis_pending);
+    assert!(
+        messages
+            .iter()
+            .any(|message| message["result"][0]["command"]["arguments"][0] == "fresh")
     );
 }
 
