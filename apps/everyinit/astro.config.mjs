@@ -15,8 +15,8 @@ export default defineConfig({
   site: "https://everyinit.dev",
   output: "static",
   vite: {
-    server: { allowedHosts: ["docs.everyinit.dev", "everyinit.dev"] },
-    preview: { allowedHosts: ["docs.everyinit.dev", "everyinit.dev"] },
+    server: { allowedHosts: ["learn.everyinit.dev", "docs.everyinit.dev", "everyinit.dev"] },
+    preview: { allowedHosts: ["learn.everyinit.dev", "docs.everyinit.dev", "everyinit.dev"] },
     plugins: [
       tailwindcss(),
       evinDocs({

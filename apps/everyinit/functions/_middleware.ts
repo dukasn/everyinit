@@ -9,15 +9,26 @@ export const onRequest = async ({ request, next }: PagesContext): Promise<Respon
   const normalizedPath = pathname.replace(/\/+$/, "") || "/";
   const isAsset = pathname.startsWith("/_astro/") || /\.[a-z0-9]+$/i.test(pathname);
 
+  if (url.hostname === "docs.everyinit.dev") {
+    const canonicalUrl = new URL(url);
+    canonicalUrl.protocol = "https:";
+    canonicalUrl.hostname = "learn.everyinit.dev";
+    canonicalUrl.port = "";
+    if (normalizedPath === "/install" || normalizedPath === "/docs/install") {
+      canonicalUrl.pathname = "/book/installation/";
+    }
+    return Response.redirect(canonicalUrl, 308);
+  }
+
   if (isAsset) return next();
 
   if (normalizedPath === "/install" || normalizedPath === "/docs/install") {
     url.pathname =
-      url.hostname === "docs.everyinit.dev" ? "/book/installation/" : "/docs/book/installation/";
+      url.hostname === "learn.everyinit.dev" ? "/book/installation/" : "/docs/book/installation/";
     return Response.redirect(url, 308);
   }
 
-  if (url.hostname === "docs.everyinit.dev") {
+  if (url.hostname === "learn.everyinit.dev") {
     if (pathname === "/") url.pathname = "/docs/";
     else if (pathname === "/docs") url.pathname = "/docs/";
     else if (!pathname.startsWith("/docs/")) url.pathname = `/docs${pathname}`;

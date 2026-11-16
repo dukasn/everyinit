@@ -20,7 +20,7 @@ curl -fsSL https://get.everyinit.dev/all | sh -s -- --package all
 ```
 
 The installer puts them in `~/.local/bin` by default. Ensure that directory is
-on `PATH`, then restart VS Code. See the [installation guide](https://docs.everyinit.dev/book/installation)
+on `PATH`, then restart VS Code. See the [installation guide](https://learn.everyinit.dev/book/installation)
 for platform details, pinned releases, and source installation. The project is
 early-stage canary software; interfaces may change before a stable release.
 The canary label applies to the CLI download channel. The Marketplace extension
@@ -59,8 +59,8 @@ echo "Hello from ESH"
 Save the script as `scripts/hello.esh`; you can also run the task in a terminal
 with `evin run hello`.
 
-Read the [first workflow guide](https://docs.everyinit.dev/book/first-workflow)
-and [first ESH script guide](https://docs.everyinit.dev/book/esh/first-script)
+Read the [first workflow guide](https://learn.everyinit.dev/book/first-workflow)
+and [first ESH script guide](https://learn.everyinit.dev/book/esh/first-script)
 for a complete introduction.
 
 ## Language servers and executable paths
@@ -100,8 +100,8 @@ settings above.
 
 ## Links
 
-- [Install and compatibility](https://docs.everyinit.dev/book/installation)
-- [Documentation](https://docs.everyinit.dev/)
+- [Install and compatibility](https://learn.everyinit.dev/book/installation)
+- [Documentation](https://learn.everyinit.dev/)
 - [Source repository](https://github.com/dukasn/everyinit)
 - [Report an issue](https://github.com/dukasn/everyinit/issues)
 - [License](https://github.com/dukasn/everyinit/blob/main/LICENSE)

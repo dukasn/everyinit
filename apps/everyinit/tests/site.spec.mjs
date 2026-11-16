@@ -58,7 +58,7 @@ test("the project home presents Evin and links to current installation instructi
   await expect(footer.getByRole("link", { name: "Trademark policy" })).toBeVisible();
   await expect(page.getByRole("link", { name: /documentation/i }).first()).toHaveAttribute(
     "href",
-    "https://docs.everyinit.dev/",
+    "/docs/",
   );
   await expect(page.getByRole("link", { name: "Install Everyinit" }).first()).toHaveAttribute(
     "href",
@@ -395,7 +395,7 @@ test("a search finishing after dismissal is ready when the dialog reopens", asyn
   await expect(page.locator("[data-search-option]:visible").first()).toContainText("Rustup");
 });
 
-test("Pages serves docs at the docs host root and preserves the project home domain", () => {
+test("Pages serves docs at the learn host root and redirects the old docs host", () => {
   const fetchForHost = (host, pathname) =>
     execFileSync(
       "curl",
@@ -411,15 +411,31 @@ test("Pages serves docs at the docs host root and preserves the project home dom
       { encoding: "utf8" },
     );
 
-  expect(fetchForHost("docs.everyinit.dev", "/")).toContain("Everyinit · Evin Docs");
-  expect(fetchForHost("docs.everyinit.dev", "/book/installation")).toContain(
+  expect(fetchForHost("learn.everyinit.dev", "/")).toContain("Everyinit · Evin Docs");
+  expect(fetchForHost("learn.everyinit.dev", "/book/installation")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
-  expect(fetchForHost("docs.everyinit.dev", "/install/")).toContain(
+  expect(fetchForHost("learn.everyinit.dev", "/install/")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
-  expect(fetchForHost("docs.everyinit.dev", "/docs/install")).toContain(
+  expect(fetchForHost("learn.everyinit.dev", "/docs/install")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
+  const legacyRedirect = execFileSync(
+    "curl",
+    [
+      "--silent",
+      "--show-error",
+      "--output",
+      "/dev/null",
+      "--write-out",
+      "%{http_code} %{redirect_url}",
+      "--header",
+      "Host: docs.everyinit.dev",
+      "http://127.0.0.1:8788/book/installation",
+    ],
+    { encoding: "utf8" },
+  );
+  expect(legacyRedirect).toBe("308 https://learn.everyinit.dev/book/installation");
   expect(fetchForHost("everyinit.dev", "/")).toContain("Everyinit — development, orchestrated");
 });

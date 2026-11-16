@@ -5,17 +5,19 @@ interface Props {
   title?: string;
   description?: string;
   canonical?: string;
+  locale?: string;
 }
 
 const {
   title = "Everyinit — development, orchestrated",
   description = "A calmer way to run the work around your code.",
   canonical = "https://everyinit.dev/",
+  locale = "en",
 } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={locale}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

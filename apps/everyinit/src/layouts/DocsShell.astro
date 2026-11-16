@@ -2,6 +2,7 @@
 import type { EvinDocsRouteData } from "everyinit";
 import docs from "virtual:evin/docs";
 import { renderDocument } from "../lib/render-doc";
+import { createTranslator, resolveLocale } from "../i18n";
 import SiteLayout from "./SiteLayout.astro";
 
 interface Props {
@@ -9,14 +10,28 @@ interface Props {
 }
 
 const { route } = Astro.props;
-const title = String(route.page.page.metadata.title ?? route.page.page.slug ?? "Documentation");
-const description = String(route.page.page.metadata.description ?? "Evin documentation, generated from the project source.");
+const locale = resolveLocale(route.locale);
+const t = createTranslator(route.locale);
+const title = String(route.page.page.metadata.title ?? route.page.page.slug ?? t("docs-generic-title"));
+const description = String(route.page.page.metadata.description ?? t("docs-generic-description"));
 const toc = route.page.page.toc ?? [];
 const groups = new Map<string, Map<string, typeof docs.routes>>();
+const navLabelIds: Record<string, string> = {
+  Guides: "docs-nav-guides",
+  Reference: "docs-nav-reference",
+  Contributing: "docs-nav-contributing",
+  Workflows: "docs-nav-workflows",
+  Delivery: "docs-nav-delivery",
+  ESH: "docs-nav-esh",
+  Actions: "docs-nav-actions",
+  "Core reference": "docs-nav-core-reference",
+  Project: "docs-nav-project",
+  Pages: "docs-nav-pages",
+};
+const navLabel = (label: string) => navLabelIds[label] ? t(navLabelIds[label]) : label;
 for (const item of docs.routes) {
   if (item.path === "/") continue;
   const [key = "guides", subsection = ""] = item.path.split("/").filter(Boolean);
-  const title = key === "book" ? "Guides" : key === "reference" ? "Reference" : key === "contributing" ? "Contributing" : key;
   const section = key === "book"
     ? subsection === "esh" ? "ESH" : subsection === "delivery" ? "Delivery" : "Workflows"
     : key === "reference"
@@ -29,9 +44,9 @@ for (const item of docs.routes) {
   groups.set(key, sections);
 }
 const navGroups = [...groups.entries()].map(([key, sections]) => ({
-  title: key === "book" ? "Guides" : key === "reference" ? "Reference" : key === "contributing" ? "Contributing" : key,
+  title: navLabel(key === "book" ? "Guides" : key === "reference" ? "Reference" : key === "contributing" ? "Contributing" : key),
   sections: [...sections.entries()].map(([title, entries]) => ({
-    title,
+    title: navLabel(title),
     entries: entries.sort((a, b) => (a.navigation_order ?? 9999) - (b.navigation_order ?? 9999) || a.path.localeCompare(b.path)),
   })),
 }));
@@ -46,90 +61,90 @@ const variants = docs.manifest.versions.flatMap((version) => docs.manifest.local
   return { version: version.id, locale, href: counterpart?.path, available: Boolean(counterpart) };
 }));
 const content = renderDocument(route.page.page.ast, docs.assets[route.page.id] ?? {});
-const canonical = `https://docs.everyinit.dev${route.path === "/" ? "/" : route.path}`;
+const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route.path}`;
 ---
 
-<SiteLayout title={`${title} · Evin Docs`} description={description} canonical={canonical}>
+<SiteLayout title={`${title} · Evin Docs`} description={description} canonical={canonical} locale={locale}>
   <div class="min-h-screen bg-paper">
     <header id="docs-site-header" class="docs-site-header sticky top-0 z-30 border-b border-line/80 bg-paper/90 backdrop-blur-xl">
       <div class="mx-auto flex h-[4.25rem] max-w-[90rem] items-center gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
-        <a href="https://everyinit.dev/" class="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight" aria-label="Everyinit home">
+        <a href="/" class="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight" aria-label={t("site-home")}>
           <span class="grid size-8 place-items-center rounded-lg bg-ink text-lime"><span class="brand-mark size-5" aria-hidden="true"></span></span>
-          <span>everyinit <span class="font-normal text-moss">/ docs</span></span>
+          <span>{t("docs-brand")}</span>
         </a>
-        <button id="docs-search-open" type="button" aria-label="Search documentation" class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full border border-line bg-surface px-0 text-left text-xs text-[#667263] transition hover:border-moss hover:text-ink sm:w-40 sm:justify-start sm:px-3 md:w-48">
+        <button id="docs-search-open" type="button" aria-label={t("docs-search-open")} class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full border border-line bg-surface px-0 text-left text-xs text-[#667263] transition hover:border-moss hover:text-ink sm:w-40 sm:justify-start sm:px-3 md:w-48">
           <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
-          <span class="hidden min-w-0 flex-1 truncate sm:block">Search docs</span>
+          <span class="hidden min-w-0 flex-1 truncate sm:block">{t("docs-search-open")}</span>
           <kbd class="hidden rounded border border-line px-1.5 py-0.5 font-mono text-[9px] text-moss sm:block">⌘ K</kbd>
         </button>
         <div class="flex shrink-0 items-center gap-1.5 md:ml-1 md:gap-2">
           <details class="docs-variant">
-            <summary aria-label={`Documentation version ${route.version}`}><span class="docs-variant-label">Version</span><span class="docs-variant-value">{route.version}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
+            <summary aria-label={t("docs-version-aria", { version: route.version })}><span class="docs-variant-label">{t("docs-version-label")}</span><span class="docs-variant-value">{route.version}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
             <div class="docs-variant-menu">
-              <p class="docs-variant-menu-title">Documentation version</p>
+              <p class="docs-variant-menu-title">{t("docs-version-menu")}</p>
               {variants.filter((variant) => variant.available && variant.locale === route.locale).map((variant) => <a href={variant.href} aria-current={variant.version === route.version ? "page" : undefined} class:list={["docs-variant-option", { "is-selected": variant.version === route.version }]}><span>{variant.version}</span><span class="docs-variant-check" aria-hidden="true">✓</span></a>)}
             </div>
           </details>
           <details class="docs-variant docs-variant-locale">
-            <summary aria-label={`Documentation language ${route.locale}`}><span class="docs-variant-label">Language</span><span class="docs-variant-value">{route.locale}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
+            <summary aria-label={t("docs-language-aria", { locale: route.locale })}><span class="docs-variant-label">{t("docs-language-label")}</span><span class="docs-variant-value">{route.locale}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
             <div class="docs-variant-menu">
-              <p class="docs-variant-menu-title">Documentation language</p>
+              <p class="docs-variant-menu-title">{t("docs-language-menu")}</p>
               {variants.filter((variant) => variant.available && variant.version === route.version).map((variant) => <a href={variant.href} aria-current={variant.locale === route.locale ? "page" : undefined} class:list={["docs-variant-option", { "is-selected": variant.locale === route.locale }]}><span>{variant.locale}</span><span class="docs-variant-check" aria-hidden="true">✓</span></a>)}
             </div>
           </details>
-          <a href="https://github.com/dukasn/everyinit" class="hidden rounded-full px-2 py-2 text-xs font-medium text-moss transition hover:text-ink md:inline-flex">GitHub ↗</a>
+          <a href="https://github.com/dukasn/everyinit" class="hidden rounded-full px-2 py-2 text-xs font-medium text-moss transition hover:text-ink md:inline-flex">{t("docs-github")}</a>
         </div>
       </div>
     </header>
 
     <dialog id="docs-search-dialog" data-version={route.version} data-locale={route.locale} class="docs-search-dialog" aria-labelledby="docs-search-heading">
       <section class="docs-search-panel">
-        <h2 id="docs-search-heading" class="sr-only">Search documentation</h2>
+        <h2 id="docs-search-heading" class="sr-only">{t("docs-search-open")}</h2>
         <div class="docs-search-input-row flex items-center gap-3 border-b border-line px-4">
           <svg class="size-5 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
-          <input id="docs-search-input" type="search" role="combobox" aria-label="Search documentation" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="docs-search-results" aria-describedby="docs-search-status" aria-expanded="false" autocomplete="off" placeholder="Search pages, topics, and paths…" class="h-14 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#667263]" />
-          <kbd class="rounded border border-line px-1.5 py-1 font-mono text-[10px] text-moss">ESC</kbd>
+          <input id="docs-search-input" type="search" role="combobox" aria-label={t("docs-search-open")} aria-autocomplete="list" aria-haspopup="listbox" aria-controls="docs-search-results" aria-describedby="docs-search-status" aria-expanded="false" autocomplete="off" placeholder={t("docs-search-input-placeholder")} class="h-14 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#667263]" />
+          <kbd class="rounded border border-line px-1.5 py-1 font-mono text-[10px] text-moss">{t("docs-search-escape")}</kbd>
         </div>
         <div class="docs-search-body">
           <div id="docs-search-prompt" class="docs-search-empty-state docs-search-welcome">
             <span class="docs-search-empty-mark" aria-hidden="true"><span class="brand-mark"></span></span>
-            <p class="docs-search-eyebrow">Documentation search</p>
-            <h3>What are you working on?</h3>
-            <p class="docs-search-copy">Find a guide, configuration option, action, or ESH topic.</p>
-            <div class="docs-search-suggestions" aria-label="Try a search">
-              <button type="button" data-search-query="first workflow">First workflow</button>
-              <button type="button" data-search-query="workspace configuration">Workspace config</button>
-              <button type="button" data-search-query="documentation action">Docs action</button>
+            <p class="docs-search-eyebrow">{t("docs-search-prompt-eyebrow")}</p>
+            <h3>{t("docs-search-prompt-title")}</h3>
+            <p class="docs-search-copy">{t("docs-search-prompt-copy")}</p>
+            <div class="docs-search-suggestions" aria-label={t("docs-search-suggestions-label")}>
+              <button type="button" data-search-query={t("docs-search-query-workflow")}>{t("docs-search-suggestion-workflow")}</button>
+              <button type="button" data-search-query={t("docs-search-query-workspace")}>{t("docs-search-suggestion-workspace")}</button>
+              <button type="button" data-search-query={t("docs-search-query-action")}>{t("docs-search-suggestion-action")}</button>
             </div>
           </div>
           <p id="docs-search-status" class="sr-only" aria-live="polite"></p>
-        <div id="docs-search-results" role="listbox" aria-label="Documentation pages" class="docs-search-results hidden"></div>
+        <div id="docs-search-results" role="listbox" aria-label={t("docs-search-results-label")} class="docs-search-results hidden"></div>
           <div id="docs-search-empty" class="docs-search-empty-state docs-search-no-results hidden">
             <span class="docs-search-empty-mark docs-search-empty-mark-muted" aria-hidden="true"><span class="brand-mark"></span></span>
-            <p class="docs-search-eyebrow">Keep exploring</p>
-            <h3>No matches just yet</h3>
-            <p id="docs-search-empty-message" class="docs-search-copy">Try a shorter phrase or one of these searches.</p>
-            <div class="docs-search-suggestions" aria-label="Suggested searches">
-              <button type="button" data-search-query="first workflow">First workflow</button>
-              <button type="button" data-search-query="workspace configuration">Workspace config</button>
-              <button type="button" data-search-query="documentation action">Docs action</button>
+            <p class="docs-search-eyebrow">{t("docs-search-empty-eyebrow")}</p>
+            <h3>{t("docs-search-empty-title")}</h3>
+            <p id="docs-search-empty-message" class="docs-search-copy">{t("docs-search-empty-copy")}</p>
+            <div class="docs-search-suggestions" aria-label={t("docs-search-suggestions-label")}>
+              <button type="button" data-search-query={t("docs-search-query-workflow")}>{t("docs-search-suggestion-workflow")}</button>
+              <button type="button" data-search-query={t("docs-search-query-workspace")}>{t("docs-search-suggestion-workspace")}</button>
+              <button type="button" data-search-query={t("docs-search-query-action")}>{t("docs-search-suggestion-action")}</button>
             </div>
-            <button class="docs-search-clear" type="button" data-search-clear>Clear search</button>
+            <button class="docs-search-clear" type="button" data-search-clear>{t("docs-search-clear")}</button>
           </div>
         </div>
         <div class="docs-search-footer flex items-center justify-between border-t border-line px-4 py-3 text-[10px] text-[#586553]">
-          <span>Search page content and headings</span><span><kbd>↑</kbd> <kbd>↓</kbd> to move · <kbd>↵</kbd> to open</span>
+          <span>{t("docs-search-footer-content")}</span><span>{t("docs-search-footer-keys")}</span>
         </div>
       </section>
     </dialog>
 
     <details class="docs-mobile-nav lg:hidden">
-      <summary><span>Browse documentation</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
-      <nav aria-label="Documentation sections">
+      <summary><span>{t("docs-mobile-browse")}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
+      <nav aria-label={t("docs-mobile-browse")}>
         <div class="docs-mobile-quick">
-          <a href="/book/installation">Install Evin <span aria-hidden="true">↗</span></a>
-          <a href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>Overview</a>
-          <button id="docs-mobile-search" type="button">Search documentation</button>
+          <a href="/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
+          <a href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
+          <button id="docs-mobile-search" type="button">{t("docs-search-open")}</button>
         </div>
         {navGroups.map((group) => <section class="docs-mobile-nav-group">
           <h2>{group.title}</h2>
@@ -143,12 +158,12 @@ const canonical = `https://docs.everyinit.dev${route.path === "/" ? "/" : route.
 
     <div class="mx-auto grid max-w-[90rem] lg:grid-cols-[15rem_minmax(0,1fr)_12rem]">
       <aside class="docs-sidebar hidden lg:block">
-        <section class="docs-sidebar-quick" aria-label="Quick actions">
-          <h2>Get started</h2>
-          <a class="docs-quick-primary" href="/book/installation">Install Evin <span aria-hidden="true">↗</span></a>
-          <a class="docs-quick-secondary" href="/book/first-workflow">Run your first workflow</a>
-          <a class="docs-quick-secondary docs-quick-overview" href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>Overview</a>
-          <button id="docs-sidebar-search" type="button"><span aria-hidden="true">⌕</span> Search documentation</button>
+        <section class="docs-sidebar-quick" aria-label={t("docs-quick-get-started")}>
+          <h2>{t("docs-quick-get-started")}</h2>
+          <a class="docs-quick-primary" href="/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
+          <a class="docs-quick-secondary" href="/book/first-workflow">{t("docs-quick-first-workflow")}</a>
+          <a class="docs-quick-secondary docs-quick-overview" href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
+          <button id="docs-sidebar-search" type="button"><span aria-hidden="true">⌕</span> {t("docs-search-open")}</button>
         </section>
         {navGroups.map((group) => <section class="mb-7">
           <div class="docs-sidebar-heading"><h2>{group.title}</h2><span>{group.sections.reduce((total, section) => total + section.entries.length, 0)}</span></div>
@@ -160,40 +175,40 @@ const canonical = `https://docs.everyinit.dev${route.path === "/" ? "/" : route.
           </details>)}
         </section>)}
         <div class="rounded-xl border border-line bg-surface p-4">
-          <p class="text-[10px] font-semibold uppercase tracking-[.12em] text-moss">Need a hand?</p>
-          <p class="mt-2 text-xs leading-5 text-[#6b776a]">Ask a question or help improve the docs.</p>
-          <a href="https://github.com/dukasn/everyinit/issues" class="mt-3 inline-flex text-xs font-semibold text-ink">Open an issue ↗</a>
+          <p class="text-[10px] font-semibold uppercase tracking-[.12em] text-moss">{t("docs-quick-need-help")}</p>
+          <p class="mt-2 text-xs leading-5 text-[#6b776a]">{t("docs-quick-help-description")}</p>
+          <a href="https://github.com/dukasn/everyinit/issues" class="mt-3 inline-flex text-xs font-semibold text-ink">{t("docs-quick-open-issue")}</a>
         </div>
       </aside>
 
       <main class:list={["docs-main min-w-0 px-5 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-14", { "docs-index-main": route.path === "/" }]}>
         <div class="docs-breadcrumb mb-8 flex items-center gap-2 text-[11px]">
-          <a href="/" class="hover:text-ink">Docs</a><span aria-hidden="true">/</span><span class="text-moss">{route.path === "/" ? "Overview" : title}</span>
+          <a href="/" class="hover:text-ink">{t("docs-breadcrumb")}</a><span aria-hidden="true">/</span><span class="text-moss">{route.path === "/" ? t("docs-mobile-overview") : title}</span>
         </div>
-        {route.is_fallback && <aside class="mb-8 rounded-xl border border-[#d8dfcf] bg-[#edf1e9] px-4 py-3 text-sm text-moss">This page is shown in {route.content_locale} because a {route.locale} translation is not available yet.</aside>}
+        {route.is_fallback && <aside class="mb-8 rounded-xl border border-[#d8dfcf] bg-[#edf1e9] px-4 py-3 text-sm text-moss">{t("docs-fallback", { contentLocale: route.content_locale, requestedLocale: route.locale })}</aside>}
         <article class="doc-content" set:html={content} />
-        {previousPage || nextPage ? <nav class="docs-page-nav" aria-label="Page navigation">
+        {previousPage || nextPage ? <nav class="docs-page-nav" aria-label={t("docs-page-navigation")}>
           {previousPage ? <a class="docs-page-link docs-page-previous" href={previousPage.path}>
-            <span class="docs-page-direction"><span aria-hidden="true">←</span> Previous</span>
+            <span class="docs-page-direction"><span aria-hidden="true">←</span> {t("docs-page-previous")}</span>
             <span class="docs-page-link-title">{String(previousPage.page.page.metadata.title ?? previousPage.path)}</span>
           </a> : <span></span>}
           {nextPage ? <a class="docs-page-link docs-page-next" href={nextPage.path}>
-            <span class="docs-page-direction">Next <span aria-hidden="true">→</span></span>
+            <span class="docs-page-direction">{t("docs-page-next")} <span aria-hidden="true">→</span></span>
             <span class="docs-page-link-title">{String(nextPage.page.page.metadata.title ?? nextPage.path)}</span>
           </a> : <span></span>}
         </nav> : route.path === "/" ? <div class="docs-index-links">
-          <a href="/book/installation">Start with installation <span aria-hidden="true">→</span></a>
-          <a href="/book/first-workflow">Build your first workflow <span aria-hidden="true">→</span></a>
+          <a href="/book/installation">{t("docs-index-start")} <span aria-hidden="true">→</span></a>
+          <a href="/book/first-workflow">{t("docs-quick-first-workflow")} <span aria-hidden="true">→</span></a>
         </div> : null}
         <div class="docs-page-source mt-12 border-t border-line pt-5 text-xs">
-          Page source: <code class="font-mono text-[10px]">{route.page.source_path}</code>
+          {t("docs-source")} <code class="font-mono text-[10px]">{route.page.source_path}</code>
         </div>
       </main>
 
       <aside class="docs-toc hidden xl:block">
         {toc.length > 1 && <div class="sticky top-24">
-          <h2 class="mb-4 px-2 text-[10px] font-semibold uppercase tracking-[.15em] text-[#8a9586]">On this page</h2>
-          <nav aria-label="On this page" class="space-y-1">
+          <h2 class="mb-4 px-2 text-[10px] font-semibold uppercase tracking-[.15em] text-[#8a9586]">{t("docs-toc")}</h2>
+          <nav aria-label={t("docs-toc")} class="space-y-1">
             {toc.map((item) => <a href={`#${item.anchor}`} class="block border-l border-line py-1.5 pr-1 text-[11px] leading-4 text-[#6a7668] transition hover:border-moss hover:text-ink" style={`padding-left: ${8 + Math.max(0, item.level - 1) * 10}px`}>{item.text}</a>)}
           </nav>
         </div>}
@@ -202,265 +217,6 @@ const canonical = `https://docs.everyinit.dev${route.path === "/" ? "/" : route.
   </div>
 
   <script>
-    import { loadSearchIndex, searchDocs } from "virtual:evin/search";
-
-    const header = document.querySelector<HTMLElement>("#docs-site-header");
-    const dialog = document.querySelector<HTMLDialogElement>("#docs-search-dialog");
-    const openButton = document.querySelector<HTMLButtonElement>("#docs-search-open");
-    const sidebarSearch = document.querySelector<HTMLButtonElement>("#docs-sidebar-search");
-    const mobileSearch = document.querySelector<HTMLButtonElement>("#docs-mobile-search");
-    const input = document.querySelector<HTMLInputElement>("#docs-search-input");
-    const variantMenus = [...document.querySelectorAll<HTMLDetailsElement>(".docs-variant")];
-    const prompt = document.querySelector<HTMLDivElement>("#docs-search-prompt");
-    const empty = document.querySelector<HTMLDivElement>("#docs-search-empty");
-    const emptyMessageNode = document.querySelector<HTMLParagraphElement>("#docs-search-empty-message");
-    const status = document.querySelector<HTMLParagraphElement>("#docs-search-status");
-    const results = document.querySelector<HTMLDivElement>("#docs-search-results");
-    const emptyMessage = "Try a shorter phrase or one of these searches.";
-    let visibleOptions: HTMLAnchorElement[] = [];
-    let activeIndex = -1;
-    let searchIndexPromise: ReturnType<typeof loadSearchIndex> | undefined;
-    let searchRequest = 0;
-    let returnFocusTo: HTMLElement | null = null;
-    let scrollLock: {
-      rootOverflow: string;
-      bodyOverflow: string;
-      rootOverscroll: string;
-      bodyOverscroll: string;
-    } | null = null;
-    const resultCache = new Map<string, Awaited<ReturnType<typeof searchDocs>>>();
-    const resultCacheLimit = 40;
-
-    const setActive = (index: number) => {
-      activeIndex = !visibleOptions.length || index === -1
-        ? -1
-        : ((index % visibleOptions.length) + visibleOptions.length) % visibleOptions.length;
-      for (const option of visibleOptions) {
-        option.setAttribute("aria-selected", "false");
-        option.classList.remove("is-active");
-      }
-      if (activeIndex < 0) input?.removeAttribute("aria-activedescendant");
-      else {
-        const option = visibleOptions[activeIndex];
-        option.setAttribute("aria-selected", "true");
-        option.classList.add("is-active");
-        input?.setAttribute("aria-activedescendant", option.id);
-        option.scrollIntoView({ block: "nearest" });
-      }
-    };
-
-    const search = async (value: string) => {
-      const request = ++searchRequest;
-      const query = value.trim();
-      visibleOptions = [];
-      results?.replaceChildren();
-      results?.classList.toggle("hidden", !query);
-      prompt?.classList.toggle("hidden", Boolean(query));
-      input?.removeAttribute("aria-activedescendant");
-      if (!query) {
-        empty?.classList.add("hidden");
-        empty?.classList.remove("is-loading", "is-error");
-        if (status) status.textContent = "";
-        activeIndex = -1;
-        return;
-      }
-      if (emptyMessageNode) emptyMessageNode.textContent = "Searching the docs for a match…";
-      empty?.classList.add("is-loading");
-      empty?.classList.remove("is-error");
-      empty?.classList.remove("hidden");
-      if (status) status.textContent = "Searching documentation…";
-      try {
-        let matches = resultCache.get(query);
-        if (matches) {
-          resultCache.delete(query);
-          resultCache.set(query, matches);
-        } else {
-          searchIndexPromise ??= loadSearchIndex(dialog?.dataset.version ?? "latest", dialog?.dataset.locale ?? "en");
-          const index = await searchIndexPromise;
-          if (request !== searchRequest) return;
-          matches = searchDocs(index, query, { limit: 10 });
-          resultCache.set(query, matches);
-          if (resultCache.size > resultCacheLimit) {
-            resultCache.delete(resultCache.keys().next().value!);
-          }
-        }
-        if (request !== searchRequest) return;
-        for (const match of matches) {
-          const option = document.createElement("a");
-          option.id = `docs-search-option-${visibleOptions.length}`;
-          option.className = "docs-search-option";
-          option.dataset.searchOption = "";
-          option.href = match.route;
-          option.setAttribute("role", "option");
-          option.setAttribute("aria-selected", "false");
-          const title = document.createElement("span");
-          title.className = "docs-search-option-title";
-          title.textContent = match.title;
-          const path = document.createElement("span");
-          path.className = "docs-search-option-path";
-          path.textContent = match.route;
-          const snippet = document.createElement("span");
-          snippet.className = "docs-search-option-snippet";
-          snippet.textContent = match.snippet;
-          option.append(title, path, snippet);
-          results?.append(option);
-          visibleOptions.push(option);
-        }
-        empty?.classList.remove("is-loading");
-        empty?.classList.toggle("hidden", matches.length > 0);
-        if (!matches.length && emptyMessageNode) emptyMessageNode.textContent = emptyMessage;
-        if (status) status.textContent = matches.length
-          ? `${matches.length} matching ${matches.length === 1 ? "result" : "results"}.`
-          : "No matching pages.";
-        setActive(-1);
-      } catch (error) {
-        if (request !== searchRequest) return;
-        searchIndexPromise = undefined;
-        empty?.classList.remove("is-loading");
-        empty?.classList.add("is-error");
-        empty?.classList.remove("hidden");
-        if (emptyMessageNode) emptyMessageNode.textContent = "Search data could not be loaded. Try again in a moment.";
-        if (status) status.textContent = "Search failed to load.";
-        console.error("Failed to search Evin documentation", error);
-      }
-    };
-
-    const openSearch = (invoker?: HTMLElement | null) => {
-      header?.classList.remove("is-hidden");
-      document.documentElement.classList.remove("docs-header-hidden");
-      if (invoker) returnFocusTo = invoker;
-      else if (!dialog?.open) returnFocusTo = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      if (!dialog?.open) {
-        const root = document.documentElement;
-        const body = document.body;
-        scrollLock ??= {
-          rootOverflow: root.style.overflow,
-          bodyOverflow: body.style.overflow,
-          rootOverscroll: root.style.overscrollBehavior,
-          bodyOverscroll: body.style.overscrollBehavior,
-        };
-        root.style.overflow = "hidden";
-        body.style.overflow = "hidden";
-        root.style.overscrollBehavior = "none";
-        body.style.overscrollBehavior = "none";
-        dialog?.showModal();
-      }
-      input?.setAttribute("aria-expanded", "true");
-      requestAnimationFrame(() => input?.focus());
-    };
-
-    openButton?.addEventListener("click", (event) => openSearch(event.currentTarget as HTMLElement));
-    sidebarSearch?.addEventListener("click", (event) => openSearch(event.currentTarget as HTMLElement));
-    mobileSearch?.addEventListener("click", (event) => openSearch(event.currentTarget as HTMLElement));
-    header?.addEventListener("focusin", () => {
-      header.classList.remove("is-hidden");
-      document.documentElement.classList.remove("docs-header-hidden");
-    });
-    let previousScrollY = window.scrollY;
-    let scrollFrame = 0;
-    window.addEventListener("scroll", () => {
-      if (scrollFrame) return;
-      scrollFrame = requestAnimationFrame(() => {
-        const currentScrollY = window.scrollY;
-        const delta = currentScrollY - previousScrollY;
-        const shouldShow = currentScrollY < 72 || delta < -5 || header?.matches(":focus-within") || dialog?.open;
-        const shouldHide = currentScrollY > 120 && delta > 7 && !dialog?.open;
-        if (shouldShow) {
-          header?.classList.remove("is-hidden");
-          document.documentElement.classList.remove("docs-header-hidden");
-        } else if (shouldHide) {
-          header?.classList.add("is-hidden");
-          document.documentElement.classList.add("docs-header-hidden");
-        }
-        previousScrollY = currentScrollY;
-        scrollFrame = 0;
-      });
-    }, { passive: true });
-    document.addEventListener("click", (event) => {
-      for (const menu of variantMenus) {
-        if (!menu.contains(event.target as Node)) menu.open = false;
-      }
-    });
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        for (const menu of variantMenus) menu.open = false;
-      }
-    });
-    dialog?.addEventListener("click", (event) => {
-      const target = event.target as HTMLElement;
-      const queryButton = target.closest<HTMLButtonElement>("[data-search-query]");
-      if (queryButton && input) {
-        input.value = queryButton.dataset.searchQuery ?? "";
-        input.focus();
-        void search(input.value);
-      }
-      if (target.closest("[data-search-clear]") && input) {
-        input.value = "";
-        input.focus();
-        void search("");
-      }
-      if (event.target === dialog) dialog.close();
-    });
-    dialog?.addEventListener("cancel", () => {
-      input?.setAttribute("aria-expanded", "false");
-    });
-    dialog?.addEventListener("close", () => {
-      if (dialog.open) return;
-      input?.setAttribute("aria-expanded", "false");
-      input?.removeAttribute("aria-activedescendant");
-      setActive(-1);
-      if (scrollLock) {
-        const root = document.documentElement;
-        const body = document.body;
-        root.style.overflow = scrollLock.rootOverflow;
-        body.style.overflow = scrollLock.bodyOverflow;
-        root.style.overscrollBehavior = scrollLock.rootOverscroll;
-        body.style.overscrollBehavior = scrollLock.bodyOverscroll;
-        scrollLock = null;
-      }
-      const target = returnFocusTo?.isConnected && returnFocusTo.getClientRects().length
-        ? returnFocusTo
-        : openButton;
-      target?.focus();
-    });
-    input?.addEventListener("input", () => void search(input.value));
-    results?.addEventListener("focusin", (event) => {
-      const option = (event.target as HTMLElement).closest<HTMLAnchorElement>("[data-search-option]");
-      const index = option ? visibleOptions.indexOf(option) : -1;
-      if (index >= 0) setActive(index);
-    });
-    input?.addEventListener("keydown", (event) => {
-      if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setActive(activeIndex + 1);
-      } else if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setActive(activeIndex < 0 || activeIndex === 0 ? visibleOptions.length - 1 : activeIndex - 1);
-      } else if (event.key === "Home" && visibleOptions.length) {
-        event.preventDefault();
-        setActive(0);
-      } else if (event.key === "End" && visibleOptions.length) {
-        event.preventDefault();
-        setActive(visibleOptions.length - 1);
-      } else if (event.key === "PageDown" && visibleOptions.length) {
-        event.preventDefault();
-        setActive(Math.min(visibleOptions.length - 1, (activeIndex < 0 ? 0 : activeIndex) + 5));
-      } else if (event.key === "PageUp" && visibleOptions.length) {
-        event.preventDefault();
-        setActive(Math.max(0, (activeIndex < 0 ? 0 : activeIndex) - 5));
-      } else if (event.key === "Enter" && activeIndex >= 0) {
-        event.preventDefault();
-        visibleOptions[activeIndex].click();
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        dialog?.close();
-      }
-    });
-    document.addEventListener("keydown", (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        openSearch();
-      }
-    });
+    import "../scripts/docs-search";
   </script>
 </SiteLayout>

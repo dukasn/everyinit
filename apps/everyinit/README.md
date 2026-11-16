@@ -2,14 +2,32 @@
 
 The Astro app publishes the Everyinit presentation page and the headless Evin
 documentation package as a site. The home page is `/`; generated documentation
-pages are built under `/docs/`. The Pages middleware maps the `docs.everyinit.dev`
-host to those generated routes, so documentation URLs remain rooted at `/` on
-that domain.
+pages are built under `/docs/`. The Pages middleware maps the
+`learn.everyinit.dev` host to those generated routes, so documentation URLs
+remain rooted at `/` on that domain. The former `docs.everyinit.dev` host
+permanently redirects to the matching `learn.everyinit.dev` URL.
 
 The documentation pages import `virtual:evin/docs` from `everyinit/vite`. The
 Evin action remains the source of truth for page parsing, localized and
 versioned routes, fallbacks, navigation order, and page data. Astro renders the
 resulting AST and uses the manifest to create a page for every route.
+
+## Translate the site interface
+
+Astro's interface uses Fluent catalogs in `src/i18n/catalogs/`. The English
+catalog, `en.ftl`, is the source of truth. Add a catalog named for its BCP 47
+locale (for example, `pt-BR.ftl`) and translate every English message ID. The
+site validates Fluent syntax and matching message IDs with:
+
+```sh
+npm run check:locales --workspace @everyinit/site
+```
+
+The verifier is part of `everyinit-site:verify`. A complete non-English catalog
+automatically adds a localized homepage at `/<locale>/`; documentation chrome
+uses the current documentation route's locale and falls back to English when
+that locale has no site catalog. Keep message IDs stable when editing English
+copy so translation catalogs remain aligned.
 
 ## Run and preview locally
 
@@ -33,8 +51,9 @@ cargo evin-dev run everyinit-site:preview
 ```
 
 This builds the site and starts Wrangler at `http://127.0.0.1:8788/`. The home
-is at `/`, and docs are available under `/docs/`; the host-specific rewrite is
-covered by the site browser tests. Stop either server with Ctrl-C.
+is at `/`, and docs are available under `/docs/`; the host-specific rewrite and
+legacy-host redirect are covered by the site browser tests. Stop either server
+with Ctrl-C.
 
 ## Validate changes
 
@@ -63,11 +82,13 @@ corepack npm exec -- wrangler pages project create everyinit-site --production-b
 
 The Wrangler deployment runs from `apps/everyinit`, where it can include
 `functions/_middleware.ts` alongside the built `dist/` assets. That function
-maps `docs.everyinit.dev` to the static `/docs/` route tree. Dashboard drag and
-drop uploads do not compile Pages Functions, so the first upload only
+maps `learn.everyinit.dev` to the static `/docs/` route tree and redirects the
+former `docs.everyinit.dev` hostname. Dashboard drag and drop uploads do not
+compile Pages Functions, so the first upload only
 bootstraps the project; the GitHub Actions Wrangler deployment publishes the
-full site behavior. Attach `everyinit.dev` and `docs.everyinit.dev` to this same
-Pages project.
+full site behavior. Attach `everyinit.dev` and `learn.everyinit.dev` to this same
+Pages project, and keep `docs.everyinit.dev` attached so its redirect remains
+available.
 
 The `Deploy` GitHub Actions workflow deploys the exact commit after its `CI`
 workflow succeeds. Pushes to `main` publish the production branch; pushes to

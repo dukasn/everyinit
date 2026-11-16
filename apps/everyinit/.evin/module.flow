@@ -41,6 +41,7 @@ tasks:
     description: "Type-check and build the Everyinit site"
     needs: [docs:build]
     steps:
-      - run: npm exec -- oxfmt --check src astro.config.mjs functions/_middleware.ts package.json tests/site.spec.mjs README.md tsconfig.json
+      - run: npm run check:locales --workspace @everyinit/site
+      - run: npm exec -- oxfmt --check src scripts/check-locales.mjs astro.config.mjs functions/_middleware.ts package.json tests/site.spec.mjs README.md tsconfig.json
       - run: npm run check --workspace @everyinit/site
       - run: EVIN_DOCS_PREBUILT=1 npm run build --workspace @everyinit/site
