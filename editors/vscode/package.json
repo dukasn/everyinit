@@ -2,7 +2,7 @@
   "name": "everyinit",
   "displayName": "Everyinit",
   "description": "Language support, diagnostics, and workflow orchestration for Evin (.flow) and ESH (.esh)",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "publisher": "everyinit",
   "license": "GPL-3.0-only",
   "icon": "assets/icon.png",
