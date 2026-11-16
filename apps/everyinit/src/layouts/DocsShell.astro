@@ -11,6 +11,7 @@ interface Props {
 
 const { route } = Astro.props;
 const locale = resolveLocale(route.locale);
+const docsPath = (path: string) => path === "/" ? "/docs/" : `/docs${path}`;
 const t = createTranslator(route.locale);
 const title = String(route.page.page.metadata.title ?? route.page.page.slug ?? t("docs-generic-title"));
 const description = String(route.page.page.metadata.description ?? t("docs-generic-description"));
@@ -58,17 +59,17 @@ const nextPage = currentSection && currentIndex >= 0 ? currentSection.entries[cu
 const variants = docs.manifest.versions.flatMap((version) => docs.manifest.locales.map((locale) => {
   const page = docs.counterpart(route, version.id, locale);
   const counterpart = docs.routeForPage(page);
-  return { version: version.id, locale, href: counterpart?.path, available: Boolean(counterpart) };
+  return { version: version.id, locale, href: counterpart ? docsPath(counterpart.path) : undefined, available: Boolean(counterpart) };
 }));
 const content = renderDocument(route.page.page.ast, docs.assets[route.page.id] ?? {});
-const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route.path}`;
+const canonical = `https://everyinit.dev${docsPath(route.path)}`;
 ---
 
 <SiteLayout title={`${title} · Evin Docs`} description={description} canonical={canonical} locale={locale}>
   <div class="min-h-screen bg-paper">
     <header id="docs-site-header" class="docs-site-header sticky top-0 z-30 border-b border-line/80 bg-paper/90 backdrop-blur-xl">
       <div class="mx-auto flex h-[4.25rem] max-w-[90rem] items-center gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
-        <a href="/" class="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight" aria-label={t("site-home")}>
+        <a href="/docs/" class="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight" aria-label={t("site-home")}>
           <span class="grid size-8 place-items-center rounded-lg bg-ink text-lime"><span class="brand-mark size-5" aria-hidden="true"></span></span>
           <span>{t("docs-brand")}</span>
         </a>
@@ -97,7 +98,7 @@ const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route
       </div>
     </header>
 
-    <dialog id="docs-search-dialog" data-version={route.version} data-locale={route.locale} class="docs-search-dialog" aria-labelledby="docs-search-heading">
+    <dialog id="docs-search-dialog" data-version={route.version} data-locale={route.locale} data-docs-base="/docs" class="docs-search-dialog" aria-labelledby="docs-search-heading">
       <section class="docs-search-panel">
         <h2 id="docs-search-heading" class="sr-only">{t("docs-search-open")}</h2>
         <div class="docs-search-input-row flex items-center gap-3 border-b border-line px-4">
@@ -142,7 +143,7 @@ const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route
       <summary><span>{t("docs-mobile-browse")}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
       <nav aria-label={t("docs-mobile-browse")}>
         <div class="docs-mobile-quick">
-          <a href="/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
+          <a href="/docs/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
           <a href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
           <button id="docs-mobile-search" type="button">{t("docs-search-open")}</button>
         </div>
@@ -150,7 +151,7 @@ const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route
           <h2>{group.title}</h2>
           {group.sections.map((section) => <div class="docs-mobile-nav-section">
             <h3>{section.title}</h3>
-            {section.entries.map((item) => <a href={item.path} aria-current={item.path === route.path ? "page" : undefined} class:list={["docs-nav-link", { "is-current": item.path === route.path }]}>{String(item.page.page.metadata.title ?? item.path)}</a>)}
+            {section.entries.map((item) => <a href={docsPath(item.path)} aria-current={item.path === route.path ? "page" : undefined} class:list={["docs-nav-link", { "is-current": item.path === route.path }]}>{String(item.page.page.metadata.title ?? item.path)}</a>)}
           </div>)}
         </section>)}
       </nav>
@@ -160,8 +161,8 @@ const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route
       <aside class="docs-sidebar hidden lg:block">
         <section class="docs-sidebar-quick" aria-label={t("docs-quick-get-started")}>
           <h2>{t("docs-quick-get-started")}</h2>
-          <a class="docs-quick-primary" href="/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
-          <a class="docs-quick-secondary" href="/book/first-workflow">{t("docs-quick-first-workflow")}</a>
+          <a class="docs-quick-primary" href="/docs/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
+          <a class="docs-quick-secondary" href="/docs/book/first-workflow">{t("docs-quick-first-workflow")}</a>
           <a class="docs-quick-secondary docs-quick-overview" href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
           <button id="docs-sidebar-search" type="button"><span aria-hidden="true">⌕</span> {t("docs-search-open")}</button>
         </section>
@@ -170,7 +171,7 @@ const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route
           {group.sections.map((section) => <details class="docs-nav-section" open={section.entries.some((item) => item.path === route.path)}>
             <summary><span>{section.title}</span><span class="docs-nav-count">{section.entries.length}</span></summary>
             <nav aria-label={`${group.title}: ${section.title}`}>
-              {section.entries.map((item) => <a href={item.path} title={String(item.page.page.metadata.title ?? item.path)} aria-current={item.path === route.path ? "page" : undefined} class:list={["docs-nav-link", { "is-current": item.path === route.path }]}>{String(item.page.page.metadata.title ?? item.path)}</a>)}
+              {section.entries.map((item) => <a href={docsPath(item.path)} title={String(item.page.page.metadata.title ?? item.path)} aria-current={item.path === route.path ? "page" : undefined} class:list={["docs-nav-link", { "is-current": item.path === route.path }]}>{String(item.page.page.metadata.title ?? item.path)}</a>)}
             </nav>
           </details>)}
         </section>)}
@@ -183,22 +184,22 @@ const canonical = `https://learn.everyinit.dev${route.path === "/" ? "/" : route
 
       <main class:list={["docs-main min-w-0 px-5 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-14", { "docs-index-main": route.path === "/" }]}>
         <div class="docs-breadcrumb mb-8 flex items-center gap-2 text-[11px]">
-          <a href="/" class="hover:text-ink">{t("docs-breadcrumb")}</a><span aria-hidden="true">/</span><span class="text-moss">{route.path === "/" ? t("docs-mobile-overview") : title}</span>
+          <a href="/docs/" class="hover:text-ink">{t("docs-breadcrumb")}</a><span aria-hidden="true">/</span><span class="text-moss">{route.path === "/" ? t("docs-mobile-overview") : title}</span>
         </div>
         {route.is_fallback && <aside class="mb-8 rounded-xl border border-[#d8dfcf] bg-[#edf1e9] px-4 py-3 text-sm text-moss">{t("docs-fallback", { contentLocale: route.content_locale, requestedLocale: route.locale })}</aside>}
         <article class="doc-content" set:html={content} />
         {previousPage || nextPage ? <nav class="docs-page-nav" aria-label={t("docs-page-navigation")}>
-          {previousPage ? <a class="docs-page-link docs-page-previous" href={previousPage.path}>
+          {previousPage ? <a class="docs-page-link docs-page-previous" href={docsPath(previousPage.path)}>
             <span class="docs-page-direction"><span aria-hidden="true">←</span> {t("docs-page-previous")}</span>
             <span class="docs-page-link-title">{String(previousPage.page.page.metadata.title ?? previousPage.path)}</span>
           </a> : <span></span>}
-          {nextPage ? <a class="docs-page-link docs-page-next" href={nextPage.path}>
+          {nextPage ? <a class="docs-page-link docs-page-next" href={docsPath(nextPage.path)}>
             <span class="docs-page-direction">{t("docs-page-next")} <span aria-hidden="true">→</span></span>
             <span class="docs-page-link-title">{String(nextPage.page.page.metadata.title ?? nextPage.path)}</span>
           </a> : <span></span>}
         </nav> : route.path === "/" ? <div class="docs-index-links">
-          <a href="/book/installation">{t("docs-index-start")} <span aria-hidden="true">→</span></a>
-          <a href="/book/first-workflow">{t("docs-quick-first-workflow")} <span aria-hidden="true">→</span></a>
+          <a href="/docs/book/installation">{t("docs-index-start")} <span aria-hidden="true">→</span></a>
+          <a href="/docs/book/first-workflow">{t("docs-quick-first-workflow")} <span aria-hidden="true">→</span></a>
         </div> : null}
         <div class="docs-page-source mt-12 border-t border-line pt-5 text-xs">
           {t("docs-source")} <code class="font-mono text-[10px]">{route.page.source_path}</code>

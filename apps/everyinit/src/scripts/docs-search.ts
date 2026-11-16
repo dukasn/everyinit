@@ -17,6 +17,8 @@ const emptyMessageNode = document.querySelector<HTMLParagraphElement>("#docs-sea
 const status = document.querySelector<HTMLParagraphElement>("#docs-search-status");
 const results = document.querySelector<HTMLDivElement>("#docs-search-results");
 const emptyMessage = t("docs-search-empty-copy");
+const docsBase = dialog?.dataset.docsBase ?? "/docs";
+const docsHref = (path: string) => (path === "/" ? `${docsBase}/` : `${docsBase}${path}`);
 let visibleOptions: HTMLAnchorElement[] = [];
 let activeIndex = -1;
 let searchIndexPromise: ReturnType<typeof loadSearchIndex> | undefined;
@@ -94,7 +96,7 @@ const search = async (value: string) => {
       option.id = `docs-search-option-${visibleOptions.length}`;
       option.className = "docs-search-option";
       option.dataset.searchOption = "";
-      option.href = match.route;
+      option.href = docsHref(match.route);
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", "false");
       const title = document.createElement("span");
@@ -102,7 +104,7 @@ const search = async (value: string) => {
       title.textContent = match.title;
       const path = document.createElement("span");
       path.className = "docs-search-option-path";
-      path.textContent = match.route;
+      path.textContent = docsHref(match.route);
       const snippet = document.createElement("span");
       snippet.className = "docs-search-option-snippet";
       snippet.textContent = match.snippet;

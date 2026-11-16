@@ -20,6 +20,16 @@ const safeUrl = (value: unknown): string => {
   return /^(?:javascript|vbscript|data):/i.test(url) ? "#" : url;
 };
 
+const docsLink = (value: unknown): string => {
+  const url = safeUrl(value);
+  if (url === "/") return "/docs/";
+  if (url === "/docs") return "/docs/";
+  if (url.startsWith("/") && !url.startsWith("//") && !url.startsWith("/docs/")) {
+    return `/docs${url}`;
+  }
+  return url;
+};
+
 const syntaxClass = (scope: string): string => {
   if (scope.includes(".section.")) return "syntax-section";
   if (scope.startsWith("comment.")) return "syntax-comment";
@@ -66,7 +76,7 @@ const inline = (value: unknown, assets: Record<string, string>): string => {
     case "Code":
       return `<code>${escapeHtml(node.content)}</code>`;
     case "Link":
-      return `<a href="${escapeHtml(safeUrl(node.href))}"${node.title ? ` title="${escapeHtml(node.title)}"` : ""}>${escapeHtml(node.content)}</a>`;
+      return `<a href="${escapeHtml(docsLink(node.href))}"${node.title ? ` title="${escapeHtml(node.title)}"` : ""}>${escapeHtml(node.content)}</a>`;
     case "Image":
       return `<img src="${escapeHtml(safeUrl(assets[String(node.src)] ?? node.src))}" alt="${escapeHtml(node.alt)}" loading="lazy"${node.title ? ` title="${escapeHtml(node.title)}"` : ""}>`;
     case "Math":

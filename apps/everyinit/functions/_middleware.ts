@@ -3,42 +3,46 @@ type PagesContext = {
   next(request?: Request | string, init?: RequestInit): Promise<Response>;
 };
 
+const legacyDocsHosts = new Set(["learn.everyinit.dev", "docs.everyinit.dev"]);
+const isAssetPath = (pathname: string) =>
+  pathname.startsWith("/_astro/") || /\.[a-z0-9]+$/i.test(pathname);
+
+const canonicalDocsPath = (pathname: string) => {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  if (normalized === "/" || normalized === "/docs") return "/docs/";
+  if (normalized === "/install" || normalized === "/docs/install") {
+    return "/docs/book/installation/";
+  }
+  return normalized.startsWith("/docs/") ? normalized : `/docs${normalized}`;
+};
+
 export const onRequest = async ({ request, next }: PagesContext): Promise<Response> => {
   const url = new URL(request.url);
   const pathname = url.pathname;
   const normalizedPath = pathname.replace(/\/+$/, "") || "/";
-  const isAsset = pathname.startsWith("/_astro/") || /\.[a-z0-9]+$/i.test(pathname);
 
-  if (url.hostname === "docs.everyinit.dev") {
+  if (legacyDocsHosts.has(url.hostname)) {
     const canonicalUrl = new URL(url);
     canonicalUrl.protocol = "https:";
-    canonicalUrl.hostname = "learn.everyinit.dev";
+    canonicalUrl.hostname = "everyinit.dev";
     canonicalUrl.port = "";
-    if (normalizedPath === "/install" || normalizedPath === "/docs/install") {
-      canonicalUrl.pathname = "/book/installation/";
-    }
+    canonicalUrl.pathname = isAssetPath(pathname) ? pathname : canonicalDocsPath(pathname);
     return Response.redirect(canonicalUrl, 308);
   }
 
-  if (isAsset) return next();
+  if (isAssetPath(pathname)) return next();
 
   if (normalizedPath === "/install" || normalizedPath === "/docs/install") {
-    url.pathname =
-      url.hostname === "learn.everyinit.dev" ? "/book/installation/" : "/docs/book/installation/";
+    url.pathname = "/docs/book/installation/";
     return Response.redirect(url, 308);
   }
 
-  if (url.hostname === "learn.everyinit.dev") {
-    if (pathname === "/") url.pathname = "/docs/";
-    else if (pathname === "/docs") url.pathname = "/docs/";
-    else if (!pathname.startsWith("/docs/")) url.pathname = `/docs${pathname}`;
-    return next(new Request(url, request));
+  if (pathname === "/" || normalizedPath === "/docs" || pathname.startsWith("/docs/")) {
+    return next();
   }
 
-  if (pathname === "/" || pathname === "/docs" || pathname.startsWith("/docs/")) return next();
-
-  // Evin's generated links are rooted at the documentation host. Re-map them
-  // to the app's static /docs tree for local preview and same-host previews.
+  // Preserve old root-level documentation links while serving the canonical
+  // pages from the single /docs route tree.
   url.pathname = `/docs${pathname}`;
   return next(new Request(url, request));
 };

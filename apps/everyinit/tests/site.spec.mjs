@@ -244,7 +244,7 @@ test("documentation navigation and search work at desktop and mobile widths", as
   await page.locator("#docs-search-input").fill("Rustup");
   const bodyResult = page.locator("[data-search-option]:visible").first();
   await expect(bodyResult).toContainText("Rustup");
-  await expect(bodyResult).toHaveAttribute("href", "/book/installation#build-from-source");
+  await expect(bodyResult).toHaveAttribute("href", "/docs/book/installation#build-from-source");
   await page.keyboard.press("Escape");
   await page.locator(".docs-mobile-nav > summary").click();
   await expect(page.locator(".docs-mobile-nav")).toContainText("Workflows");
@@ -395,7 +395,7 @@ test("a search finishing after dismissal is ready when the dialog reopens", asyn
   await expect(page.locator("[data-search-option]:visible").first()).toContainText("Rustup");
 });
 
-test("Pages serves docs at the learn host root and redirects the old docs host", () => {
+test("Pages serves docs on everyinit.dev and redirects retired docs hosts", () => {
   const fetchForHost = (host, pathname) =>
     execFileSync(
       "curl",
@@ -411,31 +411,35 @@ test("Pages serves docs at the learn host root and redirects the old docs host",
       { encoding: "utf8" },
     );
 
-  expect(fetchForHost("learn.everyinit.dev", "/")).toContain("Everyinit · Evin Docs");
-  expect(fetchForHost("learn.everyinit.dev", "/book/installation")).toContain(
+  expect(fetchForHost("everyinit.dev", "/docs/")).toContain("Everyinit · Evin Docs");
+  expect(fetchForHost("everyinit.dev", "/docs/book/installation")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
-  expect(fetchForHost("learn.everyinit.dev", "/install/")).toContain(
+  expect(fetchForHost("everyinit.dev", "/install/")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
-  expect(fetchForHost("learn.everyinit.dev", "/docs/install")).toContain(
+  expect(fetchForHost("everyinit.dev", "/docs/install")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
-  const legacyRedirect = execFileSync(
-    "curl",
-    [
-      "--silent",
-      "--show-error",
-      "--output",
-      "/dev/null",
-      "--write-out",
-      "%{http_code} %{redirect_url}",
-      "--resolve",
-      "docs.everyinit.dev:8788:127.0.0.1",
-      "http://docs.everyinit.dev:8788/book/installation",
-    ],
-    { encoding: "utf8" },
+  const redirectForHost = (host, pathname) =>
+    execFileSync(
+      "curl",
+      [
+        "--silent",
+        "--show-error",
+        "--output",
+        "/dev/null",
+        "--write-out",
+        "%{http_code} %{redirect_url}",
+        "--resolve",
+        `${host}:8788:127.0.0.1`,
+        `http://${host}:8788${pathname}`,
+      ],
+      { encoding: "utf8" },
+    );
+  expect(redirectForHost("learn.everyinit.dev", "/book/installation")).toBe(
+    "308 https://everyinit.dev/docs/book/installation",
   );
-  expect(legacyRedirect).toBe("308 https://learn.everyinit.dev/book/installation");
+  expect(redirectForHost("docs.everyinit.dev", "/")).toBe("308 https://everyinit.dev/docs/");
   expect(fetchForHost("everyinit.dev", "/")).toContain("Everyinit — development, orchestrated");
 });

@@ -1,11 +1,10 @@
 # Everyinit site
 
 The Astro app publishes the Everyinit presentation page and the headless Evin
-documentation package as a site. The home page is `/`; generated documentation
-pages are built under `/docs/`. The Pages middleware maps the
-`learn.everyinit.dev` host to those generated routes, so documentation URLs
-remain rooted at `/` on that domain. The former `docs.everyinit.dev` host
-permanently redirects to the matching `learn.everyinit.dev` URL.
+documentation package on `https://everyinit.dev`. The home page is `/`, and all
+documentation routes are under `/docs/`. The former `learn.everyinit.dev` and
+`docs.everyinit.dev` hosts permanently redirect to the matching canonical docs
+URL on the main domain.
 
 The documentation pages import `virtual:evin/docs` from `everyinit/vite`. The
 Evin action remains the source of truth for page parsing, localized and
@@ -43,17 +42,16 @@ integration runs `docs:build` at startup and when a watched documentation file
 changes. It uses the checked-out Evin CLI through Cargo when needed; set
 `EVIN_BIN` to use an already-built Evin executable instead.
 
-For a production-style preview, including the Cloudflare Pages middleware that
-maps the docs host to `/`, run:
+For a production-style preview, including the Cloudflare Pages redirects, run:
 
 ```sh
 cargo evin-dev run site:preview
 ```
 
 This builds the site and starts Wrangler at `http://127.0.0.1:8788/`. The home
-is at `/`, and docs are available under `/docs/`; the host-specific rewrite and
-legacy-host redirect are covered by the site browser tests. Stop either server
-with Ctrl-C.
+is at `/`, and docs are available under `/docs/`. The canonical routes and
+redirects from legacy docs URLs are covered by the site browser tests. Stop
+either server with Ctrl-C.
 
 ## Validate changes
 
@@ -82,13 +80,12 @@ corepack npm exec -- wrangler pages project create everyinit-site --production-b
 
 The Wrangler deployment runs from `apps/everyinit`, where it can include
 `functions/_middleware.ts` alongside the built `dist/` assets. That function
-maps `learn.everyinit.dev` to the static `/docs/` route tree and redirects the
-former `docs.everyinit.dev` hostname. Dashboard drag and drop uploads do not
+redirects the retired `learn.everyinit.dev` and `docs.everyinit.dev` hostnames
+to canonical paths on `everyinit.dev`. Dashboard drag and drop uploads do not
 compile Pages Functions, so the first upload only
 bootstraps the project; the GitHub Actions Wrangler deployment publishes the
-full site behavior. Attach `everyinit.dev` and `learn.everyinit.dev` to this same
-Pages project, and keep `docs.everyinit.dev` attached so its redirect remains
-available.
+full site behavior. Attach `everyinit.dev` to the Pages project. Keep the two
+former docs hostnames attached while their redirects are needed.
 
 The `Deploy` GitHub Actions workflow deploys the exact commit after its `CI`
 workflow succeeds. Pushes to `main` publish the production branch; pushes to
