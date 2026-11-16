@@ -27,6 +27,21 @@ fn rejects_an_empty_notes_path() {
 }
 
 #[test]
+fn semantic_configuration_errors_keep_fluent_issue_codes() {
+    let with = evin_flow::parse_yaml("path: ' '\n").unwrap();
+    let Err(ChangelogError::ConfigurationIssue(issue)) = ChangelogConfig::from_with(Some(with))
+    else {
+        panic!("expected a structured changelog configuration issue");
+    };
+
+    assert_eq!(issue.key, "changelog-path-must-not-be-empty");
+    assert_eq!(
+        evin_locales::render_issue(&issue),
+        evin_locales::t!("changelog-path-must-not-be-empty")
+    );
+}
+
+#[test]
 fn configuration_failures_use_fluent_messages() {
     let section_error = evin_flow::template::pipeline::validate_template_syntax("{{broken}}")
         .unwrap_err()
@@ -59,6 +74,10 @@ fn configuration_failures_use_fluent_messages() {
         (
             "version: ' '\n",
             evin_locales::t!("version-must-not-be-empty"),
+        ),
+        (
+            "version: '{{broken}}'\n",
+            evin_locales::t!("issue-changelog-version-invalid", error = &section_error),
         ),
         (
             "include_unreleased: false\n",

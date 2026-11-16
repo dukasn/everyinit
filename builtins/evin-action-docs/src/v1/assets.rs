@@ -208,10 +208,10 @@ impl ResolvedAssets {
     }
 }
 
-pub fn validate_asset_dir(asset_dir: &str) -> Result<(), String> {
+pub fn validate_asset_dir(asset_dir: &str) -> Result<(), evin_diagnostic::IssueCode> {
     asset_dir_path(asset_dir)
         .map(|_| ())
-        .map_err(|error| error.title)
+        .map_err(|error| error.code)
 }
 
 pub fn fingerprint_files(source_root: &Path, asset_dir: &str) -> Vec<PathBuf> {

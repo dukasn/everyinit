@@ -30,37 +30,36 @@ impl<'a> ArtifactInspector for FsArtifactInspector<'a> {
         }
 
         let mut artifacts = Vec::new();
-        let entries = std::fs::read_dir(&dir).map_err(|e| {
-            ProtocolError::ArtifactInspection(evin_locales::t!(
-                "release-sync-artifacts-directory-read-failed",
-                error = e.to_string()
-            ))
-        })?;
+        let entries =
+            std::fs::read_dir(&dir).map_err(|source| ProtocolError::ArtifactsDirectoryRead {
+                path: dir.clone(),
+                source,
+            })?;
 
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() {
-                let metadata = entry.metadata().map_err(|e| {
-                    ProtocolError::ArtifactInspection(evin_locales::t!(
-                        "release-sync-artifact-metadata-read-failed",
-                        error = e.to_string()
-                    ))
-                })?;
-                let mut file = std::fs::File::open(&path).map_err(|e| {
-                    ProtocolError::ArtifactInspection(evin_locales::t!(
-                        "release-sync-artifact-open-failed",
-                        error = e.to_string()
-                    ))
-                })?;
+                let metadata =
+                    entry
+                        .metadata()
+                        .map_err(|source| ProtocolError::ArtifactMetadataRead {
+                            path: path.clone(),
+                            source,
+                        })?;
+                let mut file =
+                    std::fs::File::open(&path).map_err(|source| ProtocolError::ArtifactOpen {
+                        path: path.clone(),
+                        source,
+                    })?;
                 let mut hasher = Sha256::new();
                 let mut buffer = [0; 64 * 1024];
                 loop {
-                    let read = file.read(&mut buffer).map_err(|e| {
-                        ProtocolError::ArtifactInspection(evin_locales::t!(
-                            "release-sync-artifact-hash-failed",
-                            error = e.to_string()
-                        ))
-                    })?;
+                    let read =
+                        file.read(&mut buffer)
+                            .map_err(|source| ProtocolError::ArtifactHash {
+                                path: path.clone(),
+                                source,
+                            })?;
                     if read == 0 {
                         break;
                     }

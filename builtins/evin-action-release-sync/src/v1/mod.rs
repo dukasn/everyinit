@@ -37,30 +37,93 @@ fn protocol_error_diagnostic(
                     .arg("version", version.to_string()),
             )
         }
-        evin_release_sync::ProtocolError::SchemaValidation(error) => evin_locales::diagnostic(
-            evin_diagnostic::IssueCode::new("release-sync-schema-validation-failed")
-                .arg("error", error),
+        evin_release_sync::ProtocolError::StateFileNotFound { path } => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-state-file-not-found")
+                .arg("path", path.display().to_string()),
         ),
-        evin_release_sync::ProtocolError::StateIngestion(error) => evin_locales::diagnostic(
-            evin_diagnostic::IssueCode::new("release-sync-state-ingestion-failed")
-                .arg("error", error),
+        evin_release_sync::ProtocolError::StateFileRead { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-state-file-read-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::StateJsonInvalid { source } => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-state-json-invalid")
+                .arg("error", source.to_string()),
         ),
-        evin_release_sync::ProtocolError::GitInspection(error) => evin_locales::diagnostic(
-            evin_diagnostic::IssueCode::new("release-sync-git-inspection-failed")
-                .arg("error", error),
+        evin_release_sync::ProtocolError::GitTagCommandFailed { source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-git-tag-command-failed")
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::GitTagFailed { stderr } => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-git-tag-failed").arg("error", stderr),
         ),
-        evin_release_sync::ProtocolError::NotesExtraction(error) => evin_locales::diagnostic(
-            evin_diagnostic::IssueCode::new("release-sync-notes-extraction-failed")
-                .arg("error", error),
+        evin_release_sync::ProtocolError::ConfiguredTagMissing { tag } => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-configured-tag-missing").arg("tag", tag),
         ),
-        evin_release_sync::ProtocolError::ArtifactInspection(error) => evin_locales::diagnostic(
-            evin_diagnostic::IssueCode::new("release-sync-artifact-inspection-failed")
-                .arg("error", error),
+        evin_release_sync::ProtocolError::ArtifactsDirectoryRead { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-artifacts-directory-read-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::ArtifactMetadataRead { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-artifact-metadata-read-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::ArtifactOpen { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-artifact-open-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::ArtifactHash { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-artifact-hash-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::NotesDirectoryCreate { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-notes-directory-create-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::NotesFileWrite { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-note-write-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::PlanDirectoryCreate { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-plan-directory-create-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
+        evin_release_sync::ProtocolError::PlanSerialize { source } => evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("release-sync-plan-serialization-failed")
+                .arg("error", source.to_string()),
         ),
-        evin_release_sync::ProtocolError::PlanWrite(error) => evin_locales::diagnostic(
-            evin_diagnostic::IssueCode::new("release-sync-plan-operation-failed")
-                .arg("error", error),
-        ),
+        evin_release_sync::ProtocolError::PlanFileWrite { path, source } => {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("release-sync-plan-write-failed")
+                    .arg("path", path.display().to_string())
+                    .arg("error", source.to_string()),
+            )
+        }
         evin_release_sync::ProtocolError::Io(error) => evin_locales::diagnostic(
             evin_diagnostic::IssueCode::new("release-sync-io-failed").arg("error", error),
         ),

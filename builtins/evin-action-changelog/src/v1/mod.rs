@@ -26,6 +26,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 enum ChangelogError {
     InvalidConfiguration(evin_flow::ConfigError),
+    ConfigurationIssue(evin_diagnostic::IssueCode),
     GitExecutionFailed(String),
     WriteFileFailed { path: String, message: String },
     ReadFileFailed { path: String, message: String },
@@ -36,6 +37,7 @@ impl ChangelogError {
     fn issue(&self) -> Option<evin_diagnostic::IssueCode> {
         match self {
             Self::InvalidConfiguration(_) => None,
+            Self::ConfigurationIssue(issue) => Some(issue.clone()),
             Self::GitExecutionFailed(error) => {
                 Some(evin_diagnostic::IssueCode::new("git-execution-failed").arg("error", error))
             }
@@ -60,6 +62,10 @@ pub fn validate_config(
     match ChangelogConfig::from_with(with.cloned()) {
         Ok(_) => Ok(()),
         Err(ChangelogError::InvalidConfiguration(error)) => Err(error),
+        Err(ChangelogError::ConfigurationIssue(issue)) => Err(evin_flow::ConfigError {
+            message: evin_locales::render_issue(&issue),
+            span: None,
+        }),
         Err(error) => Err(evin_flow::ConfigError {
             message: error
                 .issue()
@@ -84,6 +90,10 @@ pub async fn execute(
             ChangelogError::InvalidConfiguration(error) => {
                 error.into_diagnostic(evin_locales::t!("changelog-invalid-config-title"), None)
             }
+            ChangelogError::ConfigurationIssue(issue) => evin_diagnostic::Diagnostic::new(
+                evin_locales::t!("changelog-invalid-config-title"),
+                issue,
+            ),
             error => evin_locales::diagnostic(error.issue().expect("non-config issue")),
         })
 }
@@ -95,7 +105,9 @@ async fn generate_changelog(
     let config: ChangelogConfig = ctx
         .load_config(with.as_ref())
         .map_err(ChangelogError::InvalidConfiguration)?;
-    config.validate()?;
+    config
+        .validate()
+        .map_err(ChangelogError::ConfigurationIssue)?;
 
     if let Some(section) = &config.section {
         let section = resolve_templates(section, ctx).map_err(|error| {
@@ -104,11 +116,6 @@ async fn generate_changelog(
                     .arg("error", error.to_string()),
             )
         })?;
-        if section.trim().is_empty() {
-            return Err(ChangelogError::InvalidSection(
-                evin_diagnostic::IssueCode::new("changelog-section-empty"),
-            ));
-        }
         let notes_path = config.notes_path.as_deref().expect("validated notes_path");
         let input_path = ctx
             .fs
@@ -245,13 +252,10 @@ async fn generate_changelog(
         .map(|version| resolve_templates(version, ctx))
         .transpose()
         .map_err(|e| {
-            ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                message: evin_locales::t!(
-                    "changelog-template-resolution-failed",
-                    error = e.to_string()
-                ),
-                span: None,
-            })
+            ChangelogError::ConfigurationIssue(
+                evin_diagnostic::IssueCode::new("changelog-template-resolution-failed")
+                    .arg("error", e.to_string()),
+            )
         })?;
 
     let tags_format = ctx.tag_format();
@@ -270,13 +274,10 @@ async fn generate_changelog(
         .map(|label| resolve_templates(label, ctx))
         .transpose()
         .map_err(|e| {
-            ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                message: evin_locales::t!(
-                    "changelog-template-resolution-failed",
-                    error = e.to_string()
-                ),
-                span: None,
-            })
+            ChangelogError::ConfigurationIssue(
+                evin_diagnostic::IssueCode::new("changelog-template-resolution-failed")
+                    .arg("error", e.to_string()),
+            )
         })?
         .map(|label| format!(" — {label}"))
         .unwrap_or_default();

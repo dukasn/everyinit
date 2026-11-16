@@ -16,52 +16,38 @@ use super::super::adapters::{CommandGitStateProvider, FsPlanSink, FsRemoteStateS
 use evin_release_sync::{GitStateProvider, PlanSink, ProtocolError, RemoteStateSource};
 
 #[test]
-fn missing_state_diagnostic_uses_fluent_message() {
+fn missing_state_keeps_path_as_structured_error_data() {
     let temp = tempfile::tempdir().unwrap();
     let source = FsRemoteStateSource {
         workspace_root: temp.path(),
         state_path: "missing-state.json",
     };
+
     let error = source.load_remote_state().unwrap_err();
-    let ProtocolError::StateIngestion(message) = error else {
-        panic!("expected state ingestion error");
+    let ProtocolError::StateFileNotFound { path } = error else {
+        panic!("expected missing state file error");
     };
-    let expected = evin_locales::t!(
-        "release-sync-state-file-not-found",
-        path = temp.path().join("missing-state.json").display().to_string()
-    );
-    assert!(
-        !expected.starts_with("<missing locale key:"),
-        "expected Fluent message to exist: {expected}"
-    );
-    assert_eq!(message, expected);
+    assert_eq!(path, temp.path().join("missing-state.json"));
 }
 
 #[test]
-fn invalid_state_json_uses_fluent_message() {
+fn invalid_state_json_keeps_parser_error_as_structured_data() {
     let temp = tempfile::tempdir().unwrap();
-    let state_path = temp.path().join("state.json");
-    std::fs::write(&state_path, "{").unwrap();
+    std::fs::write(temp.path().join("state.json"), "{").unwrap();
     let source = FsRemoteStateSource {
         workspace_root: temp.path(),
         state_path: "state.json",
     };
 
     let error = source.load_remote_state().unwrap_err();
-    let ProtocolError::SchemaValidation(message) = error else {
-        panic!("expected state schema validation error");
+    let ProtocolError::StateJsonInvalid { source } = error else {
+        panic!("expected invalid state JSON error");
     };
-    let detail = serde_json::from_str::<evin_release_sync::RemoteReleaseState>("{")
-        .unwrap_err()
-        .to_string();
-    assert_eq!(
-        message,
-        evin_locales::t!("release-sync-state-json-invalid", error = detail)
-    );
+    assert_eq!(source.classify(), serde_json::error::Category::Eof);
 }
 
 #[test]
-fn state_read_error_uses_fluent_message() {
+fn state_read_error_keeps_path_and_io_source() {
     let temp = tempfile::tempdir().unwrap();
     let state_path = temp.path().join("state.json");
     std::fs::create_dir(&state_path).unwrap();
@@ -71,20 +57,15 @@ fn state_read_error_uses_fluent_message() {
     };
 
     let error = source.load_remote_state().unwrap_err();
-    let ProtocolError::StateIngestion(message) = error else {
-        panic!("expected state ingestion error");
+    let ProtocolError::StateFileRead { path, source } = error else {
+        panic!("expected state file read error");
     };
-    let detail = std::fs::read_to_string(&state_path)
-        .unwrap_err()
-        .to_string();
-    assert_eq!(
-        message,
-        evin_locales::t!("release-sync-state-file-read-failed", error = detail)
-    );
+    assert_eq!(path, state_path);
+    assert_eq!(source.kind(), std::io::ErrorKind::IsADirectory);
 }
 
 #[test]
-fn notes_directory_error_uses_fluent_message() {
+fn notes_directory_error_keeps_path_and_io_source() {
     let temp = tempfile::tempdir().unwrap();
     let blocker = temp.path().join("notes");
     std::fs::write(&blocker, "file").unwrap();
@@ -95,22 +76,15 @@ fn notes_directory_error_uses_fluent_message() {
     let mut sink = FsPlanSink::new(temp.path(), &config);
 
     let error = sink.write_notes_file("release.md", "notes").unwrap_err();
-    let ProtocolError::PlanWrite(message) = error else {
-        panic!("expected plan write error");
+    let ProtocolError::NotesDirectoryCreate { path, source } = error else {
+        panic!("expected notes directory creation error");
     };
-    let detail = std::fs::create_dir_all(&blocker).unwrap_err().to_string();
-    assert_eq!(
-        message,
-        evin_locales::t!(
-            "release-sync-notes-directory-create-failed",
-            path = blocker.display().to_string(),
-            error = detail
-        )
-    );
+    assert_eq!(path, blocker);
+    assert_eq!(source.kind(), std::io::ErrorKind::AlreadyExists);
 }
 
 #[test]
-fn plan_directory_error_uses_fluent_message() {
+fn plan_directory_error_keeps_path_and_io_source() {
     let temp = tempfile::tempdir().unwrap();
     let blocker = temp.path().join("plans");
     std::fs::write(&blocker, "file").unwrap();
@@ -130,22 +104,15 @@ fn plan_directory_error_uses_fluent_message() {
     };
 
     let error = sink.write_plan(&plan).unwrap_err();
-    let ProtocolError::PlanWrite(message) = error else {
-        panic!("expected plan write error");
+    let ProtocolError::PlanDirectoryCreate { path, source } = error else {
+        panic!("expected plan directory creation error");
     };
-    let detail = std::fs::create_dir_all(&blocker).unwrap_err().to_string();
-    assert_eq!(
-        message,
-        evin_locales::t!(
-            "release-sync-plan-directory-create-failed",
-            path = blocker.display().to_string(),
-            error = detail
-        )
-    );
+    assert_eq!(path, blocker);
+    assert_eq!(source.kind(), std::io::ErrorKind::AlreadyExists);
 }
 
 #[test]
-fn note_write_error_uses_fluent_message() {
+fn note_write_error_keeps_path_and_io_source() {
     let temp = tempfile::tempdir().unwrap();
     let notes_dir = temp.path().join("notes");
     std::fs::create_dir(&notes_dir).unwrap();
@@ -158,24 +125,15 @@ fn note_write_error_uses_fluent_message() {
     let mut sink = FsPlanSink::new(temp.path(), &config);
 
     let error = sink.write_notes_file("release.md", "notes").unwrap_err();
-    let ProtocolError::PlanWrite(message) = error else {
-        panic!("expected plan write error");
+    let ProtocolError::NotesFileWrite { path, source } = error else {
+        panic!("expected note file write error");
     };
-    let detail = std::fs::write(&destination, "notes")
-        .unwrap_err()
-        .to_string();
-    assert_eq!(
-        message,
-        evin_locales::t!(
-            "release-sync-note-write-failed",
-            path = destination.display().to_string(),
-            error = detail
-        )
-    );
+    assert_eq!(path, destination);
+    assert_eq!(source.kind(), std::io::ErrorKind::IsADirectory);
 }
 
 #[test]
-fn plan_write_error_uses_fluent_message() {
+fn plan_write_error_keeps_path_and_io_source() {
     let temp = tempfile::tempdir().unwrap();
     let destination = temp.path().join("plan.json");
     std::fs::create_dir(&destination).unwrap();
@@ -195,22 +153,15 @@ fn plan_write_error_uses_fluent_message() {
     };
 
     let error = sink.write_plan(&plan).unwrap_err();
-    let ProtocolError::PlanWrite(message) = error else {
-        panic!("expected plan write error");
+    let ProtocolError::PlanFileWrite { path, source } = error else {
+        panic!("expected plan file write error");
     };
-    let detail = std::fs::write(&destination, "{}").unwrap_err().to_string();
-    assert_eq!(
-        message,
-        evin_locales::t!(
-            "release-sync-plan-write-failed",
-            path = destination.display().to_string(),
-            error = detail
-        )
-    );
+    assert_eq!(path, destination);
+    assert_eq!(source.kind(), std::io::ErrorKind::IsADirectory);
 }
 
 #[test]
-fn missing_configured_tag_uses_fluent_message() {
+fn missing_configured_tag_keeps_tag_as_structured_data() {
     let temp = tempfile::tempdir().unwrap();
     let output = std::process::Command::new("git")
         .args(["init", "-q"])
@@ -224,19 +175,14 @@ fn missing_configured_tag_uses_fluent_message() {
         title: None,
     };
     let error = provider.local_tags().unwrap_err();
-    let ProtocolError::GitInspection(message) = error else {
-        panic!("expected Git inspection error");
+    let ProtocolError::ConfiguredTagMissing { tag } = error else {
+        panic!("expected missing configured tag error");
     };
-    let expected = evin_locales::t!("release-sync-configured-tag-missing", tag = "v1.2.3");
-    assert!(
-        !expected.starts_with("<missing locale key:"),
-        "expected Fluent message to exist: {expected}"
-    );
-    assert_eq!(message, expected);
+    assert_eq!(tag, "v1.2.3");
 }
 
 #[test]
-fn git_tag_command_error_uses_fluent_message() {
+fn git_tag_command_error_keeps_io_source() {
     let temp = tempfile::tempdir().unwrap();
     let missing_worktree = temp.path().join("missing-worktree");
     let provider = CommandGitStateProvider {
@@ -246,21 +192,8 @@ fn git_tag_command_error_uses_fluent_message() {
     };
 
     let error = provider.local_tags().unwrap_err();
-    let ProtocolError::GitInspection(message) = error else {
-        panic!("expected git inspection error");
+    let ProtocolError::GitTagCommandFailed { source } = error else {
+        panic!("expected git tag command error");
     };
-    let detail = std::process::Command::new("git")
-        .args([
-            "tag",
-            "-l",
-            "--format=%(refname:short)|%(*objectname)|%(objectname)|%(contents:subject)",
-        ])
-        .current_dir(&missing_worktree)
-        .output()
-        .unwrap_err()
-        .to_string();
-    assert_eq!(
-        message,
-        evin_locales::t!("release-sync-git-tag-command-failed", error = detail)
-    );
+    assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
 }

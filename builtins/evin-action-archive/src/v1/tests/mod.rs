@@ -65,6 +65,229 @@ fn spanned_mapping(with: HashMap<String, serde_json::Value>) -> evin_flow::Spann
     )
 }
 
+fn context_with_env(root: &std::path::Path, env: HashMap<String, String>) -> RunnerContext {
+    let (tx, _) = tokio::sync::mpsc::unbounded_channel();
+    let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default());
+    let logger = evin_action_sdk::Logger::new("archive_test".into(), tx.clone(), secrets.clone());
+    let git = std::sync::Arc::new(evin_action_sdk::git::GitProvider::new(
+        root.to_path_buf(),
+        evin_action_sdk::PipelineMode::Normal,
+        logger,
+    ));
+    evin_action_sdk::RunnerContextBuilder::new(
+        "archive_test".into(),
+        tx,
+        root.to_path_buf(),
+        git,
+        secrets,
+    )
+    .env(env)
+    .build()
+}
+
+#[test]
+fn invalid_exclude_glob_uses_fluent_diagnostic() {
+    let temp = TempDir::new().unwrap();
+    let ctx = context_with_env(temp.path(), HashMap::new());
+    let with = evin_flow::parse_yaml("exclude: ['[']\n").unwrap();
+    let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+
+    let error = mapping::resolve_and_map_files(&ctx, &config).unwrap_err();
+    assert_eq!(error.code.key, "invalid-glob");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("invalid-glob", error = detail)
+    );
+}
+
+#[test]
+fn workspace_escape_in_archive_glob_uses_fluent_diagnostic() {
+    let temp = TempDir::new().unwrap();
+    let ctx = context_with_env(temp.path(), HashMap::new());
+    let with = evin_flow::parse_yaml("path: out.tar.gz\ninclude: ['../outside/*.txt']\n").unwrap();
+    let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+
+    let error = mapping::resolve_and_map_files(&ctx, &config).unwrap_err();
+    assert_eq!(error.code.key, "issue-archive-safe-path-failed");
+    let detail = &error.code.args[1].1;
+    let expected = evin_locales::t!(
+        "issue-archive-safe-path-failed",
+        context = "source",
+        error = detail
+    );
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(
+        error.title,
+        evin_locales::t!("issue-archive-safe-path-failed-title")
+    );
+}
+
+#[tokio::test]
+async fn unmatched_archive_inputs_use_fluent_diagnostic() {
+    let temp = TempDir::new().unwrap();
+    let ctx = context_with_env(temp.path(), HashMap::new());
+    let with =
+        evin_flow::parse_yaml("path: dist/archive.tar.gz\ninclude: ['missing/**']\n").unwrap();
+
+    let error = ArchiveAction.execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "no-files-matched");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("no-files-matched")
+    );
+}
+
+#[tokio::test]
+async fn output_directory_failure_uses_fluent_diagnostic() {
+    let temp = TempDir::new().unwrap();
+    std::fs::write(temp.path().join("input.txt"), "content").unwrap();
+    let blocker = temp.path().join("blocked");
+    std::fs::write(&blocker, "file").unwrap();
+    let ctx = context_with_env(temp.path(), HashMap::new());
+    let with =
+        evin_flow::parse_yaml("path: blocked/archive.tar.gz\ninclude: [input.txt]\n").unwrap();
+
+    let error = ArchiveAction.execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "create-output-dir-failed");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("create-output-dir-failed", error = detail)
+    );
+}
+
+#[tokio::test]
+async fn missing_package_target_uses_fluent_diagnostic() {
+    let temp = TempDir::new().unwrap();
+    let ctx = context_with_env(temp.path(), HashMap::new());
+    let with = evin_flow::parse_yaml(
+        "format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: state\npackage:\n  name: app\n  summary: app\n  maintainer: Maintainer\n  license: MIT\n",
+    )
+    .unwrap();
+
+    let error = ArchiveAction.execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "archive-package-target-missing");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("archive-package-target-missing", format = "deb")
+    );
+}
+
+#[tokio::test]
+async fn release_artifact_failures_use_fluent_diagnostics() {
+    let temp = TempDir::new().unwrap();
+    let ctx = context_with_env(temp.path(), HashMap::new());
+    let invalid_json = "not json";
+    let invalid = ArchiveAction
+        .execute(&ctx, Some(package_config(invalid_json)))
+        .await
+        .unwrap_err();
+    assert_eq!(invalid.code.key, "archive-release-output-invalid");
+    let detail = &invalid.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&invalid.code),
+        evin_locales::t!("archive-release-output-invalid", error = detail)
+    );
+
+    let unsupported_schema = serde_json::json!({
+        "schema": 2,
+        "release": {"version": "1.0.0", "tag": "v1.0.0"},
+        "packages": {}
+    })
+    .to_string();
+    let unsupported = ArchiveAction
+        .execute(&ctx, Some(package_config(&unsupported_schema)))
+        .await
+        .unwrap_err();
+    assert_eq!(unsupported.code.key, "archive-release-schema-unsupported");
+    assert_eq!(
+        evin_locales::render_issue(&unsupported.code),
+        evin_locales::t!("archive-release-schema-unsupported", schema = 2)
+    );
+
+    let missing_revision = serde_json::json!({
+        "schema": 1,
+        "release": {"version": "1.0.0", "tag": "v1.0.0"},
+        "packages": {}
+    })
+    .to_string();
+    let missing = ArchiveAction
+        .execute(&ctx, Some(package_config(&missing_revision)))
+        .await
+        .unwrap_err();
+    assert_eq!(missing.code.key, "archive-release-revision-missing");
+    assert_eq!(
+        evin_locales::render_issue(&missing.code),
+        evin_locales::t!(
+            "archive-release-revision-missing",
+            target = "deb",
+            package = "app"
+        )
+    );
+
+    let invalid_revision = serde_json::json!({
+        "schema": 1,
+        "release": {"version": "1.0.0", "tag": "v1.0.0"},
+        "packages": {
+            "app": {
+                "revisions": {
+                    "deb": {"version": "", "revision": 0}
+                }
+            }
+        }
+    })
+    .to_string();
+    let invalid = ArchiveAction
+        .execute(&ctx, Some(package_config(&invalid_revision)))
+        .await
+        .unwrap_err();
+    assert_eq!(invalid.code.key, "archive-release-version-revision-invalid");
+    assert_eq!(
+        evin_locales::render_issue(&invalid.code),
+        evin_locales::t!("archive-release-version-revision-invalid")
+    );
+}
+
+fn package_config(release: &str) -> evin_flow::SpannedValue {
+    let release = serde_json::to_string(release).unwrap();
+    evin_flow::parse_yaml(&format!(
+        "format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: {release}\npackage:\n  name: app\n  summary: app\n  maintainer: Maintainer\n  license: MIT\n  targets:\n    deb: {{}}\n"
+    ))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn invalid_source_date_epoch_uses_fluent_message() {
+    let temp = TempDir::new().unwrap();
+    let ctx = context_with_env(
+        temp.path(),
+        HashMap::from([("SOURCE_DATE_EPOCH".into(), "yesterday".into())]),
+    );
+
+    let error = resolve_epoch(&ctx).await.unwrap_err();
+    assert_eq!(error.code.key, "archive-source-date-epoch-invalid");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("archive-source-date-epoch-invalid", error = detail)
+    );
+}
+
+#[tokio::test]
+async fn unavailable_source_date_epoch_uses_fluent_message() {
+    let temp = TempDir::new().unwrap();
+    let ctx = context_with_env(temp.path(), HashMap::new());
+
+    let error = resolve_epoch(&ctx).await.unwrap_err();
+    assert_eq!(error.code.key, "archive-source-date-epoch-unavailable");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("archive-source-date-epoch-unavailable", error = detail)
+    );
+}
+
 #[tokio::test]
 async fn test_archive_creates_archive() {
     let temp_dir = TempDir::new().unwrap();

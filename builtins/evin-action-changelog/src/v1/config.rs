@@ -13,6 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::ChangelogError;
+use evin_diagnostic::IssueCode;
 use evin_flow::template::pipeline::validate_template_syntax;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -91,111 +92,58 @@ impl ChangelogConfig {
     pub(super) fn from_with(with: Option<evin_flow::SpannedValue>) -> Result<Self, ChangelogError> {
         let config: Self = evin_action_sdk::parse_config(with.as_ref())
             .map_err(ChangelogError::InvalidConfiguration)?;
-        config.validate()?;
+        config
+            .validate()
+            .map_err(ChangelogError::ConfigurationIssue)?;
         Ok(config)
     }
 
-    pub(super) fn validate(&self) -> Result<(), ChangelogError> {
+    pub(super) fn validate(&self) -> Result<(), IssueCode> {
         if self.path.trim().is_empty() {
-            return Err(ChangelogError::InvalidConfiguration(
-                evin_flow::ConfigError {
-                    message: evin_locales::t!("changelog-path-must-not-be-empty"),
-                    span: None,
-                },
-            ));
+            return Err(IssueCode::new("changelog-path-must-not-be-empty"));
         }
         if self
             .notes_path
             .as_deref()
             .is_some_and(|path| path.trim().is_empty())
         {
-            return Err(ChangelogError::InvalidConfiguration(
-                evin_flow::ConfigError {
-                    message: evin_locales::t!("notes-path-must-not-be-empty-when-provided"),
-                    span: None,
-                },
-            ));
+            return Err(IssueCode::new("notes-path-must-not-be-empty-when-provided"));
         }
         if let Some(section) = &self.section {
             if section.trim().is_empty() || self.notes_path.is_none() {
-                return Err(ChangelogError::InvalidConfiguration(
-                    evin_flow::ConfigError {
-                        message: evin_locales::t!(
-                            "section-must-be-non-empty-and-requires-notes-path"
-                        ),
-                        span: None,
-                    },
+                return Err(IssueCode::new(
+                    "section-must-be-non-empty-and-requires-notes-path",
                 ));
             }
             validate_template_syntax(section).map_err(|error| {
-                ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                    message: evin_locales::t!(
-                        "section-template-invalid",
-                        error = error.to_string()
-                    ),
-                    span: None,
-                })
+                IssueCode::new("section-template-invalid").arg("error", error.to_string())
             })?;
         }
         if self.unreleased_heading.trim().is_empty() {
-            return Err(ChangelogError::InvalidConfiguration(
-                evin_flow::ConfigError {
-                    message: evin_locales::t!("unreleased-heading-must-not-be-empty"),
-                    span: None,
-                },
-            ));
+            return Err(IssueCode::new("unreleased-heading-must-not-be-empty"));
         }
         if self.sections.keys().any(|key| key.trim().is_empty()) {
-            return Err(ChangelogError::InvalidConfiguration(
-                evin_flow::ConfigError {
-                    message: evin_locales::t!("sections-keys-must-not-be-empty"),
-                    span: None,
-                },
-            ));
+            return Err(IssueCode::new("sections-keys-must-not-be-empty"));
         }
         if let Some(version) = &self.version {
             let is_empty = version.trim().is_empty();
             if is_empty {
-                return Err(ChangelogError::InvalidConfiguration(
-                    evin_flow::ConfigError {
-                        message: evin_locales::t!("version-must-not-be-empty"),
-                        span: None,
-                    },
-                ));
+                return Err(IssueCode::new("version-must-not-be-empty"));
             }
             validate_template_syntax(version).map_err(|e| {
-                ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                    message: evin_locales::t!(
-                        "issue-changelog-version-invalid",
-                        error = e.to_string()
-                    ),
-                    span: None,
-                })
+                IssueCode::new("issue-changelog-version-invalid").arg("error", e.to_string())
             })?;
         } else if !self.include_unreleased && self.section.is_none() {
-            return Err(ChangelogError::InvalidConfiguration(
-                evin_flow::ConfigError {
-                    message: evin_locales::t!(
-                        "version-is-required-when-include-unreleased-is-false"
-                    ),
-                    span: None,
-                },
+            return Err(IssueCode::new(
+                "version-is-required-when-include-unreleased-is-false",
             ));
         }
         if let Some(label) = &self.label {
             if label.trim().is_empty() {
-                return Err(ChangelogError::InvalidConfiguration(
-                    evin_flow::ConfigError {
-                        message: evin_locales::t!("label-must-not-be-empty-when-provided"),
-                        span: None,
-                    },
-                ));
+                return Err(IssueCode::new("label-must-not-be-empty-when-provided"));
             }
             validate_template_syntax(label).map_err(|e| {
-                ChangelogError::InvalidConfiguration(evin_flow::ConfigError {
-                    message: evin_locales::t!("label-template-invalid", error = e.to_string()),
-                    span: None,
-                })
+                IssueCode::new("label-template-invalid").arg("error", e.to_string())
             })?;
         }
         Ok(())

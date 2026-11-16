@@ -12,6 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use evin_diagnostic::IssueCode;
 use serde::Deserialize;
 
 fn default_state_path() -> String {
@@ -86,44 +87,34 @@ impl ReleaseSyncConfig {
         with: Option<&evin_flow::SpannedValue>,
     ) -> Result<Self, evin_flow::ConfigError> {
         let config: Self = evin_action_sdk::parse_config(with)?;
-        config.validate()?;
+        config.validate().map_err(|issue| evin_flow::ConfigError {
+            message: evin_locales::render_issue(&issue),
+            span: None,
+        })?;
         Ok(config)
     }
 
-    pub fn validate(&self) -> Result<(), evin_flow::ConfigError> {
+    pub fn validate(&self) -> Result<(), IssueCode> {
         if self.tag.as_ref().is_some_and(|tag| tag.trim().is_empty()) {
-            return Err(evin_flow::ConfigError {
-                message: evin_locales::t!("release-sync-tag-must-not-be-empty"),
-                span: None,
-            });
+            return Err(IssueCode::new("release-sync-tag-must-not-be-empty"));
         }
         if self
             .title
             .as_ref()
             .is_some_and(|title| title.trim().is_empty())
         {
-            return Err(evin_flow::ConfigError {
-                message: evin_locales::t!("release-sync-title-must-not-be-empty"),
-                span: None,
-            });
+            return Err(IssueCode::new("release-sync-title-must-not-be-empty"));
         }
         if self.state.trim().is_empty() {
-            return Err(evin_flow::ConfigError {
-                message: evin_locales::t!("release-sync-state-path-must-not-be-empty"),
-                span: None,
-            });
+            return Err(IssueCode::new("release-sync-state-path-must-not-be-empty"));
         }
         if self.plan_out.trim().is_empty() {
-            return Err(evin_flow::ConfigError {
-                message: evin_locales::t!("release-sync-plan-out-path-must-not-be-empty"),
-                span: None,
-            });
+            return Err(IssueCode::new(
+                "release-sync-plan-out-path-must-not-be-empty",
+            ));
         }
         if self.notes_dir.trim().is_empty() {
-            return Err(evin_flow::ConfigError {
-                message: evin_locales::t!("release-sync-notes-dir-must-not-be-empty"),
-                span: None,
-            });
+            return Err(IssueCode::new("release-sync-notes-dir-must-not-be-empty"));
         }
         Ok(())
     }

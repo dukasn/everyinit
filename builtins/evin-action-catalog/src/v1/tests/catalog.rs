@@ -107,6 +107,36 @@ fn formal_reference_error_uses_fluent_message() {
 }
 
 #[test]
+fn unreadable_source_uses_fluent_message() {
+    let temp = tempfile::tempdir().unwrap();
+    let docs = temp.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    let source = docs.join("guide.md");
+    std::fs::write(&source, [0xff]).unwrap();
+    let config = CatalogConfig {
+        source_dir: "docs".into(),
+        out: "dist/catalog.json".into(),
+        include: Vec::new(),
+        exclude: Vec::new(),
+        extract_frontmatter: true,
+        reference_prefix: "REF".into(),
+    };
+
+    let error = compile(temp.path(), &config).unwrap_err();
+    assert_eq!(error.code.key, "catalog-source-read-failed");
+    let path = &error.code.args[0].1;
+    let detail = &error.code.args[1].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("catalog-source-read-failed", path = path, error = detail)
+    );
+    assert_eq!(
+        error.title,
+        evin_locales::t!("catalog-source-read-failed-title")
+    );
+}
+
+#[test]
 fn catalog_compiles_without_web_site_settings() {
     let temp = tempfile::tempdir().unwrap();
     let docs = temp.path().join("docs");

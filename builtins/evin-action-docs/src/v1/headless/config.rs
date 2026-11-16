@@ -12,6 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use evin_diagnostic::IssueCode;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -88,48 +89,42 @@ pub fn validate_config(
     with: Option<&evin_flow::SpannedValue>,
 ) -> Result<(), evin_flow::ConfigError> {
     let config: HeadlessConfig = evin_action_sdk::parse_config(with)?;
-    validate(&config).map_err(|message| evin_flow::ConfigError {
-        message,
+    validate(&config).map_err(|issue| evin_flow::ConfigError {
+        message: evin_locales::render_issue(&issue),
         span: None,
     })
 }
 
-pub(super) fn validate(config: &HeadlessConfig) -> Result<(), String> {
+pub(super) fn validate(config: &HeadlessConfig) -> Result<(), IssueCode> {
     let prefix = config.reference_prefix.trim();
     if prefix.is_empty() || !prefix.bytes().all(|byte| byte.is_ascii_alphanumeric()) {
-        return Err(evin_locales::t!("docs-reference-prefix-invalid"));
+        return Err(IssueCode::new("docs-reference-prefix-invalid"));
     }
     if let Some(i18n) = &config.i18n {
         if i18n.locales.is_empty() {
-            return Err(evin_locales::t!("docs-i18n-locales-required"));
+            return Err(IssueCode::new("docs-i18n-locales-required"));
         }
         let mut locales = HashSet::new();
         for locale in &i18n.locales {
             let parsed = locale
                 .parse::<unic_langid::LanguageIdentifier>()
-                .map_err(|_| evin_locales::t!("docs-i18n-locale-invalid", locale = locale))?;
+                .map_err(|_| IssueCode::new("docs-i18n-locale-invalid").arg("locale", locale))?;
             if parsed.to_string() != *locale {
-                return Err(evin_locales::t!(
-                    "docs-i18n-locale-noncanonical",
-                    locale = locale
-                ));
+                return Err(IssueCode::new("docs-i18n-locale-noncanonical").arg("locale", locale));
             }
             if !locales.insert(parsed.to_string()) {
-                return Err(evin_locales::t!(
-                    "docs-i18n-locale-duplicate",
-                    locale = locale
-                ));
+                return Err(IssueCode::new("docs-i18n-locale-duplicate").arg("locale", locale));
             }
         }
         let default = i18n
             .default_locale
             .parse::<unic_langid::LanguageIdentifier>()
-            .map_err(|_| evin_locales::t!("docs-i18n-default-locale-invalid"))?;
+            .map_err(|_| IssueCode::new("docs-i18n-default-locale-invalid"))?;
         if default.to_string() != i18n.default_locale {
-            return Err(evin_locales::t!("docs-i18n-default-locale-noncanonical"));
+            return Err(IssueCode::new("docs-i18n-default-locale-noncanonical"));
         }
         if !locales.contains(&default.to_string()) {
-            return Err(evin_locales::t!("docs-i18n-default-locale-missing"));
+            return Err(IssueCode::new("docs-i18n-default-locale-missing"));
         }
     }
     if config.versions.is_empty() {
@@ -138,39 +133,32 @@ pub(super) fn validate(config: &HeadlessConfig) -> Result<(), String> {
             .as_deref()
             .is_some_and(|id| id != "latest")
         {
-            return Err(evin_locales::t!(
-                "docs-latest-version-requires-version-list"
-            ));
+            return Err(IssueCode::new("docs-latest-version-requires-version-list"));
         }
     } else {
         let mut ids = HashSet::new();
         for version in &config.versions {
             if !valid_segment(&version.id) {
-                return Err(evin_locales::t!(
-                    "docs-version-id-invalid",
-                    version = version.id.as_str()
-                ));
+                return Err(
+                    IssueCode::new("docs-version-id-invalid").arg("version", version.id.as_str())
+                );
             }
             if !ids.insert(version.id.clone()) {
-                return Err(evin_locales::t!(
-                    "docs-version-id-duplicate",
-                    version = version.id.as_str()
-                ));
+                return Err(
+                    IssueCode::new("docs-version-id-duplicate").arg("version", version.id.as_str())
+                );
             }
         }
         let latest = config
             .latest_version
             .as_deref()
-            .ok_or_else(|| evin_locales::t!("docs-latest-version-required"))?;
+            .ok_or_else(|| IssueCode::new("docs-latest-version-required"))?;
         if !ids.contains(latest) {
-            return Err(evin_locales::t!(
-                "docs-latest-version-unlisted",
-                version = latest
-            ));
+            return Err(IssueCode::new("docs-latest-version-unlisted").arg("version", latest));
         }
     }
     if config.out.as_os_str().is_empty() {
-        return Err(evin_locales::t!("docs-output-path-must-not-be-empty"));
+        return Err(IssueCode::new("docs-output-path-must-not-be-empty"));
     }
     crate::v1::assets::validate_asset_dir(&config.asset_dir)?;
     Ok(())
@@ -261,7 +249,9 @@ mod tests {
                 !expected.starts_with("<missing locale key:"),
                 "expected Fluent message to exist for {yaml:?}: {expected}"
             );
-            assert_eq!(actual, expected, "{yaml:?}");
+            assert_eq!(evin_locales::render_issue(&actual), expected, "{yaml:?}");
+            let public_error = validate_config(Some(&with)).unwrap_err();
+            assert_eq!(public_error.message, expected, "{yaml:?}");
         }
     }
 }

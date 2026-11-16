@@ -31,19 +31,13 @@ impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
             ])
             .current_dir(self.workspace_root)
             .output()
-            .map_err(|e| {
-                ProtocolError::GitInspection(evin_locales::t!(
-                    "release-sync-git-tag-command-failed",
-                    error = e.to_string()
-                ))
-            })?;
+            .map_err(|source| ProtocolError::GitTagCommandFailed { source })?;
 
         if !output.status.success() {
             let err = String::from_utf8_lossy(&output.stderr);
-            return Err(ProtocolError::GitInspection(evin_locales::t!(
-                "release-sync-git-tag-failed",
-                error = err.trim()
-            )));
+            return Err(ProtocolError::GitTagFailed {
+                stderr: err.trim().to_string(),
+            });
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -90,10 +84,9 @@ impl<'a> GitStateProvider for CommandGitStateProvider<'a> {
         if let Some(tag) = self.tag {
             tags.retain(|local| local.tag == tag);
             if tags.is_empty() {
-                return Err(ProtocolError::GitInspection(evin_locales::t!(
-                    "release-sync-configured-tag-missing",
-                    tag = tag
-                )));
+                return Err(ProtocolError::ConfiguredTagMissing {
+                    tag: tag.to_string(),
+                });
             }
         }
         Ok(tags)

@@ -103,6 +103,60 @@ async fn workspace_name_channel_variable_errors_use_fluent_messages() {
         evin_locales::t!("version-bumper-channel-variable-location-hint"),
         "missing variable here"
     );
+
+    let env_name = format!("EVIN_TEST_UNSET_{}", std::process::id());
+    let failure = resolve_channel_var(&format!("env.{env_name}"), &ctx)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        failure.message.key,
+        "version-bumper-environment-variable-missing"
+    );
+    assert_eq!(
+        evin_locales::render_issue(&failure.message),
+        evin_locales::t!("version-bumper-environment-variable-missing")
+    );
+    let hint = failure.hint.as_ref().unwrap();
+    assert_eq!(hint.key, "version-bumper-environment-variable-required");
+    assert_eq!(
+        evin_locales::render_issue(hint),
+        evin_locales::t!(
+            "version-bumper-environment-variable-required",
+            name = env_name
+        )
+    );
+}
+
+#[tokio::test]
+async fn git_channel_variable_failures_use_fluent_messages_and_hints() {
+    let temp = tempfile::tempdir().unwrap();
+    init_repo(temp.path());
+    std::fs::write(temp.path().join(".git/config"), "[broken\n").unwrap();
+    let ctx = context(temp.path());
+
+    for (variable, message_key, message, hint_key, hint_message) in [
+        (
+            "git.branch",
+            "version-bumper-git-branch-resolution-failed",
+            evin_locales::t!("version-bumper-git-branch-resolution-failed"),
+            "version-bumper-git-branch-requirement",
+            evin_locales::t!("version-bumper-git-branch-requirement"),
+        ),
+        (
+            "git.short_sha",
+            "version-bumper-git-short-sha-resolution-failed",
+            evin_locales::t!("version-bumper-git-short-sha-resolution-failed"),
+            "version-bumper-git-short-sha-requirement",
+            evin_locales::t!("version-bumper-git-short-sha-requirement"),
+        ),
+    ] {
+        let failure = resolve_channel_var(variable, &ctx).await.unwrap_err();
+        assert_eq!(failure.message.key, message_key);
+        assert_eq!(evin_locales::render_issue(&failure.message), message);
+        let hint = failure.hint.as_ref().unwrap();
+        assert_eq!(hint.key, hint_key);
+        assert_eq!(evin_locales::render_issue(hint), hint_message);
+    }
 }
 
 #[tokio::test]

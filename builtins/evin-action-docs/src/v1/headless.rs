@@ -95,8 +95,8 @@ struct VersionRecord {
     latest: bool,
 }
 
-fn diagnostic(message: impl Into<String>, code: &'static str) -> Diagnostic {
-    Diagnostic::new(message, IssueCode::new(code))
+fn diagnostic(code: IssueCode) -> Diagnostic {
+    evin_locales::diagnostic(code)
 }
 
 fn absolute(root: &Path, path: &Path) -> PathBuf {
@@ -115,21 +115,15 @@ fn parse_source(
     let source_root = absolute(root, source_dir);
     let files = SourceResolver::resolve_all(&source_root, &config.include, &config.exclude)
         .map_err(|issue| {
-            diagnostic(
-                evin_locales::t!("docs-source-discovery-failed", error = issue.message),
-                "source-discovery",
-            )
+            diagnostic(IssueCode::new("docs-source-discovery-failed").arg("error", issue.message))
         })?;
     let mut loaded = Vec::with_capacity(files.len());
     for file in files {
         let content = std::fs::read_to_string(&file.absolute_path).map_err(|error| {
-            Diagnostic::new(
-                evin_locales::t!(
-                    "docs-source-read-failed",
-                    path = file.absolute_path.display().to_string(),
-                    error = error.to_string()
-                ),
-                IssueCode::new("io-error"),
+            diagnostic(
+                IssueCode::new("docs-source-read-failed")
+                    .arg("path", file.absolute_path.display().to_string())
+                    .arg("error", error.to_string()),
             )
             .with_file_location(file.relative_path.to_string_lossy(), None, None)
         })?;
@@ -412,31 +406,22 @@ fn opaque_id(prefix: &str, identity: &impl Serialize) -> String {
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), Diagnostic> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
-            Diagnostic::new(
-                evin_locales::t!(
-                    "docs-output-directory-create-failed",
-                    path = parent.display().to_string(),
-                    error = error.to_string()
-                ),
-                IssueCode::new("io-error"),
+            diagnostic(
+                IssueCode::new("docs-output-directory-create-failed")
+                    .arg("path", parent.display().to_string())
+                    .arg("error", error.to_string()),
             )
         })?;
     }
     let mut bytes = serde_json::to_vec_pretty(value).map_err(|error| {
-        diagnostic(
-            evin_locales::t!("docs-data-serialization-failed", error = error.to_string()),
-            "serialization-error",
-        )
+        diagnostic(IssueCode::new("docs-data-serialization-failed").arg("error", error.to_string()))
     })?;
     bytes.push(b'\n');
     std::fs::write(path, bytes).map_err(|error| {
-        Diagnostic::new(
-            evin_locales::t!(
-                "docs-output-write-failed",
-                path = path.display().to_string(),
-                error = error.to_string()
-            ),
-            IssueCode::new("io-error"),
+        diagnostic(
+            IssueCode::new("docs-output-write-failed")
+                .arg("path", path.display().to_string())
+                .arg("error", error.to_string()),
         )
     })
 }
@@ -483,12 +468,9 @@ fn build_variants(
             let site = parse_source(root, config, &locale_root)?;
             if locale == &default_locale && site.pages.is_empty() {
                 return Err(diagnostic(
-                    evin_locales::t!(
-                        "docs-default-locale-pages-missing",
-                        locale = locale,
-                        path = absolute(root, &locale_root).display().to_string()
-                    ),
-                    "no-documents",
+                    IssueCode::new("docs-default-locale-pages-missing")
+                        .arg("locale", locale)
+                        .arg("path", absolute(root, &locale_root).display().to_string()),
                 ));
             }
             let source_root = absolute(root, &locale_root);
@@ -591,8 +573,7 @@ fn build_variants(
         };
         if !routes.insert(canonical_route.clone()) {
             return Err(diagnostic(
-                evin_locales::t!("docs-generated-route-ambiguous", route = canonical_route),
-                "route-collision",
+                IssueCode::new("docs-generated-route-ambiguous").arg("route", canonical_route),
             ));
         }
     }
@@ -687,24 +668,18 @@ fn publish(
         let search_path = out.join(&relative_path);
         if let Some(parent) = search_path.parent() {
             std::fs::create_dir_all(parent).map_err(|error| {
-                Diagnostic::new(
-                    evin_locales::t!(
-                        "docs-output-directory-create-failed",
-                        path = parent.display().to_string(),
-                        error = error.to_string()
-                    ),
-                    IssueCode::new("io-error"),
+                diagnostic(
+                    IssueCode::new("docs-output-directory-create-failed")
+                        .arg("path", parent.display().to_string())
+                        .arg("error", error.to_string()),
                 )
             })?;
         }
         std::fs::write(&search_path, &binary).map_err(|error| {
-            Diagnostic::new(
-                evin_locales::t!(
-                    "docs-search-index-write-failed",
-                    path = search_path.display().to_string(),
-                    error = error.to_string()
-                ),
-                IssueCode::new("io-error"),
+            diagnostic(
+                IssueCode::new("docs-search-index-write-failed")
+                    .arg("path", search_path.display().to_string())
+                    .arg("error", error.to_string()),
             )
         })?;
         let digest = Sha256::digest(&binary);
@@ -823,22 +798,16 @@ pub async fn execute(
     with: Option<evin_flow::SpannedValue>,
 ) -> Result<(), Diagnostic> {
     let config: HeadlessConfig = ctx.load_config(with.as_ref()).map_err(|error| {
-        diagnostic(
-            evin_locales::t!("docs-invalid-config", error = error.message),
-            "invalid-config",
-        )
+        diagnostic(IssueCode::new("docs-invalid-config").arg("error", error.message))
     })?;
-    validate(&config).map_err(|message| diagnostic(message, "invalid-config"))?;
+    validate(&config).map_err(diagnostic)?;
     let root = ctx.fs.workspace_root();
     // Build to an isolated location for dry runs so no configured output files are touched.
     if ctx.mode == evin_action_sdk::PipelineMode::DryRun {
         let temp = tempfile::tempdir().map_err(|error| {
             diagnostic(
-                evin_locales::t!(
-                    "docs-temporary-output-prepare-failed",
-                    error = error.to_string()
-                ),
-                "io-error",
+                IssueCode::new("docs-temporary-output-prepare-failed")
+                    .arg("error", error.to_string()),
             )
         })?;
         let mut preview = config.clone();
@@ -859,4 +828,250 @@ pub async fn execute(
         .set_output("manifest_path", &manifest.to_string_lossy());
     ctx.state.set_output("page_count", &page_count.to_string());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn assert_fluent_diagnostic(diagnostic: &Diagnostic, key: &str, expected_message: String) {
+        assert_eq!(diagnostic.code.key, key);
+        assert_eq!(
+            evin_locales::render_issue(&diagnostic.code),
+            expected_message
+        );
+        assert_eq!(diagnostic.title, expected_message);
+    }
+
+    fn logger() -> evin_action_sdk::Logger {
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default());
+        evin_action_sdk::Logger::new("docs-test".into(), tx, secrets)
+    }
+
+    fn runner_context(root: &Path) -> RunnerContext {
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default());
+        let logger = evin_action_sdk::Logger::new("docs-test".into(), tx.clone(), secrets.clone());
+        let git = std::sync::Arc::new(evin_action_sdk::git::GitProvider::new(
+            root.to_path_buf(),
+            evin_action_sdk::PipelineMode::Normal,
+            logger,
+        ));
+        evin_action_sdk::RunnerContextBuilder::new(
+            "docs-test".into(),
+            tx,
+            root.to_path_buf(),
+            git,
+            secrets,
+        )
+        .build()
+    }
+
+    #[tokio::test]
+    async fn invalid_runtime_config_uses_fluent_diagnostic() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = runner_context(temp.path());
+        let with = evin_flow::parse_yaml("unknown: true\n").unwrap();
+        let config_error =
+            evin_action_sdk::parse_config::<HeadlessConfig>(Some(&with)).unwrap_err();
+
+        let error = execute(&ctx, Some(with)).await.unwrap_err();
+        assert_fluent_diagnostic(
+            &error,
+            "docs-invalid-config",
+            evin_locales::t!("docs-invalid-config", error = config_error.message),
+        );
+    }
+
+    #[test]
+    fn missing_default_locale_pages_use_a_fluent_issue_code() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("docs");
+        std::fs::create_dir_all(&source_root).unwrap();
+        let with = evin_flow::parse_yaml("source_dir: docs\n").unwrap();
+        let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+
+        let error = build_variants(temp.path(), &config, &logger()).unwrap_err();
+        assert_eq!(error.code.key, "docs-default-locale-pages-missing");
+        let locale = &error.code.args[0].1;
+        let path = &error.code.args[1].1;
+        assert_fluent_diagnostic(
+            &error,
+            "docs-default-locale-pages-missing",
+            evin_locales::t!(
+                "docs-default-locale-pages-missing",
+                locale = locale,
+                path = path
+            ),
+        );
+    }
+
+    #[test]
+    fn overlapping_version_route_uses_a_fluent_issue_code() {
+        let temp = tempfile::tempdir().unwrap();
+        let latest_docs = temp.path().join("docs/latest/v1");
+        let older_docs = temp.path().join("docs/v1");
+        std::fs::create_dir_all(&latest_docs).unwrap();
+        std::fs::create_dir_all(&older_docs).unwrap();
+        std::fs::write(latest_docs.join("guide.md"), "# Latest guide\n").unwrap();
+        std::fs::write(older_docs.join("guide.md"), "# Older guide\n").unwrap();
+        let with = evin_flow::parse_yaml(
+            "versions:\n  - id: latest\n    source_dir: docs/latest\n  - id: v1\n    source_dir: docs/v1\nlatest_version: latest\n",
+        )
+        .unwrap();
+        let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+
+        let error = build_variants(temp.path(), &config, &logger()).unwrap_err();
+        let route = &error.code.args[0].1;
+        assert_fluent_diagnostic(
+            &error,
+            "docs-generated-route-ambiguous",
+            evin_locales::t!("docs-generated-route-ambiguous", route = route),
+        );
+    }
+
+    #[test]
+    fn source_discovery_failure_uses_a_fluent_issue_code() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("docs");
+        std::fs::create_dir_all(&source_root).unwrap();
+        std::fs::write(
+            source_root.join("999999999999999999999999.guide.md"),
+            "Guide\n",
+        )
+        .unwrap();
+        let with = evin_flow::parse_yaml("source_dir: docs\n").unwrap();
+        let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+
+        let error = build_variants(temp.path(), &config, &logger()).unwrap_err();
+        assert_eq!(error.code.key, "docs-source-discovery-failed");
+        let detail = &error.code.args[0].1;
+        assert_fluent_diagnostic(
+            &error,
+            "docs-source-discovery-failed",
+            evin_locales::t!("docs-source-discovery-failed", error = detail),
+        );
+    }
+
+    #[test]
+    fn search_index_write_failure_uses_a_fluent_issue_code() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("docs");
+        std::fs::create_dir_all(&source_root).unwrap();
+        std::fs::write(source_root.join("guide.md"), "# Guide\n").unwrap();
+        let blocked_index = temp.path().join("dist/docs-data/search/latest/en.bin");
+        std::fs::create_dir_all(&blocked_index).unwrap();
+        let with = evin_flow::parse_yaml("source_dir: docs\n").unwrap();
+        let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+
+        let error = publish(temp.path(), &config, &logger()).unwrap_err();
+        assert_eq!(error.code.key, "docs-search-index-write-failed");
+        let path = &error.code.args[0].1;
+        let detail = &error.code.args[1].1;
+        assert_fluent_diagnostic(
+            &error,
+            "docs-search-index-write-failed",
+            evin_locales::t!(
+                "docs-search-index-write-failed",
+                path = path,
+                error = detail
+            ),
+        );
+    }
+
+    #[test]
+    fn source_read_failure_uses_a_fluent_issue_code() {
+        let temp = tempfile::tempdir().unwrap();
+        let source_root = temp.path().join("docs");
+        std::fs::create_dir_all(&source_root).unwrap();
+        std::fs::write(source_root.join("guide.md"), [0xff]).unwrap();
+        let with = evin_flow::parse_yaml("source_dir: docs\n").unwrap();
+        let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+
+        let error = parse_source(temp.path(), &config, &config.source_dir).unwrap_err();
+        let path = error
+            .code
+            .args
+            .iter()
+            .find(|(name, _)| *name == "path")
+            .unwrap()
+            .1
+            .clone();
+        let detail = error
+            .code
+            .args
+            .iter()
+            .find(|(name, _)| *name == "error")
+            .unwrap()
+            .1
+            .clone();
+        assert_fluent_diagnostic(
+            &error,
+            "docs-source-read-failed",
+            evin_locales::t!("docs-source-read-failed", path = path, error = detail),
+        );
+    }
+
+    #[test]
+    fn output_directory_failure_uses_a_fluent_issue_code() {
+        let temp = tempfile::tempdir().unwrap();
+        let blocker = temp.path().join("blocked");
+        std::fs::write(&blocker, "file").unwrap();
+        let output = blocker.join("docs.json");
+
+        let error = write_json(&output, &serde_json::json!({})).unwrap_err();
+        let detail = std::fs::create_dir_all(&blocker).unwrap_err().to_string();
+        assert_fluent_diagnostic(
+            &error,
+            "docs-output-directory-create-failed",
+            evin_locales::t!(
+                "docs-output-directory-create-failed",
+                path = blocker.display().to_string(),
+                error = detail
+            ),
+        );
+    }
+
+    #[test]
+    fn output_file_failure_uses_a_fluent_issue_code() {
+        let temp = tempfile::tempdir().unwrap();
+        let output = temp.path().join("docs.json");
+        std::fs::create_dir(&output).unwrap();
+
+        let error = write_json(&output, &serde_json::json!({})).unwrap_err();
+        let detail = std::fs::write(&output, b"{}").unwrap_err().to_string();
+        assert_fluent_diagnostic(
+            &error,
+            "docs-output-write-failed",
+            evin_locales::t!(
+                "docs-output-write-failed",
+                path = output.display().to_string(),
+                error = detail
+            ),
+        );
+    }
+
+    #[test]
+    fn serialization_failure_uses_a_fluent_issue_code() {
+        struct FailingSerialization;
+
+        impl serde::Serialize for FailingSerialization {
+            fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                Err(serde::ser::Error::custom("test serialization failure"))
+            }
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let error = write_json(&temp.path().join("docs.json"), &FailingSerialization).unwrap_err();
+        let detail = &error.code.args[0].1;
+        assert_fluent_diagnostic(
+            &error,
+            "docs-data-serialization-failed",
+            evin_locales::t!("docs-data-serialization-failed", error = detail),
+        );
+    }
 }

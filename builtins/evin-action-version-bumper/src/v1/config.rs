@@ -89,7 +89,7 @@ impl VersionBumperConfig {
         });
         let config: Self = evin_action_sdk::parse_config(Some(&with))?;
         config.validate().map_err(|e| evin_flow::ConfigError {
-            message: e.to_string(),
+            message: evin_locales::render_issue(&e.code),
             span: None,
         })?;
         Ok(config)

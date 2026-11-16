@@ -48,6 +48,18 @@ fn initial_version_error_uses_fluent_message() {
 }
 
 #[test]
+fn config_error_conversion_preserves_fluent_rendering() {
+    let with = evin_flow::parse_yaml("initial_version: invalid\n").unwrap();
+    let detail = semver::Version::parse("invalid").unwrap_err().to_string();
+
+    let error = VersionBumperConfig::from_with(Some(with)).unwrap_err();
+    assert_eq!(
+        error.message,
+        evin_locales::t!("initial-version-invalid", error = detail)
+    );
+}
+
+#[test]
 fn configuration_validation_errors_use_fluent_messages() {
     assert_fluent_error!(
         VersionBumperConfig {
@@ -258,4 +270,17 @@ fn invalid_template_syntax_uses_fluent_diagnostic() {
         .to_string()
     );
     assert_eq!(evin_locales::render_issue(&error.code), expected);
+}
+
+#[test]
+fn unsupported_template_variable_uses_fluent_diagnostic() {
+    let error = super::super::config::validate_tokens("${bump.release}", &["version"]).unwrap_err();
+    assert_eq!(error.code.key, "issue-version-bumper-unsupported-template");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!(
+            "issue-version-bumper-unsupported-template",
+            template = "bump.release"
+        )
+    );
 }

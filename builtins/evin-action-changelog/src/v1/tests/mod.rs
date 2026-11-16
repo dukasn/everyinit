@@ -85,6 +85,98 @@ fn repository(with_pending: bool) -> tempfile::TempDir {
 }
 
 #[tokio::test]
+async fn blank_section_resolution_uses_fluent_diagnostic() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut ctx = context(temp.path());
+    ctx.env = evin_action_sdk::Environment::new(HashMap::from([(
+        "EMPTY_SECTION".to_string(),
+        String::new(),
+    )]));
+    let with =
+        evin_flow::parse_yaml("section: '${env.EMPTY_SECTION}'\nnotes_path: notes.md\n").unwrap();
+
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "changelog-section-template-invalid");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("changelog-section-template-invalid", error = detail)
+    );
+}
+
+#[tokio::test]
+async fn version_template_resolution_failure_uses_fluent_diagnostic() {
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = context(temp.path());
+    let with = evin_flow::parse_yaml("version: '${missing}'\n").unwrap();
+
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "changelog-template-resolution-failed");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("changelog-template-resolution-failed", error = detail)
+    );
+}
+
+#[tokio::test]
+async fn changelog_read_failure_uses_fluent_diagnostic() {
+    let temp = tempfile::tempdir().unwrap();
+    let ctx = context(temp.path());
+    let with =
+        evin_flow::parse_yaml("path: missing.md\nsection: v1.0.0\nnotes_path: notes.md\n").unwrap();
+
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "changelog-file-read-failed");
+    let path = &error.code.args[0].1;
+    let detail = &error.code.args[1].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("changelog-file-read-failed", path = path, error = detail)
+    );
+}
+
+#[tokio::test]
+async fn notes_write_failure_uses_fluent_diagnostic() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::write(temp.path().join("CHANGELOG.md"), "## [v1.0.0]\n- notes\n").unwrap();
+    std::fs::write(temp.path().join("blocked"), "file").unwrap();
+    let ctx = context(temp.path());
+    let with = evin_flow::parse_yaml("section: v1.0.0\nnotes_path: blocked/notes.md\n").unwrap();
+
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "file-write-failed");
+    let path = &error.code.args[0].1;
+    let detail = &error.code.args[1].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("file-write-failed", path = path, error = detail)
+    );
+}
+
+#[tokio::test]
+async fn git_execution_failure_uses_fluent_diagnostic() {
+    let temp = tempfile::tempdir().unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &["config", "user.name", "Test"][..],
+        &["config", "user.email", "test@example.test"][..],
+    ] {
+        git(temp.path(), args);
+    }
+    std::fs::write(temp.path().join(".git/config"), "[broken\n").unwrap();
+    let ctx = context(temp.path());
+
+    let error = execute(&ctx, None).await.unwrap_err();
+    assert_eq!(error.code.key, "git-execution-failed");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("git-execution-failed", error = detail)
+    );
+}
+
+#[tokio::test]
 async fn notes_path_receives_only_the_pending_section_body() {
     let temp = repository(true);
     let ctx = context(temp.path());

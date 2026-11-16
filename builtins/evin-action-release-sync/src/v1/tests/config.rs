@@ -25,44 +25,50 @@ fn configuration_errors_use_fluent_messages() {
         tag: Some("  ".to_string()),
         ..ReleaseSyncConfig::default()
     };
-    assert_fluent_message(
-        config.validate().unwrap_err().message,
+    assert_fluent_issue(
+        config.validate().unwrap_err(),
+        "release-sync-tag-must-not-be-empty",
         evin_locales::t!("release-sync-tag-must-not-be-empty"),
     );
 
     config.tag = None;
     config.title = Some("  ".to_string());
-    assert_fluent_message(
-        config.validate().unwrap_err().message,
+    assert_fluent_issue(
+        config.validate().unwrap_err(),
+        "release-sync-title-must-not-be-empty",
         evin_locales::t!("release-sync-title-must-not-be-empty"),
     );
 
     config.title = None;
     config.state.clear();
-    assert_fluent_message(
-        config.validate().unwrap_err().message,
+    assert_fluent_issue(
+        config.validate().unwrap_err(),
+        "release-sync-state-path-must-not-be-empty",
         evin_locales::t!("release-sync-state-path-must-not-be-empty"),
     );
 
     config.state = ReleaseSyncConfig::default().state;
     config.plan_out.clear();
-    assert_fluent_message(
-        config.validate().unwrap_err().message,
+    assert_fluent_issue(
+        config.validate().unwrap_err(),
+        "release-sync-plan-out-path-must-not-be-empty",
         evin_locales::t!("release-sync-plan-out-path-must-not-be-empty"),
     );
 
     config.plan_out = ReleaseSyncConfig::default().plan_out;
     config.notes_dir.clear();
-    assert_fluent_message(
-        config.validate().unwrap_err().message,
+    assert_fluent_issue(
+        config.validate().unwrap_err(),
+        "release-sync-notes-dir-must-not-be-empty",
         evin_locales::t!("release-sync-notes-dir-must-not-be-empty"),
     );
 }
 
-fn assert_fluent_message(actual: String, expected: String) {
+fn assert_fluent_issue(issue: evin_diagnostic::IssueCode, key: &str, expected: String) {
     assert!(
         !expected.starts_with("<missing locale key:"),
         "expected Fluent message to exist: {expected}"
     );
-    assert_eq!(actual, expected);
+    assert_eq!(issue.key, key);
+    assert_eq!(evin_locales::render_issue(&issue), expected);
 }

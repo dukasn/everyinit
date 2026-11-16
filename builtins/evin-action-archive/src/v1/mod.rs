@@ -30,6 +30,7 @@ use evin_action_sdk::{
     RunnerContext,
     packaging::{self, PackageContext, PackageFormat, SourceEntry},
 };
+use evin_diagnostic::IssueCode;
 use mapping::resolve_and_map_files;
 use packages::{
     PACKAGE_ENCODERS, PackageBuild, load_scripts, package_filename, resolve_package_payloads,
@@ -69,15 +70,17 @@ pub fn validate_task_config(
     let Some(release) = config.release else {
         return Ok(());
     };
-    let task = release_reference_task(&release).ok_or_else(|| evin_flow::ConfigError {
-        message: evin_locales::t!("archive-release-reference-format-invalid"),
+    validate_release_reference(&release, ctx.needs).map_err(|issue| evin_flow::ConfigError {
+        message: evin_locales::render_issue(&issue),
         span: None,
-    })?;
-    if !ctx.needs.iter().any(|need| need == task) {
-        return Err(evin_flow::ConfigError {
-            message: evin_locales::t!("archive-release-reference-missing-need", task = task),
-            span: None,
-        });
+    })
+}
+
+fn validate_release_reference(release: &str, needs: &[String]) -> Result<(), IssueCode> {
+    let task = release_reference_task(release)
+        .ok_or_else(|| IssueCode::new("archive-release-reference-format-invalid"))?;
+    if !needs.iter().any(|need| need == task) {
+        return Err(IssueCode::new("archive-release-reference-missing-need").arg("task", task));
     }
     Ok(())
 }

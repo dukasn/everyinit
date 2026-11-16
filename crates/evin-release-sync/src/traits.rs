@@ -20,23 +20,95 @@ pub enum ProtocolError {
     #[error("Unsupported remote state schema version '{0}', expected 1")]
     UnsupportedSchemaVersion(u32),
 
-    #[error("Schema validation failed: {0}")]
-    SchemaValidation(String),
+    #[error("Remote state file not found at '{path}'")]
+    StateFileNotFound { path: std::path::PathBuf },
 
-    #[error("State ingestion error: {0}")]
-    StateIngestion(String),
+    #[error("Failed to read remote state file '{path}': {source}")]
+    StateFileRead {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
-    #[error("Git inspection error: {0}")]
-    GitInspection(String),
+    #[error("Remote state JSON is invalid: {source}")]
+    StateJsonInvalid {
+        #[source]
+        source: serde_json::Error,
+    },
 
-    #[error("Notes extraction error: {0}")]
-    NotesExtraction(String),
+    #[error("Failed to run git tag: {source}")]
+    GitTagCommandFailed {
+        #[source]
+        source: std::io::Error,
+    },
 
-    #[error("Artifact inspection error: {0}")]
-    ArtifactInspection(String),
+    #[error("git tag failed: {stderr}")]
+    GitTagFailed { stderr: String },
 
-    #[error("Plan serialization/write error: {0}")]
-    PlanWrite(String),
+    #[error("Configured release tag '{tag}' does not exist locally")]
+    ConfiguredTagMissing { tag: String },
+
+    #[error("Failed to read artifacts directory: {source}")]
+    ArtifactsDirectoryRead {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to read artifact metadata for '{path}': {source}")]
+    ArtifactMetadataRead {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to open artifact '{path}': {source}")]
+    ArtifactOpen {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to hash artifact '{path}': {source}")]
+    ArtifactHash {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to create release notes directory '{path}': {source}")]
+    NotesDirectoryCreate {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to write release notes file '{path}': {source}")]
+    NotesFileWrite {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to create release plan directory '{path}': {source}")]
+    PlanDirectoryCreate {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Failed to serialize release plan: {source}")]
+    PlanSerialize {
+        #[source]
+        source: serde_json::Error,
+    },
+
+    #[error("Failed to write release plan '{path}': {source}")]
+    PlanFileWrite {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

@@ -40,6 +40,18 @@ fn formats_reject_each_others_keys() {
         &configured_default,
         evin_locales::t!("archive-distro-fields-required"),
     );
+
+    let explicit_layout = evin_flow::parse_yaml(
+        "format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\nlayout: flat\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { deb: {} } }\n",
+    )
+    .unwrap();
+    let error = validate_config(Some(&explicit_layout)).unwrap_err();
+    let expected = evin_locales::t!(
+        "archive-field-invalid-for-format",
+        field = "layout",
+        format = "deb"
+    );
+    assert_eq!(error.message, expected);
 }
 
 #[test]
@@ -82,6 +94,16 @@ fn assert_config_error(with: &evin_flow::SpannedValue, expected: String) {
 
 #[test]
 fn package_release_reference_must_be_a_declared_need() {
+    let invalid_format = validate_release_reference("release", &[]).unwrap_err();
+    assert_eq!(
+        invalid_format.key,
+        "archive-release-reference-format-invalid"
+    );
+    assert_eq!(
+        evin_locales::render_issue(&invalid_format),
+        evin_locales::t!("archive-release-reference-format-invalid")
+    );
+
     let with = evin_flow::parse_yaml("format: deb\noutput_dir: dist\narchitecture: x86_64\npackage: { name: app, summary: app, maintainer: A, license: MIT, targets: { deb: {} } }\nrelease: ${bump.release}\n").unwrap();
     let missing = evin_action_sdk::ActionValidationContext {
         task_name: "package",
@@ -90,6 +112,12 @@ fn package_release_reference_must_be_a_declared_need() {
     let error = validate_task_config(&missing, Some(&with)).unwrap_err();
     assert_eq!(
         error.message,
+        evin_locales::t!("archive-release-reference-missing-need", task = "bump")
+    );
+    let missing_need = validate_release_reference("${bump.release}", &[]).unwrap_err();
+    assert_eq!(missing_need.key, "archive-release-reference-missing-need");
+    assert_eq!(
+        evin_locales::render_issue(&missing_need),
         evin_locales::t!("archive-release-reference-missing-need", task = "bump")
     );
     let needs = vec!["bump".to_string()];

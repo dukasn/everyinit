@@ -16,7 +16,6 @@ label-must-not-be-empty-when-provided = label must not be empty when provided
 label-template-invalid = label contains invalid template syntax: { $error }
 changelog-file-read-failed = Failed to read changelog '{ $path }': { $error }
 changelog-section-template-invalid = Invalid section template: { $error }
-changelog-section-empty = Changelog section must not be empty
 changelog-section-paths-must-differ = Changelog and notes paths must differ
 changelog-section-invalid = Invalid changelog section: { $error }
 changelog-section-missing = Missing or empty changelog section for { $section }
