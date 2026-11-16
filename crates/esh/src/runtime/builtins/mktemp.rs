@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::path::{Path, PathBuf};
+
 use crate::error::ExecError;
 use crate::runtime::context::ExecutionContext;
 use crate::runtime::path_presentation::present;
@@ -24,7 +26,9 @@ pub fn mktemp<'a>(
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
         let mut is_dir = false;
+        let mut directory: Option<PathBuf> = None;
         let mut prefix = "esh_tmp_".to_string();
+        let mut suffix = String::new();
         let mut _keep = false;
 
         let mut iter = args.iter().peekable();
@@ -35,15 +39,49 @@ pub fn mktemp<'a>(
                 _keep = true;
             } else if arg == "-p" || arg == "--tmpdir" {
                 if let Some(p) = iter.next() {
-                    prefix = p.clone();
+                    directory = Some(PathBuf::from(p));
                 }
             } else if !arg.starts_with('-') {
-                prefix = arg.clone();
+                let template = Path::new(arg);
+                if directory.is_none() {
+                    if let Some(parent) = template
+                        .parent()
+                        .filter(|path| !path.as_os_str().is_empty())
+                    {
+                        directory = Some(parent.to_path_buf());
+                    }
+                }
+
+                let name = template
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or(arg);
+                if let Some(first_x) = name.find('X') {
+                    let after_x = &name[first_x..];
+                    let run_length = after_x
+                        .chars()
+                        .take_while(|character| *character == 'X')
+                        .count();
+                    if run_length >= 3 {
+                        prefix = name[..first_x].to_string();
+                        suffix = name[first_x + run_length..].to_string();
+                    } else {
+                        prefix = name.to_string();
+                    }
+                } else {
+                    prefix = name.to_string();
+                }
             }
         }
 
+        let mut builder = Builder::new();
+        builder.prefix(&prefix).suffix(&suffix);
         if is_dir {
-            match Builder::new().prefix(&prefix).tempdir() {
+            let result = match directory.as_deref() {
+                Some(directory) => builder.tempdir_in(directory),
+                None => builder.tempdir(),
+            };
+            match result {
                 Ok(dir) => {
                     let path = dir.keep();
                     ctx.write_stdout(format!("{}\n", present(&path)).as_bytes());
@@ -57,7 +95,11 @@ pub fn mktemp<'a>(
                 }
             }
         } else {
-            match Builder::new().prefix(&prefix).tempfile() {
+            let result = match directory.as_deref() {
+                Some(directory) => builder.tempfile_in(directory),
+                None => builder.tempfile(),
+            };
+            match result {
                 Ok(file) => {
                     let path = file
                         .into_temp_path()
