@@ -43,13 +43,12 @@ pub fn mktemp<'a>(
                 }
             } else if !arg.starts_with('-') {
                 let template = Path::new(arg);
-                if directory.is_none() {
-                    if let Some(parent) = template
+                if directory.is_none()
+                    && let Some(parent) = template
                         .parent()
                         .filter(|path| !path.as_os_str().is_empty())
-                    {
-                        directory = Some(parent.to_path_buf());
-                    }
+                {
+                    directory = Some(parent.to_path_buf());
                 }
 
                 let name = template

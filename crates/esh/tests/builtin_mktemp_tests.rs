@@ -47,3 +47,41 @@ async fn test_mktemp_file_and_directory() {
     let _ = std::fs::remove_file(file_path);
     let _ = std::fs::remove_dir(dir_path);
 }
+
+#[tokio::test]
+async fn test_mktemp_template_uses_its_parent_directory() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let directory = tempfile::tempdir_in(".").expect("create relative temporary directory");
+    let template = directory.path().join("CHANGELOG.md.tmp.XXXXXX");
+    let script = format!("mktemp '{}'", template.display());
+
+    let status = engine
+        .eval_str(&script, &mut ctx)
+        .await
+        .expect("eval failed");
+    assert_eq!(status, 0);
+
+    let output = ctx.get_captured_stdout().unwrap();
+    let created_path = Path::new(output.trim());
+    assert!(created_path.exists());
+    assert_eq!(
+        created_path
+            .parent()
+            .expect("temporary file should have a parent")
+            .canonicalize()
+            .expect("canonicalize created file parent"),
+        directory
+            .path()
+            .canonicalize()
+            .expect("canonicalize temp directory")
+    );
+    assert!(
+        created_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("CHANGELOG.md.tmp."))
+    );
+}
