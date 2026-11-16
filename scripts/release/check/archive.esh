@@ -41,7 +41,6 @@ assert [ -x "$ROOT/bin/$PACKAGE" ] "archived bin/$PACKAGE binary is not executab
 assert [ -f "$ROOT/LICENSE" ] "archive is missing LICENSE"
 assert [ -f "$ROOT/THIRD_PARTY_NOTICES.md" ] "archive is missing THIRD_PARTY_NOTICES.md"
 assert [ -f "$ROOT/LICENSES/OFL-1.1.txt" ] "archive is missing the IBM Plex OFL notice"
-assert [ -f "$ROOT/LICENSES/MIT.txt" ] "archive is missing the Tabler Icons MIT notice"
 assert "$EXTRACT_DIR/$RELEASE_DIR/bin/$PACKAGE --version | grep -Fq '$VERSION'" -- "archived $PACKAGE version does not match $VERSION"
 
 rm -rf "$EXTRACT_DIR"

@@ -13,13 +13,6 @@ the reserved font name “Plex” and are licensed under the SIL Open Font Licen
 [`LICENSES/OFL-1.1.txt`](LICENSES/OFL-1.1.txt).
 See [IBM Plex](https://github.com/IBM/plex).
 
-## Tabler Icons
-
-SVG icons under `builtins/evin-action-docs/icons/` are from Tabler Icons by
-Paweł Kuna and contributors, under the MIT License. The copyright and full
-license notice is in [`LICENSES/MIT.txt`](LICENSES/MIT.txt). See
-[Tabler Icons](https://tabler.io/icons).
-
 ## GNU GPL license badge
 
 The GNU GPL license badge images in the repository root are official GNU GPL

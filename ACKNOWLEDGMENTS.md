@@ -11,13 +11,11 @@ Special thanks to:
   advancing software freedom and publishing the GNU General Public License.
 - [**IBM Plex**](https://github.com/IBM/plex) for the Plex Mono typeface used
   in the documentation theme.
-- [**Tabler Icons**](https://tabler.io/icons) for the open-source icons used
-  throughout the documentation theme.
 
-The documentation action provides default IBM Plex Mono and Tabler Icons
-assets. A site can replace its logo, favicon, icon directory, or layout through
-the documentation action's resource options. Keep the applicable notices with
-any redistributed original third-party assets.
+The documentation action provides default IBM Plex Mono assets. A site can
+replace its logo, favicon, or layout through the documentation action's resource
+options. Keep applicable notices with any redistributed original third-party
+assets.
 
 These acknowledgments express appreciation and do not imply sponsorship,
 endorsement, or affiliation. Required copyright and license notices are kept
