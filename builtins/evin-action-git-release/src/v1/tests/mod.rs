@@ -160,9 +160,22 @@ async fn test_git_release_execution_and_recovery() {
         std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default()),
     );
 
+    let invalid_enabled = evin_flow::parse_yaml("message: release\nenabled: maybe\n").unwrap();
+    let error = super::execute(&ctx, Some(invalid_enabled))
+        .await
+        .unwrap_err();
+    let expected = evin_locales::t!("git-release-enabled-must-be-boolean", value = "maybe");
+    assert_eq!(error.code.key, "git-release-enabled-must-be-boolean");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(error.title, expected);
+
     let res = super::execute(&ctx, Some(spanned_mapping(with))).await;
     let err = res.unwrap_err();
     assert_eq!(err.code.key, "tag-already-exists");
+    assert_eq!(
+        evin_locales::render_issue(&err.code),
+        evin_locales::t!("tag-already-exists", tag = "v1.0.0")
+    );
     assert_eq!(err.title, evin_locales::t!("tag-already-exists-title"));
 
     // Make the tag config valid, but we simulate a tag failure by creating it right before tagging

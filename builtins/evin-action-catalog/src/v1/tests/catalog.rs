@@ -33,7 +33,77 @@ fn reference_prefix_error_uses_fluent_message() {
         !expected.starts_with("<missing locale key:"),
         "expected Fluent message to exist: {expected}"
     );
-    assert_eq!(error.title, expected);
+    assert_eq!(error.code.key, "catalog-reference-prefix-invalid");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(
+        error.title,
+        evin_locales::t!("catalog-reference-prefix-invalid-title")
+    );
+}
+
+#[test]
+fn source_navigation_order_error_uses_fluent_message() {
+    let temp = tempfile::tempdir().unwrap();
+    let docs = temp.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::write(docs.join("999999999999999999999999.guide.md"), "Guide\n").unwrap();
+    let config = CatalogConfig {
+        source_dir: "docs".into(),
+        out: "dist/catalog.json".into(),
+        include: Vec::new(),
+        exclude: Vec::new(),
+        extract_frontmatter: true,
+        reference_prefix: "REF".into(),
+    };
+
+    let error = compile(temp.path(), &config).unwrap_err();
+    let expected = evin_locales::t!(
+        "catalog-source-navigation-order-invalid",
+        path = "999999999999999999999999.guide.md"
+    );
+    assert_eq!(error.code.key, "catalog-source-navigation-order-invalid");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(
+        error.title,
+        evin_locales::t!("catalog-source-navigation-order-invalid-title")
+    );
+}
+
+#[test]
+fn formal_reference_error_uses_fluent_message() {
+    let temp = tempfile::tempdir().unwrap();
+    let docs = temp.path().join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::write(
+        docs.join("first-1000.md"),
+        "---\ndepends_on: REF-2000\n---\n# First\n",
+    )
+    .unwrap();
+    std::fs::write(
+        docs.join("second-2000.md"),
+        "---\ndepends_on: REF-1000\n---\n# Second\n",
+    )
+    .unwrap();
+    let config = CatalogConfig {
+        source_dir: "docs".into(),
+        out: "dist/catalog.json".into(),
+        include: Vec::new(),
+        exclude: Vec::new(),
+        extract_frontmatter: true,
+        reference_prefix: "REF".into(),
+    };
+
+    let error = compile(temp.path(), &config).unwrap_err();
+    assert_eq!(error.code.key, "catalog-source-formal-reference-invalid");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("catalog-source-formal-reference-invalid", error = detail)
+    );
+    assert_eq!(
+        error.title,
+        evin_locales::t!("catalog-source-formal-reference-invalid-title")
+    );
 }
 
 #[test]

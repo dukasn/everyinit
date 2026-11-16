@@ -34,22 +34,22 @@ fn git(root: &Path, args: &[&str]) {
 }
 
 fn context(root: &Path) -> RunnerContext {
+    context_with_mode(root, PipelineMode::Normal)
+}
+
+fn context_with_mode(root: &Path, mode: PipelineMode) -> RunnerContext {
     let secrets = Arc::new(SecretsProvider::default());
     let logger = Logger::new(
         "bump".into(),
         tokio::sync::mpsc::unbounded_channel().0,
         secrets.clone(),
     );
-    let provider = Arc::new(GitProvider::new(
-        root.to_path_buf(),
-        PipelineMode::Normal,
-        logger,
-    ));
+    let provider = Arc::new(GitProvider::new(root.to_path_buf(), mode, logger));
     RunnerContext::new(
         None,
         "bump".into(),
         false,
-        PipelineMode::Normal,
+        mode,
         tokio::sync::mpsc::unbounded_channel().0,
         vec![],
         None,
@@ -124,6 +124,103 @@ async fn undefined_channel_errors_use_fluent_diagnostic() {
             channel = "unknown-channel"
         )
     );
+}
+
+#[tokio::test]
+async fn package_release_preconditions_use_fluent_diagnostics() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut ctx = context(temp.path());
+    let mut rules = evin_gitrules::GitRulesRoot::default();
+    rules.releases.as_mut().unwrap().packages = BTreeMap::from([(
+        "app".into(),
+        PackageReleasePolicy {
+            watch: vec![],
+            targets: vec!["deb".into()],
+            revision: PackageRevisionPolicy::default(),
+        },
+    )]);
+    ctx.gitrules = Arc::new(rules);
+    let error = execute(
+        &ctx,
+        Some(evin_flow::parse_yaml("initial_version: 1.0.0\n").unwrap()),
+    )
+    .await
+    .unwrap_err();
+    let expected = evin_locales::t!(
+        "version-bumper-package-policy-invalid",
+        error = "invalid package release policy: package 'app' has no watched paths"
+    );
+    assert_eq!(error.code.key, "version-bumper-package-policy-invalid");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(error.title, expected);
+
+    let temp = tempfile::tempdir().unwrap();
+    let mut ctx = context(temp.path());
+    ctx.gitrules = Arc::new(package_release_rules());
+    let with =
+        evin_flow::parse_yaml("initial_version: 1.0.0\ngit:\n  commit: false\n  tag: false\n")
+            .unwrap();
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(
+        error.code.key,
+        "version-bumper-package-release-requires-git"
+    );
+    let expected = evin_locales::t!("version-bumper-package-release-requires-git");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(error.title, expected);
+}
+
+#[tokio::test]
+async fn package_release_rejects_staged_and_watched_worktree_changes_with_fluent_messages() {
+    for staged in [true, false] {
+        let temp = tempfile::tempdir().unwrap();
+        init_repo(temp.path());
+        std::fs::create_dir_all(temp.path().join("src")).unwrap();
+        std::fs::write(temp.path().join("src/app"), "pending\n").unwrap();
+        if staged {
+            git(temp.path(), &["add", "src/app"]);
+        }
+
+        let mut ctx = context(temp.path());
+        ctx.gitrules = Arc::new(package_release_rules());
+        let with =
+            evin_flow::parse_yaml("initial_version: 1.0.0\ngit:\n  commit: true\n  tag: true\n")
+                .unwrap();
+        let error = execute(&ctx, Some(with)).await.unwrap_err();
+        if staged {
+            let expected = evin_locales::t!("version-bumper-package-release-index-not-empty");
+            assert_eq!(
+                error.code.key,
+                "version-bumper-package-release-index-not-empty"
+            );
+            assert_eq!(evin_locales::render_issue(&error.code), expected);
+            assert_eq!(error.title, expected);
+        } else {
+            let expected = evin_locales::t!(
+                "version-bumper-package-release-worktree-dirty",
+                paths = "src/app"
+            );
+            assert_eq!(
+                error.code.key,
+                "version-bumper-package-release-worktree-dirty"
+            );
+            assert_eq!(evin_locales::render_issue(&error.code), expected);
+            assert_eq!(error.title, expected);
+        }
+    }
+}
+
+fn package_release_rules() -> evin_gitrules::GitRulesRoot {
+    let mut rules = evin_gitrules::GitRulesRoot::default();
+    rules.releases.as_mut().unwrap().packages = BTreeMap::from([(
+        "app".into(),
+        PackageReleasePolicy {
+            watch: vec!["src/**".into()],
+            targets: vec!["deb".into()],
+            revision: PackageRevisionPolicy::default(),
+        },
+    )]);
+    rules
 }
 
 fn init_repo(root: &Path) {
@@ -441,7 +538,12 @@ async fn later_mismatch_does_not_write_earlier_replacement() {
             "files:\n  - Cargo.toml\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
         .unwrap();
-    assert!(execute(&ctx, Some(with)).await.is_err());
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "version-bumper-replacement-missing");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("version-bumper-replacement-missing", path = "VERSION")
+    );
     assert_eq!(
         std::fs::read_to_string(temp.path().join("Cargo.toml")).unwrap(),
         "version = \"0.0.0\"\n"
@@ -489,7 +591,12 @@ async fn tagged_release_does_not_fall_back_to_new_version() {
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
         .unwrap();
-    assert!(execute(&ctx, Some(with)).await.is_err());
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "version-bumper-replacement-missing");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("version-bumper-replacement-missing", path = "VERSION")
+    );
 }
 
 #[tokio::test]
@@ -519,6 +626,14 @@ async fn calculated_existing_tag_fails_before_edits() {
         .unwrap();
     let error = execute(&ctx, Some(with)).await.unwrap_err();
     assert_eq!(error.code.key, "calculated-tag-already-exists");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!(
+            "calculated-tag-already-exists",
+            version = "0.1.1",
+            tag = "v0.1.1"
+        )
+    );
     assert_eq!(
         std::fs::read_to_string(temp.path().join("VERSION")).unwrap(),
         "0.1.0\n"
@@ -600,6 +715,87 @@ async fn reports_changed_false_without_qualifying_commits() {
     let outputs = ctx.state.outputs.lock().unwrap();
     assert_eq!(outputs["changed"], "false");
     assert_eq!(outputs["version"], "1.0.0");
+}
+
+#[tokio::test]
+async fn require_change_failure_uses_fluent_message() {
+    let temp = tempfile::TempDir::new().unwrap();
+    init_repo(temp.path());
+    std::fs::write(temp.path().join("file"), "one\n").unwrap();
+    git(temp.path(), &["add", "."]);
+    git(temp.path(), &["commit", "-qm", "feat: initial"]);
+    git(temp.path(), &["tag", "-a", "v1.0.0", "-m", "v1.0.0"]);
+
+    let ctx = context(temp.path());
+    let with = evin_flow::parse_yaml("initial_version: 1.0.0\nrequire_change: true\n").unwrap();
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    let expected = evin_locales::t!("no-version-change");
+    assert_eq!(error.code.key, "no-version-change");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(error.title, evin_locales::t!("no-version-change-title"));
+}
+
+#[tokio::test]
+async fn unsafe_version_file_path_uses_fluent_message() {
+    let temp = tempfile::TempDir::new().unwrap();
+    init_repo(temp.path());
+    std::fs::write(temp.path().join("file"), "initial\n").unwrap();
+    git(temp.path(), &["add", "."]);
+    git(temp.path(), &["commit", "-qm", "feat: initial"]);
+    let ctx = context(temp.path());
+    let path = "../Cargo.toml";
+    let detail = ctx.fs.get_safe_physical_path(path).unwrap_err().to_string();
+    let with = evin_flow::parse_yaml(&format!("files: ['{path}']\n")).unwrap();
+
+    let error = execute(&ctx, Some(with)).await.unwrap_err();
+    let expected = evin_locales::t!(
+        "version-bumper-file-path-unusable",
+        path = path,
+        error = detail
+    );
+    assert_eq!(error.code.key, "version-bumper-file-path-unusable");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+    assert_eq!(
+        error.title,
+        evin_locales::t!("version-bumper-file-path-unusable-title")
+    );
+}
+
+#[tokio::test]
+async fn dry_run_mutation_bypass_uses_fluent_uncertainty() {
+    let temp = tempfile::TempDir::new().unwrap();
+    init_repo(temp.path());
+    let manifest = "[package]\nname = \"sample\"\nversion = \"0.1.0\"\n";
+    std::fs::write(temp.path().join("Cargo.toml"), manifest).unwrap();
+    git(temp.path(), &["add", "Cargo.toml"]);
+    git(temp.path(), &["commit", "-qm", "feat: initial"]);
+    let head_before = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap()
+        .stdout;
+    let ctx = context_with_mode(temp.path(), PipelineMode::DryRun);
+    let with =
+        evin_flow::parse_yaml("files: [Cargo.toml]\ngit:\n  commit: true\n  tag: true\n").unwrap();
+
+    execute(&ctx, Some(with)).await.unwrap();
+
+    assert_eq!(
+        ctx.uncertainty(),
+        [evin_locales::t!("version-bumper-dry-run-skipped-mutations")]
+    );
+    assert_eq!(
+        std::fs::read_to_string(temp.path().join("Cargo.toml")).unwrap(),
+        manifest
+    );
+    let head_after = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(temp.path())
+        .output()
+        .unwrap()
+        .stdout;
+    assert_eq!(head_before, head_after);
 }
 
 #[tokio::test]

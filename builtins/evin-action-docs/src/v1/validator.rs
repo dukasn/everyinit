@@ -171,14 +171,11 @@ impl LinkValidator {
             } else {
                 "use an absolute HTTPS URL"
             };
-            diagnostics.push(evin_diagnostic::Diagnostic::new(
-                evin_locales::t!(
-                    "docs-invalid-media",
-                    label = label,
-                    slug = current_slug,
-                    requirement = requirement
-                ),
-                evin_diagnostic::IssueCode::new("invalid-media"),
+            diagnostics.push(evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("docs-invalid-media")
+                    .arg("label", label)
+                    .arg("slug", current_slug)
+                    .arg("requirement", requirement),
             ));
         }
     }
@@ -201,22 +198,20 @@ impl LinkValidator {
             if let Some(anchor) = target.anchor
                 && !index.has_anchor(target.slug, anchor)
             {
-                diagnostics.push(evin_diagnostic::Diagnostic::new(
-                    evin_locales::t!(
-                        "docs-broken-alias-anchor",
-                        slug = current_slug,
-                        alias = href,
-                        anchor = anchor
-                    ),
-                    evin_diagnostic::IssueCode::new("broken-anchor"),
+                diagnostics.push(evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("docs-broken-alias-anchor")
+                        .arg("slug", current_slug)
+                        .arg("alias", href)
+                        .arg("anchor", anchor),
                 ));
             }
             return;
         }
         if looks_like_alias(site_ast, href) {
-            diagnostics.push(evin_diagnostic::Diagnostic::new(
-                evin_locales::t!("docs-broken-formal-link", slug = current_slug, alias = href),
-                evin_diagnostic::IssueCode::new("broken-link"),
+            diagnostics.push(evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("docs-broken-formal-link")
+                    .arg("slug", current_slug)
+                    .arg("alias", href),
             ));
             return;
         }
@@ -243,9 +238,10 @@ impl LinkValidator {
                 resolved_route.as_deref().unwrap_or(target_route)
             };
             if !index.has_anchor(anchor_route, anchor) {
-                diagnostics.push(evin_diagnostic::Diagnostic::new(
-                    evin_locales::t!("docs-broken-anchor", slug = current_slug, anchor = anchor),
-                    evin_diagnostic::IssueCode::new("broken-anchor"),
+                diagnostics.push(evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("docs-broken-anchor")
+                        .arg("slug", current_slug)
+                        .arg("anchor", anchor),
                 ));
             }
         }
@@ -417,17 +413,14 @@ impl DiagramValidator {
                     && current_width != exp
                 {
                     diagnostics.push(
-                        evin_diagnostic::Diagnostic::new(
-                            evin_locales::t!(
-                                "docs-svgbob-box-width-mismatch",
-                                diagram = diagram_name,
-                                source = source_path,
-                                line = line_num,
-                                expected = exp,
-                                actual = current_width,
-                                box_start_line = box_start_line
-                            ),
-                            evin_diagnostic::IssueCode::new("svgbob-box-mismatch"),
+                        evin_locales::diagnostic(
+                            evin_diagnostic::IssueCode::new("docs-svgbob-box-width-mismatch")
+                                .arg("diagram", diagram_name)
+                                .arg("source", source_path)
+                                .arg("line", line_num.to_string())
+                                .arg("expected", exp.to_string())
+                                .arg("actual", current_width.to_string())
+                                .arg("box_start_line", box_start_line.to_string()),
                         )
                         .with_severity(evin_diagnostic::Severity::Warning)
                         .with_file_location(
@@ -448,14 +441,11 @@ impl DiagramValidator {
                 let quote_count = inner.matches('"').count();
                 if quote_count % 2 != 0 {
                     diagnostics.push(
-                        evin_diagnostic::Diagnostic::new(
-                            evin_locales::t!(
-                                "docs-svgbob-unpaired-quote",
-                                line = line_num,
-                                diagram = diagram_name,
-                                source = source_path
-                            ),
-                            evin_diagnostic::IssueCode::new("svgbob-unpaired-quote"),
+                        evin_locales::diagnostic(
+                            evin_diagnostic::IssueCode::new("docs-svgbob-unpaired-quote")
+                                .arg("line", line_num.to_string())
+                                .arg("diagram", diagram_name)
+                                .arg("source", source_path),
                         )
                         .with_severity(evin_diagnostic::Severity::Warning)
                         .with_file_location(
@@ -581,14 +571,11 @@ impl MathValidator {
         let normalized = evin_doc::validation::normalize_latex(latex);
         if let Err(err) = latex2mathml::latex_to_mathml(&normalized, display) {
             diagnostics.push(
-                evin_diagnostic::Diagnostic::new(
-                    evin_locales::t!(
-                        "docs-invalid-latex-math",
-                        source = source_path,
-                        error = err.to_string(),
-                        latex = latex
-                    ),
-                    evin_diagnostic::IssueCode::new("invalid-math"),
+                evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("docs-invalid-latex-math")
+                        .arg("source", source_path)
+                        .arg("error", err.to_string())
+                        .arg("latex", latex),
                 )
                 .with_severity(evin_diagnostic::Severity::Warning)
                 .with_file_location(source_path, None, None),
@@ -600,6 +587,16 @@ impl MathValidator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_fluent_diagnostic(
+        diagnostic: &evin_diagnostic::Diagnostic,
+        key: &str,
+        expected: String,
+    ) {
+        assert_eq!(diagnostic.code.key, key);
+        assert_eq!(evin_locales::render_issue(&diagnostic.code), expected);
+        assert_eq!(diagnostic.title, expected);
+    }
     use crate::v1::ast::{DocFormat, DocPage, FormalReference, TocEntry};
     use std::collections::HashMap;
 
@@ -663,10 +660,28 @@ mod tests {
             !expected.starts_with("<missing locale key:"),
             "expected Fluent message to exist: {expected}"
         );
-        assert_eq!(broken_anchor.diagnostics[0].title, expected);
-        assert_eq!(
-            LinkValidator::validate(&site("REF-9999")).diagnostics.len(),
-            1
+        assert_fluent_diagnostic(
+            &broken_anchor.diagnostics[0],
+            "docs-broken-alias-anchor",
+            expected,
+        );
+        let broken_link = LinkValidator::validate(&site("REF-9999"));
+        assert_eq!(broken_link.diagnostics.len(), 1);
+        assert_fluent_diagnostic(
+            &broken_link.diagnostics[0],
+            "docs-broken-formal-link",
+            evin_locales::t!(
+                "docs-broken-formal-link",
+                slug = "guide",
+                alias = "REF-9999"
+            ),
+        );
+        let broken_page_anchor = LinkValidator::validate(&site("#missing"));
+        assert_eq!(broken_page_anchor.diagnostics.len(), 1);
+        assert_fluent_diagnostic(
+            &broken_page_anchor.diagnostics[0],
+            "docs-broken-anchor",
+            evin_locales::t!("docs-broken-anchor", slug = "guide", anchor = "missing"),
         );
     }
 
@@ -746,14 +761,15 @@ mod tests {
         };
         let audit = LinkValidator::validate(&site);
         assert_eq!(audit.diagnostics.len(), 1);
-        assert_eq!(
-            audit.diagnostics[0].title,
+        assert_fluent_diagnostic(
+            &audit.diagnostics[0],
+            "docs-invalid-media",
             evin_locales::t!(
                 "docs-invalid-media",
                 label = "source",
                 slug = "guide",
                 requirement = "use a registered local asset or an absolute HTTPS URL"
-            )
+            ),
         );
     }
 
@@ -778,8 +794,9 @@ mod tests {
         assert_eq!(diagnostics.len(), 1);
         let expected_width = UnicodeWidthStr::width("+-------------------------------+");
         let actual_width = UnicodeWidthStr::width("|  Too long content line inside  |");
-        assert_eq!(
-            diagnostics[0].title,
+        assert_fluent_diagnostic(
+            &diagnostics[0],
+            "docs-svgbob-box-width-mismatch",
             evin_locales::t!(
                 "docs-svgbob-box-width-mismatch",
                 diagram = "Mismatch Test",
@@ -788,7 +805,7 @@ mod tests {
                 expected = expected_width,
                 actual = actual_width,
                 box_start_line = 1
-            )
+            ),
         );
     }
 
@@ -808,14 +825,15 @@ mod tests {
         );
 
         assert_eq!(diagnostics.len(), 1);
-        assert_eq!(
-            diagnostics[0].title,
+        assert_fluent_diagnostic(
+            &diagnostics[0],
+            "docs-svgbob-unpaired-quote",
             evin_locales::t!(
                 "docs-svgbob-unpaired-quote",
                 line = 2,
                 diagram = "Quote Test",
                 source = "guide.rst"
-            )
+            ),
         );
     }
 
@@ -870,14 +888,15 @@ mod tests {
         let error = latex2mathml::latex_to_mathml(&normalized, latex2mathml::DisplayStyle::Block)
             .unwrap_err()
             .to_string();
-        assert_eq!(
-            diagnostics[0].title,
+        assert_fluent_diagnostic(
+            &diagnostics[0],
+            "docs-invalid-latex-math",
             evin_locales::t!(
                 "docs-invalid-latex-math",
                 source = "doc.md",
                 error = error,
                 latex = latex
-            )
+            ),
         );
     }
 
@@ -929,7 +948,8 @@ mod tests {
         let diagnostics = MathValidator::validate(&site);
         assert_eq!(diagnostics.len(), 1);
         let diag = &diagnostics[0];
-        assert_eq!(diag.code.key, "invalid-math");
+        assert_eq!(diag.code.key, "docs-invalid-latex-math");
+        assert_eq!(evin_locales::render_issue(&diag.code), diag.title);
         assert_eq!(diag.severity, evin_diagnostic::Severity::Warning);
         match &diag.location {
             Some(evin_diagnostic::FileLocation::Path { path, .. }) => {

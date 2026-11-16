@@ -65,9 +65,7 @@ impl ResolvedAssets {
             &evin_locales::t!("docs-asset-directory-description"),
         )?;
         if !asset_root.starts_with(&source_root) {
-            return Err(invalid_asset(evin_locales::t!(
-                "docs-asset-dir-outside-source"
-            )));
+            return Err(asset_issue("docs-asset-dir-outside-source", []));
         }
 
         let sources = references
@@ -83,12 +81,14 @@ impl ResolvedAssets {
         let mut outputs = BTreeMap::new();
         for (reference, _, output) in &sources {
             if let Some(existing) = outputs.insert(output.clone(), reference) {
-                return Err(invalid_asset(evin_locales::t!(
+                return Err(asset_issue(
                     "docs-local-image-output-collision",
-                    first = existing.as_str(),
-                    second = reference.as_str(),
-                    output = output.display().to_string()
-                )));
+                    [
+                        ("first", existing.as_str().to_string()),
+                        ("second", reference.as_str().to_string()),
+                        ("output", output.display().to_string()),
+                    ],
+                ));
             }
         }
 
@@ -140,19 +140,23 @@ impl ResolvedAssets {
             let destination = out_dir.join(&asset.output_relative);
             if let Some(parent) = destination.parent() {
                 std::fs::create_dir_all(parent).map_err(|error| {
-                    invalid_asset(evin_locales::t!(
+                    asset_issue(
                         "docs-generated-media-directory-create-failed",
-                        path = parent.display().to_string(),
-                        error = error.to_string()
-                    ))
+                        [
+                            ("path", parent.display().to_string()),
+                            ("error", error.to_string()),
+                        ],
+                    )
                 })?;
             }
             std::fs::write(&destination, &asset.contents).map_err(|error| {
-                invalid_asset(evin_locales::t!(
+                asset_issue(
                     "docs-local-image-publish-failed",
-                    path = destination.display().to_string(),
-                    error = error.to_string()
-                ))
+                    [
+                        ("path", destination.display().to_string()),
+                        ("error", error.to_string()),
+                    ],
+                )
             })?;
         }
         self.prune_stale(out_dir)?;
@@ -174,11 +178,13 @@ impl ResolvedAssets {
         for file in files {
             if !expected.contains(&file) {
                 std::fs::remove_file(&file).map_err(|error| {
-                    invalid_asset(evin_locales::t!(
+                    asset_issue(
                         "docs-stale-generated-image-prune-failed",
-                        path = file.display().to_string(),
-                        error = error.to_string()
-                    ))
+                        [
+                            ("path", file.display().to_string()),
+                            ("error", error.to_string()),
+                        ],
+                    )
                 })?;
             }
         }
@@ -260,7 +266,7 @@ impl Visitor for AssetReferenceCollector<'_> {
 fn asset_dir_path(asset_dir: &str) -> Result<PathBuf, evin_diagnostic::Diagnostic> {
     let path = Path::new(asset_dir.trim());
     if asset_dir.trim().is_empty() || path.is_absolute() {
-        return Err(invalid_asset(evin_locales::t!("docs-asset-dir-invalid")));
+        return Err(asset_issue("docs-asset-dir-invalid", []));
     }
     let mut normalized = PathBuf::new();
     for component in path.components() {
@@ -268,12 +274,12 @@ fn asset_dir_path(asset_dir: &str) -> Result<PathBuf, evin_diagnostic::Diagnosti
             Component::Normal(part) => normalized.push(part),
             Component::CurDir => {}
             Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
-                return Err(invalid_asset(evin_locales::t!("docs-asset-dir-invalid")));
+                return Err(asset_issue("docs-asset-dir-invalid", []));
             }
         }
     }
     if normalized.as_os_str().is_empty() {
-        return Err(invalid_asset(evin_locales::t!("docs-asset-dir-invalid")));
+        return Err(asset_issue("docs-asset-dir-invalid", []));
     }
     Ok(normalized)
 }
@@ -292,10 +298,10 @@ fn local_reference_path(
                 || part.contains('#')
         })
     {
-        return Err(invalid_asset(evin_locales::t!(
+        return Err(asset_issue(
             "docs-local-image-reference-outside-assets",
-            reference = reference
-        )));
+            [("reference", reference.to_string())],
+        ));
     }
     Ok(PathBuf::from(suffix))
 }
@@ -311,10 +317,10 @@ fn source_path(
         &evin_locales::t!("docs-local-image-description", reference = reference),
     )?;
     if !canonical.starts_with(asset_root) || !canonical.is_file() {
-        return Err(invalid_asset(evin_locales::t!(
+        return Err(asset_issue(
             "docs-local-image-reference-must-be-file",
-            reference = reference
-        )));
+            [("reference", reference.to_string())],
+        ));
     }
     Ok(canonical)
 }
@@ -325,10 +331,10 @@ fn output_path(relative: &Path, reference: &str) -> Result<PathBuf, evin_diagnos
         .and_then(|extension| extension.to_str())
         .map(str::to_ascii_lowercase)
         .ok_or_else(|| {
-            invalid_asset(evin_locales::t!(
+            asset_issue(
                 "docs-local-image-extension-missing",
-                reference = reference
-            ))
+                [("reference", reference.to_string())],
+            )
         })?;
     let mut output = PathBuf::from(PUBLISHED_MEDIA_DIR).join(relative);
     match extension.as_str() {
@@ -337,11 +343,13 @@ fn output_path(relative: &Path, reference: &str) -> Result<PathBuf, evin_diagnos
         }
         "avif" | "svg" => {}
         _ => {
-            return Err(invalid_asset(evin_locales::t!(
+            return Err(asset_issue(
                 "docs-local-image-extension-unsupported",
-                reference = reference,
-                extension = extension
-            )));
+                [
+                    ("reference", reference.to_string()),
+                    ("extension", extension),
+                ],
+            ));
         }
     }
     Ok(output)
@@ -358,28 +366,34 @@ fn generate_asset(
         .unwrap_or_default();
     match extension.as_str() {
         "svg" | "avif" => std::fs::read(source_path).map_err(|error| {
-            invalid_asset(evin_locales::t!(
+            asset_issue(
                 "docs-local-image-read-failed",
-                reference = reference,
-                error = error.to_string()
-            ))
+                [
+                    ("reference", reference.to_string()),
+                    ("error", error.to_string()),
+                ],
+            )
         }),
         "png" | "jpg" | "jpeg" => {
             let image = ImageReader::open(source_path)
                 .map_err(|error| {
-                    invalid_asset(evin_locales::t!(
+                    asset_issue(
                         "docs-local-image-read-failed",
-                        reference = reference,
-                        error = error.to_string()
-                    ))
+                        [
+                            ("reference", reference.to_string()),
+                            ("error", error.to_string()),
+                        ],
+                    )
                 })?
                 .decode()
                 .map_err(|error| {
-                    invalid_asset(evin_locales::t!(
+                    asset_issue(
                         "docs-local-image-invalid-raster",
-                        reference = reference,
-                        error = error.to_string()
-                    ))
+                        [
+                            ("reference", reference.to_string()),
+                            ("error", error.to_string()),
+                        ],
+                    )
                 })?
                 .to_rgba8();
             let pixels = image
@@ -398,11 +412,13 @@ fn generate_asset(
                 ))
                 .map(|encoded| encoded.avif_file)
                 .map_err(|error| {
-                    invalid_asset(evin_locales::t!(
+                    asset_issue(
                         "docs-local-image-avif-encode-failed",
-                        reference = reference,
-                        error = error.to_string()
-                    ))
+                        [
+                            ("reference", reference.to_string()),
+                            ("error", error.to_string()),
+                        ],
+                    )
                 })
         }
         _ => unreachable!("unsupported extensions are rejected before publishing"),
@@ -411,12 +427,14 @@ fn generate_asset(
 
 fn canonicalize(path: &Path, description: &str) -> Result<PathBuf, evin_diagnostic::Diagnostic> {
     std::fs::canonicalize(path).map_err(|error| {
-        invalid_asset(evin_locales::t!(
+        asset_issue(
             "docs-path-resolve-failed",
-            description = description,
-            path = path.display().to_string(),
-            error = error.to_string()
-        ))
+            [
+                ("description", description.to_string()),
+                ("path", path.display().to_string()),
+                ("error", error.to_string()),
+            ],
+        )
     })
 }
 
@@ -425,17 +443,19 @@ fn collect_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), evin_diagn
         return Ok(());
     }
     for entry in std::fs::read_dir(root).map_err(|error| {
-        invalid_asset(evin_locales::t!(
+        asset_issue(
             "docs-asset-directory-read-failed",
-            path = root.display().to_string(),
-            error = error.to_string()
-        ))
+            [
+                ("path", root.display().to_string()),
+                ("error", error.to_string()),
+            ],
+        )
     })? {
         let entry = entry.map_err(|error| {
-            invalid_asset(evin_locales::t!(
+            asset_issue(
                 "docs-asset-inspection-failed",
-                error = error.to_string()
-            ))
+                [("error", error.to_string())],
+            )
         })?;
         let path = entry.path();
         if path.is_dir() {
@@ -452,17 +472,19 @@ fn prune_empty_dirs(root: &Path) -> Result<(), evin_diagnostic::Diagnostic> {
         return Ok(());
     }
     for entry in std::fs::read_dir(root).map_err(|error| {
-        invalid_asset(evin_locales::t!(
+        asset_issue(
             "docs-generated-media-read-failed",
-            path = root.display().to_string(),
-            error = error.to_string()
-        ))
+            [
+                ("path", root.display().to_string()),
+                ("error", error.to_string()),
+            ],
+        )
     })? {
         let entry = entry.map_err(|error| {
-            invalid_asset(evin_locales::t!(
+            asset_issue(
                 "docs-generated-media-inspection-failed",
-                error = error.to_string()
-            ))
+                [("error", error.to_string())],
+            )
         })?;
         let path = entry.path();
         if path.is_dir() {
@@ -478,11 +500,15 @@ fn path_to_url(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
-fn invalid_asset(message: impl AsRef<str>) -> evin_diagnostic::Diagnostic {
-    evin_diagnostic::Diagnostic::new(
-        message.as_ref(),
-        evin_diagnostic::IssueCode::new("invalid-asset"),
-    )
+fn asset_issue<const N: usize>(
+    key: &'static str,
+    args: [(&'static str, String); N],
+) -> evin_diagnostic::Diagnostic {
+    let code = args.into_iter().fold(
+        evin_diagnostic::IssueCode::new(key),
+        |code, (name, value)| code.arg(name, value),
+    );
+    evin_locales::diagnostic(code)
 }
 
 #[cfg(test)]
@@ -526,6 +552,17 @@ mod tests {
             .unwrap();
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes.into_inner()).unwrap();
+    }
+
+    fn assert_asset_error<T: std::fmt::Debug>(
+        result: Result<T, evin_diagnostic::Diagnostic>,
+        key: &str,
+        expected: String,
+    ) {
+        let error = result.unwrap_err();
+        assert_eq!(error.code.key, key);
+        assert_eq!(evin_locales::render_issue(&error.code), expected);
+        assert_eq!(error.title, expected);
     }
 
     #[test]
@@ -596,7 +633,10 @@ mod tests {
             reference = "/assets/../diagram.png"
         );
         assert!(!expected.starts_with("<missing locale key:"));
-        assert_eq!(traversal.unwrap_err().title, expected);
+        let error = traversal.unwrap_err();
+        assert_eq!(error.code.key, "docs-local-image-reference-outside-assets");
+        assert_eq!(evin_locales::render_issue(&error.code), expected);
+        assert_eq!(error.title, expected);
 
         write_png(&source.join("assets/diagram.jpg"));
         let collision = ResolvedAssets::build(
@@ -611,6 +651,87 @@ mod tests {
             output = "assets/media/diagram.avif"
         );
         assert!(!expected.starts_with("<missing locale key:"));
-        assert_eq!(collision.unwrap_err().title, expected);
+        let error = collision.unwrap_err();
+        assert_eq!(error.code.key, "docs-local-image-output-collision");
+        assert_eq!(evin_locales::render_issue(&error.code), expected);
+        assert_eq!(error.title, expected);
+    }
+
+    #[test]
+    fn rejects_non_file_and_unsupported_local_images_with_fluent_diagnostics() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("docs");
+        std::fs::create_dir_all(source.join("assets/directory")).unwrap();
+        std::fs::write(source.join("assets/no-extension"), "image").unwrap();
+        std::fs::write(source.join("assets/animated.gif"), "image").unwrap();
+
+        assert_asset_error(
+            ResolvedAssets::build(&source, "assets", &site(&["/assets/directory"])),
+            "docs-local-image-reference-must-be-file",
+            evin_locales::t!(
+                "docs-local-image-reference-must-be-file",
+                reference = "/assets/directory"
+            ),
+        );
+        assert_asset_error(
+            ResolvedAssets::build(&source, "assets", &site(&["/assets/no-extension"])),
+            "docs-local-image-extension-missing",
+            evin_locales::t!(
+                "docs-local-image-extension-missing",
+                reference = "/assets/no-extension"
+            ),
+        );
+        assert_asset_error(
+            ResolvedAssets::build(&source, "assets", &site(&["/assets/animated.gif"])),
+            "docs-local-image-extension-unsupported",
+            evin_locales::t!(
+                "docs-local-image-extension-unsupported",
+                reference = "/assets/animated.gif",
+                extension = "gif"
+            ),
+        );
+    }
+
+    #[test]
+    fn invalid_raster_and_asset_publish_failures_use_fluent_diagnostics() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("docs");
+        let invalid_raster = source.join("assets/broken.png");
+        std::fs::create_dir_all(invalid_raster.parent().unwrap()).unwrap();
+        std::fs::write(&invalid_raster, "not a png").unwrap();
+        let decode_error = ImageReader::open(&invalid_raster)
+            .unwrap()
+            .decode()
+            .unwrap_err()
+            .to_string();
+        assert_asset_error(
+            ResolvedAssets::build(&source, "assets", &site(&["/assets/broken.png"])),
+            "docs-local-image-invalid-raster",
+            evin_locales::t!(
+                "docs-local-image-invalid-raster",
+                reference = "/assets/broken.png",
+                error = decode_error
+            ),
+        );
+
+        let svg = source.join("assets/logo.svg");
+        std::fs::write(&svg, "<svg/>").unwrap();
+        let assets =
+            ResolvedAssets::build(&source, "assets", &site(&["/assets/logo.svg"])).unwrap();
+        let out = temp.path().join("dist");
+        let destination = out.join("assets/media/logo.svg");
+        std::fs::create_dir_all(&destination).unwrap();
+        let write_error = std::fs::write(&destination, "<svg/>")
+            .unwrap_err()
+            .to_string();
+        assert_asset_error(
+            assets.write_to(&out),
+            "docs-local-image-publish-failed",
+            evin_locales::t!(
+                "docs-local-image-publish-failed",
+                path = destination.display().to_string(),
+                error = write_error
+            ),
+        );
     }
 }

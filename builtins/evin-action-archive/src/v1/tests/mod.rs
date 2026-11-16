@@ -188,8 +188,15 @@ async fn test_archive_collision() {
     let err = res.unwrap_err();
     assert_eq!(err.code.key, "path-collision");
     assert_eq!(err.title, evin_locales::t!("path-collision-title"));
-    let message = evin_locales::render_issue(&err.code);
-    assert!(!message.starts_with("<missing locale key:"), "{message}");
+    assert_eq!(
+        evin_locales::render_issue(&err.code),
+        evin_locales::t!(
+            "path-collision",
+            destination = "file.txt",
+            source1 = dir_a.join("file.txt").display().to_string(),
+            source2 = dir_b.join("file.txt").display().to_string()
+        )
+    );
 }
 
 #[tokio::test]
@@ -303,7 +310,15 @@ async fn test_archive_relative_layout_outside_cwd() {
 
     let action = ArchiveAction;
     let res = action.execute(&ctx, Some(spanned_mapping(with))).await;
-    assert!(res.is_err());
+    let error = res.unwrap_err();
+    assert_eq!(error.code.key, "relative-path-escape");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!(
+            "relative-path-escape",
+            path = module_b.join("file.txt").display().to_string()
+        )
+    );
 }
 
 #[tokio::test]

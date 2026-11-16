@@ -13,6 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
+use crate::v1::config::{ArchScripts, ArchTarget, PackageConfig, PackageTargets};
 
 #[test]
 fn formats_reject_each_others_keys() {
@@ -41,6 +42,35 @@ fn formats_reject_each_others_keys() {
     );
 }
 
+#[test]
+fn archive_configuration_failures_use_fluent_messages() {
+    for (yaml, expected) in [
+        (
+            "format: zip\n",
+            evin_locales::t!("unsupported-format", format = "zip"),
+        ),
+        (
+            "include: [src/**]\n",
+            evin_locales::t!("archive-path-must-not-be-empty"),
+        ),
+        (
+            "path: out.tar.gz\n",
+            evin_locales::t!("include-must-contain-at-least-one-pattern"),
+        ),
+        (
+            "path: out.tar.gz\ninclude: [src/**]\ncompression_level: 10\n",
+            evin_locales::t!("compression-level-invalid"),
+        ),
+        (
+            "format: deb\n",
+            evin_locales::t!("archive-distro-fields-required"),
+        ),
+    ] {
+        let with = evin_flow::parse_yaml(yaml).unwrap();
+        assert_config_error(&with, expected);
+    }
+}
+
 fn assert_config_error(with: &evin_flow::SpannedValue, expected: String) {
     let error = validate_config(Some(with)).unwrap_err();
     assert!(
@@ -57,7 +87,11 @@ fn package_release_reference_must_be_a_declared_need() {
         task_name: "package",
         needs: &[],
     };
-    assert!(validate_task_config(&missing, Some(&with)).is_err());
+    let error = validate_task_config(&missing, Some(&with)).unwrap_err();
+    assert_eq!(
+        error.message,
+        evin_locales::t!("archive-release-reference-missing-need", task = "bump")
+    );
     let needs = vec!["bump".to_string()];
     let valid = evin_action_sdk::ActionValidationContext {
         task_name: "package",
@@ -96,6 +130,68 @@ fn package_validation_rejects_invalid_relations_and_backup_paths() {
         validate_package(config.package.as_ref().unwrap(), PackageFormat::Arch).unwrap_err();
     let expected = evin_locales::t!("package-path-invalid", path = "../etc/app.conf");
     assert_eq!(error.code.key, "package-path-invalid");
+    assert_eq!(evin_locales::render_issue(&error.code), expected);
+}
+
+#[test]
+fn package_metadata_relations_and_scripts_use_fluent_errors() {
+    let mut package = valid_package();
+    package.summary = "two\nlines".into();
+    assert_package_error(
+        &package,
+        "archive-package-metadata-invalid",
+        evin_locales::t!("archive-package-metadata-invalid", field = "summary"),
+    );
+
+    let mut package = valid_package();
+    package.name = "Bad Name".into();
+    assert_package_error(
+        &package,
+        "archive-package-name-invalid",
+        evin_locales::t!("archive-package-name-invalid"),
+    );
+
+    let mut package = valid_package();
+    package.targets.arch = Some(ArchTarget {
+        depends: vec![" ".into()],
+        ..ArchTarget::default()
+    });
+    assert_package_error(
+        &package,
+        "archive-package-relation-invalid",
+        evin_locales::t!("archive-package-relation-invalid", field = "depends"),
+    );
+
+    let mut package = valid_package();
+    package.targets.arch = Some(ArchTarget {
+        scripts: ArchScripts {
+            install: Some(" ".into()),
+        },
+        ..ArchTarget::default()
+    });
+    assert_package_error(
+        &package,
+        "archive-package-script-path-empty",
+        evin_locales::t!("archive-package-script-path-empty"),
+    );
+}
+
+fn valid_package() -> PackageConfig {
+    PackageConfig {
+        name: "app".into(),
+        summary: "An app".into(),
+        description: None,
+        maintainer: "A".into(),
+        license: "MIT".into(),
+        homepage: None,
+        payload: Vec::new(),
+        targets: PackageTargets::default(),
+    }
+}
+
+fn assert_package_error(package: &PackageConfig, key: &str, expected: String) {
+    let error = validate_package(package, PackageFormat::Arch).unwrap_err();
+    assert_eq!(error.code.key, key);
     assert_eq!(evin_locales::render_issue(&error.code), expected);
 }
 

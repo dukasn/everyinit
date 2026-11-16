@@ -189,16 +189,79 @@ mod tests {
     use super::*;
 
     #[test]
-    fn invalid_locale_error_uses_fluent_message() {
-        let with =
-            evin_flow::parse_yaml("i18n:\n  default_locale: en\n  locales: [en, pt_br]\n").unwrap();
-        let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
-        let actual = validate(&config).unwrap_err();
-        let expected = evin_locales::t!("docs-i18n-locale-noncanonical", locale = "pt_br");
-        assert!(
-            !expected.starts_with("<missing locale key:"),
-            "expected Fluent message to exist: {expected}"
-        );
-        assert_eq!(actual, expected);
+    fn configuration_validation_errors_use_fluent_messages() {
+        let cases = [
+            (
+                "reference_prefix: '?'\n",
+                evin_locales::t!("docs-reference-prefix-invalid"),
+            ),
+            (
+                "i18n:\n  default_locale: en\n  locales: []\n",
+                evin_locales::t!("docs-i18n-locales-required"),
+            ),
+            (
+                "i18n:\n  default_locale: en\n  locales: ['not a locale']\n",
+                evin_locales::t!("docs-i18n-locale-invalid", locale = "not a locale"),
+            ),
+            (
+                "i18n:\n  default_locale: en\n  locales: [pt_br]\n",
+                evin_locales::t!("docs-i18n-locale-noncanonical", locale = "pt_br"),
+            ),
+            (
+                "i18n:\n  default_locale: en\n  locales: [en, en]\n",
+                evin_locales::t!("docs-i18n-locale-duplicate", locale = "en"),
+            ),
+            (
+                "i18n:\n  default_locale: 'not a locale'\n  locales: [en]\n",
+                evin_locales::t!("docs-i18n-default-locale-invalid"),
+            ),
+            (
+                "i18n:\n  default_locale: EN\n  locales: [en]\n",
+                evin_locales::t!("docs-i18n-default-locale-noncanonical"),
+            ),
+            (
+                "i18n:\n  default_locale: pt\n  locales: [en]\n",
+                evin_locales::t!("docs-i18n-default-locale-missing"),
+            ),
+            (
+                "latest_version: v1\n",
+                evin_locales::t!("docs-latest-version-requires-version-list"),
+            ),
+            (
+                "versions:\n  - id: '../'\n",
+                evin_locales::t!("docs-version-id-invalid", version = "../"),
+            ),
+            (
+                "versions:\n  - id: v1\n  - id: v1\n",
+                evin_locales::t!("docs-version-id-duplicate", version = "v1"),
+            ),
+            (
+                "versions:\n  - id: v1\n",
+                evin_locales::t!("docs-latest-version-required"),
+            ),
+            (
+                "versions:\n  - id: v1\nlatest_version: v2\n",
+                evin_locales::t!("docs-latest-version-unlisted", version = "v2"),
+            ),
+            (
+                "out: ''\n",
+                evin_locales::t!("docs-output-path-must-not-be-empty"),
+            ),
+            (
+                "asset_dir: ../assets\n",
+                evin_locales::t!("docs-asset-dir-invalid"),
+            ),
+        ];
+
+        for (yaml, expected) in cases {
+            let with = evin_flow::parse_yaml(yaml).unwrap();
+            let config: HeadlessConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+            let actual = validate(&config).unwrap_err();
+            assert!(
+                !expected.starts_with("<missing locale key:"),
+                "expected Fluent message to exist for {yaml:?}: {expected}"
+            );
+            assert_eq!(actual, expected, "{yaml:?}");
+        }
     }
 }

@@ -414,3 +414,171 @@ fn validate_script_path(path: &str) -> Result<(), evin_diagnostic::Diagnostic> {
     packaging::safe_relative_path(path).map_err(evin_diagnostic::Diagnostic::from)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::v1::config::{ArchScripts, ArchTarget, PackageTargets, PayloadMapping};
+    use evin_action_sdk::{Logger, PipelineMode, RunnerContext, git::GitProvider};
+    use std::{collections::HashMap, path::Path, sync::Arc};
+
+    fn context(root: &Path) -> RunnerContext {
+        let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = Arc::new(evin_action_sdk::secrets::SecretsProvider::default());
+        RunnerContext::new(
+            None,
+            "archive-package-test".to_string(),
+            false,
+            PipelineMode::Normal,
+            log_tx,
+            vec![],
+            Some(root.to_string_lossy().to_string()),
+            HashMap::new(),
+            root.to_path_buf(),
+            HashMap::new(),
+            Arc::new(GitProvider::new(
+                root.to_path_buf(),
+                PipelineMode::Normal,
+                Logger::new(
+                    "archive-package-test".to_string(),
+                    tokio::sync::mpsc::unbounded_channel().0,
+                    secrets.clone(),
+                ),
+            )),
+            secrets,
+        )
+    }
+
+    fn package(payload: Vec<PayloadMapping>) -> PackageConfig {
+        PackageConfig {
+            name: "app".into(),
+            summary: "An app".into(),
+            description: None,
+            maintainer: "Maintainer".into(),
+            license: "MIT".into(),
+            homepage: None,
+            payload,
+            targets: PackageTargets::default(),
+        }
+    }
+
+    fn payload(source: &str, strip_prefix: &str, destination: &str) -> PayloadMapping {
+        PayloadMapping {
+            source: source.into(),
+            strip_prefix: strip_prefix.into(),
+            destination: destination.into(),
+            mode: None,
+        }
+    }
+
+    fn assert_fluent_error(error: evin_diagnostic::Diagnostic, key: &str, expected: String) {
+        assert_eq!(error.code.key, key);
+        assert_eq!(evin_locales::render_issue(&error.code), expected);
+        assert_eq!(error.title, expected);
+    }
+
+    #[test]
+    fn payload_validation_and_discovery_errors_use_fluent_messages() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = context(temp.path());
+
+        let error =
+            resolve_package_payloads(&ctx, &package(vec![payload("", "app", "/usr")])).unwrap_err();
+        assert_fluent_error(
+            error,
+            "archive-payload-source-prefix-required",
+            evin_locales::t!("archive-payload-source-prefix-required"),
+        );
+
+        let mut invalid_mode = payload("app/*", "app", "/usr");
+        invalid_mode.mode = Some(0o1000);
+        let error = resolve_package_payloads(&ctx, &package(vec![invalid_mode])).unwrap_err();
+        assert_fluent_error(
+            error,
+            "archive-payload-mode-invalid",
+            evin_locales::t!("archive-payload-mode-invalid"),
+        );
+
+        let source = "[";
+        let detail = ctx
+            .fs
+            .matching_files_from(temp.path(), source)
+            .unwrap_err()
+            .to_string();
+        let error = resolve_package_payloads(&ctx, &package(vec![payload(source, ".", "/usr")]))
+            .unwrap_err();
+        assert_fluent_error(
+            error,
+            "archive-payload-source-discovery-failed",
+            evin_locales::t!(
+                "archive-payload-source-discovery-failed",
+                source = source,
+                error = detail
+            ),
+        );
+    }
+
+    #[test]
+    fn payload_strip_prefix_and_collision_errors_use_fluent_messages() {
+        let temp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(temp.path().join("outside")).unwrap();
+        std::fs::write(temp.path().join("outside/tool"), "tool").unwrap();
+        let ctx = context(temp.path());
+
+        let error = resolve_package_payloads(
+            &ctx,
+            &package(vec![payload("outside/*", "inside", "/usr/bin")]),
+        )
+        .unwrap_err();
+        assert_fluent_error(
+            error,
+            "archive-payload-outside-strip-prefix",
+            evin_locales::t!(
+                "archive-payload-outside-strip-prefix",
+                source = temp.path().join("outside/tool").display().to_string(),
+                prefix = temp.path().join("inside").display().to_string()
+            ),
+        );
+
+        std::fs::create_dir_all(temp.path().join("one")).unwrap();
+        std::fs::create_dir_all(temp.path().join("two")).unwrap();
+        std::fs::write(temp.path().join("one/tool"), "one").unwrap();
+        std::fs::write(temp.path().join("two/tool"), "two").unwrap();
+        let error = resolve_package_payloads(
+            &ctx,
+            &package(vec![
+                payload("one/*", "one", "/usr/bin"),
+                payload("two/*", "two", "/usr/bin"),
+            ]),
+        )
+        .unwrap_err();
+        assert_fluent_error(
+            error,
+            "archive-payload-collision",
+            evin_locales::t!("archive-payload-collision", destination = "usr/bin/tool"),
+        );
+    }
+
+    #[test]
+    fn package_script_read_error_uses_fluent_message() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = context(temp.path());
+        let mut package = package(Vec::new());
+        package.targets.arch = Some(ArchTarget {
+            scripts: ArchScripts {
+                install: Some("missing.install".into()),
+            },
+            ..ArchTarget::default()
+        });
+        let detail = std::fs::read(temp.path().join("missing.install"))
+            .unwrap_err()
+            .to_string();
+
+        let error = load_scripts(&ctx, &package, PackageFormat::Arch).unwrap_err();
+        assert_fluent_error(
+            error,
+            "archive-package-script-read-failed",
+            evin_locales::t!("archive-package-script-read-failed", error = detail),
+        );
+    }
+}

@@ -126,10 +126,7 @@ fn macro_calls(source: &str) -> Vec<(String, String)> {
 }
 
 fn issue_code_keys(source: &str) -> Vec<String> {
-    let issue_code = Regex::new(
-        r#"(?:evin_locales::)?diagnostic\(\s*(?:evin_diagnostic::)?IssueCode::new\(\s*"([^"]+)""#,
-    )
-    .unwrap();
+    let issue_code = Regex::new(r#"(?:evin_diagnostic::)?IssueCode::new\(\s*"([^"]+)""#).unwrap();
     issue_code
         .captures_iter(source)
         .map(|capture| capture[1].to_string())
@@ -142,6 +139,9 @@ fn builtin_fluent_calls_match_english_keys_and_arguments() {
     let builtins = root.join("builtins");
     let messages = english_messages();
     let argument = Regex::new(r"\b([a-z][a-z0-9_]*)\s*=").unwrap();
+    // These codes come from evin-doc's parser and are wrapped with a localized
+    // docs-level message by the builtin instead of owning a builtin FTL entry.
+    let framework_issue_codes = ["invalid-filename", "io-error", "missing-translation"];
     let mut files = Vec::new();
     rust_files(&builtins, &mut files);
 
@@ -149,6 +149,9 @@ fn builtin_fluent_calls_match_english_keys_and_arguments() {
     for path in files {
         let source = std::fs::read_to_string(&path).expect("read builtin Rust source");
         for key in issue_code_keys(&source) {
+            if framework_issue_codes.contains(&key.as_str()) {
+                continue;
+            }
             assert!(
                 messages.contains_key(&key),
                 "{} references IssueCode key '{key}' without an English Fluent message",

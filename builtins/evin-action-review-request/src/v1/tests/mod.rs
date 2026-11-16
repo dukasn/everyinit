@@ -107,6 +107,26 @@ async fn reports_failures_and_missing_commands() {
 }
 
 #[tokio::test]
+async fn invalid_runtime_config_uses_localized_diagnostic_title() {
+    let dir = tempfile::tempdir().unwrap();
+    let ctx = context(dir.path(), PipelineMode::Normal);
+    let config = with("branch: b\nbase: main\ncommands:\n  find: echo\nunknown: true\n").unwrap();
+    let config_error =
+        evin_action_sdk::parse_config::<ReviewRequestConfig>(Some(&config)).unwrap_err();
+
+    let error = execute(&ctx, Some(config)).await.unwrap_err();
+    assert_eq!(error.code.key, "issue-yaml-parse-failed");
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("issue-yaml-parse-failed", error = config_error.message)
+    );
+    assert_eq!(
+        error.title,
+        evin_locales::t!("review-request-invalid-config-title")
+    );
+}
+
+#[tokio::test]
 async fn dry_run_executes_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let ctx = context(dir.path(), PipelineMode::DryRun);
@@ -117,6 +137,10 @@ async fn dry_run_executes_nothing() {
     .await
     .unwrap();
     assert!(!dir.path().join("ran.txt").exists());
+    assert_eq!(
+        ctx.uncertainty(),
+        [evin_locales::t!("review-request-dry-run-skipped-lookup")]
+    );
 }
 
 fn context(dir: &std::path::Path, mode: PipelineMode) -> RunnerContext {

@@ -181,7 +181,6 @@ async fn exports_existing_section_without_regenerating_changelog() {
 #[tokio::test]
 async fn export_rejects_missing_empty_duplicate_and_same_path() {
     let temp = repository(false);
-    let ctx = context(temp.path());
     let path = temp.path().join("CHANGELOG.md");
     for changelog in [
         "## [v1.0.0]\n- older\n",
@@ -189,17 +188,26 @@ async fn export_rejects_missing_empty_duplicate_and_same_path() {
         "## [v1.0.1]\n- first\n## [v1.0.1]\n- duplicate\n",
     ] {
         std::fs::write(&path, changelog).unwrap();
+        let ctx = context(temp.path());
         let with = evin_flow::parse_yaml("section: v1.0.1\nnotes_path: notes.md\n").unwrap();
         let error = execute(&ctx, Some(with)).await.unwrap_err();
-        if changelog == "## [v1.0.0]\n- older\n" {
+        if changelog == "## [v1.0.0]\n- older\n"
+            || changelog == "## [v1.0.1]\n\n## [v1.0.0]\n- older\n"
+        {
             assert_eq!(error.code.key, "changelog-section-missing");
             let expected = evin_locales::t!("changelog-section-missing", section = "v1.0.1");
             assert!(!expected.starts_with("<missing locale key:"));
+            assert_eq!(evin_locales::render_issue(&error.code), expected);
+        } else if changelog == "## [v1.0.1]\n- first\n## [v1.0.1]\n- duplicate\n" {
+            let detail = "Duplicate changelog sections for v1.0.1";
+            let expected = evin_locales::t!("changelog-section-invalid", error = detail);
+            assert_eq!(error.code.key, "changelog-section-invalid",);
             assert_eq!(evin_locales::render_issue(&error.code), expected);
         }
         assert!(!temp.path().join("notes.md").exists());
     }
     std::fs::write(&path, "## [v1.0.1]\n- keep\n").unwrap();
+    let ctx = context(temp.path());
     let with = evin_flow::parse_yaml("section: v1.0.1\nnotes_path: ./CHANGELOG.md\n").unwrap();
     let error = execute(&ctx, Some(with)).await.unwrap_err();
     assert_eq!(error.code.key, "changelog-section-paths-must-differ");
@@ -212,7 +220,12 @@ async fn export_rejects_missing_empty_duplicate_and_same_path() {
         "## [v1.0.1]\n- keep\n"
     );
 
-    assert!(validate_config(Some(&evin_flow::parse_yaml("section: v1.0.1\n").unwrap())).is_err());
+    let error =
+        validate_config(Some(&evin_flow::parse_yaml("section: v1.0.1\n").unwrap())).unwrap_err();
+    assert_eq!(
+        error.message,
+        evin_locales::t!("section-must-be-non-empty-and-requires-notes-path")
+    );
 }
 
 mod config;

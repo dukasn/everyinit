@@ -25,3 +25,62 @@ fn rejects_an_empty_notes_path() {
     );
     assert_eq!(error.message, expected);
 }
+
+#[test]
+fn configuration_failures_use_fluent_messages() {
+    let section_error = evin_flow::template::pipeline::validate_template_syntax("{{broken}}")
+        .unwrap_err()
+        .to_string();
+    let cases = [
+        (
+            "path: ' '\n",
+            evin_locales::t!("changelog-path-must-not-be-empty"),
+        ),
+        (
+            "section: ' '\nnotes_path: notes.md\n",
+            evin_locales::t!("section-must-be-non-empty-and-requires-notes-path"),
+        ),
+        (
+            "section: v1.0.0\n",
+            evin_locales::t!("section-must-be-non-empty-and-requires-notes-path"),
+        ),
+        (
+            "section: '{{broken}}'\nnotes_path: notes.md\n",
+            evin_locales::t!("section-template-invalid", error = &section_error),
+        ),
+        (
+            "unreleased_heading: ' '\n",
+            evin_locales::t!("unreleased-heading-must-not-be-empty"),
+        ),
+        (
+            "sections:\n  ' ': Maintenance\n",
+            evin_locales::t!("sections-keys-must-not-be-empty"),
+        ),
+        (
+            "version: ' '\n",
+            evin_locales::t!("version-must-not-be-empty"),
+        ),
+        (
+            "include_unreleased: false\n",
+            evin_locales::t!("version-is-required-when-include-unreleased-is-false"),
+        ),
+        (
+            "label: ' '\n",
+            evin_locales::t!("label-must-not-be-empty-when-provided"),
+        ),
+        (
+            "label: '{{broken}}'\n",
+            evin_locales::t!("label-template-invalid", error = &section_error),
+        ),
+    ];
+
+    for (yaml, expected) in cases {
+        let with = evin_flow::parse_yaml(yaml).unwrap();
+        let error = validate_config(Some(&with)).unwrap_err();
+        assert!(
+            !expected.starts_with("<missing locale key:"),
+            "expected Fluent message to exist for {yaml:?}: {expected}"
+        );
+        assert_eq!(error.message, expected, "{yaml:?}");
+    }
+}

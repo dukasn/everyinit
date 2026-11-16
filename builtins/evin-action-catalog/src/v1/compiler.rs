@@ -13,11 +13,24 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::config::CatalogConfig;
-use evin_diagnostic::Diagnostic;
+use evin_diagnostic::{Diagnostic, IssueCode};
 use std::path::Path;
 
-pub(super) fn issue(message: impl Into<String>, code: &'static str) -> Diagnostic {
-    evin_diagnostic::Diagnostic::new(message, evin_diagnostic::IssueCode::new(code))
+fn source_issue(issue: evin_doc::DocIssue) -> Diagnostic {
+    let path = issue.source_path.unwrap_or_default();
+    match issue.code {
+        "invalid-nav-order" => evin_locales::diagnostic(
+            IssueCode::new("catalog-source-navigation-order-invalid").arg("path", path),
+        ),
+        "formal-reference-invalid" => evin_locales::diagnostic(
+            IssueCode::new("catalog-source-formal-reference-invalid").arg("error", issue.message),
+        ),
+        _ => evin_locales::diagnostic(
+            IssueCode::new("catalog-source-compilation-failed")
+                .arg("path", path)
+                .arg("error", issue.message),
+        ),
+    }
 }
 
 #[allow(clippy::result_large_err)]
@@ -32,17 +45,14 @@ pub(super) fn compile(
     };
     let files =
         evin_doc::SourceResolver::resolve_all(&source_root, &config.include, &config.exclude)
-            .map_err(|error| issue(error.message, error.code))?;
+            .map_err(source_issue)?;
     let mut sources = Vec::with_capacity(files.len());
     for file in files {
         let content = std::fs::read_to_string(&file.absolute_path).map_err(|error| {
-            issue(
-                evin_locales::t!(
-                    "catalog-source-read-failed",
-                    path = file.absolute_path.display().to_string(),
-                    error = error.to_string()
-                ),
-                "io-error",
+            evin_locales::diagnostic(
+                IssueCode::new("catalog-source-read-failed")
+                    .arg("path", file.absolute_path.display().to_string())
+                    .arg("error", error.to_string()),
             )
         })?;
         sources.push((file, content));
@@ -65,10 +75,9 @@ pub(super) fn compile(
         });
     let prefix = config.reference_prefix.trim().to_ascii_uppercase();
     if prefix.is_empty() || !prefix.chars().all(|ch| ch.is_ascii_alphanumeric()) {
-        return Err(issue(
-            evin_locales::t!("catalog-reference-prefix-invalid"),
-            "invalid-config",
-        ));
+        return Err(evin_locales::diagnostic(IssueCode::new(
+            "catalog-reference-prefix-invalid",
+        )));
     }
     let site = evin_doc::compile_site(
         inputs,
@@ -79,7 +88,7 @@ pub(super) fn compile(
         },
         None,
     )
-    .map_err(|error| issue(error.message, error.code))?;
+    .map_err(source_issue)?;
     let count = site.pages.len();
     let generated_at = std::env::var("SOURCE_DATE_EPOCH")
         .ok()
@@ -93,10 +102,33 @@ pub(super) fn compile(
         generated_at,
     );
     catalog.validate().map_err(|error| {
-        issue(
-            evin_locales::t!("catalog-output-invalid", error = error.to_string()),
-            "invalid-catalog",
+        evin_locales::diagnostic(
+            IssueCode::new("catalog-output-invalid").arg("error", error.to_string()),
         )
     })?;
     Ok((catalog, count))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_issue;
+
+    #[test]
+    fn unclassified_source_diagnostic_uses_fluent_fallback() {
+        let error = source_issue(
+            evin_doc::DocIssue::error("document-parse-failed", "unexpected heading structure")
+                .with_source_path("guide.md"),
+        );
+        let expected = evin_locales::t!(
+            "catalog-source-compilation-failed",
+            path = "guide.md",
+            error = "unexpected heading structure"
+        );
+        assert_eq!(error.code.key, "catalog-source-compilation-failed");
+        assert_eq!(evin_locales::render_issue(&error.code), expected);
+        assert_eq!(
+            error.title,
+            evin_locales::t!("catalog-source-compilation-failed-title")
+        );
+    }
 }

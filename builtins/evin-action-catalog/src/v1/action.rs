@@ -12,12 +12,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use super::compiler::{compile, issue};
+use super::compiler::compile;
 use super::config::CatalogConfig;
 use evin_action_sdk::{
     Action, ActionDescriptor, ActionFieldDescriptor, ActionFieldKind, ActionOutputDescriptor,
     RunnerContext,
 };
+use evin_diagnostic::IssueCode;
 
 const DESCRIPTOR: ActionDescriptor = ActionDescriptor {
     summary: "Compile documentation symbols and keywords into a tooling catalog.",
@@ -98,9 +99,8 @@ impl Action for CatalogAction {
         with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         let config: CatalogConfig = ctx.load_config(with.as_ref()).map_err(|error| {
-            issue(
-                evin_locales::t!("catalog-invalid-config", error = error.message),
-                "invalid-config",
+            evin_locales::diagnostic(
+                IssueCode::new("catalog-invalid-config").arg("error", error.message),
             )
         })?;
         let (catalog, page_count) = compile(ctx.fs.workspace_root(), &config)?;
@@ -110,20 +110,15 @@ impl Action for CatalogAction {
             ctx.fs.workspace_root().join(config.out)
         };
         let json = serde_json::to_string_pretty(&catalog).map_err(|error| {
-            issue(
-                evin_locales::t!(
-                    "catalog-json-serialization-failed",
-                    error = error.to_string()
-                ),
-                "json-error",
+            evin_locales::diagnostic(
+                IssueCode::new("catalog-json-serialization-failed").arg("error", error),
             )
         })?;
         ctx.fs
             .write(&output.to_string_lossy(), json)
             .map_err(|error| {
-                issue(
-                    evin_locales::t!("catalog-output-write-failed", error = error.to_string()),
-                    "io-error",
+                evin_locales::diagnostic(
+                    IssueCode::new("catalog-output-write-failed").arg("error", error),
                 )
             })?;
         let entry_count = catalog.symbols.len() + catalog.keywords.len();

@@ -72,11 +72,6 @@ async fn run(
         .as_deref()
         .map(|value| resolve("title", value))
         .transpose()?;
-    if wanted && title.as_deref().is_none_or(|t| t.trim().is_empty()) {
-        return Err(evin_diagnostic::IssueCode::new(
-            "review-request-title-resolved-empty",
-        ));
-    }
 
     let mut env = HashMap::new();
     env.insert(

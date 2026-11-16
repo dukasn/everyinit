@@ -188,6 +188,22 @@ fn configuration_validation_errors_use_fluent_messages() {
             path = "release.txt"
         )
     );
+    let error = VersionBumperConfig {
+        files: vec![FileConfig::Custom(CustomFileConfig {
+            path: "release.txt".into(),
+            match_pattern: "[".into(),
+            write: "${version}".into(),
+        })],
+        ..VersionBumperConfig::default()
+    }
+    .validate()
+    .unwrap_err();
+    assert_eq!(error.code.key, "custom-file-match-invalid");
+    let detail = &error.code.args[0].1;
+    assert_eq!(
+        evin_locales::render_issue(&error.code),
+        evin_locales::t!("custom-file-match-invalid", error = detail)
+    );
     for (config, key, expected) in [
         (
             CustomFileConfig {
