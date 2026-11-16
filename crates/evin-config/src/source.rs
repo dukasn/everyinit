@@ -9,6 +9,7 @@
 //! File access for configuration loading. The overlay implementation is the
 //! editor-safe counterpart to normal filesystem discovery.
 
+use evin_flow::YamlDocument;
 use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -106,12 +107,20 @@ impl WorkspaceDocuments {
         source: &dyn WorkspaceSource,
         path: PathBuf,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
+        let path = normalize(path);
+        if self.texts.contains_key(&path) {
+            return Ok(());
+        }
         if !source.exists(&path) {
             return Err(missing(&path));
         }
-        self.texts
-            .entry(path.clone())
-            .or_insert(read(source, &path)?);
+        let text = read(source, &path)?;
+        let document = crate::workspace::NamespaceFlow::from_str(&text, Some(&path))?;
+        self.texts.insert(path.clone(), text);
+        let base = path.parent().unwrap_or(Path::new(""));
+        for child in includes(&document.include, base) {
+            self.load_namespace(source, child)?;
+        }
         Ok(())
     }
 }

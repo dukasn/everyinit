@@ -97,6 +97,37 @@ fn document_task_scopes(
             _ => {}
         }
     }
+    // Namespace includes form a tree layered on the workspace/module roots.
+    // Walk until all reachable nested documents have inherited their scope.
+    for _ in 0..documents.len() {
+        let mut changed = false;
+        for (path, document) in documents {
+            if document.kind != DocumentKind::Namespace {
+                continue;
+            }
+            let Some(parent_scope) = scopes.get(path).cloned() else {
+                continue;
+            };
+            let Some(ast) = &document.ast else {
+                continue;
+            };
+            let Some(includes) = mapping_get(ast, "include").or_else(|| mapping_get(ast, "includes")) else {
+                continue;
+            };
+            let before = scopes.clone();
+            add_namespace_scopes(
+                documents,
+                &mut scopes,
+                Some(includes),
+                path.parent().unwrap_or(Path::new("")),
+                Some(&parent_scope),
+            );
+            changed |= scopes != before;
+        }
+        if !changed {
+            break;
+        }
+    }
     scopes
 }
 
@@ -499,13 +530,45 @@ fn validate_module_and_namespace_names(index: &mut WorkspaceSemanticIndex) {
         } else {
             name
         };
-        if !seen.insert(identity.clone()) {
+        if !seen.insert(identity.clone())
+            && !(document.kind == DocumentKind::Namespace
+                && is_same_scope_namespace_fragment(&index.documents, &scopes, &document.path, &identity))
+        {
             duplicates.push((key, identity, document.path.clone(), span));
         }
     }
     for (key, name, path, span) in duplicates {
         push_reference_issue(index, key, [("name", name)], &path, span);
     }
+}
+
+fn is_same_scope_namespace_fragment(
+    documents: &std::collections::BTreeMap<PathBuf, WorkspaceDocument>,
+    scopes: &std::collections::BTreeMap<PathBuf, String>,
+    child_path: &Path,
+    scope: &str,
+) -> bool {
+    documents.iter().any(|(parent_path, parent)| {
+        if parent.kind != DocumentKind::Namespace
+            || scopes.get(parent_path).map(String::as_str) != Some(scope)
+        {
+            return false;
+        }
+        let Some(ast) = &parent.ast else {
+            return false;
+        };
+        let includes = mapping_get(ast, "include").or_else(|| mapping_get(ast, "includes"));
+        include_entries(includes).into_iter().any(|(_, file)| {
+            let path = crate::source::normalize(if Path::new(&file).is_absolute() {
+                PathBuf::from(file)
+            } else {
+                parent_path.parent().unwrap_or(Path::new("")).join(file)
+            });
+            (path == child_path && scopes.get(child_path).map(String::as_str) == Some(scope))
+                || (*parent_path == child_path
+                    && scopes.get(&path).map(String::as_str) == Some(scope))
+        })
+    })
 }
 
 fn document_string_span(document: &WorkspaceDocument, path: &[&str]) -> Option<(String, Span)> {

@@ -111,6 +111,7 @@ flow-schema-named-prerelease-format-templates = Named prerelease format template
 flow-schema-named-variable-presets = Named variable presets.
 flow-schema-namespace-environment-values = Namespace environment values.
 flow-schema-namespace-flow-files-declared-by-module = Namespace Flow files declared by module.
+flow-schema-nested-namespace-flow-files = Child namespace Flow files included by this namespace.
 flow-schema-namespace-identifier-prepended-to-tasks = Namespace identifier prepended to tasks.
 flow-schema-namespace-metadata = Namespace metadata.
 flow-schema-namespace-task-definitions = Namespace task definitions.

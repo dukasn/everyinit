@@ -62,6 +62,109 @@ fn overlay_document_variables(
     combined
 }
 
+fn namespace_includes(
+    include: &Option<crate::workspace::IncludeConfig>,
+) -> Vec<(Option<String>, String)> {
+    match include {
+        Some(crate::workspace::IncludeConfig::List(paths)) => {
+            paths.iter().map(|path| (None, path.clone())).collect()
+        }
+        Some(crate::workspace::IncludeConfig::Map(paths)) => {
+            let mut entries = paths
+                .iter()
+                .map(|(name, path)| (Some(name.clone()), path.clone()))
+                .collect::<Vec<_>>();
+            entries.sort_by(|a, b| a.1.cmp(&b.1));
+            entries
+        }
+        None => Vec::new(),
+    }
+}
+
+struct NamespaceParseContext<'a> {
+    source: &'a dyn crate::source::WorkspaceSource,
+    cwd: Option<&'a str>,
+    valid_stages: &'a [evin_flow::Spanned<String>],
+    workspace_name: &'a str,
+    include_stack: std::collections::HashSet<std::path::PathBuf>,
+    global_tasks: &'a mut Vec<TaskObject>,
+    discovered: &'a mut Vec<(String, String, usize)>,
+}
+
+fn parse_nested_namespaces(
+    include: &Option<crate::workspace::IncludeConfig>,
+    base: &std::path::Path,
+    parent_scope: &str,
+    inherited_env: &HashMap<String, String>,
+    inherited_values: &HashMap<String, String>,
+    context: &mut NamespaceParseContext<'_>,
+) -> Result<(), evin_diagnostic::Diagnostic> {
+    for (alias, file_path) in namespace_includes(include) {
+        let child_path =
+            crate::source::normalize(if std::path::Path::new(&file_path).is_absolute() {
+                std::path::PathBuf::from(&file_path)
+            } else {
+                base.join(&file_path)
+            });
+        if !context.include_stack.insert(child_path.clone()) {
+            return Err(evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                    .arg("file_path", child_path.display().to_string())
+                    .arg("error", "namespace include cycle detected"),
+            )
+            .with_file_location(child_path.display().to_string(), None, None));
+        }
+        if !context.source.exists(&child_path) {
+            return Err(evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                    .arg("file_path", &file_path)
+                    .arg("error", "included namespace file does not exist"),
+            )
+            .with_file_location(&file_path, None, None));
+        }
+        let child: crate::workspace::NamespaceFlow = load_flow(context.source, &child_path)?;
+        let child_name = alias.unwrap_or(child.namespace.name.clone());
+        let full_scope =
+            if child_name == parent_scope || child_name.starts_with(&format!("{parent_scope}:")) {
+                child_name
+            } else {
+                format!("{parent_scope}:{child_name}")
+            };
+        let env = overlay_document_variables(inherited_env, child.env);
+        let values = overlay_document_variables(inherited_values, child.values);
+        let source_file = child_path.display().to_string();
+        if let Some(tasks) = child.tasks {
+            let parsed = parse_tasks(
+                tasks,
+                TaskParseContext {
+                    namespace: Some(&full_scope),
+                    cwd: context.cwd,
+                    source_file: Some(&source_file),
+                    module_env: (!env.is_empty()).then_some(&env),
+                    module_values: Some(&values),
+                    valid_stages: context.valid_stages,
+                    workspace_name: Some(context.workspace_name),
+                },
+            )?;
+            let count = parsed.len();
+            context.global_tasks.extend(parsed);
+            context
+                .discovered
+                .push((full_scope.clone(), source_file.clone(), count));
+        }
+        parse_nested_namespaces(
+            &child.include,
+            child_path.parent().unwrap_or(base),
+            &full_scope,
+            &env,
+            &values,
+            context,
+        )?;
+        context.include_stack.remove(&child_path);
+    }
+    Ok(())
+}
+
 #[derive(Default, Clone, Copy)]
 pub struct TaskParseContext<'a> {
     pub namespace: Option<&'a str>,
@@ -363,6 +466,22 @@ pub fn load_workspace_tasks_from_sync(
             let namespace_doc: crate::workspace::NamespaceFlow = load_flow(source, &ns_path)?;
 
             let ns_name = explicit_name.unwrap_or(namespace_doc.namespace.name);
+            parse_nested_namespaces(
+                &namespace_doc.include,
+                ns_path.parent().unwrap_or(std::path::Path::new("")),
+                &ns_name,
+                &namespace_doc.env,
+                &namespace_doc.values,
+                &mut NamespaceParseContext {
+                    source,
+                    cwd: None,
+                    valid_stages: &valid_stages,
+                    workspace_name: &workspace.workspace.name,
+                    include_stack: std::collections::HashSet::from([ns_path.clone()]),
+                    global_tasks: &mut global_tasks,
+                    discovered: &mut modules_discovered,
+                },
+            )?;
 
             if let Some(tasks) = namespace_doc.tasks {
                 let parsed = parse_tasks(
@@ -495,11 +614,27 @@ pub fn load_workspace_tasks_from_sync(
                         let count = parsed.len();
                         global_tasks.extend(parsed);
                         modules_discovered.push((
-                            full_ns_name,
+                            full_ns_name.clone(),
                             ns_path.display().to_string(),
                             count,
                         ));
                     }
+                    parse_nested_namespaces(
+                        &namespace_doc.include,
+                        ns_path.parent().unwrap_or(std::path::Path::new("")),
+                        &full_ns_name,
+                        &combined_env,
+                        &combined_values,
+                        &mut NamespaceParseContext {
+                            source,
+                            cwd: Some(module_dir),
+                            valid_stages: &valid_stages,
+                            workspace_name: &workspace.workspace.name,
+                            include_stack: std::collections::HashSet::from([ns_path.clone()]),
+                            global_tasks: &mut global_tasks,
+                            discovered: &mut modules_discovered,
+                        },
+                    )?;
                 }
             }
         }

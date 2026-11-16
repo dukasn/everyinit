@@ -1,0 +1,44 @@
+#!evin/v1
+namespace:
+  name: release
+  description: "Release engineering and distribution pipelines"
+
+tasks:
+  doctor:
+    stage: Publish
+    description: "Report Linux musl release prerequisite availability"
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/check/doctor.esh
+
+  rehearse-start:
+    stage: Publish
+    description: "Record repository status before generating the release rehearsal"
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/check/rehearsal-clean.esh --snapshot
+
+  changelog-rehearse:
+    stage: Publish
+    description: "Generate and verify the candidate changelog in ignored output"
+    env: [RELEASE_VERSION]
+    needs: [release:rehearse-start]
+    steps:
+      - uses: evin/changelog@v1
+        with:
+          path: target/release-rehearsal/CHANGELOG.md
+          version: "${env.RELEASE_VERSION}"
+      - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh target/release-rehearsal/CHANGELOG.md
+      - run: cargo run --locked -p esh -- scripts/release/check/changelog.esh target/release-rehearsal/CHANGELOG.md "$RELEASE_VERSION"
+
+  rehearse:
+    stage: Publish
+    description: "Build and verify every release distribution without publishing"
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs:
+      - release:changelog-rehearse
+      - evin:pkg:dist-verify
+      - esh:pkg:dist-verify
+      - vscode:pkg:dist-verify
+      - npm:dist-verify
+      - site:verify
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/check/rehearsal-clean.esh

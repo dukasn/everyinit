@@ -6,7 +6,7 @@ workspace:
   install_hint: "cargo install --path crates/evin"
   hook_runner:
     command: cargo
-    args: [evin-dev]
+    args: [--quiet, evin-dev]
   modules:
     - docs/
     - apps/everyinit/
@@ -17,9 +17,6 @@ workspace:
     - editors/vscode/
   include:
     release: .evin/release.flow
-    "release:ci": .evin/release/ci.flow
-    "release:pkg": .evin/release/pkg.flow
-    "release:pub": .evin/release/pub.flow
 
 stages:
   - Build

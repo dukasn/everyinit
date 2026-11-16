@@ -133,6 +133,12 @@ fn index_document(
                 index_include_path_contexts(index, document, include, base);
             }
         }
+        DocumentKind::Namespace => {
+            if let Some(include) = mapping_get(ast, "include").or_else(|| mapping_get(ast, "includes")) {
+                let base = document.path.parent().unwrap_or(Path::new(""));
+                index_include_path_contexts(index, document, include, base.to_owned());
+            }
+        }
         _ => {}
     }
     if let Some(values) = mapping_get(ast, "values") {

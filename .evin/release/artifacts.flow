@@ -1,0 +1,210 @@
+#!evin/v1
+namespace:
+  name: release
+  description: "Release engineering and distribution pipelines"
+
+tasks:
+  notes:
+    stage: Publish
+    description: "Export the merged changelog section for the release"
+    env: [RELEASE_TAG]
+    steps:
+      - uses: evin/changelog@v1
+        with:
+          section: "${env.RELEASE_TAG}"
+          notes_path: target/release-notes.md
+      - run: cargo run --locked -p esh -- scripts/release/notes/add-channel-status.esh target/release-notes.md
+
+  stage:
+    stage: Publish
+    description: "Build and stage the two release binaries"
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    steps:
+      - run: rm -rf target/release-archives target/release-staging
+      - run: mkdir -p target/release-archives target/release-staging
+      - run: cargo build --release --locked --target "$RELEASE_TARGET" -p evin -p esh
+      - run: cargo run --locked -p esh -- scripts/release/check/binary.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/check/binary.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION"
+      - run: cargo run --locked -p esh -- scripts/release/package/stage.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
+      - run: cargo run --locked -p esh -- scripts/release/package/stage.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-staging
+
+  archives:
+    stage: Publish
+    description: "Archive Linux tar.gz release binaries"
+    cwd: target/release-staging
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs: [release:stage]
+    steps:
+      - uses: evin/archive@v1
+        with:
+          path: "../release-archives/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}.tar.gz"
+          include: ["evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"]
+          layout: relative
+      - uses: evin/archive@v1
+        with:
+          path: "../release-archives/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}.tar.gz"
+          include: ["esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/**/*"]
+          layout: relative
+
+  native:
+    stage: Publish
+    description: "Build Evin and ESH Debian and Arch packages"
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs:
+      - release:stage
+      - release:pkg:state
+    steps:
+      - uses: evin/archive@v1
+        with:
+          format: deb
+          output_dir: target/release-archives
+          architecture: x86_64
+          release: "${release:pkg:state.release}"
+          package:
+            name: evin
+            summary: Evin workflow engine
+            maintainer: Everyinit contributors
+            license: GPL-3.0-only
+            homepage: https://everyinit.dev
+            payload:
+              - source: "target/release-staging/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/evin"
+                strip_prefix: "target/release-staging/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: /usr/bin
+                mode: 493
+              - source: LICENSE
+                strip_prefix: .
+                destination: /usr/share/licenses/evin
+              - source: THIRD_PARTY_NOTICES.md
+                strip_prefix: .
+                destination: /usr/share/doc/evin
+              - source: LICENSES/**/*
+                strip_prefix: LICENSES
+                destination: /usr/share/licenses/evin/LICENSES
+            targets:
+              deb: {}
+      - uses: evin/archive@v1
+        with:
+          format: arch
+          output_dir: target/release-archives
+          architecture: x86_64
+          release: "${release:pkg:state.release}"
+          package:
+            name: evin
+            summary: Evin workflow engine
+            maintainer: Everyinit contributors
+            license: GPL-3.0-only
+            homepage: https://everyinit.dev
+            payload:
+              - source: "target/release-staging/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/evin"
+                strip_prefix: "target/release-staging/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: /usr/bin
+                mode: 493
+              - source: LICENSE
+                strip_prefix: .
+                destination: /usr/share/licenses/evin
+              - source: THIRD_PARTY_NOTICES.md
+                strip_prefix: .
+                destination: /usr/share/doc/evin
+              - source: LICENSES/**/*
+                strip_prefix: LICENSES
+                destination: /usr/share/licenses/evin/LICENSES
+            targets:
+              arch: {}
+      - uses: evin/archive@v1
+        with:
+          format: deb
+          output_dir: target/release-archives
+          architecture: x86_64
+          release: "${release:pkg:state.release}"
+          package:
+            name: esh
+            summary: ESH portable shell runtime
+            maintainer: Everyinit contributors
+            license: GPL-3.0-only
+            homepage: https://everyinit.dev
+            payload:
+              - source: "target/release-staging/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/esh"
+                strip_prefix: "target/release-staging/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: /usr/bin
+                mode: 493
+              - source: LICENSE
+                strip_prefix: .
+                destination: /usr/share/licenses/esh
+              - source: THIRD_PARTY_NOTICES.md
+                strip_prefix: .
+                destination: /usr/share/doc/esh
+              - source: LICENSES/**/*
+                strip_prefix: LICENSES
+                destination: /usr/share/licenses/esh/LICENSES
+            targets:
+              deb: {}
+      - uses: evin/archive@v1
+        with:
+          format: arch
+          output_dir: target/release-archives
+          architecture: x86_64
+          release: "${release:pkg:state.release}"
+          package:
+            name: esh
+            summary: ESH portable shell runtime
+            maintainer: Everyinit contributors
+            license: GPL-3.0-only
+            homepage: https://everyinit.dev
+            payload:
+              - source: "target/release-staging/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/esh"
+                strip_prefix: "target/release-staging/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin"
+                destination: /usr/bin
+                mode: 493
+              - source: LICENSE
+                strip_prefix: .
+                destination: /usr/share/licenses/esh
+              - source: THIRD_PARTY_NOTICES.md
+                strip_prefix: .
+                destination: /usr/share/doc/esh
+              - source: LICENSES/**/*
+                strip_prefix: LICENSES
+                destination: /usr/share/licenses/esh/LICENSES
+            targets:
+              arch: {}
+
+  vscode:
+    stage: Publish
+    description: "Package Everyinit VS Code extension for release"
+    env: [RELEASE_VERSION]
+    # Staging clears the shared archive directory before any package is written.
+    needs: [release:stage]
+    steps:
+      - run: npm --prefix editors/vscode run package
+      - run: mkdir -p target/release-archives
+      - run: cp editors/vscode/dist/github/everyinit-${RELEASE_VERSION}.vsix target/release-archives/
+
+  sign:
+    stage: Publish
+    description: "Cryptographically sign all release packages and manifests"
+    env: [RELEASE_VERSION, EVERYINIT_RELEASE_SIGNING_KEY, RELEASE_SIGNING_KEY, RELEASE_SIGNING_KEY_FILE]
+    needs:
+      - release:archives
+      - release:native
+      - release:vscode
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/package/sign.esh target/release-archives "$RELEASE_VERSION"
+
+  archives-verify:
+    stage: Publish
+    description: "Inspect all release archives, native packages, VS Code extension, and cryptographic signatures"
+    env: [RELEASE_TARGET, RELEASE_VERSION]
+    needs: [release:sign]
+    steps:
+      - run: cargo run --locked -p esh -- scripts/release/check/archive.esh evin "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
+      - run: cargo run --locked -p esh -- scripts/release/check/archive.esh esh "$RELEASE_TARGET" "$RELEASE_VERSION" target/release-archives
+      - run: cargo run --locked -p esh -- scripts/release/check/release-packages.esh target/release-archives "$RELEASE_VERSION" "$RELEASE_TARGET"
+
+  pkg:
+    stage: Publish
+    description: "Build release distributions for Evin, ESH, the editor extension, and npm integrations"
+    needs:
+      - release:ci:tag-verify
+      - evin:pkg:gh
+      - esh:pkg:gh
+      - vscode:pkg:gh
+      - npm:dist-verify

@@ -184,6 +184,8 @@ pub struct NamespaceConfig {
 #[serde(deny_unknown_fields)]
 pub struct NamespaceFlow {
     pub namespace: NamespaceConfig,
+    #[serde(default, alias = "includes")]
+    pub include: Option<IncludeConfig>,
     #[serde(default)]
     pub env: HashMap<String, String>,
     #[serde(default)]
@@ -392,6 +394,15 @@ pub const NAMESPACE_EDITOR_SCHEMA: EditorSchema = EditorSchema::Object(&[
     .required()
     .role(EditorRole::Namespace)
     .catalog("namespace"),
+    EditorField::new(
+        "include",
+        EDITOR_INCLUDE,
+        "flow-schema-nested-namespace-flow-files",
+    )
+    .catalog("namespace.include"),
+    EditorField::new("includes", EDITOR_INCLUDE, "flow-schema-alias-for-include")
+        .alias_of("include")
+        .catalog("namespace.include"),
     EditorField::new(
         "env",
         EDITOR_STRING_MAP,

@@ -177,8 +177,9 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     ] {
         assert!(identity.contains(value));
     }
-    let release = fs::read_to_string(root().join(".evin/release.flow")).unwrap();
-    let tasks = flow(".evin/release.flow");
+    let proposal = fs::read_to_string(root().join(".evin/release/proposal.flow")).unwrap();
+    let artifacts = fs::read_to_string(root().join(".evin/release/artifacts.flow")).unwrap();
+    let tasks = flow(".evin/release/proposal.flow");
     let bump = &tasks["tasks"]["bump"]["steps"][0]["with"];
     assert_eq!(bump["initial_version"].as_str(), Some("0.1.0"));
     assert!(bump["cargo_pre_1_0"].is_null());
@@ -195,9 +196,9 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         .unwrap()["with"];
     assert!(git["tag"].is_null(), "never tag an unmerged proposal");
     assert_eq!(git["enabled"].as_str(), Some("${release:bump.changed}"));
-    assert!(release.contains("evin/review-request@v1"));
-    assert!(release.contains("evin/archive@v1"));
-    let notes = &tasks["tasks"]["notes"]["steps"][0]["with"];
+    assert!(proposal.contains("evin/review-request@v1"));
+    assert!(artifacts.contains("evin/archive@v1"));
+    let notes = &flow(".evin/release/artifacts.flow")["tasks"]["notes"]["steps"][0]["with"];
     assert_eq!(notes["section"].as_str(), Some("${env.RELEASE_TAG}"));
     assert_eq!(
         notes["notes_path"].as_str(),
@@ -230,7 +231,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
 
 #[test]
 fn release_package_producers_wait_for_archive_directory_cleanup() {
-    let release = flow(".evin/release.flow");
+    let release = flow(".evin/release/artifacts.flow");
     let tasks = &release["tasks"];
     let sign_needs = tasks["sign"]["needs"].as_sequence().unwrap();
 
