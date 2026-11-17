@@ -1,9 +1,9 @@
-export type EvinCodeLanguage = "flow" | "esh";
+export type EvinCodeLanguage = "flow" | "esh" | "json";
 export const supportedCodeLanguages: readonly EvinCodeLanguage[];
 
 export interface EvinCodeToken {
   text: string;
-  /** Most specific TextMate scope from the VS Code Flow or ESH grammar. */
+  /** Most specific TextMate scope from the Flow, ESH, or JSON grammar. */
   scope: string | null;
   /** Full TextMate scope stack, from the language root to the token scope. */
   scopes: readonly string[];
@@ -15,7 +15,7 @@ export interface EvinCodeHighlighter {
   dispose(): void;
 }
 
-/** Initialize the shared VS Code TextMate grammars for use in web frameworks. */
+/** Initialize the Flow and ESH VS Code grammars plus JSON for web frameworks. */
 export function createCodeHighlighter(): Promise<EvinCodeHighlighter>;
 /** Tokenize using a shared, lazily initialized highlighter. */
 export function tokenizeCode(source: string, language: string | null | undefined): Promise<EvinCodeToken[]>;

@@ -37,6 +37,7 @@ const syntaxClass = (scope: string): string => {
   if (scope.startsWith("constant.character.escape.")) return "syntax-escape";
   if (scope.startsWith("entity.name.tag.enum.")) return "syntax-enum";
   if (scope.startsWith("keyword.control.property.")) return "syntax-key";
+  if (scope.startsWith("support.type.property-name.")) return "syntax-key";
   if (scope.startsWith("keyword.operator.")) return "syntax-punctuation";
   if (scope.startsWith("entity.name.type.directive.")) return "syntax-keyword";
   if (scope.startsWith("keyword.")) return "syntax-keyword";

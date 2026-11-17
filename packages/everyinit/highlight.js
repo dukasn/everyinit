@@ -1,5 +1,6 @@
 import { createHighlighterCore } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
+import jsonGrammar from "shiki/langs/json.mjs";
 import flowGrammar from "./grammars/flow.tmLanguage.json" with { type: "json" };
 import eshGrammar from "./grammars/esh.tmLanguage.json" with { type: "json" };
 
@@ -8,13 +9,15 @@ const languages = new Map([
   ["evin-flow", "flow"],
   ["esh", "esh"],
   ["evin-esh", "esh"],
+  ["json", "json"],
 ]);
 
-export const supportedCodeLanguages = Object.freeze(["flow", "esh"]);
+export const supportedCodeLanguages = Object.freeze(["flow", "esh", "json"]);
 
 const grammars = [
   { ...flowGrammar, name: "flow", aliases: ["evin-flow"] },
   { ...eshGrammar, name: "esh", aliases: ["evin-esh"] },
+  ...jsonGrammar,
 ];
 
 /** Return the canonical language ID for a supported Evin code language. */

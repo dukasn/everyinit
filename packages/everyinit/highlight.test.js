@@ -13,7 +13,7 @@ const scopes = (tokens) => new Set(tokens.flatMap((token) => token.scopes));
 const highlighter = await createCodeHighlighter();
 
 test("package grammars stay byte-for-byte aligned with the VS Code grammars", async () => {
-  for (const language of supportedCodeLanguages) {
+  for (const language of ["flow", "esh"]) {
     const [packageGrammar, extensionGrammar] = await Promise.all([
       readFile(new URL(`./grammars/${language}.tmLanguage.json`, import.meta.url), "utf8"),
       readFile(new URL(`../../editors/vscode/syntaxes/${language}.tmLanguage.json`, import.meta.url), "utf8"),
@@ -63,9 +63,10 @@ test("ESH tokens match variables, operators, and control scopes from VS Code", (
 });
 
 test("language aliases resolve and unknown languages remain plain text", async () => {
-  assert.deepEqual(supportedCodeLanguages, ["flow", "esh"]);
+  assert.deepEqual(supportedCodeLanguages, ["flow", "esh", "json"]);
   assert.equal(resolveCodeLanguage(".flow"), "flow");
   assert.equal(resolveCodeLanguage("EVIN-ESH"), "esh");
+  assert.equal(resolveCodeLanguage("JSON"), "json");
   assert.equal(resolveCodeLanguage("bash"), null);
   assert.deepEqual(await tokenizeCode("echo hi", "bash"), [
     { text: "echo hi", scope: null, scopes: [] },

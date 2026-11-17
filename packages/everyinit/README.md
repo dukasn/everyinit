@@ -36,12 +36,12 @@ const index = await loadSearchIndex("latest", "en");
 const results = searchDocs(index, "workspace configuration");
 ```
 
-## Flow and ESH code highlighting
+## Flow, ESH, and JSON code highlighting
 
 `everyinit/highlight` tokenizes Evin Flow and ESH with the same TextMate
-grammars used by the VS Code extension. Initialize one highlighter for the app,
-then render its source-preserving segments as spans, native elements, or theme
-tokens:
+grammars used by the VS Code extension, and also supports standard JSON.
+Initialize one highlighter for the app, then render its source-preserving
+segments as spans, native elements, or theme tokens:
 
 ```js
 import { createCodeHighlighter } from "everyinit/highlight";
@@ -51,14 +51,15 @@ const tokens = highlighter.tokenizeCode('workspace:\n  name: "site"\n', "flow");
 // [{ text: "workspace", scope: "comment.block.section.flow", scopes: [...] }, ...]
 ```
 
-`supportedCodeLanguages` lists the canonical identifiers: `flow` and `esh`
-(also `.flow`, `.esh`, `evin-flow`, and `evin-esh` are accepted). Unknown
-identifiers return the source as one unscoped token so integrations can keep
-their own highlighters as fallback. Tokens include both the most specific
-`scope` and the full `scopes` stack. The package uses Shiki's TextMate engine
-and Oniguruma WASM; framework integrations can use the grammar's full scope
-detail or map it into a smaller visual theme. `tokenizeCode` is also exported
-as an async helper that shares a lazily initialized highlighter.
+`supportedCodeLanguages` lists the canonical identifiers: `flow`, `esh`, and
+`json` (also `.flow`, `.esh`, `evin-flow`, and `evin-esh` are accepted).
+Unknown identifiers return the source as one unscoped token so integrations
+can keep their own highlighters as fallback. Tokens include both the most
+specific `scope` and the full `scopes` stack. The package uses Shiki's
+TextMate engine and Oniguruma WASM; framework integrations can use the
+grammar's full scope detail or map it into a smaller visual theme.
+`tokenizeCode` is also exported as an async helper that shares a lazily
+initialized highlighter.
 
 Framework adapters consume Evin's output; parsing, validation, and route
 semantics remain in the Evin CLI action.
