@@ -1,0 +1,47 @@
+name: Platform probe
+
+# Manual compatibility probes only; do not add these jobs to required checks.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Operating systems to probe
+        required: true
+        type: choice
+        options:
+          - both
+          - windows
+          - macos
+        default: both
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Experimental Windows probe
+    if: inputs.platform == 'both' || inputs.platform == 'windows'
+    runs-on: windows-2025
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-platform-probe
+      - name: Run exploratory workspace checks
+        run: cargo evin-dev run platform-probe
+
+  macos:
+    name: Experimental macOS probe
+    if: inputs.platform == 'both' || inputs.platform == 'macos'
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1-platform-probe
+      - name: Run exploratory workspace checks
+        run: cargo evin-dev run platform-probe

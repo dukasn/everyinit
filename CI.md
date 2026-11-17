@@ -12,9 +12,11 @@ supported.
   official Evin and ESH release artifacts.
 - Linux x86_64 behavior is the primary compatibility target. Local setup and
   validation should be documented and kept reliable on that target.
-- GitHub Actions runs on Linux x86_64 only for now, including end-to-end and
-  process-supervision checks. Other Linux architectures, macOS, and Windows
-  are not part of the current CI runner set or official CLI builds.
+- Required GitHub Actions checks run on Linux x86_64 only, including
+  end-to-end and process-supervision checks. A separate manual workflow probes
+  compilation and workspace tests on Windows and macOS to find portability
+  issues. Those exploratory runs do not add platform support or official CLI
+  builds for those systems.
 - The canonical task definitions live in Evin `.flow` files. CI should invoke
   those tasks through `cargo evin-dev` and keep workflow YAML focused on runner
   setup, credentials, and GitHub-specific orchestration.
@@ -39,7 +41,9 @@ supported.
   report the shared validation result.
 - Configure the `CI gate` job as the required status check on both protected
   branches. Keep direct pushes, force pushes, and deletions blocked by the
-  branch rulesets.
+  branch rulesets. Never require the experimental Windows/macOS probe: it is
+  expected to expose failures while those platforms are still outside the
+  support promise.
 - After successful main push CI, the Release workflow maintains a single
   release PR. Merging it (merge commit, squash, or rebase) starts a release only after
   exact-SHA main push CI succeeds. Evin builds, verifies, and cryptographically
@@ -69,3 +73,27 @@ user-facing support promise and release expectations, then add native CI
 coverage for the relevant build, test, and quality workflows. Until then,
 prioritize Linux x86_64 feature development and defer platform-specific work
 unless it is required by the architecture.
+
+## Experimental Windows and macOS probe
+
+The `Platform probe` workflow is available through `workflow_dispatch` only.
+Select the branch to inspect and choose Windows, macOS, or both. It runs the
+root Evin task `platform-probe`, which starts an ESH script to run
+`cargo check --workspace --all-targets --locked` and
+`cargo test --workspace --locked` on the selected native runner. The OS jobs
+are independent, so one platform's failure does not cancel the other's result.
+
+Dispatch it from the Actions tab, or use GitHub CLI:
+
+```sh
+gh workflow run platform-probe.yml --ref <branch> -f platform=both
+gh run watch
+```
+
+The probe intentionally reports failures instead of hiding them. It is an
+occasional portability investigation, not a required check, release gate, or
+claim that Evin and ESH support either operating system. Keep the protected
+branch requirement on the Linux `CI gate` job only. Broader support requires a
+separate decision about user-facing guarantees, contributor setup, and release
+artifacts. A passing probe only describes that commit; it does not establish
+compatibility across supported installation, release, and maintenance paths.

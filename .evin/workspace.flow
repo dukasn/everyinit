@@ -76,6 +76,12 @@ tasks:
       - esh:e2e
       - site:e2e
 
+  platform-probe:
+    stage: Test
+    description: "Probe workspace compilation and tests on experimental platforms"
+    steps:
+      - run: cargo run --locked -p esh -- scripts/ci/platform-probe.esh
+
   quality:
     stage: Check
     description: "Run Rust, documentation data, Cloudflare infra, and editor extension quality checks"
