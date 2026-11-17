@@ -14,8 +14,8 @@
 
 use crate::{GitHook, PolicyError};
 use evin_diagnostic::IssueCode;
-use evin_gitrules::models::GitRulesRoot;
-use evin_gitrules::validator::RulesValidator;
+use evin_repository_policy::models::RepositoryPolicy;
+use evin_repository_policy::validator::RepositoryPolicyValidator;
 use std::io::IsTerminal;
 use std::path::Path;
 
@@ -28,11 +28,11 @@ impl GitHook for PrePushHook {
 
     async fn enforce(
         &self,
-        rules: &GitRulesRoot,
+        rules: &RepositoryPolicy,
         repo_root: &Path,
         payload: &[String],
     ) -> Result<(), Vec<PolicyError>> {
-        let validator = RulesValidator::new(rules);
+        let validator = RepositoryPolicyValidator::new(rules);
         let mut violations = Vec::new();
         let remote_name = payload.first().map(|s| s.as_str()).unwrap_or("");
         let mut is_force_push = false;

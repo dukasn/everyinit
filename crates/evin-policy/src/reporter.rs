@@ -14,7 +14,7 @@
 
 use crate::PolicyError;
 use evin_diagnostic::{Diagnostic, IssueCode};
-use evin_gitrules::validator::ValidationError;
+use evin_repository_policy::validator::ValidationError;
 
 /// Converts policy validation errors into diagnostics.
 pub fn violations_to_diagnostics(errors: &[PolicyError]) -> Vec<Diagnostic> {

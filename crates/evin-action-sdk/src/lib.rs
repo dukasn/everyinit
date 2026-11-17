@@ -391,7 +391,7 @@ pub struct RunnerContext {
     pub git: std::sync::Arc<git::GitProvider>,
     pub secrets: std::sync::Arc<secrets::SecretsProvider>,
     pub dry_run: evin_io::DryRunState,
-    pub gitrules: std::sync::Arc<evin_gitrules::GitRulesRoot>,
+    pub policy: std::sync::Arc<evin_repository_policy::RepositoryPolicy>,
     pub http: std::sync::Arc<http::HttpClient>,
     pub cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
@@ -730,7 +730,7 @@ impl RunnerContext {
             git,
             secrets,
             dry_run,
-            gitrules: std::sync::Arc::new(evin_gitrules::GitRulesRoot::default()),
+            policy: std::sync::Arc::new(evin_repository_policy::RepositoryPolicy::default()),
             http,
             cancel_token: None,
         }
@@ -752,14 +752,14 @@ impl RunnerContext {
         self.dry_run.uncertainty_for(&self.task_name)
     }
 
-    /// Retrieves the globally resolved GitRules.
+    /// Retrieves the globally resolved RepositoryPolicy.
     /// Since the core engine always evaluates policies, this is guaranteed to return a valid schema.
-    pub fn gitrules(&self) -> &evin_gitrules::GitRulesRoot {
-        &self.gitrules
+    pub fn policy(&self) -> &evin_repository_policy::RepositoryPolicy {
+        &self.policy
     }
 
     pub fn tag_format(&self) -> &str {
-        self.gitrules
+        self.policy
             .tags
             .as_ref()
             .and_then(|t| t.name_format.as_ref())
@@ -770,7 +770,7 @@ impl RunnerContext {
 
     /// Safely gets whether signatures are required, defaulting to false
     pub fn require_signatures(&self) -> bool {
-        self.gitrules
+        self.policy
             .authorship
             .as_ref()
             .and_then(|a| a.policies.as_ref())

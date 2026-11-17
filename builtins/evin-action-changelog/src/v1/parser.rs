@@ -32,7 +32,7 @@ pub(super) struct ReleaseBlock {
 pub(super) fn parse_header(
     subject: &str,
     hash: &str,
-    parsed: Option<evin_gitrules::models::ParsedCommit>,
+    parsed: Option<evin_repository_policy::models::ParsedCommit>,
 ) -> Option<ParsedCommit> {
     if let Some(p) = parsed {
         return Some(ParsedCommit {

@@ -14,7 +14,7 @@
 
 use semver::{Prerelease, Version};
 
-use evin_gitrules::models::{Impact, VersioningStrategy};
+use evin_repository_policy::models::{Impact, VersioningStrategy};
 
 fn bump_base(v: &mut Version, impact: Impact, strategy: VersioningStrategy) {
     match (

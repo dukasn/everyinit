@@ -60,7 +60,7 @@ pub fn sync_phases() -> Vec<Box<dyn Phase>> {
 
 pub fn init_phases(
     workspace: bool,
-    gitrules: bool,
+    policy: bool,
     env: bool,
     all: bool,
     module: Option<String>,
@@ -70,7 +70,7 @@ pub fn init_phases(
         Box::new(ResolveInitPhase),
         Box::new(InitWorkspacePhase {
             workspace,
-            gitrules,
+            policy,
             env,
             all,
             module,

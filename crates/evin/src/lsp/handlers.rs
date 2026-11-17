@@ -367,7 +367,7 @@ impl EvinLspServer {
                     DocumentKind::Workspace => "workspace",
                     DocumentKind::Module => "module",
                     DocumentKind::Namespace => "namespace",
-                    DocumentKind::GitRules => "gitrules",
+                    DocumentKind::RepositoryPolicy => "policy",
                     DocumentKind::Environment => "environment",
                     DocumentKind::Unknown => "unknown",
                 };

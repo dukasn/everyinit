@@ -97,7 +97,7 @@ pub enum ManifestKind {
     Workspace,
     Module,
     Namespace,
-    GitRules,
+    RepositoryPolicy,
     Environment,
     Package,
 }
@@ -230,7 +230,7 @@ pub fn render_check(
                     tasks = manifest.task_count
                 )
             }
-            ManifestKind::GitRules => {
+            ManifestKind::RepositoryPolicy => {
                 evin_locales::t!("check-checked-rules", path = manifest.path.as_str())
             }
             ManifestKind::Environment => {
@@ -1042,9 +1042,9 @@ mod tests {
                         issues: Vec::new(),
                     },
                     CheckedManifest {
-                        path: ".evin/gitrules.flow".into(),
+                        path: ".evin/policy.json".into(),
                         task_count: 0,
-                        kind: ManifestKind::GitRules,
+                        kind: ManifestKind::RepositoryPolicy,
                         issues: Vec::new(),
                     },
                 ],
@@ -1063,7 +1063,7 @@ mod tests {
         let output = console::strip_ansi_codes(&output);
         assert!(output.contains("╭   Workspace › Check "));
         assert!(output.contains("Checked .evin/workspace.flow (5 tasks)"));
-        assert!(output.contains("Checked .evin/gitrules.flow"));
+        assert!(output.contains("Checked .evin/policy.json"));
         assert!(output.contains("Validation Summary"));
         assert!(output.contains("Status: Valid (0 errors, 0 warnings)"));
         assert!(output.contains("5 tasks, 2 stages, 0 modules, 0 namespaces"));

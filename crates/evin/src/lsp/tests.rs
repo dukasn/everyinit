@@ -90,7 +90,7 @@ fn workspace(root: &Path) {
     )
     .unwrap();
     std::fs::write(
-        root.join(".evin/environment.flow"),
+        root.join(".evin/environment.json"),
         "version: 1\nenvironments:\n  TOKEN:\n    type: secret\n",
     )
     .unwrap();
@@ -371,7 +371,7 @@ fn completion_honors_snippet_capability_and_environment_schema() {
     let mut server = EvinLspServer::default();
     initialize(&mut server, directory.path(), true);
     let mut output = Vec::new();
-    server.handle_message(&json!({ "jsonrpc": "2.0", "id": 2, "method": "textDocument/completion", "params": { "textDocument": { "uri": uri(directory.path(), ".evin/environment.flow") }, "position": { "line": 3, "character": 10 } } }).to_string(), &mut output).unwrap();
+    server.handle_message(&json!({ "jsonrpc": "2.0", "id": 2, "method": "textDocument/completion", "params": { "textDocument": { "uri": uri(directory.path(), ".evin/environment.json") }, "position": { "line": 3, "character": 10 } } }).to_string(), &mut output).unwrap();
     let message = bodies(output).pop().unwrap();
     let items = message["result"].as_array().unwrap();
     assert!(items.iter().any(|item| item["label"] == "secret"));
@@ -786,7 +786,7 @@ fn embedded_catalog_enriches_action_hover() {
 }
 
 #[test]
-fn gitrules_leaf_hover_keeps_type_and_uses_section_catalog() {
+fn policy_leaf_hover_keeps_type_and_uses_section_catalog() {
     let directory = tempfile::tempdir().unwrap();
     workspace(directory.path());
     let workspace_path = directory.path().join(".evin/workspace.flow");
@@ -795,13 +795,13 @@ fn gitrules_leaf_hover_keeps_type_and_uses_section_catalog() {
         &workspace_path,
         workspace_text.replace(
             "version: 1.0.0",
-            "version: 1.0.0, rules: .evin/gitrules.flow",
+            "version: 1.0.0, policy: .evin/policy.json",
         ),
     )
     .unwrap();
     std::fs::write(
-        directory.path().join(".evin/gitrules.flow"),
-        "commits:\n  message_format: '{type}: {description}'\n",
+        directory.path().join(".evin/policy.json"),
+        r#"{"$schema":"https://dl.everyinit.dev/schema/v1/policy","name":"test","commits":{"message_format":"{type}: {description}"}}"#,
     )
     .unwrap();
     let mut server = EvinLspServer::default();
@@ -810,8 +810,8 @@ fn gitrules_leaf_hover_keeps_type_and_uses_section_catalog() {
     server
         .handle_message(
             &json!({ "jsonrpc": "2.0", "id": 37, "method": "textDocument/hover", "params": {
-                "textDocument": { "uri": uri(directory.path(), ".evin/gitrules.flow") },
-                "position": { "line": 1, "character": 3 }
+                "textDocument": { "uri": uri(directory.path(), ".evin/policy.json") },
+                "position": { "line": 0, "character": 85 }
             }})
             .to_string(),
             &mut output,
@@ -824,11 +824,11 @@ fn gitrules_leaf_hover_keeps_type_and_uses_section_catalog() {
     assert!(value.contains("Commit message rules"), "{hover}");
     assert_eq!(
         hover["result"]["range"]["start"],
-        json!({ "line": 1, "character": 2 })
+        json!({ "line": 0, "character": 81 })
     );
     assert_eq!(
         hover["result"]["range"]["end"],
-        json!({ "line": 1, "character": 16 })
+        json!({ "line": 0, "character": 95 })
     );
 }
 
@@ -837,8 +837,8 @@ fn repository_flow_comments_never_hover_through_the_protocol() {
     let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let files = [
         ".evin/workspace.flow",
-        ".evin/environment.flow",
-        ".evin/gitrules.flow",
+        ".evin/environment.json",
+        ".evin/policy.json",
         ".evin/release.flow",
         "crates/esh/.evin/module.flow",
         "crates/evin/.evin/module.flow",
@@ -944,7 +944,7 @@ fn repository_flow_comments_never_hover_through_the_protocol() {
 }
 
 #[test]
-fn gitrules_comment_hover_returns_null() {
+fn policy_comment_hover_returns_null() {
     let directory = tempfile::tempdir().unwrap();
     workspace(directory.path());
     let workspace_path = directory.path().join(".evin/workspace.flow");
@@ -953,22 +953,28 @@ fn gitrules_comment_hover_returns_null() {
         &workspace_path,
         workspace_text.replace(
             "version: 1.0.0",
-            "version: 1.0.0, rules: .evin/gitrules.flow",
+            "version: 1.0.0, policy: .evin/policy.json",
         ),
     )
     .unwrap();
-    let gitrules_text = "#!evin/v1\nversion: 1\ncommits:\n  # The conventional commit format used for all commit messages.\n  # Can be a single string or an array of acceptable formats.\n  message_format:\n    - \"{type}: {description}\"\n";
-    std::fs::write(directory.path().join(".evin/gitrules.flow"), gitrules_text).unwrap();
+    let policy_text = r#"{
+  "$schema": "https://dl.everyinit.dev/schema/v1/policy",
+  "name": "test",
+  "commits": {
+    "message_format": ["{type}: {description}"]
+  }
+}"#;
+    std::fs::write(directory.path().join(".evin/policy.json"), policy_text).unwrap();
     let mut server = EvinLspServer::default();
     initialize(&mut server, directory.path(), false);
 
-    // Hover over comment line ("  # The conventional...")
+    // Whitespace and delimiters are not semantic fields.
     let mut output = Vec::new();
     server
         .handle_message(
             &json!({ "jsonrpc": "2.0", "id": 50, "method": "textDocument/hover", "params": {
-                "textDocument": { "uri": uri(directory.path(), ".evin/gitrules.flow") },
-                "position": { "line": 3, "character": 5 }
+                "textDocument": { "uri": uri(directory.path(), ".evin/policy.json") },
+                "position": { "line": 4, "character": 2 }
             }})
             .to_string(),
             &mut output,
@@ -977,34 +983,40 @@ fn gitrules_comment_hover_returns_null() {
     let hover = bodies(output).pop().unwrap();
     assert_eq!(hover["result"], serde_json::Value::Null, "{hover}");
 
-    // Hover over header comment line ("#!evin/v1")
+    // The schema reference is a semantic JSON property.
     let mut output = Vec::new();
     server
         .handle_message(
             &json!({ "jsonrpc": "2.0", "id": 51, "method": "textDocument/hover", "params": {
-                "textDocument": { "uri": uri(directory.path(), ".evin/gitrules.flow") },
-                "position": { "line": 0, "character": 2 }
+                "textDocument": { "uri": uri(directory.path(), ".evin/policy.json") },
+                "position": { "line": 1, "character": 5 }
             }})
             .to_string(),
             &mut output,
         )
         .unwrap();
     let hover = bodies(output).pop().unwrap();
-    assert_eq!(hover["result"], serde_json::Value::Null, "{hover}");
+    assert!(
+        hover["result"]["contents"]["value"]
+            .as_str()
+            .unwrap()
+            .contains("Policy schema URI"),
+        "{hover}"
+    );
 
-    // Now test with the full repository gitrules.flow
-    let full_gitrules = std::fs::read_to_string("../../.evin/gitrules.flow").unwrap();
-    std::fs::write(directory.path().join(".evin/gitrules.flow"), &full_gitrules).unwrap();
+    // Check whitespace in the full repository policy document.
+    let full_policy = std::fs::read_to_string("../../.evin/policy.json").unwrap();
+    std::fs::write(directory.path().join(".evin/policy.json"), &full_policy).unwrap();
     let mut server = EvinLspServer::default();
     initialize(&mut server, directory.path(), false);
 
-    // Hover over comment under branches: (line 64 in file -> 0-indexed line 63)
+    // Hover over whitespace before the branches property.
     let mut output = Vec::new();
     server
         .handle_message(
             &json!({ "jsonrpc": "2.0", "id": 52, "method": "textDocument/hover", "params": {
-                "textDocument": { "uri": uri(directory.path(), ".evin/gitrules.flow") },
-                "position": { "line": 63, "character": 5 }
+                "textDocument": { "uri": uri(directory.path(), ".evin/policy.json") },
+                "position": { "line": 95, "character": 2 }
             }})
             .to_string(),
             &mut output,
@@ -1016,7 +1028,7 @@ fn gitrules_comment_hover_returns_null() {
 }
 
 #[test]
-fn gitrules_unicode_hover_and_tokens_use_utf16_ranges() {
+fn policy_unicode_hover_and_tokens_use_utf16_ranges() {
     let directory = tempfile::tempdir().unwrap();
     workspace(directory.path());
     let workspace_path = directory.path().join(".evin/workspace.flow");
@@ -1025,19 +1037,19 @@ fn gitrules_unicode_hover_and_tokens_use_utf16_ranges() {
         &workspace_path,
         workspace_text.replace(
             "version: 1.0.0",
-            "version: 1.0.0, rules: .evin/gitrules.flow",
+            "version: 1.0.0, policy: .evin/policy.json",
         ),
     )
     .unwrap();
-    let text = "commits: { fields: { café: { allowed_values: [feat] } }, message_format: \"{type}: descrição\" }\n";
-    std::fs::write(directory.path().join(".evin/gitrules.flow"), text).unwrap();
+    let text = r#"{"$schema":"https://dl.everyinit.dev/schema/v1/policy","name":"test","commits":{"fields":{"café":{"allowed_values":["feat"]}},"message_format":"{type}: descrição"}}"#;
+    std::fs::write(directory.path().join(".evin/policy.json"), text).unwrap();
     let mut server = EvinLspServer::default();
     initialize(&mut server, directory.path(), false);
-    let rules_uri = uri(directory.path(), ".evin/gitrules.flow");
+    let rules_uri = uri(directory.path(), ".evin/policy.json");
     for (needle, expected) in [
         ("café", "café"),
         ("message_format", "message_format"),
-        ("descrição", "\"{type}: descrição\""),
+        ("descrição", "{type}: descrição"),
     ] {
         let offset = text.find(needle).unwrap();
         let character = text[..offset].encode_utf16().count() as u32;
@@ -1071,43 +1083,10 @@ fn gitrules_unicode_hover_and_tokens_use_utf16_ranges() {
             .0;
         assert_eq!(&text[raw_start..raw_end], expected, "{hover}");
     }
-    let mut output = Vec::new();
-    server
-        .handle_message(
-            &json!({ "jsonrpc": "2.0", "id": 40, "method": "textDocument/semanticTokens/full", "params": {
-                "textDocument": { "uri": rules_uri }
-            }})
-            .to_string(),
-            &mut output,
-        )
-        .unwrap();
-    let response = bodies(output).pop().unwrap();
-    let tokens = decode_semantic_tokens(response["result"]["data"].as_array().unwrap());
-    let cafe_start = text[..text.find("café").unwrap()].encode_utf16().count() as u32;
-    let property = STANDARD_SEMANTIC_TOKEN_TYPES
-        .iter()
-        .position(|name| *name == "property")
-        .unwrap() as u32;
-    assert!(tokens.contains(&(0, cafe_start, 4, property)), "{tokens:?}");
-    let raw_value = "\"{type}: descrição\"";
-    let value_start = text[..text.find(raw_value).unwrap()].encode_utf16().count() as u32;
-    let string = STANDARD_SEMANTIC_TOKEN_TYPES
-        .iter()
-        .position(|name| *name == "string")
-        .unwrap() as u32;
-    assert!(
-        tokens.contains(&(
-            0,
-            value_start,
-            raw_value.encode_utf16().count() as u32,
-            string
-        )),
-        "{tokens:?}"
-    );
 }
 
 #[test]
-fn gitrules_schema_diagnostics_keep_unaffected_leaf_hover() {
+fn policy_schema_diagnostics_keep_unaffected_leaf_hover() {
     let directory = tempfile::tempdir().unwrap();
     workspace(directory.path());
     let workspace_path = directory.path().join(".evin/workspace.flow");
@@ -1116,18 +1095,14 @@ fn gitrules_schema_diagnostics_keep_unaffected_leaf_hover() {
         &workspace_path,
         workspace_text.replace(
             "version: 1.0.0",
-            "version: 1.0.0, rules: .evin/gitrules.flow",
+            "version: 1.0.0, policy: .evin/policy.json",
         ),
     )
     .unwrap();
-    std::fs::write(
-        directory.path().join(".evin/gitrules.flow"),
-        "commits: {}\n",
-    )
-    .unwrap();
+    std::fs::write(directory.path().join(".evin/policy.json"), "commits: {}\n").unwrap();
     let mut server = EvinLspServer::default();
     initialize(&mut server, directory.path(), false);
-    let rules_uri = uri(directory.path(), ".evin/gitrules.flow");
+    let rules_uri = uri(directory.path(), ".evin/policy.json");
     let text = "commits:\n  message_format: '{type}: {description}'\n  policies:\n    surprise: true\n    require_body: no\nreleases:\n  packages:\n    app: { watch: [] }\n";
     let mut output = Vec::new();
     server

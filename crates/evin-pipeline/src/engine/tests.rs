@@ -68,10 +68,10 @@ impl evin_action_sdk::Action for ValuesAction {
     }
 }
 
-struct GitRulesAction;
+struct RepositoryPolicyAction;
 
 #[async_trait::async_trait]
-impl evin_action_sdk::Action for GitRulesAction {
+impl evin_action_sdk::Action for RepositoryPolicyAction {
     fn validate_config(
         &self,
         _with: Option<&evin_flow::SpannedValue>,
@@ -85,7 +85,7 @@ impl evin_action_sdk::Action for GitRulesAction {
         _with: Option<evin_flow::SpannedValue>,
     ) -> Result<(), evin_diagnostic::Diagnostic> {
         let format = ctx
-            .gitrules()
+            .policy()
             .commits
             .as_ref()
             .unwrap()
@@ -361,14 +361,14 @@ async fn merges_workspace_module_and_task_values_for_native_actions() {
 }
 
 #[tokio::test]
-async fn test_gitrules_injected_into_context() {
+async fn test_policy_injected_into_context() {
     let mut resolver = DagResolver::new();
-    let mut task = new_task("gitrules_test", None, "");
+    let mut task = new_task("policy_test", None, "");
     task.run = None;
     task.steps = Some(vec![evin_config::models::StepObject {
         run: None,
         uses: Some(evin_flow::Spanned::new(
-            "gitrules_action".to_string(),
+            "policy_action".to_string(),
             evin_flow::Span::default(),
         )),
         with: None,
@@ -383,12 +383,12 @@ async fn test_gitrules_injected_into_context() {
         None,
     );
 
-    let rules = evin_gitrules::GitRulesRoot {
+    let rules = evin_repository_policy::RepositoryPolicy {
         version: 1,
         name: "test".to_string(),
         description: None,
-        commits: Some(evin_gitrules::CommitsNamespace {
-            message_format: Some(evin_gitrules::FormatList::Single(
+        commits: Some(evin_repository_policy::CommitsNamespace {
+            message_format: Some(evin_repository_policy::FormatList::Single(
                 "{type}: {description}".to_string(),
             )),
             ignore_patterns: vec![],
@@ -407,8 +407,8 @@ async fn test_gitrules_injected_into_context() {
         remotes: None,
     };
 
-    engine.config.gitrules = Some(std::sync::Arc::new(rules));
-    engine.register_action("gitrules_action", Box::new(GitRulesAction));
+    engine.config.policy = Some(std::sync::Arc::new(rules));
+    engine.register_action("policy_action", Box::new(RepositoryPolicyAction));
 
     let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
     let report = engine.execute(resolver, log_tx).await;

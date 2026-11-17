@@ -478,7 +478,7 @@ impl PipelineEngine {
         let invocation_flags = self.config.invocation_flags.clone();
         let actions = self.state.actions.clone();
         let needs = task.needs.clone().unwrap_or_default();
-        let gitrules = self.config.gitrules.clone();
+        let policy = self.config.policy.clone();
         let workspace_name = self.config.workspace_name.clone();
 
         join_set.spawn(async move {
@@ -582,9 +582,9 @@ impl PipelineEngine {
                     .debug_event(evin_action_sdk::debug::TaskWorkingDirectory { path });
             }
 
-            // Pass the globally resolved gitrules down to the action context
-            if let Some(r) = gitrules {
-                ctx.gitrules = r;
+            // Pass the globally resolved policy down to the action context
+            if let Some(r) = policy {
+                ctx.policy = r;
             }
 
             for dep in &unverified_inputs {

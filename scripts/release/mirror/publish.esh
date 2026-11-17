@@ -48,6 +48,14 @@ for FILE_PATH in $(glob "$MIRROR_ROOT/**"); do
   esac
 done
 
+if test "$MODE" = all || test "$MODE" = objects; then
+  for NAME in policy environment; do
+    FILE_PATH="schemas/v1/$NAME.schema.json"
+    assert [ -f "$FILE_PATH" ] "configuration schema is missing: $FILE_PATH"
+    assert [ "$(json -g '$id' "$FILE_PATH")" = "https://dl.everyinit.dev/schema/v1/$NAME" ] "configuration schema has an unexpected id: $FILE_PATH"
+  done
+fi
+
 SOURCE_COMMIT=""
 for BINARY in evin esh; do
   DIRECTORY="$MIRROR_ROOT/$BINARY/$CHANNEL/v$VERSION"
@@ -91,5 +99,12 @@ for FILE_PATH in $(glob "$MIRROR_ROOT/**"); do
   if test "$MODE" != all && test "$MODE" != "$KIND"; then continue; fi
   corepack npm exec -- wrangler r2 object put "$BUCKET/$KEY" --file "$FILE_PATH" --remote --config infra/mirror/wrangler.toml
 done
+
+if test "$MODE" = all || test "$MODE" = objects; then
+  for NAME in policy environment; do
+    FILE_PATH="schemas/v1/$NAME.schema.json"
+    corepack npm exec -- wrangler r2 object put "$BUCKET/schema/v1/$NAME.schema.json" --file "$FILE_PATH" --remote --config infra/mirror/wrangler.toml
+  done
+fi
 
 echo "Published $MODE for $CHANNEL $VERSION mirror objects for Evin and ESH"

@@ -124,10 +124,10 @@ configuration-resolution-failed = Configuration resolution failed
 task-failed = [{ $task_name }] failed
 task-unverified = [{ $task_name }] unverified
 
-msg-gitrules-local = Loaded local custom gitrules from { $path }
-msg-gitrules-remote-cached = Loaded remote cached custom gitrules from { $url }
-msg-gitrules-remote-fetched = Loaded remote fetched custom gitrules from { $url }
-msg-gitrules-fallback = Loaded default fallback gitrules
+msg-policy-local = Loaded local custom policy from { $path }
+msg-policy-remote-cached = Loaded remote cached custom policy from { $url }
+msg-policy-remote-fetched = Loaded remote fetched custom policy from { $url }
+msg-policy-fallback = Loaded default fallback policy
 msg-workspace-modules = Detected { $count } workspace modules: { $formatted }
 msg-workspace-value-single = Registered 1 workspace value
 msg-workspace-values-plural = Registered { $count } workspace values

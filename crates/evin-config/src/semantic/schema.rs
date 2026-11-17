@@ -64,14 +64,14 @@ pub fn configuration_catalog_targets() -> BTreeSet<CatalogTarget> {
         CatalogTarget::configuration_path(&["module"]),
         CatalogTarget::configuration_path(&["namespace"]),
         CatalogTarget::configuration_path(&["environment"]),
-        CatalogTarget::configuration_path(&["GitRules"]),
+        CatalogTarget::configuration_path(&["RepositoryPolicy"]),
     ]);
     for (schema, root) in [
         (crate::workspace::WORKSPACE_EDITOR_SCHEMA, "workspace"),
         (crate::workspace::MODULE_EDITOR_SCHEMA, "module"),
         (crate::workspace::NAMESPACE_EDITOR_SCHEMA, "namespace"),
         (crate::environment::EDITOR_SCHEMA, "environment"),
-        (evin_gitrules::editor_schema::GITRULES_SCHEMA, "GitRules"),
+        (evin_repository_policy::editor_schema::POLICY_SCHEMA, "RepositoryPolicy"),
     ] {
         collect_schema_targets(schema, root, &mut targets);
     }

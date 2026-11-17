@@ -38,6 +38,8 @@
 !/playwright.config.mjs
 !/scripts/
 !/tests/
+!/schemas/
+!/templates/
 !/packages/
 !/apps/
 !/.vscode/

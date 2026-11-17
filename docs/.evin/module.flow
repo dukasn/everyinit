@@ -16,7 +16,7 @@ tasks:
             - 30.module-configuration.4510.md
             - 35.namespace-configuration.4515.md
             - 40.environment-configuration.4520.md
-            - 50.git-rules-configuration.4530.md
+            - 50.repository-policy-configuration.4530.md
             - actions/10.documentation-action.5100.md
             - actions/15.catalog-action.5170.md
             - actions/20.archive-action.5110.md

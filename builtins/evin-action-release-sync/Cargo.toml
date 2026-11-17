@@ -12,7 +12,7 @@ evin-action-sdk = { workspace = true }
 evin-release-sync = { workspace = true }
 evin-diagnostic = { workspace = true }
 evin-git = { workspace = true }
-evin-gitrules = { workspace = true }
+evin-repository-policy = { workspace = true }
 evin-locales = { workspace = true }
 evin-flow = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

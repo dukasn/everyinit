@@ -2,7 +2,7 @@
 workspace:
   name: main
   version: "0.2.10"
-  rules: ".evin/gitrules.flow"
+  policy: ".evin/policy.json"
   install_hint: "cargo install --path crates/evin"
   hook_runner:
     command: cargo

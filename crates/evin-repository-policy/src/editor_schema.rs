@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Editor-facing shape of GitRules. Keep this beside the serde models and
+//! Editor-facing shape of RepositoryPolicy. Keep this beside the serde models and
 //! cover its field names against serialization in tests.
 
 use evin_flow::schema::{Field, Schema, ValueConstraint};
@@ -72,7 +72,7 @@ const COMMITS: Schema = Schema::Object(&[
     Field::new(
         "message_format",
         FORMAT,
-        "flow-schema-commit-message-template-or-alternative-templates-placeholders-capture-fields-optional-groups-and-patterns-follow-the-gitrules-template-syntax",
+        "flow-schema-commit-message-template-or-alternative-templates-placeholders-capture-fields-optional-groups-and-patterns-follow-the-policy-template-syntax",
     )
     .constraints(&[ValueConstraint::GitTemplate]),
     Field::new(
@@ -462,13 +462,15 @@ const REMOTES: Schema = Schema::Object(&[Field::new(
     "flow-schema-remote-push-policies",
 )]);
 
-pub const GITRULES_SCHEMA: Schema = Schema::Object(&[
+pub const POLICY_SCHEMA: Schema = Schema::Object(&[
     Field::new(
-        "version",
-        Schema::Integer,
-        "flow-schema-gitrules-specification-version",
+        "$schema",
+        Schema::String,
+        "flow-schema-policy-json-schema-uri",
     )
-    .non_nullable(),
+    .required()
+    .non_nullable()
+    .catalog("RepositoryPolicy.$schema"),
     Field::new(
         "name",
         Schema::String,
@@ -485,55 +487,56 @@ pub const GITRULES_SCHEMA: Schema = Schema::Object(&[
         COMMITS,
         "flow-schema-commit-message-and-validation-rules",
     )
-    .catalog("GitRules.commits"),
+    .catalog("RepositoryPolicy.commits"),
     Field::new(
         "branches",
         BRANCHES,
         "flow-schema-branch-naming-and-protection-rules",
     )
-    .catalog("GitRules.branches"),
+    .catalog("RepositoryPolicy.branches"),
     Field::new(
         "releases",
         RELEASES,
         "flow-schema-release-and-package-policies",
     )
-    .catalog("GitRules.releases"),
+    .catalog("RepositoryPolicy.releases"),
     Field::new(
         "authorship",
         AUTHORSHIP,
         "flow-schema-author-identity-policies",
     )
-    .catalog("GitRules.authorship"),
+    .catalog("RepositoryPolicy.authorship"),
     Field::new("history", HISTORY, "flow-schema-history-integrity-policies")
-        .catalog("GitRules.history"),
+        .catalog("RepositoryPolicy.history"),
     Field::new(
         "tags",
         TAGS,
         "flow-schema-tag-naming-and-lifecycle-policies",
     )
-    .catalog("GitRules.tags"),
+    .catalog("RepositoryPolicy.tags"),
     Field::new(
         "pull_requests",
         PULL_REQUESTS,
         "flow-schema-pull-request-governance-policies",
     )
-    .catalog("GitRules.pull_requests"),
+    .catalog("RepositoryPolicy.pull_requests"),
     Field::new(
         "files",
         FILES,
         "flow-schema-file-naming-and-content-policies",
     )
-    .catalog("GitRules.files"),
-    Field::new("lfs", LFS, "flow-schema-git-lfs-policies").catalog("GitRules.lfs"),
+    .catalog("RepositoryPolicy.files"),
+    Field::new("lfs", LFS, "flow-schema-git-lfs-policies").catalog("RepositoryPolicy.lfs"),
     Field::new("submodules", SUBMODULES, "flow-schema-submodule-policies")
-        .catalog("GitRules.submodules"),
-    Field::new("remotes", REMOTES, "flow-schema-remote-push-policies").catalog("GitRules.remotes"),
+        .catalog("RepositoryPolicy.submodules"),
+    Field::new("remotes", REMOTES, "flow-schema-remote-push-policies")
+        .catalog("RepositoryPolicy.remotes"),
 ]);
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::GitRulesRoot;
+    use crate::models::RepositoryPolicy;
     use serde_json::{Value, json};
 
     fn example(schema: Schema) -> Value {
@@ -590,9 +593,9 @@ mod tests {
 
     #[test]
     fn schema_field_names_and_types_match_serde_models() {
-        let source = example(GITRULES_SCHEMA);
-        let typed: GitRulesRoot = serde_json::from_value(source).unwrap();
+        let source = example(POLICY_SCHEMA);
+        let typed: RepositoryPolicy = serde_json::from_value(source).unwrap();
         let serialized = serde_json::to_value(typed).unwrap();
-        assert_shape(GITRULES_SCHEMA, &serialized);
+        assert_shape(POLICY_SCHEMA, &serialized);
     }
 }

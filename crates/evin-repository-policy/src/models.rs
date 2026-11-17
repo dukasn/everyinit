@@ -15,7 +15,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum FormatList {
     Single(String),
@@ -31,11 +31,12 @@ impl FormatList {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
-pub struct GitRulesRoot {
-    pub version: u32,
+pub struct RepositoryPolicy {
+    #[serde(rename = "$schema")]
+    pub schema: String,
     pub name: String,
     pub description: Option<String>,
     pub commits: Option<CommitsNamespace>,
@@ -51,11 +52,11 @@ pub struct GitRulesRoot {
     pub remotes: Option<RemotesNamespace>,
 }
 
-impl Default for GitRulesRoot {
+impl Default for RepositoryPolicy {
     fn default() -> Self {
         Self {
-            version: 1,
-            name: "Default GitRules Standard".to_string(),
+            schema: "https://dl.everyinit.dev/schema/v1/policy".to_string(),
+            name: "Default Repository Policy".to_string(),
             description: Some(
                 "Provides standard conventional commits and safety defaults.".to_string(),
             ),
@@ -73,7 +74,7 @@ impl Default for GitRulesRoot {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ParsedCommit {
     pub commit_type: String,
     pub scope: Option<String>,
@@ -81,7 +82,7 @@ pub struct ParsedCommit {
     pub is_breaking: bool,
 }
 
-impl GitRulesRoot {
+impl RepositoryPolicy {
     pub fn parse_commit_message(&self, message: &str) -> Option<ParsedCommit> {
         let commits_ns = self.commits.as_ref()?;
         let format_list = commits_ns.message_format.as_ref()?;
@@ -213,7 +214,9 @@ impl GitRulesRoot {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    schemars::JsonSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum Impact {
     None = 0,
     Patch = 1,
@@ -221,7 +224,7 @@ pub enum Impact {
     Major = 3,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct CommitsNamespace {
@@ -280,7 +283,7 @@ impl Default for CommitsNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FieldConstraint {
     pub must_be: Option<String>,
@@ -289,7 +292,7 @@ pub struct FieldConstraint {
     pub max_length: Option<usize>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct CommitPolicies {
     pub require_body: Option<bool>,
@@ -298,7 +301,7 @@ pub struct CommitPolicies {
     pub require_ticket_reference: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct BranchesNamespace {
@@ -349,7 +352,7 @@ impl Default for BranchesNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct PrereleaseConfig {
@@ -357,13 +360,13 @@ pub struct PrereleaseConfig {
     pub channels: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct BranchPolicies {
     pub block_push_to_main: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct ReleasesNamespace {
@@ -475,7 +478,9 @@ impl Default for ReleasesNamespace {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    schemars::JsonSchema, Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum VersioningStrategy {
     #[default]
@@ -483,13 +488,15 @@ pub enum VersioningStrategy {
     Cargo,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, default)]
 pub struct VersioningConfig {
     pub strategy: VersioningStrategy,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(
+    schemars::JsonSchema, Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageRevisionScope {
     #[default]
@@ -497,13 +504,13 @@ pub enum PackageRevisionScope {
     Target,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, default)]
 pub struct PackageRevisionPolicy {
     pub scope: PackageRevisionScope,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct PackageReleasePolicy {
     pub watch: Vec<String>,
@@ -512,7 +519,7 @@ pub struct PackageReleasePolicy {
     pub revision: PackageRevisionPolicy,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "lowercase")]
 pub enum VersionBump {
     Major,
@@ -521,14 +528,14 @@ pub enum VersionBump {
     None,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ChangeTypeDefinition {
     pub bump: VersionBump,
     pub changelog_section: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields, default)]
 #[derive(Default)]
 pub struct TicketLinking {
@@ -536,21 +543,21 @@ pub struct TicketLinking {
     pub url_template: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ChangelogConfig {
     pub ticket_linking: Option<TicketLinking>,
     pub host_integration: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ReleasePolicies {
     pub breaking_change_bump: Option<VersionBump>,
     pub pre_release_prefix: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct AuthorshipNamespace {
@@ -570,14 +577,14 @@ impl Default for AuthorshipNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct AuthorshipPolicies {
     pub require_signatures: Option<bool>,
     pub block_identity_forging: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct HistoryNamespace {
@@ -597,21 +604,21 @@ impl Default for HistoryNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ContentBlock {
     pub pattern: String,
     pub error_message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct HistoryPolicies {
     pub require_linear_history: Option<bool>,
     pub max_staged_file_size: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct TagsNamespace {
@@ -631,14 +638,14 @@ impl Default for TagsNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct TagPolicies {
     pub require_annotated: Option<bool>,
     pub block_deletion: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct PullRequestsNamespace {
@@ -661,7 +668,7 @@ impl Default for PullRequestsNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct PullRequestPolicies {
     pub require_assignee: Option<bool>,
@@ -670,7 +677,7 @@ pub struct PullRequestPolicies {
     pub block_wip_prefixes: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct FilesNamespace {
@@ -693,7 +700,7 @@ impl Default for FilesNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct ContentRule {
     pub name: String,
@@ -706,14 +713,14 @@ pub struct ContentRule {
     pub error_message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct FilesPolicies {
     #[serde(default)]
     pub block_paths: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct LfsNamespace {
@@ -737,7 +744,7 @@ impl Default for LfsNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct LfsPolicies {
     #[serde(default)]
@@ -745,7 +752,7 @@ pub struct LfsPolicies {
     pub require_lfs_installed: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct SubmodulesNamespace {
@@ -763,7 +770,7 @@ impl Default for SubmodulesNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct SubmodulePolicies {
     pub allow_creation: Option<bool>,
@@ -771,7 +778,7 @@ pub struct SubmodulePolicies {
     pub allowed_hosts: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 #[serde(default)]
 pub struct RemotesNamespace {
@@ -790,7 +797,7 @@ impl Default for RemotesNamespace {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RemotePolicies {
     #[serde(default)]
@@ -800,15 +807,13 @@ pub struct RemotePolicies {
     pub require_up_to_date: Option<bool>,
 }
 
-impl evin_flow::YamlDocument for GitRulesRoot {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_parse_commit_message_conventional() {
-        let rules = GitRulesRoot::default();
+        let rules = RepositoryPolicy::default();
         let parsed = rules
             .parse_commit_message("feat(auth): add OAuth2 login")
             .unwrap();
@@ -821,7 +826,7 @@ mod tests {
 
     #[test]
     fn test_parse_commit_message_breaking_change() {
-        let rules = GitRulesRoot::default();
+        let rules = RepositoryPolicy::default();
         let parsed = rules
             .parse_commit_message("fix(api)!: breaking change in response")
             .unwrap();
@@ -832,7 +837,7 @@ mod tests {
 
     #[test]
     fn test_determine_bump() {
-        let rules = GitRulesRoot::default();
+        let rules = RepositoryPolicy::default();
 
         let feat = rules.parse_commit_message("feat: new feature").unwrap();
         assert_eq!(rules.determine_bump(&feat), Impact::Minor);
@@ -846,7 +851,7 @@ mod tests {
 
     #[test]
     fn test_get_changelog_section() {
-        let rules = GitRulesRoot::default();
+        let rules = RepositoryPolicy::default();
 
         let feat = rules.parse_commit_message("feat: add feature").unwrap();
         assert_eq!(rules.get_changelog_section(&feat), "Features");
@@ -857,7 +862,7 @@ mod tests {
 
     #[test]
     fn test_format_ticket_links() {
-        let mut rules = GitRulesRoot::default();
+        let mut rules = RepositoryPolicy::default();
 
         let mut releases = ReleasesNamespace::default();
         let changelog = ChangelogConfig {

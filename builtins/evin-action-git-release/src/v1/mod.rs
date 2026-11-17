@@ -77,7 +77,7 @@ pub async fn execute(
     let commit_msg_template = if let Some(m) = &config.message {
         m.clone()
     } else if let Some(m) = ctx
-        .gitrules()
+        .policy()
         .releases
         .as_ref()
         .and_then(|r| r.commit_message.clone())

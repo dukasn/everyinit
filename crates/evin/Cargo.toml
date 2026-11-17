@@ -33,7 +33,7 @@ evin-pipeline = { workspace = true }
 evin-action-changelog = { workspace = true }
 evin-action-archive = { workspace = true }
 evin-git = { workspace = true }
-evin-gitrules = { workspace = true }
+evin-repository-policy = { workspace = true }
 evin-config = { workspace = true }
 evin-locales = { workspace = true }
 evin-action-version-bumper = { workspace = true }

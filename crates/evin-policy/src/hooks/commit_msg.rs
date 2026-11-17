@@ -14,8 +14,8 @@
 
 use crate::{GitHook, PolicyError};
 use evin_diagnostic::IssueCode;
-use evin_gitrules::models::GitRulesRoot;
-use evin_gitrules::validator::RulesValidator;
+use evin_repository_policy::models::RepositoryPolicy;
+use evin_repository_policy::validator::RepositoryPolicyValidator;
 use std::path::Path;
 
 pub struct CommitMsgHook;
@@ -27,11 +27,11 @@ impl GitHook for CommitMsgHook {
 
     async fn enforce(
         &self,
-        rules: &GitRulesRoot,
+        rules: &RepositoryPolicy,
         repo_root: &Path,
         payload: &[String],
     ) -> Result<(), Vec<PolicyError>> {
-        let validator = RulesValidator::new(rules);
+        let validator = RepositoryPolicyValidator::new(rules);
         let mut violations = Vec::new();
 
         if let Err(errors) = validator.validate_history_integrity(repo_root) {

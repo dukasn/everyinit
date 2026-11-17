@@ -23,13 +23,13 @@ fn index_document(
         DocumentKind::Workspace => "workspace",
         DocumentKind::Module => "module",
         DocumentKind::Namespace => "namespace",
-        DocumentKind::GitRules => "GitRules",
+        DocumentKind::RepositoryPolicy => "RepositoryPolicy",
         DocumentKind::Environment => "environment",
         DocumentKind::Unknown => return,
     };
     let mut root = symbol(
         document,
-        if document.kind == DocumentKind::GitRules {
+        if document.kind == DocumentKind::RepositoryPolicy {
             SemanticKind::PackagePolicy
         } else {
             match document.kind {
@@ -49,7 +49,7 @@ fn index_document(
         DocumentKind::Workspace => crate::workspace::WORKSPACE_EDITOR_SCHEMA,
         DocumentKind::Module => crate::workspace::MODULE_EDITOR_SCHEMA,
         DocumentKind::Namespace => crate::workspace::NAMESPACE_EDITOR_SCHEMA,
-        DocumentKind::GitRules => evin_gitrules::editor_schema::GITRULES_SCHEMA,
+        DocumentKind::RepositoryPolicy => evin_repository_policy::editor_schema::POLICY_SCHEMA,
         DocumentKind::Environment => crate::environment::EDITOR_SCHEMA,
         DocumentKind::Unknown => return,
     };
@@ -84,7 +84,7 @@ fn index_document(
     }
     if matches!(
         document.kind,
-        DocumentKind::GitRules | DocumentKind::Environment
+        DocumentKind::RepositoryPolicy | DocumentKind::Environment
     ) {
         return;
     }

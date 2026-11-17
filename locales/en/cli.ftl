@@ -3,8 +3,8 @@
 app-description = Evin — Development, orchestrated.
 init-command-help = Initialize .evin configuration for this repository
 init-workspace-help = Generate a default .evin/workspace.flow
-init-gitrules-help = Generate a default .evin/gitrules.flow
-init-env-help = Generate a default .evin/environment.flow
+init-policy-help = Generate a default .evin/policy.json
+init-env-help = Generate a default .evin/environment.json
 init-module-help = Generate a default .evin/module.flow in the specified path
 init-all-help = Generate all default workspace configuration files
 init-path-help = Target directory path for workspace initialization

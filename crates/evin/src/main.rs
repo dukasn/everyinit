@@ -64,8 +64,8 @@ enum Commands {
         #[arg(short = 'w', long, help = evin_locales::t!("init-workspace-help"))]
         workspace: bool,
 
-        #[arg(short = 'g', long, help = evin_locales::t!("init-gitrules-help"))]
-        gitrules: bool,
+        #[arg(short = 'p', long, help = evin_locales::t!("init-policy-help"))]
+        policy: bool,
 
         #[arg(short = 'e', long, help = evin_locales::t!("init-env-help"))]
         env: bool,
@@ -269,7 +269,7 @@ async fn main() {
     let phases = match cli.command {
         Commands::Init {
             workspace,
-            gitrules,
+            policy,
             env,
             all,
             ref module,
@@ -287,7 +287,7 @@ async fn main() {
                 text: intro_text,
                 mode: presentation_mode,
             });
-            commands::init_phases(workspace, gitrules, env, all, module.clone(), path.clone())
+            commands::init_phases(workspace, policy, env, all, module.clone(), path.clone())
         }
 
         Commands::Sync => {

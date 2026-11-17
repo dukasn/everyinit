@@ -52,7 +52,7 @@ pub struct WorkspaceConfig {
     pub include: Option<IncludeConfig>,
     pub install_hint: Option<String>,
     pub hook_runner: Option<HookRunner>,
-    pub rules: Option<String>,
+    pub policy: Option<String>,
     pub execution: Option<ExecutionMode>,
 }
 
@@ -143,7 +143,7 @@ pub struct WorkspaceFlow {
     #[serde(default)]
     pub tasks: Option<HashMap<evin_flow::Spanned<String>, crate::models::TaskObject>>,
     #[serde(skip)]
-    pub gitrules: Option<std::sync::Arc<evin_gitrules::GitRulesRoot>>,
+    pub policy: Option<std::sync::Arc<evin_repository_policy::RepositoryPolicy>>,
 }
 
 pub type WorkspaceYaml = WorkspaceFlow;
@@ -263,11 +263,11 @@ const EDITOR_WORKSPACE: EditorSchema = EditorSchema::Object(&[
     )
     .catalog("workspace.hook_runner"),
     EditorField::new(
-        "rules",
+        "policy",
         EditorSchema::String,
-        "flow-schema-path-to-git-rules-configuration",
+        "flow-schema-path-to-repository-policy-configuration",
     )
-    .catalog("workspace.rules"),
+    .catalog("workspace.policy"),
     EditorField::new(
         "execution",
         EditorSchema::Enum(&["linear", "parallel"]),

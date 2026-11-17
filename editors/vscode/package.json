@@ -49,6 +49,16 @@
         }
       }
     },
+    "jsonValidation": [
+      {
+        "fileMatch": "**/.evin/policy.json",
+        "url": "https://dl.everyinit.dev/schema/v1/policy"
+      },
+      {
+        "fileMatch": "**/.evin/environment.json",
+        "url": "https://dl.everyinit.dev/schema/v1/environment"
+      }
+    ],
     "languages": [
       {
         "id": "flow",
@@ -60,14 +70,7 @@
         "extensions": [
           ".flow"
         ],
-        "filenames": [
-          "workspace.flow",
-          "gitrules.flow",
-          "release.flow",
-          "environment.flow",
-          "module.flow",
-          "package.flow"
-        ],
+        "filenames": ["workspace.flow", "release.flow", "module.flow", "package.flow"],
         "firstLine": "^#!evin/v[0-9]+",
         "icon": {
           "light": "./assets/logo-light.svg",

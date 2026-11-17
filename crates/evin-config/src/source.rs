@@ -14,7 +14,9 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::paths::{ENVIRONMENT_MANIFEST, MODULE_MANIFEST, is_canonical_manifest};
+use crate::paths::{
+    ENVIRONMENT_MANIFEST, MODULE_MANIFEST, is_canonical_manifest, is_flow_manifest,
+};
 
 /// Whether a document is eligible for Evin-aware editor treatment. Eligibility
 /// is deliberately separate from workspace discovery: a marked external Flow
@@ -29,8 +31,12 @@ pub fn recognize_evin_document(
     path: &Path,
     text: &str,
 ) -> Result<Option<EvinDocumentRecognition>, evin_diagnostic::Diagnostic> {
-    let header = evin_flow::validate_evin_header(text, Some(path))?;
     let canonical_path = is_canonical_manifest(path);
+    let header = if is_flow_manifest(path) {
+        evin_flow::validate_evin_header(text, Some(path))?
+    } else {
+        None
+    };
     Ok(
         (canonical_path || header.is_some()).then_some(EvinDocumentRecognition {
             canonical_path,
@@ -83,12 +89,12 @@ impl WorkspaceDocuments {
                 result.load_namespace(source, path)?;
             }
         }
-        if let Some(rules) = workspace
+        if let Some(policy) = workspace
             .workspace
-            .rules
+            .policy
             .filter(|path| !path.starts_with("http"))
         {
-            let path = normalize(root.join(rules));
+            let path = normalize(root.join(policy));
             if source.exists(&path) {
                 result.texts.insert(path.clone(), read(source, &path)?);
             }

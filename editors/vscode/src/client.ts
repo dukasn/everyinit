@@ -73,8 +73,12 @@ export class EveryinitClientManager implements vscode.Disposable {
     this.outputChannel.show(true);
   }
 
-  public async ensureClientForLanguage(languageId: string): Promise<void> {
-    if (languageId === "flow") {
+  public async ensureClientForDocument(document: vscode.TextDocument): Promise<void> {
+    const languageId = document.languageId;
+    const evinJsonManifest =
+      languageId === "json" &&
+      /[\\/]\.evin[\\/](?:policy|environment)\.json$/.test(document.uri.fsPath);
+    if (languageId === "flow" || evinJsonManifest) {
       await this.startEvinClient();
     } else if (languageId === "esh") {
       await this.startEshClient();
@@ -134,7 +138,11 @@ export class EveryinitClientManager implements vscode.Disposable {
       };
 
       const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: "file", language: "flow" }],
+        documentSelector: [
+          { scheme: "file", language: "flow" },
+          { scheme: "file", language: "json", pattern: "**/.evin/policy.json" },
+          { scheme: "file", language: "json", pattern: "**/.evin/environment.json" }
+        ],
         synchronize: {
           fileEvents: vscode.workspace.createFileSystemWatcher("**/*.flow"),
         },
@@ -394,7 +402,7 @@ export class EveryinitClientManager implements vscode.Disposable {
     }
 
     for (const doc of vscode.workspace.textDocuments) {
-      await this.ensureClientForLanguage(doc.languageId);
+      await this.ensureClientForDocument(doc);
     }
 
     this.scheduleStateChange();
@@ -501,7 +509,7 @@ function inferManifestKind(relPath: string): string {
   const base = path.posix.basename(relPath);
   if (base === "workspace.flow") return "workspace";
   if (base === "module.flow") return "module";
-  if (base === "gitrules.flow") return "gitrules";
-  if (base === "environment.flow") return "environment";
+  if (base === "policy.json") return "policy";
+  if (base === "environment.json") return "environment";
   return "namespace";
 }

@@ -217,7 +217,7 @@ pub async fn evaluate(
 
 async fn release_lock_issues(config: &EverInitConfig) -> Vec<CheckIssueView> {
     let mut issues = Vec::new();
-    let Some(rules) = config.gitrules.as_ref() else {
+    let Some(rules) = config.policy.as_ref() else {
         return issues;
     };
     let policies = rules
@@ -369,7 +369,7 @@ async fn release_lock_issues(config: &EverInitConfig) -> Vec<CheckIssueView> {
 }
 
 static EMPTY_PACKAGES: std::sync::LazyLock<
-    std::collections::BTreeMap<String, evin_gitrules::PackageReleasePolicy>,
+    std::collections::BTreeMap<String, evin_repository_policy::PackageReleasePolicy>,
 > = std::sync::LazyLock::new(std::collections::BTreeMap::new);
 
 pub fn check_view(
@@ -534,13 +534,13 @@ fn check_view_with_findings(
         }
     }
 
-    // Git rules
-    let gitrules_path = PathBuf::from(evin_config::paths::GITRULES_MANIFEST);
-    if gitrules_path.exists() {
+    // repository policy
+    let policy_path = PathBuf::from(evin_config::paths::POLICY_MANIFEST);
+    if policy_path.exists() {
         checked_files.push(CheckedManifest {
-            path: crate::commands::file_uri(evin_config::paths::GITRULES_MANIFEST)?,
+            path: crate::commands::file_uri(evin_config::paths::POLICY_MANIFEST)?,
             task_count: 0,
-            kind: ManifestKind::GitRules,
+            kind: ManifestKind::RepositoryPolicy,
             issues: Vec::new(),
         });
     }
@@ -714,8 +714,8 @@ mod tests {
             modules: None,
             install_hint: None,
             hook_runner: None,
-            gitrules: None,
-            gitrules_source: evin_config::parser::GitRulesSource::Fallback,
+            policy: None,
+            policy_source: evin_config::parser::RepositoryPolicySource::Fallback,
             warnings: Vec::new(),
             modules_discovered: vec![
                 ("release".into(), ".evin/release.flow".into(), 2),

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://dl.everyinit.dev/schema/v1/policy",
+  "name": "default",
+  "description": "Repository development and release policy.",
+  "commits": {
+    "message_format": [
+      "{type}({scope}?){breaking?}: {description}",
+      "{type}: {description}"
+    ],
+    "fields": {
+      "type": {
+        "allowed_values": ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"],
+        "must_be": "lowercase-with-hyphens"
+      },
+      "description": {
+        "max_length": 72
+      }
+    },
+    "policies": {
+      "require_body": false,
+      "require_ticket_reference": false
+    }
+  },
+  "branches": {
+    "name_format": ["{type}/{ticket}-{description}", "{type}/{description}"],
+    "fields": {
+      "type": {
+        "allowed_values": ["feat", "fix", "chore", "docs", "refactor", "release"],
+        "must_be": "lowercase-with-hyphens"
+      },
+      "description": {
+        "must_be": "lowercase-with-hyphens"
+      }
+    },
+    "policies": {
+      "block_push_to_main": false
+    }
+  },
+  "tags": {
+    "name_format": "v{version}",
+    "policies": {
+      "require_annotated": true,
+      "block_deletion": true
+    }
+  },
+  "pull_requests": {
+    "title_format": "{type}({scope}?): {description}",
+    "policies": {
+      "require_assignee": false,
+      "require_linked_issue": false,
+      "block_wip_prefixes": ["WIP:", "draft:", "wip:"]
+    }
+  }
+}

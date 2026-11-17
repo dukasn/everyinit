@@ -17,7 +17,7 @@ use super::*;
 use evin_action_sdk::{
     Logger, PipelineMode, RunnerContext, git::GitProvider, secrets::SecretsProvider,
 };
-use evin_gitrules::{PackageReleasePolicy, PackageRevisionPolicy};
+use evin_repository_policy::{PackageReleasePolicy, PackageRevisionPolicy};
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -184,7 +184,7 @@ async fn undefined_channel_errors_use_fluent_diagnostic() {
 async fn package_release_preconditions_use_fluent_diagnostics() {
     let temp = tempfile::tempdir().unwrap();
     let mut ctx = context(temp.path());
-    let mut rules = evin_gitrules::GitRulesRoot::default();
+    let mut rules = evin_repository_policy::RepositoryPolicy::default();
     rules.releases.as_mut().unwrap().packages = BTreeMap::from([(
         "app".into(),
         PackageReleasePolicy {
@@ -193,7 +193,7 @@ async fn package_release_preconditions_use_fluent_diagnostics() {
             revision: PackageRevisionPolicy::default(),
         },
     )]);
-    ctx.gitrules = Arc::new(rules);
+    ctx.policy = Arc::new(rules);
     let error = execute(
         &ctx,
         Some(evin_flow::parse_yaml("initial_version: 1.0.0\n").unwrap()),
@@ -210,7 +210,7 @@ async fn package_release_preconditions_use_fluent_diagnostics() {
 
     let temp = tempfile::tempdir().unwrap();
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(package_release_rules());
+    ctx.policy = Arc::new(package_release_rules());
     let with =
         evin_flow::parse_yaml("initial_version: 1.0.0\ngit:\n  commit: false\n  tag: false\n")
             .unwrap();
@@ -236,7 +236,7 @@ async fn package_release_rejects_staged_and_watched_worktree_changes_with_fluent
         }
 
         let mut ctx = context(temp.path());
-        ctx.gitrules = Arc::new(package_release_rules());
+        ctx.policy = Arc::new(package_release_rules());
         let with =
             evin_flow::parse_yaml("initial_version: 1.0.0\ngit:\n  commit: true\n  tag: true\n")
                 .unwrap();
@@ -264,8 +264,8 @@ async fn package_release_rejects_staged_and_watched_worktree_changes_with_fluent
     }
 }
 
-fn package_release_rules() -> evin_gitrules::GitRulesRoot {
-    let mut rules = evin_gitrules::GitRulesRoot::default();
+fn package_release_rules() -> evin_repository_policy::RepositoryPolicy {
+    let mut rules = evin_repository_policy::RepositoryPolicy::default();
     rules.releases.as_mut().unwrap().packages = BTreeMap::from([(
         "app".into(),
         PackageReleasePolicy {
@@ -374,7 +374,7 @@ async fn first_release_accepts_existing_initial_version_when_deferred() {
     git(temp.path(), &["add", "."]);
     git(temp.path(), &["commit", "-qm", "feat: initial"]);
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml(
             "initial_version: 0.1.0\nfiles:\n  - Cargo.toml\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
         )
@@ -397,7 +397,7 @@ async fn first_release_without_staged_changes_cannot_commit() {
     git(temp.path(), &["add", "."]);
     git(temp.path(), &["commit", "-qm", "feat: initial"]);
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  message: 'release: ${version}'\n",
         )
@@ -418,7 +418,7 @@ async fn first_release_still_replaces_zero_previous_version_and_can_defer() {
     git(temp.path(), &["add", "."]);
     git(temp.path(), &["commit", "-qm", "feat: initial"]);
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
         )
@@ -439,7 +439,7 @@ async fn first_release_with_no_edits_can_defer() {
     git(temp.path(), &["add", "."]);
     git(temp.path(), &["commit", "-qm", "feat: initial"]);
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\ngit:\n  commit: true\n  tag: true\n  defer: true\n  message: 'release: ${version}'\n",
         )
@@ -451,7 +451,7 @@ async fn first_release_with_no_edits_can_defer() {
 
 #[tokio::test]
 async fn tagged_pre_one_releases_use_commit_impacts() {
-    use evin_gitrules::VersioningStrategy::{Cargo, Semver};
+    use evin_repository_policy::VersioningStrategy::{Cargo, Semver};
     for (strategy, subject, expected) in [
         (Cargo, "fix: correct an issue", "0.1.1"),
         (Cargo, "feat: add a capability", "0.1.1"),
@@ -467,9 +467,9 @@ async fn tagged_pre_one_releases_use_commit_impacts() {
         git(temp.path(), &["tag", "v0.1.0"]);
         git(temp.path(), &["commit", "--allow-empty", "-qm", subject]);
         let mut ctx = context(temp.path());
-        let mut rules = evin_gitrules::GitRulesRoot::default();
+        let mut rules = evin_repository_policy::RepositoryPolicy::default();
         rules.releases.as_mut().unwrap().versioning.strategy = strategy;
-        ctx.gitrules = Arc::new(rules);
+        ctx.policy = Arc::new(rules);
         let with = evin_flow::parse_yaml(
                 "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n"
             ).unwrap();
@@ -495,16 +495,16 @@ async fn proposal_recalculation_uses_last_tag_when_main_adds_a_breaking_change()
         temp.path(),
         &["commit", "--allow-empty", "-qm", "fix: first change"],
     );
-    let rules = evin_gitrules::parse_str(
-        "releases:\n  versioning:\n    strategy: cargo\n",
-        "flow",
+    let rules = evin_repository_policy::parse_str(
+        r#"{"$schema":"https://dl.everyinit.dev/schema/v1/policy","releases":{"versioning":{"strategy":"cargo"}}}"#,
+        "json",
         None,
     )
     .unwrap();
     let config = "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n";
     git(temp.path(), &["switch", "-qc", "automation/release"]);
     let mut first = context(temp.path());
-    first.gitrules = Arc::new(rules.clone());
+    first.policy = Arc::new(rules.clone());
     execute(&first, Some(evin_flow::parse_yaml(config).unwrap()))
         .await
         .unwrap();
@@ -527,7 +527,7 @@ async fn proposal_recalculation_uses_last_tag_when_main_adds_a_breaking_change()
         &["switch", "--force-create", "automation/release", "main"],
     );
     let mut updated = context(temp.path());
-    updated.gitrules = Arc::new(rules);
+    updated.policy = Arc::new(rules);
     execute(&updated, Some(evin_flow::parse_yaml(config).unwrap()))
         .await
         .unwrap();
@@ -563,7 +563,7 @@ async fn unmatched_replacements_fail_with_and_without_existing_tag() {
                 );
             }
             let mut ctx = context(temp.path());
-            ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+            ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
             let error = execute(&ctx, Some(evin_flow::parse_yaml(files).unwrap()))
                 .await
                 .unwrap_err();
@@ -587,7 +587,7 @@ async fn later_mismatch_does_not_write_earlier_replacement() {
     git(temp.path(), &["add", "."]);
     git(temp.path(), &["commit", "-qm", "feat: initial"]);
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml(
             "files:\n  - Cargo.toml\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
@@ -613,7 +613,7 @@ async fn repeated_file_replacements_are_validated_in_order() {
     git(temp.path(), &["add", "."]);
     git(temp.path(), &["commit", "-qm", "feat: initial"]);
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: old\n    write: intermediate\n  - path: ./VERSION\n    match: intermediate\n    write: '${version}'\n",
         )
@@ -638,9 +638,10 @@ async fn tagged_release_does_not_fall_back_to_new_version() {
         &["commit", "--allow-empty", "-qm", "feat: next"],
     );
     let mut ctx = context(temp.path());
-    let mut rules = evin_gitrules::GitRulesRoot::default();
-    rules.releases.as_mut().unwrap().versioning.strategy = evin_gitrules::VersioningStrategy::Cargo;
-    ctx.gitrules = Arc::new(rules);
+    let mut rules = evin_repository_policy::RepositoryPolicy::default();
+    rules.releases.as_mut().unwrap().versioning.strategy =
+        evin_repository_policy::VersioningStrategy::Cargo;
+    ctx.policy = Arc::new(rules);
     let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
@@ -671,9 +672,10 @@ async fn calculated_existing_tag_fails_before_edits() {
         &["commit", "--allow-empty", "-qm", "feat: next"],
     );
     let mut ctx = context(temp.path());
-    let mut rules = evin_gitrules::GitRulesRoot::default();
-    rules.releases.as_mut().unwrap().versioning.strategy = evin_gitrules::VersioningStrategy::Cargo;
-    ctx.gitrules = Arc::new(rules);
+    let mut rules = evin_repository_policy::RepositoryPolicy::default();
+    rules.releases.as_mut().unwrap().versioning.strategy =
+        evin_repository_policy::VersioningStrategy::Cargo;
+    ctx.policy = Arc::new(rules);
     let with = evin_flow::parse_yaml(
             "files:\n  - path: VERSION\n    match: '(?m)^${previous_version}$'\n    write: '${version}'\n",
         )
@@ -716,7 +718,7 @@ async fn package_only_release_commits_lock_with_trailer_and_no_tag() {
     git(temp.path(), &["commit", "-qm", "ci: rebuild package"]);
 
     let mut ctx = context(temp.path());
-    let mut rules = evin_gitrules::GitRulesRoot::default();
+    let mut rules = evin_repository_policy::RepositoryPolicy::default();
     rules.releases.as_mut().unwrap().packages = BTreeMap::from([(
         "app".into(),
         PackageReleasePolicy {
@@ -725,7 +727,7 @@ async fn package_only_release_commits_lock_with_trailer_and_no_tag() {
             revision: PackageRevisionPolicy::default(),
         },
     )]);
-    ctx.gitrules = Arc::new(rules);
+    ctx.policy = Arc::new(rules);
     let with = evin_flow::parse_yaml("initial_version: 1.0.0\ngit:\n  commit: true\n  tag: true\n")
         .unwrap();
     execute(&ctx, Some(with)).await.unwrap();
@@ -763,7 +765,7 @@ async fn reports_changed_false_without_qualifying_commits() {
     git(temp.path(), &["tag", "-a", "v1.0.0", "-m", "v1.0.0"]);
 
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml("initial_version: 1.0.0\n").unwrap();
     execute(&ctx, Some(with)).await.unwrap();
     let outputs = ctx.state.outputs.lock().unwrap();
@@ -864,7 +866,7 @@ async fn reports_changed_true_for_a_qualifying_commit() {
     git(temp.path(), &["commit", "-aqm", "feat: add a capability"]);
 
     let mut ctx = context(temp.path());
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     let with = evin_flow::parse_yaml("initial_version: 1.0.0\n").unwrap();
     execute(&ctx, Some(with)).await.unwrap();
     let outputs = ctx.state.outputs.lock().unwrap();

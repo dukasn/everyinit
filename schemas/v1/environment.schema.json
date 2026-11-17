@@ -1,0 +1,114 @@
+{
+  "$defs": {
+    "EnvScope": {
+      "enum": [
+        "Internal",
+        "Process"
+      ],
+      "type": "string"
+    },
+    "EnvVarDef": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "required": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "scopes": {
+          "default": [
+            "Internal",
+            "Process"
+          ],
+          "items": {
+            "$ref": "#/$defs/EnvScope"
+          },
+          "type": "array"
+        },
+        "stages": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "$ref": "#/$defs/EnvVarType"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "EnvVarType": {
+      "enum": [
+        "string",
+        "number",
+        "boolean",
+        "secret"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://dl.everyinit.dev/schema/v1/environment",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "https://dl.everyinit.dev/schema/v1/environment",
+      "type": "string"
+    },
+    "environments": {
+      "additionalProperties": {
+        "$ref": "#/$defs/EnvVarDef"
+      },
+      "default": {},
+      "type": "object"
+    },
+    "presets": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "default": {},
+      "type": "object"
+    }
+  },
+  "required": [
+    "$schema"
+  ],
+  "title": "EnvironmentSchema",
+  "type": "object"
+}

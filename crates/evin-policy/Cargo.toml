@@ -7,7 +7,7 @@ edition.workspace = true
 [dependencies]
 evin-diagnostic = { workspace = true }
 evin-git = { workspace = true }
-evin-gitrules = { workspace = true }
+evin-repository-policy = { workspace = true }
 evin-locales = { workspace = true }
 evin-action-sdk = { workspace = true }
 tokio = { workspace = true, features = ["process"] }

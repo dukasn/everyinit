@@ -1,6 +1,7 @@
 const CHANNELS = new Set(["canary"]);
 const VERSION_PATTERN = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const TARGET_PATTERN = /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+$/;
+const SCHEMA_NAMES = new Set(["policy", "environment"]);
 
 function responseHeaders(extra = {}) {
   return new Headers({
@@ -25,6 +26,14 @@ function objectKey(pathname: string): string | null {
     const channel = parts[0].slice(0, -".json".length);
     return CHANNELS.has(channel) ? `channels/${channel}.json` : null;
   }
+  if (
+    parts.length === 3 &&
+    parts[0] === "schema" &&
+    /^v\d+$/.test(parts[1]) &&
+    SCHEMA_NAMES.has(parts[2])
+  ) {
+    return `schema/${parts[1]}/${parts[2]}.schema.json`;
+  }
   if (parts.length < 2) return null;
   const [binary, second] = parts;
   if (binary !== "evin" && binary !== "esh") return null;
@@ -42,6 +51,7 @@ function objectKey(pathname: string): string | null {
 }
 
 function contentType(key: string): string {
+  if (key.startsWith("schema/")) return "application/schema+json; charset=utf-8";
   if (key.endsWith(".json")) return "application/json; charset=utf-8";
   if (key.endsWith(".tar.gz")) return "application/gzip";
   return "text/plain; charset=utf-8";

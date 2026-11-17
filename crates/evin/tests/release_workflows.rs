@@ -184,7 +184,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     assert_eq!(bump["initial_version"].as_str(), Some("0.1.0"));
     assert!(bump["cargo_pre_1_0"].is_null());
     assert_eq!(
-        flow(".evin/gitrules.flow")["releases"]["versioning"]["strategy"].as_str(),
+        flow(".evin/policy.json")["releases"]["versioning"]["strategy"].as_str(),
         Some("cargo")
     );
     let propose = &tasks["tasks"]["propose"];
@@ -411,7 +411,7 @@ fi
 }
 
 #[test]
-fn cli_version_bumper_uses_the_configured_git_rules_strategy() {
+fn cli_version_bumper_uses_the_configured_repository_policy_strategy() {
     for (strategy, expected) in [("cargo", "0.1.1\n"), ("semver", "0.2.0\n")] {
         let repo = Repo::new();
         fs::create_dir_all(repo.work.join(".evin")).unwrap();
@@ -421,7 +421,7 @@ fn cli_version_bumper_uses_the_configured_git_rules_strategy() {
 workspace:
   name: versioning-test
   version: "0.1.0"
-  rules: .evin/gitrules.flow
+  policy: .evin/policy.json
 stages: [Release]
 tasks:
   bump:
@@ -437,8 +437,10 @@ tasks:
         )
         .unwrap();
         fs::write(
-            repo.work.join(".evin/gitrules.flow"),
-            format!("#!evin/v1\nreleases:\n  versioning:\n    strategy: {strategy}\n"),
+            repo.work.join(".evin/policy.json"),
+            format!(
+                r#"{{"$schema":"https://dl.everyinit.dev/schema/v1/policy","releases":{{"versioning":{{"strategy":"{strategy}"}}}}}}"#
+            ),
         )
         .unwrap();
         fs::write(repo.work.join("VERSION"), "0.1.0\n").unwrap();

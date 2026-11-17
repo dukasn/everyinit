@@ -148,7 +148,7 @@
       "match": "^  ([a-zA-Z0-9_.-]+)\\s*(:)(?=\\s*(?:#.*)?$)",
       "captures": {
         "1": {
-          "name": "support.variable.environment.flow"
+          "name": "support.variable.environment.json"
         },
         "2": {
           "name": "punctuation.separator.key-value.flow"
@@ -548,13 +548,13 @@
             },
             {
               "match": "[^\\s,\\[\\]\"'$#]+",
-              "name": "support.variable.environment.flow"
+              "name": "support.variable.environment.json"
             }
           ]
         },
         {
           "match": "[^\\s,\\[\\]\"'$#]+",
-          "name": "support.variable.environment.flow"
+          "name": "support.variable.environment.json"
         }
       ]
     },

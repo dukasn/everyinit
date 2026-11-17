@@ -1,9 +1,9 @@
 // Copyright (C) 2026 Eduardo Marques Santos
 //
 // Deterministic, Git-backed package release state shared by native actions and
-// the CLI. The lock file is data; policy remains in gitrules.flow.
+// the CLI. The lock file is data; policy remains in policy.json.
 
-use evin_gitrules::{PackageReleasePolicy, PackageRevisionScope};
+use evin_repository_policy::{PackageReleasePolicy, PackageRevisionScope};
 use glob::Pattern;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -139,7 +139,7 @@ impl ReleaseLock {
                             .any(|state| state.version.trim().is_empty() || state.revision == 0)
                     {
                         return Err(ReleaseError::Lock(format!(
-                            "package '{id}' target state does not match GitRules"
+                            "package '{id}' target state does not match RepositoryPolicy"
                         )));
                     }
                 }
@@ -590,7 +590,7 @@ mod tests {
             PackageReleasePolicy {
                 watch: vec!["src/**".into()],
                 targets: vec!["deb".into(), "apk".into(), "arch".into()],
-                revision: evin_gitrules::PackageRevisionPolicy { scope },
+                revision: evin_repository_policy::PackageRevisionPolicy { scope },
             },
         )])
     }
@@ -781,7 +781,7 @@ mod tests {
             PackageReleasePolicy {
                 watch: vec!["editors/vscode/**".into()],
                 targets: vec!["vsix".into()],
-                revision: evin_gitrules::PackageRevisionPolicy {
+                revision: evin_repository_policy::PackageRevisionPolicy {
                     scope: PackageRevisionScope::Package,
                 },
             },

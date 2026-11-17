@@ -479,6 +479,15 @@ async fn metadata_and_channel_manifest_publish_signed_release_pointers() {
 #[tokio::test]
 async fn publish_mirror_uploads_only_the_requested_release_objects() {
     let temp = tempdir().unwrap();
+    let schema_directory = temp.path().join("schemas/v1");
+    fs::create_dir_all(&schema_directory).unwrap();
+    for name in ["policy", "environment"] {
+        fs::copy(
+            repository_root().join(format!("schemas/v1/{name}.schema.json")),
+            schema_directory.join(format!("{name}.schema.json")),
+        )
+        .unwrap();
+    }
     let mirror = temp.path().join("mirror");
     for binary in ["evin", "esh"] {
         let directory = mirror.join(format!("{binary}/canary/v1.2.3"));
@@ -545,9 +554,11 @@ async fn publish_mirror_uploads_only_the_requested_release_objects() {
         .unwrap();
     assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
     let uploads = fs::read_to_string(log).unwrap();
-    assert_eq!(uploads.lines().count(), 8);
+    assert_eq!(uploads.lines().count(), 10);
     assert!(uploads.contains("everyinit-artifacts/evin/canary/v1.2.3/release.json"));
     assert!(uploads.contains("everyinit-artifacts/esh/canary/v1.2.3/SHA256SUMS.sig"));
+    assert!(uploads.contains("everyinit-artifacts/schema/v1/policy.schema.json"));
+    assert!(uploads.contains("everyinit-artifacts/schema/v1/environment.schema.json"));
     assert!(uploads.lines().all(|line| line.contains("--remote")));
     assert!(!uploads.contains("channels/canary.json"));
 }

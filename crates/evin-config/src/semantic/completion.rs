@@ -319,10 +319,20 @@ fn scalar_at(document: &WorkspaceDocument, range: &SourceRange) -> Option<String
 }
 
 fn range(document: &WorkspaceDocument, span: Span) -> SourceRange {
+    let mut start = span.offset;
+    let mut end = span.offset.saturating_add(span.length.max(1));
+    if document.path.extension().and_then(|value| value.to_str()) == Some("json") {
+        if document.text.as_bytes().get(start) == Some(&b'"') {
+            start += 1;
+        }
+        if end > start && document.text.as_bytes().get(end - 1) == Some(&b'"') {
+            end -= 1;
+        }
+    }
     SourceRange {
         path: document.path.clone(),
-        start: span.offset,
-        end: span.offset.saturating_add(span.length.max(1)),
+        start,
+        end,
     }
 }
 

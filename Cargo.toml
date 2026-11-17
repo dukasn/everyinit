@@ -17,6 +17,8 @@ tokio = { version = "1.53.1", features = ["full"] }
 serde = { version = "1.0.229", features = ["derive"] }
 marked-yaml = { version = "0.8.0", features = ["serde"] }
 serde_json = "1.0.151"
+jsonschema = "0.61.2"
+schemars = "1.2.3"
 thiserror = "2.0.19"
 miette = { version = "7.6.0", features = ["fancy"] }
 clap = { version = "4.6.5", features = ["derive"] }
@@ -86,7 +88,7 @@ evin-config = { path = "crates/evin-config" }
 evin-pipeline = { path = "crates/evin-pipeline" }
 evin-dotenv = { path = "crates/evin-dotenv" }
 evin-git = { path = "crates/evin-git" }
-evin-gitrules = { path = "crates/evin-gitrules" }
+evin-repository-policy = { path = "crates/evin-repository-policy" }
 evin-policy = { path = "crates/evin-policy" }
 evin-flow = { path = "crates/evin-flow" }
 evin-diagnostic = { path = "crates/evin-diagnostic" }

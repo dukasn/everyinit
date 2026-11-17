@@ -130,15 +130,6 @@ mod tests {
 
     #[test]
     fn test_template_localization() {
-        let gitrules = bundle::get("init-template-gitrules");
-        assert!(
-            !gitrules.contains("missing locale key"),
-            "init-template-gitrules missing: {}",
-            gitrules
-        );
-        assert!(gitrules.contains("version: 1"));
-        assert!(gitrules.contains("commits:"));
-
         let workspace = bundle::get("init-template-workspace");
         assert!(
             !workspace.contains("missing locale key"),

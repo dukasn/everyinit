@@ -14,8 +14,8 @@
 
 use crate::{GitHook, PolicyError};
 use evin_diagnostic::IssueCode;
-use evin_gitrules::models::GitRulesRoot;
-use evin_gitrules::validator::RulesValidator;
+use evin_repository_policy::models::RepositoryPolicy;
+use evin_repository_policy::validator::RepositoryPolicyValidator;
 use std::path::Path;
 
 pub struct PreCommitHook;
@@ -27,18 +27,18 @@ impl GitHook for PreCommitHook {
 
     async fn enforce(
         &self,
-        rules: &GitRulesRoot,
+        rules: &RepositoryPolicy,
         repo_root: &Path,
         _payload: &[String],
     ) -> Result<(), Vec<PolicyError>> {
-        let validator = RulesValidator::new(rules);
+        let validator = RepositoryPolicyValidator::new(rules);
         let mut violations = Vec::new();
 
         match evin_git::state::get_staged_files(repo_root).await {
             Ok(raw_files) => {
-                let files: Vec<evin_gitrules::validator::StagedFile> = raw_files
+                let files: Vec<evin_repository_policy::validator::StagedFile> = raw_files
                     .into_iter()
-                    .map(|f| evin_gitrules::validator::StagedFile {
+                    .map(|f| evin_repository_policy::validator::StagedFile {
                         path: f.path,
                         content: f.content,
                         is_binary: f.is_binary,

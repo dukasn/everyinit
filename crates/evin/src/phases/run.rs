@@ -68,30 +68,30 @@ impl Phase for ResolveConfigPhase {
             .into_record(),
         ));
 
-        if let Some(gitrules) = &config.gitrules {
+        if let Some(policy) = &config.policy {
             let loaded_rules = [
-                gitrules.commits.is_some(),
-                gitrules.branches.is_some(),
-                gitrules.releases.is_some(),
-                gitrules.authorship.is_some(),
-                gitrules.history.is_some(),
-                gitrules.tags.is_some(),
-                gitrules.pull_requests.is_some(),
-                gitrules.files.is_some(),
-                gitrules.lfs.is_some(),
-                gitrules.submodules.is_some(),
-                gitrules.remotes.is_some(),
+                policy.commits.is_some(),
+                policy.branches.is_some(),
+                policy.releases.is_some(),
+                policy.authorship.is_some(),
+                policy.history.is_some(),
+                policy.tags.is_some(),
+                policy.pull_requests.is_some(),
+                policy.files.is_some(),
+                policy.lfs.is_some(),
+                policy.submodules.is_some(),
+                policy.remotes.is_some(),
             ]
             .into_iter()
             .filter(|&x| x)
             .count();
-            let target = match &config.gitrules_source {
-                evin_config::parser::GitRulesSource::Local(path) => path.clone(),
-                evin_config::parser::GitRulesSource::Fallback => "fallback".into(),
+            let target = match &config.policy_source {
+                evin_config::parser::RepositoryPolicySource::Local(path) => path.clone(),
+                evin_config::parser::RepositoryPolicySource::Fallback => "fallback".into(),
             };
             emitter.emit(PipelineEvent::DebugLog(
                 None,
-                evin_action_sdk::debug::GitrulesLoaded {
+                evin_action_sdk::debug::PolicyLoaded {
                     target,
                     loaded_rules,
                 }
@@ -106,7 +106,7 @@ impl Phase for ResolveConfigPhase {
                     .replace("' does not exist", "");
                 emitter.emit(PipelineEvent::DebugLog(
                     None,
-                    evin_action_sdk::debug::GitrulesLoaded {
+                    evin_action_sdk::debug::PolicyLoaded {
                         target,
                         loaded_rules: 0,
                     }
@@ -132,12 +132,27 @@ impl Phase for ResolveConfigPhase {
 
         let env_schema_path = workspace_root.join(evin_config::paths::ENVIRONMENT_MANIFEST);
         let env_schema = if env_schema_path.exists() {
-            match <evin_config::environment::EnvironmentFlow as evin_flow::YamlDocument>::from_file(
-                &env_schema_path,
-            ) {
-                Ok(schema) => Some(schema),
-                Err(e) => return Err(e),
-            }
+            let content = std::fs::read_to_string(&env_schema_path).map_err(|error| {
+                evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                        .arg("file_path", env_schema_path.display().to_string())
+                        .arg("error", error.to_string()),
+                )
+            })?;
+            Some(
+                evin_config::environment::parse_environment_json(&content).map_err(|error| {
+                    evin_locales::diagnostic(
+                        evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                            .arg("file_path", env_schema_path.display().to_string())
+                            .arg("error", error.to_string()),
+                    )
+                    .with_file_location(
+                        env_schema_path.display().to_string(),
+                        None,
+                        None,
+                    )
+                })?,
+            )
         } else {
             None
         };
@@ -234,7 +249,7 @@ impl Phase for ResolveConfigPhase {
             ctx.run_payload = invocation.hook_payload;
             ctx.invocation_flags = invocation.action_flags;
 
-            if any_hook && let Some(rules) = &config.gitrules {
+            if any_hook && let Some(rules) = &config.policy {
                 let engine = evin_policy::PolicyEngine::new();
                 if let Some(target) = original_targets.first()
                     && let Err(violations) = engine
@@ -295,7 +310,7 @@ impl Phase for ExecuteTasksPhase {
         engine.config.invocation_flags = ctx.invocation_flags.clone();
         engine.config.global_env = Arc::new(global_env);
         engine.config.env_schema = ctx.env_schema.clone();
-        engine.config.gitrules = config.gitrules;
+        engine.config.policy = config.policy;
         engine.config.forced_execution = ctx.forced_execution;
         engine.config.workspace_execution = config.execution;
 

@@ -8,7 +8,7 @@ export interface EveryinitConfig {
   trace: TraceLevel;
 }
 
-export type SupportedLanguage = "flow" | "esh";
+export type SupportedLanguage = "flow" | "esh" | "json";
 
 export interface LspPosition {
   line: number;
@@ -33,7 +33,7 @@ export interface CatalogDiagnosticCounts {
 export interface CatalogManifestItem {
   path: string;
   uri: string;
-  kind: "workspace" | "module" | "namespace" | "gitrules" | "environment" | "unknown" | string;
+  kind: "workspace" | "module" | "namespace" | "policy" | "environment" | "unknown" | string;
   errors: number;
   warnings: number;
 }

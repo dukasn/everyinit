@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use evin_config::parser::GitRulesSource;
+use evin_config::parser::RepositoryPolicySource;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -196,7 +196,7 @@ pub async fn resolve_watch_spec(
     // Creation and deletion matter too, so absent optional configuration
     // inputs remain in the snapshot as watched exact paths.
     config_paths.insert(evin_config::paths::ENVIRONMENT_MANIFEST.to_string());
-    if let GitRulesSource::Local(path) = &config.gitrules_source {
+    if let RepositoryPolicySource::Local(path) = &config.policy_source {
         config_paths.insert(normalize_relative(path));
     }
 

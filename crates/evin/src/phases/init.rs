@@ -20,7 +20,7 @@ use evin_diagnostic::Diagnostic;
 
 pub struct InitWorkspacePhase {
     pub workspace: bool,
-    pub gitrules: bool,
+    pub policy: bool,
     pub env: bool,
     pub all: bool,
     pub module: Option<String>,
@@ -114,15 +114,15 @@ impl Phase for InitWorkspacePhase {
         emitter: &PipelineEmitter,
     ) -> Result<(), Diagnostic> {
         let mut do_workspace = self.workspace;
-        let mut do_gitrules = self.gitrules;
+        let mut do_policy = self.policy;
         let mut do_env = self.env;
         let do_module = self.module.clone();
 
         if self.all {
             do_workspace = true;
-            do_gitrules = true;
+            do_policy = true;
             do_env = true;
-        } else if !do_workspace && !do_gitrules && !do_env && do_module.is_none() {
+        } else if !do_workspace && !do_policy && !do_env && do_module.is_none() {
             do_workspace = true;
         }
 
@@ -197,11 +197,10 @@ impl Phase for InitWorkspacePhase {
             )?;
         }
 
-        if do_gitrules {
-            let gitrules_content = evin_locales::bundle::get("init-template-gitrules");
+        if do_policy {
             write_config_file(
-                &evin_dir.join(evin_config::paths::GITRULES_FILE),
-                &gitrules_content,
+                &evin_dir.join(evin_config::paths::POLICY_FILE),
+                include_str!("../../../../templates/policy.json"),
                 &cwd,
                 ctx.verbose,
                 emitter,
@@ -209,10 +208,9 @@ impl Phase for InitWorkspacePhase {
         }
 
         if do_env {
-            let env_content = evin_locales::bundle::get("init-template-environment");
             write_config_file(
                 &evin_dir.join(evin_config::paths::ENVIRONMENT_FILE),
-                &env_content,
+                include_str!("../../../../templates/environment.json"),
                 &cwd,
                 ctx.verbose,
                 emitter,
@@ -252,7 +250,7 @@ mod tests {
 
         let phase = InitWorkspacePhase {
             workspace: false,
-            gitrules: false,
+            policy: false,
             env: false,
             all: false,
             module: None,
@@ -267,8 +265,8 @@ mod tests {
                 .unwrap()
                 .starts_with("#!evin/v1\n")
         );
-        assert!(!dir.path().join(".evin/gitrules.flow").exists());
-        assert!(!dir.path().join(".evin/environment.flow").exists());
+        assert!(!dir.path().join(".evin/policy.json").exists());
+        assert!(!dir.path().join(".evin/environment.json").exists());
     }
 
     #[tokio::test]
@@ -280,7 +278,7 @@ mod tests {
 
         let phase = InitWorkspacePhase {
             workspace: false,
-            gitrules: false,
+            policy: false,
             env: false,
             all: true,
             module: None,
@@ -290,14 +288,28 @@ mod tests {
         phase.execute(&mut ctx, &emitter).await.unwrap();
 
         assert!(dir.path().join(".evin/workspace.flow").exists());
-        assert!(dir.path().join(".evin/gitrules.flow").exists());
-        assert!(dir.path().join(".evin/environment.flow").exists());
-        for name in ["workspace.flow", "gitrules.flow", "environment.flow"] {
-            assert!(
-                std::fs::read_to_string(dir.path().join(".evin").join(name))
-                    .unwrap()
-                    .starts_with("#!evin/v1\n")
-            );
+        assert!(dir.path().join(".evin/policy.json").exists());
+        assert!(dir.path().join(".evin/environment.json").exists());
+        assert!(
+            std::fs::read_to_string(dir.path().join(".evin/workspace.flow"))
+                .unwrap()
+                .starts_with("#!evin/v1\n")
+        );
+        for (name, schema) in [
+            ("policy.json", "https://dl.everyinit.dev/schema/v1/policy"),
+            (
+                "environment.json",
+                "https://dl.everyinit.dev/schema/v1/environment",
+            ),
+        ] {
+            let content = std::fs::read_to_string(dir.path().join(".evin").join(name)).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&content).unwrap();
+            assert_eq!(value["$schema"], schema);
+            if name == "policy.json" {
+                evin_repository_policy::parse_str(&content, "json", None).unwrap();
+            } else {
+                evin_config::environment::parse_environment_json(&content).unwrap();
+            }
         }
     }
 
@@ -310,7 +322,7 @@ mod tests {
 
         let phase = InitWorkspacePhase {
             workspace: false,
-            gitrules: true,
+            policy: true,
             env: true,
             all: false,
             module: None,
@@ -320,14 +332,23 @@ mod tests {
         phase.execute(&mut ctx, &emitter).await.unwrap();
 
         assert!(!dir.path().join(".evin/workspace.flow").exists());
-        assert!(dir.path().join(".evin/gitrules.flow").exists());
-        assert!(dir.path().join(".evin/environment.flow").exists());
-        for name in ["gitrules.flow", "environment.flow"] {
-            assert!(
-                std::fs::read_to_string(dir.path().join(".evin").join(name))
-                    .unwrap()
-                    .starts_with("#!evin/v1\n")
-            );
+        assert!(dir.path().join(".evin/policy.json").exists());
+        assert!(dir.path().join(".evin/environment.json").exists());
+        for (name, schema) in [
+            ("policy.json", "https://dl.everyinit.dev/schema/v1/policy"),
+            (
+                "environment.json",
+                "https://dl.everyinit.dev/schema/v1/environment",
+            ),
+        ] {
+            let content = std::fs::read_to_string(dir.path().join(".evin").join(name)).unwrap();
+            let value: serde_json::Value = serde_json::from_str(&content).unwrap();
+            assert_eq!(value["$schema"], schema);
+            if name == "policy.json" {
+                evin_repository_policy::parse_str(&content, "json", None).unwrap();
+            } else {
+                evin_config::environment::parse_environment_json(&content).unwrap();
+            }
         }
     }
 
@@ -339,7 +360,7 @@ mod tests {
         let mut ctx = CliContext::default();
         let phase = InitWorkspacePhase {
             workspace: false,
-            gitrules: false,
+            policy: false,
             env: false,
             all: false,
             module: Some("crates/example".into()),

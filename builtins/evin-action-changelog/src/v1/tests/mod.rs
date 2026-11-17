@@ -57,7 +57,7 @@ fn context(root: &Path) -> RunnerContext {
         provider,
         secrets,
     );
-    ctx.gitrules = Arc::new(evin_gitrules::GitRulesRoot::default());
+    ctx.policy = Arc::new(evin_repository_policy::RepositoryPolicy::default());
     ctx
 }
 
@@ -220,14 +220,14 @@ async fn release_commit_filter_and_chore_section_follow_git_rules() {
         git(temp.path(), &["commit", "--allow-empty", "-qm", subject]);
     }
     let mut ctx = context(temp.path());
-    let mut rules = evin_gitrules::GitRulesRoot::default();
+    let mut rules = evin_repository_policy::RepositoryPolicy::default();
     let releases = rules.releases.as_mut().unwrap();
     releases
         .change_types
         .get_mut("chore")
         .unwrap()
         .changelog_section = Some("Maintenance".to_string());
-    ctx.gitrules = Arc::new(rules);
+    ctx.policy = Arc::new(rules);
     let with = evin_flow::parse_yaml("version: 1.0.1\nnotes_path: target/notes.md\n").unwrap();
     execute(&ctx, Some(with)).await.unwrap();
 
@@ -239,7 +239,7 @@ async fn release_commit_filter_and_chore_section_follow_git_rules() {
     assert!(!notes.contains("**release:** 1.0.1"));
     assert!(!notes.contains("**release:** v1.0.2"));
 
-    Arc::make_mut(&mut ctx.gitrules)
+    Arc::make_mut(&mut ctx.policy)
         .releases
         .as_mut()
         .unwrap()

@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::models::GitRulesRoot;
+use crate::models::RepositoryPolicy;
 use rayon::prelude::*;
 use regex::Regex;
 use std::sync::Arc;
@@ -141,12 +141,12 @@ pub fn parse_size_limit(limit_str: &str) -> Result<usize, String> {
     }
 }
 
-pub struct RulesValidator<'a> {
-    rules: &'a GitRulesRoot,
+pub struct RepositoryPolicyValidator<'a> {
+    rules: &'a RepositoryPolicy,
 }
 
-impl<'a> RulesValidator<'a> {
-    pub fn new(rules: &'a GitRulesRoot) -> Self {
+impl<'a> RepositoryPolicyValidator<'a> {
+    pub fn new(rules: &'a RepositoryPolicy) -> Self {
         Self { rules }
     }
 
@@ -319,7 +319,7 @@ impl<'a> RulesValidator<'a> {
             .par_iter()
             .filter(|f| !f.is_binary && f.size_bytes <= 1_000_000)
             .filter(|f| !ignore_patterns.iter().any(|p| p.matches(&f.path)))
-            .filter(|f| !f.path.ends_with(".evin/gitrules.flow"))
+            .filter(|f| !f.path.ends_with(".evin/policy.json"))
             .flat_map(|file| {
                 let mut errors = Vec::new();
 
@@ -847,8 +847,8 @@ mod tests {
 
     #[test]
     fn test_validate_branch_name() {
-        let rules = GitRulesRoot::default();
-        let validator = RulesValidator::new(&rules);
+        let rules = RepositoryPolicy::default();
+        let validator = RepositoryPolicyValidator::new(&rules);
 
         assert!(validator.validate_branch_name("feature/my-branch").is_ok());
         assert!(validator.validate_branch_name("fix/bug-fix").is_ok());
@@ -863,8 +863,8 @@ mod tests {
 
     #[test]
     fn test_validate_tag_name() {
-        let rules = GitRulesRoot::default();
-        let validator = RulesValidator::new(&rules);
+        let rules = RepositoryPolicy::default();
+        let validator = RepositoryPolicyValidator::new(&rules);
 
         assert!(validator.validate_tag_name("v1.0.0", true).is_ok());
         assert!(validator.validate_tag_name("v2.1.0-alpha.1", true).is_ok());
@@ -877,8 +877,8 @@ mod tests {
 
     #[test]
     fn test_validate_commit_message() {
-        let rules = GitRulesRoot::default();
-        let validator = RulesValidator::new(&rules);
+        let rules = RepositoryPolicy::default();
+        let validator = RepositoryPolicyValidator::new(&rules);
 
         assert!(
             validator
@@ -899,7 +899,7 @@ mod tests {
 
     #[test]
     fn test_validate_staged_files() {
-        let mut rules = GitRulesRoot::default();
+        let mut rules = RepositoryPolicy::default();
         rules
             .history
             .as_mut()
@@ -914,7 +914,7 @@ mod tests {
             }),
             ..Default::default()
         });
-        let validator = RulesValidator::new(&rules);
+        let validator = RepositoryPolicyValidator::new(&rules);
 
         let valid_files = vec![StagedFile {
             path: "src/main.rs".to_string(),

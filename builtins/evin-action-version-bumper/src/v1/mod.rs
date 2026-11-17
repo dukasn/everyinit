@@ -201,7 +201,7 @@ async fn hydrate_channel(
     }
 
     if let Some((_missing_name, span_start, span_length, failure)) = missing_vars.first() {
-        if let Ok(source) = std::fs::read_to_string(".evin/gitrules.flow") {
+        if let Ok(source) = std::fs::read_to_string(".evin/policy.json") {
             // Find the offset of this string in the file
             if let Some(file_offset) = source.find(template) {
                 let diagnostic = evin_locales::diagnostic(failure.message.clone())
@@ -209,7 +209,7 @@ async fn hydrate_channel(
                         failure.hint.as_ref().expect("hinted variable failures"),
                     ))
                     .with_file_span(
-                        ".evin/gitrules.flow",
+                        ".evin/policy.json",
                         file_offset + span_start,
                         *span_length,
                         Some(evin_locales::t!(
@@ -251,7 +251,7 @@ pub async fn execute(
     }
     config.validate()?;
     let package_policies = ctx
-        .gitrules()
+        .policy()
         .releases
         .as_ref()
         .map(|release| release.packages.clone())
@@ -326,15 +326,15 @@ pub async fn execute(
         {
             continue;
         }
-        if let Some(parsed) = ctx.gitrules().parse_commit_message(&commit.subject) {
-            let imp = ctx.gitrules().determine_bump(&parsed);
+        if let Some(parsed) = ctx.policy().parse_commit_message(&commit.subject) {
+            let imp = ctx.policy().determine_bump(&parsed);
             impacts.push(imp);
         }
     }
 
     let (hydrated_channel, start_at_one) = if let Some(channel_name) = &config.channel {
         let prerelease_config = ctx
-            .gitrules()
+            .policy()
             .releases
             .as_ref()
             .and_then(|r| r.prerelease.as_ref());
@@ -365,7 +365,7 @@ pub async fn execute(
             config.prerelease.as_deref(),
             hydrated_channel.as_deref(),
             start_at_one,
-            ctx.gitrules()
+            ctx.policy()
                 .releases
                 .as_ref()
                 .map(|release| release.versioning.strategy)
@@ -377,7 +377,7 @@ pub async fn execute(
                     .iter()
                     .max()
                     .copied()
-                    .unwrap_or(evin_gitrules::models::Impact::None);
+                    .unwrap_or(evin_repository_policy::models::Impact::None);
                 let impact_str = format!("{:?}", max_impact).to_lowercase();
                 ctx.log
                     .debug_event(evin_action_sdk::debug::VersionDiscovery {
@@ -661,7 +661,7 @@ pub async fn execute(
         let commit_msg_template = if let Some(m) = &config.git.message {
             m.clone()
         } else if let Some(m) = ctx
-            .gitrules()
+            .policy()
             .releases
             .as_ref()
             .and_then(|r| r.commit_message.clone())

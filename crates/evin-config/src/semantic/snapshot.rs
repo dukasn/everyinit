@@ -14,7 +14,7 @@
 
 use crate::parser::{EverInitConfig, load_workspace_tasks_from_sync};
 use crate::paths::{
-    ENVIRONMENT_FILE, ENVIRONMENT_MANIFEST, GITRULES_FILE, MODULE_FILE, MODULE_MANIFEST,
+    ENVIRONMENT_FILE, ENVIRONMENT_MANIFEST, POLICY_FILE, MODULE_FILE, MODULE_MANIFEST,
     WORKSPACE_FILE, WORKSPACE_MANIFEST, is_canonical_manifest, is_flow_manifest,
 };
 use crate::source::{WorkspaceDocuments, WorkspaceSource, normalize};
@@ -31,7 +31,7 @@ pub enum DocumentKind {
     Workspace,
     Module,
     Namespace,
-    GitRules,
+    RepositoryPolicy,
     Environment,
     Unknown,
 }
@@ -161,7 +161,11 @@ impl WorkspaceSnapshot {
         for (path, text) in texts {
             let path = normalize(path);
             let mut document_diagnostics = Vec::new();
-            let header_validation = validate_evin_header(&text, Some(&path));
+            let header_validation = if is_flow_manifest(&path) {
+                validate_evin_header(&text, Some(&path))
+            } else {
+                Ok(None)
+            };
             let header_is_valid = header_validation.is_ok();
             let header = match header_validation {
                 Ok(header) => header,
@@ -190,13 +194,26 @@ impl WorkspaceSnapshot {
                     (None, recovered)
                 }
             };
-            if kind == DocumentKind::Environment
-                && let Err(diagnostic) =
-                    <crate::environment::EnvironmentFlow as evin_flow::YamlDocument>::from_str(
-                        &text,
-                        Some(&path),
-                    )
-            {
+            let config_error = match kind {
+                DocumentKind::Environment => crate::environment::parse_environment_json(&text)
+                    .err()
+                    .map(|error| error.to_string()),
+                DocumentKind::RepositoryPolicy => evin_repository_policy::parse_str(
+                    &text,
+                    "json",
+                    Some(&path),
+                )
+                .err()
+                .map(|error| error.to_string()),
+                _ => None,
+            };
+            if let Some(error) = config_error {
+                let diagnostic = evin_locales::diagnostic(
+                    evin_diagnostic::IssueCode::new("issue-file-parse-failed")
+                        .arg("file_path", path.display().to_string())
+                        .arg("error", error),
+                )
+                .with_file_location(path.display().to_string(), None, None);
                 push_unique(&mut document_diagnostics, diagnostic.clone());
                 push_unique(&mut diagnostics, diagnostic);
             }
@@ -359,11 +376,11 @@ fn supplement_reachable_documents(
         }
     }
 
-    if let Some(SpannedValue::String(rules, _)) =
-        mapping_get(&workspace_ast, "workspace").and_then(|value| mapping_get(value, "rules"))
-        && !rules.starts_with("http")
+    if let Some(SpannedValue::String(policy, _)) =
+        mapping_get(&workspace_ast, "workspace").and_then(|value| mapping_get(value, "policy"))
+        && !policy.starts_with("http")
     {
-        supplement_read(source, texts, diagnostics, &normalize(root.join(rules)));
+        supplement_read(source, texts, diagnostics, &normalize(root.join(policy)));
     }
     supplement_read(
         source,
@@ -522,8 +539,8 @@ fn document_kind(path: &Path, has_header: bool) -> DocumentKind {
         DocumentKind::Workspace
     } else if is_canonical_manifest(path) && file == MODULE_FILE {
         DocumentKind::Module
-    } else if is_canonical_manifest(path) && file == GITRULES_FILE {
-        DocumentKind::GitRules
+    } else if is_canonical_manifest(path) && file == POLICY_FILE {
+        DocumentKind::RepositoryPolicy
     } else if is_canonical_manifest(path) && file == ENVIRONMENT_FILE {
         DocumentKind::Environment
     } else if is_flow_manifest(path) || has_header {

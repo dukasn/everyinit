@@ -33,14 +33,14 @@ pub async fn reconcile(
     }
 
     let rules = config
-        .gitrules
+        .policy
         .as_ref()
-        .ok_or_else(|| diagnostic("release-lock reconciliation requires .evin/gitrules.flow"))?;
+        .ok_or_else(|| diagnostic("release-lock reconciliation requires .evin/policy.json"))?;
     let policies = rules
         .releases
         .as_ref()
         .map(|r| &r.packages)
-        .ok_or_else(|| diagnostic("GitRules has no release package policy"))?;
+        .ok_or_else(|| diagnostic("RepositoryPolicy has no release package policy"))?;
     release::validate_policies(policies).map_err(diagnostic)?;
 
     let base = read_stage(&root, 1)

@@ -197,7 +197,7 @@ fn package_policy_findings(
     actions: &HashMap<String, Arc<dyn Action>>,
 ) -> Vec<AnalysisFinding> {
     let policies = config
-        .gitrules
+        .policy
         .as_ref()
         .and_then(|rules| rules.releases.as_ref())
         .map(|release| &release.packages);
@@ -226,9 +226,9 @@ fn package_policy_findings(
                 ResolvedValue::Known(name) => match policies {
                     Some(policies) if policies.contains_key(&name) => {
                         let format = mapping_string(with, "format").and_then(|value| match resolve_value(value.0, &values) { ResolvedValue::Known(value) => Some(value), ResolvedValue::Dynamic => None });
-                        format.and_then(|format| (!policies[&name].targets.iter().any(|target| target == &format)).then(|| format!("GitRules package policy '{name}' does not declare the archive target '{format}'"))).map(|message| diagnostic_at(task, package_name.1, message, Severity::Error))
+                        format.and_then(|format| (!policies[&name].targets.iter().any(|target| target == &format)).then(|| format!("RepositoryPolicy package policy '{name}' does not declare the archive target '{format}'"))).map(|message| diagnostic_at(task, package_name.1, message, Severity::Error))
                     }
-                    _ => Some(diagnostic_at(task, package_name.1, format!("archive package '{name}' has no matching GitRules release policy"), Severity::Error)),
+                    _ => Some(diagnostic_at(task, package_name.1, format!("archive package '{name}' has no matching RepositoryPolicy release policy"), Severity::Error)),
                 },
                 ResolvedValue::Dynamic => Some(diagnostic_at(task, package_name.1, "archive package identity cannot be proven statically because it uses environment or task output templates".to_string(), Severity::Info)),
             };
@@ -357,7 +357,7 @@ fn first_template_error(value: Option<&SpannedValue>) -> Option<ConfigError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::GitRulesSource;
+    use crate::parser::RepositoryPolicySource;
     use evin_action_sdk::{Action, RunnerContext};
     use evin_flow::{Span, Spanned};
     use std::collections::BTreeMap;
@@ -408,21 +408,23 @@ mod tests {
             modules: None,
             install_hint: None,
             hook_runner: None,
-            gitrules: Some(std::sync::Arc::new(evin_gitrules::GitRulesRoot {
-                releases: Some(evin_gitrules::ReleasesNamespace {
-                    packages: BTreeMap::from([(
-                        "app".into(),
-                        evin_gitrules::PackageReleasePolicy {
-                            watch: vec!["src/**".into()],
-                            targets: vec!["deb".into()],
-                            revision: Default::default(),
-                        },
-                    )]),
+            policy: Some(std::sync::Arc::new(
+                evin_repository_policy::RepositoryPolicy {
+                    releases: Some(evin_repository_policy::ReleasesNamespace {
+                        packages: BTreeMap::from([(
+                            "app".into(),
+                            evin_repository_policy::PackageReleasePolicy {
+                                watch: vec!["src/**".into()],
+                                targets: vec!["deb".into()],
+                                revision: Default::default(),
+                            },
+                        )]),
+                        ..Default::default()
+                    }),
                     ..Default::default()
-                }),
-                ..Default::default()
-            })),
-            gitrules_source: GitRulesSource::Fallback,
+                },
+            )),
+            policy_source: RepositoryPolicySource::Fallback,
             warnings: vec![],
             modules_discovered: vec![],
             module_versions: HashMap::new(),
@@ -437,11 +439,9 @@ mod tests {
         )]);
         let findings = analyze(&config("${package_name}"), &actions).findings;
         assert_eq!(findings.len(), 1);
-        assert!(
-            findings[0].diagnostic.to_string().contains(
-                "GitRules package policy 'app' does not declare the archive target 'arch'"
-            )
-        );
+        assert!(findings[0].diagnostic.to_string().contains(
+            "RepositoryPolicy package policy 'app' does not declare the archive target 'arch'"
+        ));
     }
 
     #[test]

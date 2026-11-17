@@ -19,7 +19,7 @@ use crate::workspace::{ModuleFlow, WorkspaceFlow};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GitRulesSource {
+pub enum RepositoryPolicySource {
     Local(String),
     Fallback,
 }
@@ -36,8 +36,8 @@ pub struct EverInitConfig {
     pub modules: Option<Vec<String>>,
     pub install_hint: Option<String>,
     pub hook_runner: Option<crate::workspace::HookRunner>,
-    pub gitrules: Option<std::sync::Arc<evin_gitrules::GitRulesRoot>>,
-    pub gitrules_source: GitRulesSource,
+    pub policy: Option<std::sync::Arc<evin_repository_policy::RepositoryPolicy>>,
+    pub policy_source: RepositoryPolicySource,
     pub warnings: Vec<String>,
     pub modules_discovered: Vec<(String, String, usize)>,
     pub module_versions: HashMap<String, String>,
@@ -331,8 +331,8 @@ pub fn load_workspace_tasks_from_sync(
             modules: None,
             install_hint: None,
             hook_runner: None,
-            gitrules: None,
-            gitrules_source: GitRulesSource::Fallback,
+            policy: None,
+            policy_source: RepositoryPolicySource::Fallback,
             warnings: Vec::new(),
             modules_discovered: Vec::new(),
             module_versions: HashMap::new(),
@@ -341,56 +341,58 @@ pub fn load_workspace_tasks_from_sync(
 
     let workspace: WorkspaceFlow = load_flow(source, &workspace_path)?;
 
-    let mut gitrules = None;
-    let mut gitrules_source = GitRulesSource::Fallback;
+    let mut policy = None;
+    let mut policy_source = RepositoryPolicySource::Fallback;
     let mut warnings = Vec::new();
 
-    if let Some(rules_ref) = &workspace.workspace.rules {
-        if rules_ref.starts_with("http://") || rules_ref.starts_with("https://") {
+    if let Some(policy_ref) = &workspace.workspace.policy {
+        if policy_ref.starts_with("http://") || policy_ref.starts_with("https://") {
             warnings.push(format!(
-                "remote rules URL '{}' is not supported; only local schemas are allowed",
-                rules_ref
+                "remote policy URL '{}' is not supported; policy files must be local",
+                policy_ref
             ));
         } else {
-            let local_rules_path = std::path::PathBuf::from(rules_ref);
-            if source.exists(&local_rules_path) {
-                let rules = source
-                    .read_to_string(&local_rules_path)
+            let local_policy_path = std::path::PathBuf::from(policy_ref);
+            if source.exists(&local_policy_path) {
+                let loaded_policy = source
+                    .read_to_string(&local_policy_path)
                     .map_err(|error| {
                         evin_locales::diagnostic(
                             evin_diagnostic::IssueCode::new("issue-file-parse-failed")
-                                .arg("file_path", local_rules_path.display().to_string())
+                                .arg("file_path", local_policy_path.display().to_string())
                                 .arg("error", error.to_string()),
                         )
                     })
                     .and_then(|content| {
-                        evin_gitrules::parse_str(
+                        evin_repository_policy::parse_str(
                             &content,
-                            local_rules_path
+                            local_policy_path
                                 .extension()
                                 .and_then(|extension| extension.to_str())
                                 .unwrap_or(""),
-                            Some(&local_rules_path),
+                            Some(&local_policy_path),
                         )
                         .map_err(|error| match error {
-                            evin_gitrules::ParserError::Diagnostic(diagnostic) => diagnostic,
+                            evin_repository_policy::ParserError::Diagnostic(diagnostic) => {
+                                diagnostic
+                            }
                             other => evin_locales::diagnostic(evin_diagnostic::IssueCode::custom(
                                 other.to_string(),
                             ))
                             .with_file_location(
-                                local_rules_path.display().to_string(),
+                                local_policy_path.display().to_string(),
                                 None,
                                 None,
                             ),
                         })
                     })?;
-                gitrules = Some(std::sync::Arc::new(rules));
-                gitrules_source = GitRulesSource::Local(rules_ref.clone());
+                policy = Some(std::sync::Arc::new(loaded_policy));
+                policy_source = RepositoryPolicySource::Local(policy_ref.clone());
             } else {
                 // Retain the configured source even before it exists so watch
                 // mode can observe its creation and re-resolve the rules.
-                gitrules_source = GitRulesSource::Local(rules_ref.clone());
-                warnings.push(format!("local rules path '{}' does not exist", rules_ref));
+                policy_source = RepositoryPolicySource::Local(policy_ref.clone());
+                warnings.push(format!("local policy path '{}' does not exist", policy_ref));
             }
         }
     }
@@ -655,8 +657,8 @@ pub fn load_workspace_tasks_from_sync(
         modules: workspace.workspace.modules,
         install_hint: workspace.workspace.install_hint,
         hook_runner: workspace.workspace.hook_runner,
-        gitrules,
-        gitrules_source,
+        policy,
+        policy_source,
         warnings,
         modules_discovered,
         module_versions,
@@ -988,13 +990,11 @@ mod tests {
     }
 
     #[test]
-    fn headers_are_accepted_for_workspace_module_namespace_gitrules_and_environment() {
-        use evin_flow::YamlDocument;
-
+    fn flow_headers_and_json_schema_manifests_are_loaded_by_format() {
         let mut source = crate::source::OverlaySource::default();
         source.insert(
             ".evin/workspace.flow",
-            "#!evin/v1\nworkspace: { name: app, version: 1.0.0, rules: .evin/gitrules.flow, modules: [crates/api], include: [.evin/packages.flow] }\nstages: [Build]\ntasks: {}\n",
+            "#!evin/v1\nworkspace: { name: app, version: 1.0.0, policy: .evin/policy.json, modules: [crates/api], include: [.evin/packages.flow] }\nstages: [Build]\ntasks: {}\n",
         );
         source.insert(
             "crates/api/.evin/module.flow",
@@ -1004,24 +1004,23 @@ mod tests {
             ".evin/packages.flow",
             "#!evin/v1\nnamespace: { name: packages }\ntasks: {}\n",
         );
-        source.insert(".evin/gitrules.flow", "#!evin/v1\nversion: 1\n");
+        source.insert(
+            ".evin/policy.json",
+            r#"{"$schema":"https://dl.everyinit.dev/schema/v1/policy","name":"test"}"#,
+        );
 
         let config = load_workspace_tasks_from_sync(&source).unwrap();
-        assert!(config.gitrules.is_some());
+        assert!(config.policy.is_some());
         assert!(
             config
                 .modules_discovered
                 .iter()
                 .any(|(name, _, _)| name == "api")
         );
-        assert_eq!(
-            <crate::environment::EnvironmentFlow as YamlDocument>::from_str(
-                "#!evin/v1\nversion: 1\n",
-                None,
-            )
-            .unwrap()
-            .version,
-            1
-        );
+        let environment = crate::environment::parse_environment_json(
+            r#"{"$schema":"https://dl.everyinit.dev/schema/v1/environment"}"#,
+        )
+        .unwrap();
+        assert!(environment.environments.is_empty());
     }
 }

@@ -179,7 +179,7 @@ async fn generate_changelog(
         });
 
     let skip_regex = ctx
-        .gitrules()
+        .policy()
         .releases
         .as_ref()
         .and_then(|r| r.commit_message.as_deref())
@@ -228,7 +228,7 @@ async fn generate_changelog(
             continue;
         }
 
-        let parsed = ctx.gitrules().parse_commit_message(subject);
+        let parsed = ctx.policy().parse_commit_message(subject);
         if !current_block.version.is_empty()
             && let Some(parsed) = parse_header(subject, hash, parsed)
         {
@@ -299,7 +299,7 @@ async fn generate_changelog(
 
         let mut grouped: HashMap<String, Vec<&ParsedCommit>> = HashMap::new();
         for commit in &block.commits {
-            let temp_parsed = evin_gitrules::models::ParsedCommit {
+            let temp_parsed = evin_repository_policy::models::ParsedCommit {
                 commit_type: commit.commit_type.clone(),
                 scope: commit.scope.clone(),
                 subject: commit.subject.clone(),
@@ -313,7 +313,7 @@ async fn generate_changelog(
                     override_name.clone()
                 }
             } else {
-                ctx.gitrules().get_changelog_section(&temp_parsed)
+                ctx.policy().get_changelog_section(&temp_parsed)
             };
             if !section_name.is_empty() {
                 grouped.entry(section_name).or_default().push(commit);
@@ -335,7 +335,7 @@ async fn generate_changelog(
                     entry.push_str(&format!("**{}:** ", scope));
                 }
 
-                let entry_subject = ctx.gitrules().format_ticket_links(&c.subject);
+                let entry_subject = ctx.policy().format_ticket_links(&c.subject);
 
                 entry.push_str(&entry_subject);
                 if config.show_hashes {

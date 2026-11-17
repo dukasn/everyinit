@@ -1,0 +1,24 @@
+{
+  "$schema": "https://dl.everyinit.dev/schema/v1/environment",
+  "presets": {
+    "default": ["LOG_LEVEL", "PORT"],
+    "ci": ["LOG_LEVEL", "PORT", "DATABASE_URL"]
+  },
+  "environments": {
+    "LOG_LEVEL": {
+      "type": "string",
+      "default": "info",
+      "description": "Application logging verbosity"
+    },
+    "PORT": {
+      "type": "number",
+      "default": 8080,
+      "description": "HTTP server port"
+    },
+    "DATABASE_URL": {
+      "type": "secret",
+      "required": true,
+      "description": "Database connection URI (redacted in logs)"
+    }
+  }
+}

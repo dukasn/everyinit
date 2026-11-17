@@ -16,8 +16,8 @@ pub mod hooks;
 pub mod reporter;
 
 use evin_diagnostic::IssueCode;
-use evin_gitrules::models::GitRulesRoot;
-use evin_gitrules::validator::ValidationError;
+use evin_repository_policy::models::RepositoryPolicy;
+use evin_repository_policy::validator::ValidationError;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -48,7 +48,7 @@ pub trait GitHook: Send + Sync {
 
     fn enforce(
         &self,
-        rules: &GitRulesRoot,
+        rules: &RepositoryPolicy,
         repo_root: &Path,
         payload: &[String],
     ) -> impl std::future::Future<Output = Result<(), Vec<PolicyError>>> + Send;
@@ -71,7 +71,7 @@ impl GitHook for HookVariant {
 
     async fn enforce(
         &self,
-        rules: &GitRulesRoot,
+        rules: &RepositoryPolicy,
         repo_root: &Path,
         payload: &[String],
     ) -> Result<(), Vec<PolicyError>> {
@@ -115,7 +115,7 @@ impl PolicyEngine {
     pub async fn enforce(
         &self,
         hook_type: &str,
-        rules: &GitRulesRoot,
+        rules: &RepositoryPolicy,
         repo_root: &Path,
         payload: &[String],
     ) -> Result<(), Vec<PolicyError>> {

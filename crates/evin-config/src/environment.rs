@@ -13,7 +13,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
+use thiserror::Error;
 
 /// Names of the built-in environment presets accepted by task declarations.
 pub const BUILTIN_ENVIRONMENT_PRESETS: &[&str] = &["rust", "node", "ci", "python", "aws", "docker"];
@@ -42,21 +44,52 @@ pub fn builtin_environment_preset(name: &str) -> Option<&'static [&'static str]>
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct EnvironmentFlow {
-    pub version: u32,
+pub struct EnvironmentSchema {
+    #[serde(rename = "$schema")]
+    pub schema: String,
     #[serde(default)]
     pub presets: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub environments: HashMap<String, EnvVarDef>,
 }
 
-pub type EnvironmentYaml = EnvironmentFlow;
+impl Default for EnvironmentSchema {
+    fn default() -> Self {
+        Self {
+            schema: "https://dl.everyinit.dev/schema/v1/environment".to_string(),
+            presets: HashMap::new(),
+            environments: HashMap::new(),
+        }
+    }
+}
 
-impl evin_flow::YamlDocument for EnvironmentFlow {}
+#[derive(Debug, Error)]
+pub enum EnvironmentParseError {
+    #[error("JSON parsing failed: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("JSON Schema validation failed: {0}")]
+    Schema(String),
+}
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub fn parse_environment_json(content: &str) -> Result<EnvironmentSchema, EnvironmentParseError> {
+    let value: Value = serde_json::from_str(content)?;
+    let schema: Value =
+        serde_json::from_str(include_str!("../../../schemas/v1/environment.schema.json"))?;
+    let validator = jsonschema::validator_for(&schema)
+        .map_err(|error| EnvironmentParseError::Schema(error.to_string()))?;
+    let errors = validator
+        .iter_errors(&value)
+        .map(|error| format!("{} {error}", error.instance_path()))
+        .collect::<Vec<_>>();
+    if !errors.is_empty() {
+        return Err(EnvironmentParseError::Schema(errors.join("; ")));
+    }
+    Ok(serde_json::from_value(value)?)
+}
+
+#[derive(schemars::JsonSchema, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "PascalCase")]
 pub enum EnvScope {
     Internal,
@@ -67,7 +100,7 @@ fn default_scopes() -> Vec<EnvScope> {
     vec![EnvScope::Internal, EnvScope::Process]
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct EnvVarDef {
     #[serde(rename = "type")]
@@ -173,7 +206,7 @@ where
     deserializer.deserialize_option(FlexibleDefaultVisitor)
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum EnvVarType {
     String,
@@ -244,12 +277,12 @@ const EDITOR_VARIABLE: evin_flow::schema::Schema = evin_flow::schema::Schema::Ob
 
 pub const EDITOR_SCHEMA: evin_flow::schema::Schema = evin_flow::schema::Schema::Object(&[
     evin_flow::schema::Field::new(
-        "version",
-        evin_flow::schema::Schema::Integer,
-        "flow-schema-environment-schema-version",
+        "$schema",
+        evin_flow::schema::Schema::String,
+        "flow-schema-environment-json-schema-uri",
     )
     .required()
-    .catalog("environment.version"),
+    .catalog("environment.$schema"),
     evin_flow::schema::Field::new(
         "presets",
         evin_flow::schema::Schema::Map(&EDITOR_STRING_LIST),
@@ -267,3 +300,39 @@ pub const EDITOR_SCHEMA: evin_flow::schema::Schema = evin_flow::schema::Schema::
     .default_value("{}")
     .catalog("environment.environments"),
 ]);
+
+#[cfg(test)]
+mod tests {
+    use super::{EnvironmentParseError, parse_environment_json};
+
+    #[test]
+    fn environment_json_requires_the_versioned_schema_and_rejects_unknown_fields() {
+        assert!(matches!(
+            parse_environment_json(r#"{"presets":{}}"#),
+            Err(EnvironmentParseError::Schema(_))
+        ));
+        assert!(matches!(
+            parse_environment_json(
+                r#"{"$schema":"https://dl.everyinit.dev/schema/v2/environment"}"#
+            ),
+            Err(EnvironmentParseError::Schema(_))
+        ));
+        assert!(matches!(
+            parse_environment_json(
+                r#"{"$schema":"https://dl.everyinit.dev/schema/v1/environment","version":1}"#
+            ),
+            Err(EnvironmentParseError::Schema(_))
+        ));
+    }
+
+    #[test]
+    fn environment_json_deserializes_schema_defaults_and_scalar_values() {
+        let schema = parse_environment_json(
+            r#"{"$schema":"https://dl.everyinit.dev/schema/v1/environment","environments":{"PORT":{"type":"number","default":8080},"CI":{"type":"boolean","default":true}}}"#,
+        )
+        .unwrap();
+        assert_eq!(schema.environments.len(), 2);
+        assert_eq!(schema.environments["PORT"].default.as_deref(), Some("8080"));
+        assert_eq!(schema.environments["CI"].default.as_deref(), Some("true"));
+    }
+}

@@ -200,7 +200,7 @@ fn flow_configuration_references_compile_to_a_catalog_without_site_url() {
             "30.module-configuration.4510.md".into(),
             "35.namespace-configuration.4515.md".into(),
             "40.environment-configuration.4520.md".into(),
-            "50.git-rules-configuration.4530.md".into(),
+            "50.repository-policy-configuration.4530.md".into(),
         ],
         exclude: vec![],
         extract_frontmatter: true,
@@ -215,5 +215,5 @@ fn flow_configuration_references_compile_to_a_catalog_without_site_url() {
             .hover_markdown
             .contains("**Task definitions** (`workspace.tasks`):")
     );
-    assert!(catalog.symbols.contains_key("GitRules.releases"));
+    assert!(catalog.symbols.contains_key("RepositoryPolicy.releases"));
 }

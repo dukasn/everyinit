@@ -28,39 +28,36 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Lazy startup: listen for documents opening
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument(async (document) => {
-      if (document.languageId === "flow" || document.languageId === "esh") {
-        await clientManager?.ensureClientForLanguage(document.languageId);
-        statusBar.update(vscode.window.activeTextEditor?.document.languageId);
-      }
+      await clientManager?.ensureClientForDocument(document);
+      statusBar.update(vscode.window.activeTextEditor?.document.languageId);
     })
   );
 
   // Listen for active editor changes
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor(async (editor) => {
-      const languageId = editor?.document.languageId;
-      if (languageId === "flow" || languageId === "esh") {
-        await clientManager?.ensureClientForLanguage(languageId);
+      const document = editor?.document;
+      const languageId = document?.languageId;
+      if (document) {
+        await clientManager?.ensureClientForDocument(document);
       }
       statusBar.update(languageId);
     })
   );
 
   // Immediately check the currently active editor
-  const activeLanguage = vscode.window.activeTextEditor?.document.languageId;
-  if (activeLanguage === "flow" || activeLanguage === "esh") {
-    void clientManager.ensureClientForLanguage(activeLanguage).then(() => {
+  const activeDocument = vscode.window.activeTextEditor?.document;
+  if (activeDocument) {
+    void clientManager.ensureClientForDocument(activeDocument).then(() => {
       statusBar.update(vscode.window.activeTextEditor?.document.languageId);
     });
   }
 
   // Check already opened documents (in case files were restored on startup)
   for (const document of vscode.workspace.textDocuments) {
-    if (document.languageId === "flow" || document.languageId === "esh") {
-      void clientManager.ensureClientForLanguage(document.languageId).then(() => {
-        statusBar.update(vscode.window.activeTextEditor?.document.languageId);
-      });
-    }
+    void clientManager.ensureClientForDocument(document).then(() => {
+      statusBar.update(vscode.window.activeTextEditor?.document.languageId);
+    });
   }
 
   // React to configuration changes

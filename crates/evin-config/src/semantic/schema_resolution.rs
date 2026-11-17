@@ -359,7 +359,7 @@ fn resolve_schema_node(
                 }
                 let child_path = format!("{path}.*");
                 if !path.ends_with(".tasks") && !path.ends_with(".values") {
-                    let kind = if path == "GitRules.releases.packages" {
+                    let kind = if path == "RepositoryPolicy.releases.packages" {
                         SemanticKind::PackagePolicy
                     } else if path == "environment.environments" {
                         SemanticKind::EnvironmentVariable

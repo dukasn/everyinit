@@ -1,0 +1,1310 @@
+{
+  "$defs": {
+    "AuthorshipNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_emails": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorshipPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "block_identity_forging": false,
+            "require_signatures": false
+          }
+        }
+      },
+      "type": "object"
+    },
+    "AuthorshipPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "block_identity_forging": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "require_signatures": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BranchPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "block_push_to_main": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "BranchesNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldConstraint"
+          },
+          "default": {
+            "ticket": {
+              "allowed_values": null,
+              "max_length": null,
+              "must_be": "alphanumeric-with-hyphens",
+              "pattern": null
+            },
+            "type": {
+              "allowed_values": [
+                "feat",
+                "fix",
+                "chore",
+                "docs",
+                "refactor",
+                "test"
+              ],
+              "max_length": null,
+              "must_be": null,
+              "pattern": null
+            }
+          },
+          "type": "object"
+        },
+        "name_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FormatList"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": [
+            "{type}/{ticket}-{description}",
+            "{type}/{description}"
+          ]
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BranchPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "block_push_to_main": false
+          }
+        }
+      },
+      "type": "object"
+    },
+    "ChangeTypeDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "bump": {
+          "$ref": "#/$defs/VersionBump"
+        },
+        "changelog_section": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "bump"
+      ],
+      "type": "object"
+    },
+    "ChangelogConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "host_integration": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ticket_linking": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TicketLinking"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CommitPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_empty_commits": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max_body_line_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "require_body": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "require_ticket_reference": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "CommitsNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldConstraint"
+          },
+          "default": {
+            "scope": {
+              "allowed_values": null,
+              "max_length": null,
+              "must_be": "lowercase-with-hyphens",
+              "pattern": null
+            },
+            "type": {
+              "allowed_values": [
+                "feat",
+                "fix",
+                "chore",
+                "docs",
+                "refactor",
+                "perf",
+                "test",
+                "ci",
+                "build"
+              ],
+              "max_length": null,
+              "must_be": null,
+              "pattern": null
+            }
+          },
+          "type": "object"
+        },
+        "ignore_patterns": {
+          "default": [
+            "^Merge branch",
+            "^Revert"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "message_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FormatList"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": [
+            "{type}({scope}?){breaking?}: {description}",
+            "{type}: {description}"
+          ]
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommitPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "allow_empty_commits": false,
+            "max_body_line_length": 100,
+            "require_body": false,
+            "require_ticket_reference": false
+          }
+        }
+      },
+      "type": "object"
+    },
+    "ContentBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "error_message": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pattern",
+        "error_message"
+      ],
+      "type": "object"
+    },
+    "ContentRule": {
+      "additionalProperties": false,
+      "properties": {
+        "error_message": {
+          "type": "string"
+        },
+        "exclude": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "forbid_pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "include": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "require_pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "error_message"
+      ],
+      "type": "object"
+    },
+    "FieldConstraint": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_values": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "max_length": {
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "must_be": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pattern": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "FilesNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "content_rules": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ContentRule"
+          },
+          "type": "array"
+        },
+        "ignore": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "naming_convention": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FilesPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "block_paths": []
+          }
+        }
+      },
+      "type": "object"
+    },
+    "FilesPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "block_paths": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "FormatList": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      ]
+    },
+    "HistoryNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "content_blocks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ContentBlock"
+          },
+          "type": "array"
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HistoryPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "max_staged_file_size": "50MB",
+            "require_linear_history": false
+          }
+        }
+      },
+      "type": "object"
+    },
+    "HistoryPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "max_staged_file_size": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "require_linear_history": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "LfsNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LfsPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "require_lfs_installed": false,
+            "require_tracking_for": [
+              ".psd",
+              ".mp4",
+              ".zip",
+              ".tar.gz",
+              ".mov"
+            ]
+          }
+        }
+      },
+      "type": "object"
+    },
+    "LfsPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "require_lfs_installed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "require_tracking_for": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "PackageReleasePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "$ref": "#/$defs/PackageRevisionPolicy",
+          "default": {
+            "scope": "package"
+          }
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "watch": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "watch",
+        "targets"
+      ],
+      "type": "object"
+    },
+    "PackageRevisionPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/PackageRevisionScope",
+          "default": "package"
+        }
+      },
+      "type": "object"
+    },
+    "PackageRevisionScope": {
+      "enum": [
+        "package",
+        "target"
+      ],
+      "type": "string"
+    },
+    "PrereleaseConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "channels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "start_at_one": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "PullRequestPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "block_wip_prefixes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "require_assignee": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "require_linked_issue": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "PullRequestsNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PullRequestPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "block_wip_prefixes": [
+              "WIP:",
+              "DRAFT:"
+            ],
+            "require_assignee": false,
+            "require_linked_issue": false
+          }
+        },
+        "title_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FormatList"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "{type}({scope}?): {description}"
+        }
+      },
+      "type": "object"
+    },
+    "ReleasePolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "breaking_change_bump": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VersionBump"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pre_release_prefix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ReleasesNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "change_types": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ChangeTypeDefinition"
+          },
+          "default": {
+            "build": {
+              "bump": "patch",
+              "changelog_section": "Miscellaneous"
+            },
+            "chore": {
+              "bump": "patch",
+              "changelog_section": "Miscellaneous"
+            },
+            "ci": {
+              "bump": "none",
+              "changelog_section": "Miscellaneous"
+            },
+            "docs": {
+              "bump": "patch",
+              "changelog_section": "Documentation"
+            },
+            "feat": {
+              "bump": "minor",
+              "changelog_section": "Features"
+            },
+            "fix": {
+              "bump": "patch",
+              "changelog_section": "Bug Fixes"
+            },
+            "perf": {
+              "bump": "patch",
+              "changelog_section": "Performance Improvements"
+            },
+            "refactor": {
+              "bump": "patch",
+              "changelog_section": "Refactoring"
+            },
+            "test": {
+              "bump": "none",
+              "changelog_section": "Miscellaneous"
+            }
+          },
+          "type": "object"
+        },
+        "changelog": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangelogConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "host_integration": null,
+            "ticket_linking": null
+          }
+        },
+        "commit_message": {
+          "default": "chore(release): {version}",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "packages": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageReleasePolicy"
+          },
+          "default": {},
+          "type": "object"
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReleasePolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "breaking_change_bump": "major",
+            "pre_release_prefix": "rc"
+          }
+        },
+        "prerelease": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PrereleaseConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "channels": {
+              "alpha": "alpha.{n}",
+              "beta": "beta.{n}",
+              "canary": "canary.{n}",
+              "dev": "dev.{n}",
+              "nightly": "nightly.{n}",
+              "preview": "preview.{n}",
+              "rc": "rc.{n}",
+              "test": "test.{n}"
+            },
+            "start_at_one": false
+          }
+        },
+        "versioning": {
+          "$ref": "#/$defs/VersioningConfig",
+          "default": {
+            "strategy": "semver"
+          }
+        }
+      },
+      "type": "object"
+    },
+    "RemotePolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_push_remotes": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "block_force_push": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "require_up_to_date": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "RemotesNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemotePolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "allowed_push_remotes": [
+              "origin"
+            ],
+            "block_force_push": [
+              "main",
+              "master"
+            ],
+            "require_up_to_date": true
+          }
+        }
+      },
+      "type": "object"
+    },
+    "SubmodulePolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_creation": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "allowed_hosts": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "SubmodulesNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubmodulePolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "allow_creation": false,
+            "allowed_hosts": []
+          }
+        }
+      },
+      "type": "object"
+    },
+    "TagPolicies": {
+      "additionalProperties": false,
+      "properties": {
+        "block_deletion": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "require_annotated": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "TagsNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "name_format": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FormatList"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "v{version}"
+        },
+        "policies": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TagPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": {
+            "block_deletion": true,
+            "require_annotated": true
+          }
+        }
+      },
+      "type": "object"
+    },
+    "TicketLinking": {
+      "additionalProperties": false,
+      "properties": {
+        "prefix": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url_template": {
+          "default": null,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "VersionBump": {
+      "enum": [
+        "major",
+        "minor",
+        "patch",
+        "none"
+      ],
+      "type": "string"
+    },
+    "VersioningConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "strategy": {
+          "$ref": "#/$defs/VersioningStrategy",
+          "default": "semver"
+        }
+      },
+      "type": "object"
+    },
+    "VersioningStrategy": {
+      "enum": [
+        "semver",
+        "cargo"
+      ],
+      "type": "string"
+    }
+  },
+  "$id": "https://dl.everyinit.dev/schema/v1/policy",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "https://dl.everyinit.dev/schema/v1/policy",
+      "type": "string"
+    },
+    "authorship": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AuthorshipNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "allowed_emails": [],
+        "policies": {
+          "block_identity_forging": false,
+          "require_signatures": false
+        }
+      }
+    },
+    "branches": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BranchesNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "fields": {
+          "ticket": {
+            "allowed_values": null,
+            "max_length": null,
+            "must_be": "alphanumeric-with-hyphens",
+            "pattern": null
+          },
+          "type": {
+            "allowed_values": [
+              "feat",
+              "fix",
+              "chore",
+              "docs",
+              "refactor",
+              "test"
+            ],
+            "max_length": null,
+            "must_be": null,
+            "pattern": null
+          }
+        },
+        "name_format": [
+          "{type}/{ticket}-{description}",
+          "{type}/{description}"
+        ],
+        "policies": {
+          "block_push_to_main": false
+        }
+      }
+    },
+    "commits": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CommitsNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "fields": {
+          "scope": {
+            "allowed_values": null,
+            "max_length": null,
+            "must_be": "lowercase-with-hyphens",
+            "pattern": null
+          },
+          "type": {
+            "allowed_values": [
+              "feat",
+              "fix",
+              "chore",
+              "docs",
+              "refactor",
+              "perf",
+              "test",
+              "ci",
+              "build"
+            ],
+            "max_length": null,
+            "must_be": null,
+            "pattern": null
+          }
+        },
+        "ignore_patterns": [
+          "^Merge branch",
+          "^Revert"
+        ],
+        "message_format": [
+          "{type}({scope}?){breaking?}: {description}",
+          "{type}: {description}"
+        ],
+        "policies": {
+          "allow_empty_commits": false,
+          "max_body_line_length": 100,
+          "require_body": false,
+          "require_ticket_reference": false
+        }
+      }
+    },
+    "description": {
+      "default": "Provides standard conventional commits and safety defaults.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "files": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FilesNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "content_rules": [],
+        "ignore": [],
+        "naming_convention": null,
+        "policies": {
+          "block_paths": []
+        }
+      }
+    },
+    "history": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HistoryNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "content_blocks": [],
+        "policies": {
+          "max_staged_file_size": "50MB",
+          "require_linear_history": false
+        }
+      }
+    },
+    "lfs": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LfsNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "policies": {
+          "require_lfs_installed": false,
+          "require_tracking_for": [
+            ".psd",
+            ".mp4",
+            ".zip",
+            ".tar.gz",
+            ".mov"
+          ]
+        }
+      }
+    },
+    "name": {
+      "default": "Default Repository Policy",
+      "type": "string"
+    },
+    "pull_requests": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PullRequestsNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "policies": {
+          "block_wip_prefixes": [
+            "WIP:",
+            "DRAFT:"
+          ],
+          "require_assignee": false,
+          "require_linked_issue": false
+        },
+        "title_format": "{type}({scope}?): {description}"
+      }
+    },
+    "releases": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReleasesNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "change_types": {
+          "build": {
+            "bump": "patch",
+            "changelog_section": "Miscellaneous"
+          },
+          "chore": {
+            "bump": "patch",
+            "changelog_section": "Miscellaneous"
+          },
+          "ci": {
+            "bump": "none",
+            "changelog_section": "Miscellaneous"
+          },
+          "docs": {
+            "bump": "patch",
+            "changelog_section": "Documentation"
+          },
+          "feat": {
+            "bump": "minor",
+            "changelog_section": "Features"
+          },
+          "fix": {
+            "bump": "patch",
+            "changelog_section": "Bug Fixes"
+          },
+          "perf": {
+            "bump": "patch",
+            "changelog_section": "Performance Improvements"
+          },
+          "refactor": {
+            "bump": "patch",
+            "changelog_section": "Refactoring"
+          },
+          "test": {
+            "bump": "none",
+            "changelog_section": "Miscellaneous"
+          }
+        },
+        "changelog": {
+          "host_integration": null,
+          "ticket_linking": null
+        },
+        "commit_message": "chore(release): {version}",
+        "packages": {},
+        "policies": {
+          "breaking_change_bump": "major",
+          "pre_release_prefix": "rc"
+        },
+        "prerelease": {
+          "channels": {
+            "alpha": "alpha.{n}",
+            "beta": "beta.{n}",
+            "canary": "canary.{n}",
+            "dev": "dev.{n}",
+            "nightly": "nightly.{n}",
+            "preview": "preview.{n}",
+            "rc": "rc.{n}",
+            "test": "test.{n}"
+          },
+          "start_at_one": false
+        },
+        "versioning": {
+          "strategy": "semver"
+        }
+      }
+    },
+    "remotes": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RemotesNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "policies": {
+          "allowed_push_remotes": [
+            "origin"
+          ],
+          "block_force_push": [
+            "main",
+            "master"
+          ],
+          "require_up_to_date": true
+        }
+      }
+    },
+    "submodules": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SubmodulesNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "policies": {
+          "allow_creation": false,
+          "allowed_hosts": []
+        }
+      }
+    },
+    "tags": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TagsNamespace"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": {
+        "name_format": "v{version}",
+        "policies": {
+          "block_deletion": true,
+          "require_annotated": true
+        }
+      }
+    }
+  },
+  "required": [
+    "$schema"
+  ],
+  "title": "RepositoryPolicy",
+  "type": "object"
+}

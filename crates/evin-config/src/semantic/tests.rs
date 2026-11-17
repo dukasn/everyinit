@@ -98,7 +98,7 @@ async fn snapshot_keeps_raw_documents_and_template_definitions() {
 async fn semantic_tokens_overlay_flow_meaning_on_generic_structure_roles() {
     let text = r#"workspace:
   name: app
-  rules: ".evin/gitrules.flow"
+  policy: ".evin/policy.json"
   custom: { nested_unknown: "ordinary text" }
 stages: [Build, Test]
 tasks:
@@ -145,7 +145,7 @@ tasks:
     assert_eq!(kind_at("pre-commit"), SemanticTokenKind::EnumMember);
     assert_eq!(kind_at("evin/archive@v1"), SemanticTokenKind::Method);
     assert_eq!(kind_at("${artifact}"), SemanticTokenKind::Variable);
-    assert_eq!(kind_at(".evin/gitrules.flow"), SemanticTokenKind::String);
+    assert_eq!(kind_at(".evin/policy.json"), SemanticTokenKind::String);
     assert_eq!(kind_at("ordinary text"), SemanticTokenKind::String);
 
     assert!(tokens.windows(2).all(|pair| {
@@ -225,8 +225,8 @@ fn quoted_unicode_value_range_covers_the_source_scalar() {
 }
 
 #[test]
-fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
-    let path = PathBuf::from(".evin/gitrules.flow");
+fn policy_schema_resolves_nested_fields_dynamic_maps_and_errors() {
+    let path = PathBuf::from(".evin/policy.json");
     let text = "commits:\n  message_format: '{type}: {description}'\n  fields:\n    type:\n      allowed_values: [feat, fix]\n      pattern: '['\n  policies:\n    require_body: true\n    surprise: false\n    require_body: no\nreleases:\n  versioning: { strategy: invalid }\n  packages:\n    app:\n      watch: [src/**]\n      targets: [deb]\n      revision: { scope: target }\n    incomplete: { watch: [] }\n";
     let snapshot = WorkspaceSnapshot {
         config: None,
@@ -234,7 +234,7 @@ fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
             path.clone(),
             WorkspaceDocument {
                 path: path.clone(),
-                kind: DocumentKind::GitRules,
+                kind: DocumentKind::RepositoryPolicy,
                 header: None,
                 text: text.into(),
                 ast: Some(evin_flow::parse_yaml(text).unwrap()),
@@ -246,12 +246,21 @@ fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
     };
     let index = WorkspaceSemanticIndex::build(snapshot, &HashMap::new());
     for (key, target) in [
-        ("message_format", "GitRules.commits.message_format"),
-        ("allowed_values", "GitRules.commits.fields.*.allowed_values"),
-        ("require_body", "GitRules.commits.policies.require_body"),
-        ("strategy", "GitRules.releases.versioning.strategy"),
-        ("watch", "GitRules.releases.packages.*.watch"),
-        ("scope", "GitRules.releases.packages.*.revision.scope"),
+        ("message_format", "RepositoryPolicy.commits.message_format"),
+        (
+            "allowed_values",
+            "RepositoryPolicy.commits.fields.*.allowed_values",
+        ),
+        (
+            "require_body",
+            "RepositoryPolicy.commits.policies.require_body",
+        ),
+        ("strategy", "RepositoryPolicy.releases.versioning.strategy"),
+        ("watch", "RepositoryPolicy.releases.packages.*.watch"),
+        (
+            "scope",
+            "RepositoryPolicy.releases.packages.*.revision.scope",
+        ),
     ] {
         let offset = text.find(key).unwrap();
         let hover = index.hover_at(&path, offset).unwrap();
@@ -295,25 +304,26 @@ fn gitrules_schema_resolves_nested_fields_dynamic_maps_and_errors() {
     assert!(
         messages
             .iter()
-            .any(|message| message.contains("Unknown field GitRules.commits.policies.surprise")),
+            .any(|message| message
+                .contains("Unknown field RepositoryPolicy.commits.policies.surprise")),
         "{messages:?}"
     );
     assert!(messages.iter().any(|message| {
-        message.contains("Duplicate field GitRules.commits.policies.require_body")
+        message.contains("Duplicate field RepositoryPolicy.commits.policies.require_body")
     }));
     assert!(messages.iter().any(|message| {
-        message.contains("GitRules.commits.policies.require_body expects boolean")
+        message.contains("RepositoryPolicy.commits.policies.require_body expects boolean")
     }));
     assert!(messages.iter().any(|message| {
-        message.contains("Missing required field GitRules.releases.packages.*.targets")
+        message.contains("Missing required field RepositoryPolicy.releases.packages.*.targets")
     }));
     assert!(messages.iter().any(|message| {
-        message.contains("Invalid regular expression for GitRules.commits.fields.*.pattern")
+        message.contains("Invalid regular expression for RepositoryPolicy.commits.fields.*.pattern")
     }));
     assert!(
         messages
             .iter()
-            .any(|message| message.contains("GitRules.releases.versioning.strategy")),
+            .any(|message| message.contains("RepositoryPolicy.releases.versioning.strategy")),
         "{messages:?}"
     );
 }
@@ -538,8 +548,8 @@ fn empty_enum_value_offers_only_declared_choices() {
 }
 
 #[test]
-fn gitrules_versioning_strategy_completion_offers_supported_presets() {
-    let path = PathBuf::from(".evin/gitrules.flow");
+fn policy_versioning_strategy_completion_offers_supported_presets() {
+    let path = PathBuf::from(".evin/policy.json");
     let text = "releases:\n  versioning:\n    strategy: \n";
     let snapshot = WorkspaceSnapshot {
         config: None,
@@ -547,7 +557,7 @@ fn gitrules_versioning_strategy_completion_offers_supported_presets() {
             path.clone(),
             WorkspaceDocument {
                 path: path.clone(),
-                kind: DocumentKind::GitRules,
+                kind: DocumentKind::RepositoryPolicy,
                 header: None,
                 text: text.into(),
                 ast: Some(evin_flow::parse_yaml(text).unwrap()),
@@ -795,20 +805,20 @@ fn configuration_keys_share_canonical_completion_and_hover_targets() {
             ][..],
         ),
         (
-            ".evin/environment.flow",
+            ".evin/environment.json",
             DocumentKind::Environment,
-            "version: 1\npresets: {}\nenvironments: {}\n",
+            "{\"$schema\":\"https://dl.everyinit.dev/schema/v1/environment\",\"presets\":{},\"environments\":{}}",
             &[
-                "environment.version",
+                "environment.$schema",
                 "environment.presets",
                 "environment.environments",
             ][..],
         ),
         (
-            ".evin/gitrules.flow",
-            DocumentKind::GitRules,
+            ".evin/policy.json",
+            DocumentKind::RepositoryPolicy,
             "releases: {}\n",
-            &["GitRules.releases"][..],
+            &["RepositoryPolicy.releases"][..],
         ),
     ];
     let mut snapshot = WorkspaceSnapshot {
@@ -863,21 +873,21 @@ fn configuration_keys_share_canonical_completion_and_hover_targets() {
         .map(CatalogTarget::as_str)
         .collect::<BTreeSet<_>>();
     assert!(targets.is_superset(&BTreeSet::from([
-        "GitRules",
-        "GitRules.authorship",
-        "GitRules.branches",
-        "GitRules.commits",
-        "GitRules.description",
-        "GitRules.files",
-        "GitRules.history",
-        "GitRules.lfs",
-        "GitRules.name",
-        "GitRules.pull_requests",
-        "GitRules.releases",
-        "GitRules.remotes",
-        "GitRules.submodules",
-        "GitRules.tags",
-        "GitRules.version",
+        "RepositoryPolicy",
+        "RepositoryPolicy.authorship",
+        "RepositoryPolicy.branches",
+        "RepositoryPolicy.commits",
+        "RepositoryPolicy.description",
+        "RepositoryPolicy.files",
+        "RepositoryPolicy.history",
+        "RepositoryPolicy.lfs",
+        "RepositoryPolicy.name",
+        "RepositoryPolicy.pull_requests",
+        "RepositoryPolicy.releases",
+        "RepositoryPolicy.remotes",
+        "RepositoryPolicy.submodules",
+        "RepositoryPolicy.tags",
+        "RepositoryPolicy.$schema",
         "environment",
         "environment.default",
         "environment.description",
@@ -888,7 +898,7 @@ fn configuration_keys_share_canonical_completion_and_hover_targets() {
         "environment.scopes",
         "environment.stages",
         "environment.type",
-        "environment.version",
+        "environment.$schema",
         "module",
         "module.env",
         "module.include",
@@ -933,18 +943,18 @@ fn configuration_keys_share_canonical_completion_and_hover_targets() {
         "workspace.install_hint",
         "workspace.modules",
         "workspace.name",
-        "workspace.rules",
+        "workspace.policy",
         "workspace.stages",
         "workspace.tasks",
         "workspace.values",
         "workspace.version",
     ])));
     for target in [
-        "GitRules.commits.message_format",
-        "GitRules.commits.fields.*.allowed_values",
-        "GitRules.commits.policies.require_body",
-        "GitRules.releases.versioning.strategy",
-        "GitRules.releases.packages.*.revision.scope",
+        "RepositoryPolicy.commits.message_format",
+        "RepositoryPolicy.commits.fields.*.allowed_values",
+        "RepositoryPolicy.commits.policies.require_body",
+        "RepositoryPolicy.releases.versioning.strategy",
+        "RepositoryPolicy.releases.packages.*.revision.scope",
     ] {
         assert!(targets.contains(target), "missing schema target {target}");
     }
@@ -1038,7 +1048,7 @@ async fn reference_completion_is_scoped_and_unknown_positions_are_empty() {
         "namespace: { name: web }\ntasks: { build: { stage: Build, run: echo web } }\n",
     );
     source.insert(
-        ".evin/environment.flow",
+        ".evin/environment.json",
         "version: 1\nenvironments: { PORT: { type: number } }\n",
     );
     let index = WorkspaceSemanticIndex::build(WorkspaceSnapshot::load(&source).await, &actions());
@@ -1107,7 +1117,7 @@ async fn environment_hook_and_boolean_values_are_contextual() {
     let text = "workspace: { name: app, version: 1.0.0 }\nstages: [Build]\ntasks:\n  build:\n    stage: Build\n    env: [PO]\n    presets: [ru]\n    on: { hooks: [pre] }\n    pure: tr\n";
     source.insert(".evin/workspace.flow", text);
     source.insert(
-        ".evin/environment.flow",
+        ".evin/environment.json",
         "version: 1\npresets: { rust-web: [PORT] }\nenvironments: { PORT: { type: number } }\n",
     );
     let index = WorkspaceSemanticIndex::build(WorkspaceSnapshot::load(&source).await, &actions());
@@ -1138,7 +1148,7 @@ async fn environment_definitions_and_exposed_tasks_have_typed_completion() {
         ".evin/release.flow",
         "namespace: { name: release }\ntasks: { build: { stage: Build, run: echo } }\n",
     );
-    source.insert(".evin/environment.flow", environment);
+    source.insert(".evin/environment.json", environment);
     let index = WorkspaceSemanticIndex::build(WorkspaceSnapshot::load(&source).await, &actions());
 
     let labels_at = |path: &str, text: &str, token: &str| {
@@ -1152,14 +1162,14 @@ async fn environment_definitions_and_exposed_tasks_have_typed_completion() {
     assert!(labels_at(".evin/workspace.flow", workspace, "expose: [rel").contains("release:build"));
     assert!(
         labels_at(
-            ".evin/environment.flow",
+            ".evin/environment.json",
             environment,
             "presets: { rust-web: [PO"
         )
         .contains("PORT")
     );
-    assert!(labels_at(".evin/environment.flow", environment, "stages: [Bu").contains("Build"));
-    assert!(!labels_at(".evin/environment.flow", environment, "stages: [Bu").contains("rust-web"));
+    assert!(labels_at(".evin/environment.json", environment, "stages: [Bu").contains("Build"));
+    assert!(!labels_at(".evin/environment.json", environment, "stages: [Bu").contains("rust-web"));
 }
 
 #[tokio::test]
@@ -1223,7 +1233,7 @@ async fn task_output_template_completion_uses_declared_prerequisites() {
     let text = "workspace: { name: app, version: 1.0.0 }\nstages: [Build]\ntasks:\n  producer:\n    stage: Build\n    steps:\n      - uses: test/action@v1\n  consumer:\n    stage: Build\n    needs: [producer]\n    steps:\n      - uses: test/action@v1\n        with: { label: '${pro}' }\n      - uses: test/action@v1\n        with: { label: '${producer.ar}' }\n      - uses: test/action@v1\n        with: { label: '${env.PO}' }\n";
     source.insert(".evin/workspace.flow", text);
     source.insert(
-        ".evin/environment.flow",
+        ".evin/environment.json",
         "version: 1\nenvironments: { PORT: { type: number } }\n",
     );
     let index = WorkspaceSemanticIndex::build(WorkspaceSnapshot::load(&source).await, &actions());
@@ -1343,9 +1353,9 @@ fn environment_variable_fields_index_catalog_targets() {
         diagnostics: Vec::new(),
     };
     snapshot.documents.insert(
-        PathBuf::from(".evin/environment.flow"),
+        PathBuf::from(".evin/environment.json"),
         WorkspaceDocument {
-            path: PathBuf::from(".evin/environment.flow"),
+            path: PathBuf::from(".evin/environment.json"),
             kind: DocumentKind::Environment,
             header: None,
             text: text.into(),
@@ -1358,7 +1368,7 @@ fn environment_variable_fields_index_catalog_targets() {
     let type_offset = text.find("type:").unwrap();
     assert_eq!(
         index
-            .hover_at(Path::new(".evin/environment.flow"), type_offset)
+            .hover_at(Path::new(".evin/environment.json"), type_offset)
             .and_then(|info| info.catalog_target)
             .as_ref()
             .map(CatalogTarget::as_str),
@@ -1367,7 +1377,7 @@ fn environment_variable_fields_index_catalog_targets() {
     let req_offset = text.find("required:").unwrap();
     assert_eq!(
         index
-            .hover_at(Path::new(".evin/environment.flow"), req_offset)
+            .hover_at(Path::new(".evin/environment.json"), req_offset)
             .and_then(|info| info.catalog_target)
             .as_ref()
             .map(CatalogTarget::as_str),
@@ -1418,7 +1428,7 @@ fn workspace_metadata_fields_index_catalog_targets() {
 
 #[test]
 fn comments_do_not_trigger_hover() {
-    let path = PathBuf::from(".evin/gitrules.flow");
+    let path = PathBuf::from(".evin/policy.json");
     let text = "#!evin/v1\nversion: 1\nname: Git Development Standard (Canary)\n\ncommits:\n  # The conventional commit format used for all commit messages.\n  # Can be a single string or an array of acceptable formats.\n  message_format:\n    - \"{type}({scope}?){breaking?}: {description}\"\n    - \"{type}: {description}\"\n\n  # Commits matching these regex patterns will bypass validation.\n  ignore_patterns:\n    - \"^Merge branch\"\n    - \"^Revert\"\n\n  # Enforce specific rules for different named capturing groups in your format.\n  fields:\n    type:\n      # The allowed semantic commit types.\n      allowed_values: [feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert]\n      # Enforce a specific casing style.\n      must_be: lowercase-with-hyphens\n    description:\n      max_length: 72\n\n  policies:\n    # Do we require a commit body?\n    require_body: false # inline comment\n    # Do we require an issue tracker link in the footer?\n    require_ticket_reference: false\n";
     let snapshot = WorkspaceSnapshot {
         config: None,
@@ -1426,7 +1436,7 @@ fn comments_do_not_trigger_hover() {
             path.clone(),
             WorkspaceDocument {
                 path: path.clone(),
-                kind: DocumentKind::GitRules,
+                kind: DocumentKind::RepositoryPolicy,
                 header: None,
                 text: text.into(),
                 ast: Some(evin_flow::parse_yaml(text).unwrap()),
@@ -1491,14 +1501,14 @@ fn no_comment_byte_produces_a_hover_wherever_it_is_placed() {
         text.push_str("# column zero comment - item\n");
         text.push_str(&format!("{line} # trailing 'quoted' comment: x\n"));
     }
-    let path = PathBuf::from(".evin/gitrules.flow");
+    let path = PathBuf::from(".evin/policy.json");
     let snapshot = WorkspaceSnapshot {
         config: None,
         documents: BTreeMap::from([(
             path.clone(),
             WorkspaceDocument {
                 path: path.clone(),
-                kind: DocumentKind::GitRules,
+                kind: DocumentKind::RepositoryPolicy,
                 header: None,
                 text: text.clone(),
                 ast: Some(evin_flow::parse_yaml(&text).unwrap()),
@@ -1536,15 +1546,15 @@ fn no_comment_byte_produces_a_hover_wherever_it_is_placed() {
 }
 
 #[test]
-fn test_exact_gitrules_file() {
-    let content = std::fs::read_to_string("../../.evin/gitrules.flow").unwrap();
-    let path = PathBuf::from(".evin/gitrules.flow");
+fn test_exact_policy_file() {
+    let content = std::fs::read_to_string("../../.evin/policy.json").unwrap();
+    let path = PathBuf::from(".evin/policy.json");
     let doc = WorkspaceDocument {
         path: path.clone(),
-        kind: DocumentKind::GitRules,
+        kind: DocumentKind::RepositoryPolicy,
         header: None,
         text: content.clone(),
-        ast: evin_flow::parse_yaml(&content).ok(),
+        ast: Some(evin_flow::parse_yaml(&content).expect("JSON policy is parseable as a document")),
         completion_ast: None,
         diagnostics: Vec::new(),
     };
@@ -1554,8 +1564,8 @@ fn test_exact_gitrules_file() {
         diagnostics: Vec::new(),
     };
     let index = WorkspaceSemanticIndex::build(snapshot, &HashMap::new());
-    let b_offset = content.find("branches:").unwrap();
-    let tags_offset = content.find("tags:").unwrap();
+    let b_offset = content.find("branches").unwrap();
+    let tags_offset = content.find("tags").unwrap();
     for off in b_offset..tags_offset {
         let char_at = &content[off..off + 1];
         if char_at == " " || char_at == "\n" {
