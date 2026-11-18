@@ -55,8 +55,8 @@ jobs:
         with:
           cache: false
         env:
-          MISE_ENABLE_TOOLS: rust
-          MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: rust
+          MISE_ENABLE_TOOLS: rust,node,npm
+          MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: rust,node,npm
       - uses: Swatinem/rust-cache@v2
       - name: Require exact successful main push CI
         run: cargo evin-dev run --verbose release:ci:require
@@ -69,13 +69,6 @@ jobs:
       - name: Install the release Rust target
         if: steps.proposal.outputs.merged == '1'
         run: rustup target add x86_64-unknown-linux-musl
-      - uses: jdx/mise-action@v5
-        if: steps.proposal.outputs.merged == '1'
-        with:
-          cache: false
-        env:
-          MISE_ENABLE_TOOLS: node,npm
-          MISE_IDIOMATIC_VERSION_FILE_ENABLE_TOOLS: node,npm
       - name: Bootstrap locked workspace dependencies
         if: steps.proposal.outputs.merged == '1'
         run: |
@@ -144,4 +137,4 @@ jobs:
       - name: Require merged releases to be published before proposing
         run: cargo evin-dev run --verbose release:ci:audit
       - name: Maintain the release pull request
-        run: cargo evin-dev run --verbose release:ci:reconcile
+        run: mise exec -- cargo evin-dev run --verbose release:ci:reconcile

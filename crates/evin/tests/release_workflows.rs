@@ -43,7 +43,10 @@ fn workflow_step_run(name: &str) -> String {
 
 fn step(name: &str) -> String {
     let run = workflow_step_run(name);
-    let trimmed = run.trim();
+    let trimmed = run
+        .trim()
+        .strip_prefix("mise exec -- ")
+        .unwrap_or(run.trim());
     if let Some(task) = trimmed
         .strip_prefix("cargo evin-dev run --verbose release:")
         .or_else(|| trimmed.strip_prefix("cargo evin-dev run release:"))
@@ -164,10 +167,12 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         ),
         ("Maintain the release pull request", "release:ci:reconcile"),
     ] {
-        assert_eq!(
-            workflow_step_run(step_name),
+        let expected_run = if expected_task == "release:ci:reconcile" {
+            format!("mise exec -- cargo evin-dev run --verbose {expected_task}")
+        } else {
             format!("cargo evin-dev run --verbose {expected_task}")
-        );
+        };
+        assert_eq!(workflow_step_run(step_name), expected_run);
     }
     let identity = step("Identify merged release proposal");
     for value in [
