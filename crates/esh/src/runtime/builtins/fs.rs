@@ -1207,7 +1207,11 @@ fn copy_metadata(
         if !symlink {
             let mut mode = metadata.permissions().mode() & 0o7777;
             if !ownership_preserved {
-                mode &= !(libc::S_ISUID | libc::S_ISGID);
+                // libc gives these constants different integer types across
+                // Unix platforms; PermissionsExt::mode() always returns u32.
+                #[allow(clippy::unnecessary_cast)]
+                let set_id_bits = libc::S_ISUID as u32 | libc::S_ISGID as u32;
+                mode &= !set_id_bits;
             }
             fs::set_permissions(destination, fs::Permissions::from_mode(mode))?;
         }

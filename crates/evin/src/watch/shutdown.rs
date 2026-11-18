@@ -13,9 +13,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::engine::PipelineCompletion;
+#[cfg(unix)]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
+#[cfg(not(unix))]
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CleanupOutcome {
