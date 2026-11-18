@@ -17,6 +17,9 @@ on:
 permissions:
   contents: read
 
+env:
+  MISE_ENABLE_TOOLS: rust
+
 jobs:
   windows:
     name: Experimental Windows probe
