@@ -63,10 +63,12 @@ export class EveryinitClientManager implements vscode.Disposable {
   }>();
   public readonly onDidFinishTaskRun = this.taskRunFinishedEmitter.event;
 
-  private outputChannel: vscode.OutputChannel;
+  private outputChannel: vscode.LogOutputChannel;
 
   constructor() {
-    this.outputChannel = vscode.window.createOutputChannel("Everyinit Language Server");
+    this.outputChannel = vscode.window.createOutputChannel("Everyinit Language Server", {
+      log: true,
+    });
   }
 
   public showOutputChannel(): void {

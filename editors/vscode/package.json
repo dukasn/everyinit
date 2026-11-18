@@ -33,7 +33,7 @@
     "lsp"
   ],
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.91.0"
   },
   "activationEvents": [
     "workspaceContains:.evin/workspace.flow"
@@ -622,15 +622,19 @@
     "package:verify": "node scripts/verify-vsix.mjs"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^11.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "@types/vscode": "^1.90.0",
-    "@vscode/vsce": "^4.1.0",
+    "@types/vscode": "^1.146.0",
+    "@vscode/vsce": "^4.1.1",
     "esbuild": "^0.28.2",
     "fantasticon": "^4.1.0",
-    "oxlint": "^1.87.0",
+    "oxlint": "^1.94.0",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "glob": "^14.0.6",
+    "minimatch": "^11.0.9"
   }
 }

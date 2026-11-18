@@ -12,10 +12,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use evin_doc::{
     CompileOptions, DocFormat, DocumentInput, SourceResolver, compile_site, latex_to_unicode,
 };
+use std::hint::black_box;
 use std::path::PathBuf;
 
 fn corpus() -> Vec<(evin_doc::ResolvedDocFile, String)> {

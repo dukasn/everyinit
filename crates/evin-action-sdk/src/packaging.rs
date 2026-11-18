@@ -220,8 +220,8 @@ impl PackageContext {
                         data,
                         mode,
                         mtime: epoch,
-                        md5: Some(format!("{:x}", md5.finalize())),
-                        sha256: Some(format!("{:x}", sha.finalize())),
+                        md5: Some(digest_hex(md5.finalize().as_ref())),
+                        sha256: Some(digest_hex(sha.finalize().as_ref())),
                     },
                 )
                 .is_some()
@@ -366,7 +366,11 @@ pub fn write_atomically(
 pub fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    format!("{:x}", hasher.finalize())
+    digest_hex(hasher.finalize().as_ref())
+}
+
+fn digest_hex(digest: &[u8]) -> String {
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 pub fn normalize_archive_path(path: &str) -> Result<String, PackagingError> {

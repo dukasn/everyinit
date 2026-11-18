@@ -182,7 +182,7 @@ async fn test_archive_and_unarchive_tar_and_zip() {
     let zip_file = fs::File::open(tmp.path().join("bundle.zip")).unwrap();
     let mut zip = zip::ZipArchive::new(zip_file).unwrap();
     let zip_names = (0..zip.len())
-        .map(|index| zip.by_index(index).unwrap().name().to_string())
+        .map(|index| zip.by_index(index).unwrap().name().unwrap().into_owned())
         .collect::<Vec<_>>();
     assert!(zip_names.iter().all(|name| !name.contains('\\')));
 

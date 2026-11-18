@@ -12,8 +12,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use esh::{Engine, ExecutionContext};
+use std::hint::black_box;
 use tempfile::tempdir;
 
 fn bench_runtime(c: &mut Criterion) {

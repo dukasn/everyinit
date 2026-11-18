@@ -7,7 +7,7 @@ completions, workflow navigation, task execution, and ESH script execution.
 ## Install
 
 Install [Everyinit from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=everyinit.everyinit).
-The extension requires VS Code 1.90 or later.
+The extension requires VS Code 1.91 or later.
 
 The extension package runs in VS Code's extension host. Evin provides the
 `.flow` language server and workflow commands; ESH provides `.esh` language

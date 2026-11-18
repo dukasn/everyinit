@@ -13,10 +13,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use bumpalo::Bump;
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use esh::lexer::cursor::Lexer;
 use esh::parser::pratt::Parser;
 use esh::planner::compiler::compile_script;
+use std::hint::black_box;
 
 const COMPLEX_SCRIPT: &str = r#"
 #!/usr/bin/env esh

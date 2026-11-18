@@ -585,7 +585,10 @@ async fn verify_mirror_candidate_downloads_and_checks_signed_artifacts() {
         fs::create_dir_all(&directory).unwrap();
         let filename = format!("{binary}-v1.2.3-x86_64-unknown-linux-musl.tar.gz");
         let archive = format!("{binary} archive").into_bytes();
-        let digest = format!("{:x}", Sha256::digest(&archive));
+        let digest = Sha256::digest(&archive)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
         let manifest = format!("{digest}  {filename}\n");
         fs::write(directory.join(&filename), archive).unwrap();
         fs::write(directory.join("SHA256SUMS"), &manifest).unwrap();
@@ -732,7 +735,13 @@ fn release_fixture(root: &Path, artifacts: &[(String, Vec<u8>)]) -> PathBuf {
 
     let manifest = artifacts
         .iter()
-        .map(|(name, content)| format!("{:x}  {name}\n", Sha256::digest(content)))
+        .map(|(name, content)| {
+            let digest = Sha256::digest(content)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            format!("{digest}  {name}\n")
+        })
         .collect::<String>();
     let key_pair = Ed25519KeyPair::from_pkcs8(
         Ed25519KeyPair::generate_pkcs8(&SystemRandom::new())

@@ -14,7 +14,7 @@
 
 use crate::v1::ast::{DiagramKind, DocNode};
 use evin_diagnostic::{Diagnostic, IssueCode};
-use merman::render::HeadlessRenderer;
+use merman::{OperationControl, RenderOutput, RenderRequest, Renderer, SvgRequest};
 use pikchr::{Pikchr, PikchrFlags};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -148,11 +148,25 @@ fn render_svg(
     description: &str,
 ) -> Result<String, String> {
     let svg = match kind {
-        DiagramKind::Mermaid => HeadlessRenderer::new()
-            .with_diagram_id(id)
-            .render_svg_readable_sync(source)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| "Mermaid source did not produce a diagram".to_string())?,
+        DiagramKind::Mermaid => {
+            let output = Renderer::new()
+                .render(RenderRequest::svg(
+                    source,
+                    OperationControl::new(),
+                    SvgRequest {
+                        options: merman::svg::SvgRenderOptions {
+                            diagram_id: Some(id.to_string()),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    },
+                ))
+                .map_err(|error| error.to_string())?;
+            let RenderOutput::Svg(Some(svg)) = output else {
+                return Err("Mermaid source did not produce a diagram".to_string());
+            };
+            svg.svg().to_string()
+        }
         DiagramKind::Svgbob => svgbob::to_svg_string_pretty(source),
         DiagramKind::Pikchr => Pikchr::render(source, Some("diagram-svg"), PikchrFlags::default())
             .map_err(|error| error.to_string())?

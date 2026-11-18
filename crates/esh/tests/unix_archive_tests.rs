@@ -116,7 +116,14 @@ async fn test_unix_zip_and_unzip() {
     let archive_file = fs::File::open(tmp.path().join("app.zip")).unwrap();
     let mut archive = zip::ZipArchive::new(archive_file).unwrap();
     let names = (0..archive.len())
-        .map(|index| archive.by_index(index).unwrap().name().to_string())
+        .map(|index| {
+            archive
+                .by_index(index)
+                .unwrap()
+                .name()
+                .unwrap()
+                .into_owned()
+        })
         .collect::<Vec<_>>();
     assert!(names.iter().all(|name| !name.contains('\\')));
     assert!(names.iter().any(|name| name == "nested/data/meta.json"));

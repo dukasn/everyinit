@@ -98,7 +98,8 @@ impl Harness {
         unsafe {
             libc::close(slave);
         }
-        let master = AsyncFd::new(OwnedFd(master)).unwrap();
+        // SAFETY: `OwnedFd` keeps this valid, open descriptor unchanged until `AsyncFd` drops it.
+        let master = unsafe { AsyncFd::register(OwnedFd(master)) }.unwrap();
         Self {
             master,
             child,

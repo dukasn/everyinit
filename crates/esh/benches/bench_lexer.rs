@@ -12,9 +12,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use esh::lexer::cursor::Lexer;
 use esh::lexer::token::TokenKind;
+use std::hint::black_box;
 
 const COMPLEX_SCRIPT: &str = r#"
 #!/usr/bin/env esh

@@ -7,7 +7,7 @@ publish = { workspace = true }
 
 [dependencies]
 serde = { workspace = true }
-yaml-rust2 = "0.9" # Or appropriate version
+yaml-rust2 = "0.13" # Or appropriate version
 evin-diagnostic = { workspace = true }
 regex = { workspace = true }
 evin-locales = { workspace = true }

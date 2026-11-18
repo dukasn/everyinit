@@ -23,8 +23,8 @@ evin-process = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 parking_lot = { workspace = true }
-bumpalo = { version = "3.17", features = ["collections"] }
-phf = { version = "0.11", features = ["macros"] }
+bumpalo = { version = "3.20", features = ["collections"] }
+phf = { version = "0.14", features = ["macros"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 rustc-hash = "2.1"
 serde = { workspace = true }

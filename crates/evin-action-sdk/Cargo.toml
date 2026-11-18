@@ -17,7 +17,7 @@ regex.workspace = true
 evin-locales = { workspace = true }
 glob = { workspace = true }
 evin-repository-policy = { workspace = true }
-reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "stream", "json"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream", "json"] }
 evin-diagnostic = { workspace = true }
 evin-io = { workspace = true }
 

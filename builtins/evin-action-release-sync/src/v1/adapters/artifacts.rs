@@ -80,7 +80,13 @@ impl<'a> ArtifactInspector for FsArtifactInspector<'a> {
                     local_path: relative,
                     destination_name: file_name,
                     size_bytes: metadata.len(),
-                    sha256: Some(format!("{:x}", hasher.finalize())),
+                    sha256: Some(
+                        hasher
+                            .finalize()
+                            .iter()
+                            .map(|byte| format!("{byte:02x}"))
+                            .collect(),
+                    ),
                 });
             }
         }

@@ -11,12 +11,12 @@
     "test:everyinit": "npm test --workspace everyinit"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.0",
-    "@types/node": "^26.6.5",
-    "oxfmt": "^0.72.0",
-    "oxlint": "^1.87.0",
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
     "typescript": "^7.0.2",
-    "wrangler": "4.149.0"
+    "wrangler": "4.165.0"
   },
   "devEngines": {
     "packageManager": {

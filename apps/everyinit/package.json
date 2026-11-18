@@ -18,7 +18,7 @@
     "@astrojs/check": "^0.9.12",
     "@fluent/syntax": "^0.19.0",
     "@tailwindcss/vite": "^4.3.5",
-    "astro": "^7.4.11",
+    "astro": "^7.4.13",
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3"
   },
