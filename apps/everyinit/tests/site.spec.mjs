@@ -299,6 +299,10 @@ test("search keeps results across dismissal and restores the invoking control", 
   await input.fill("workspace configuration");
   const firstResult = page.locator("[data-search-option]:visible").first();
   await expect(firstResult).toContainText("Workspace configuration");
+  const highlightedRanges = await page.evaluate(
+    () => CSS.highlights.get("docs-search-match")?.size ?? 0,
+  );
+  expect(highlightedRanges).toBeGreaterThan(0);
   await input.press("Tab");
   await expect(firstResult).toBeFocused();
   await expect(firstResult).toHaveAttribute("aria-selected", "true");
@@ -458,4 +462,34 @@ test("Pages serves docs on everyinit.dev and redirects retired docs hosts", () =
   );
   expect(redirectForHost("docs.everyinit.dev", "/")).toBe("308 https://everyinit.dev/docs/");
   expect(fetchForHost("everyinit.dev", "/")).toContain("Everyinit — development, orchestrated");
+});
+
+test("docs navbar links separate project home from docs home", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("/docs/book/installation/");
+
+  const homeLink = page.locator(".docs-brand-home");
+  const docsLink = page.locator(".docs-brand-docs");
+  await expect(homeLink).toHaveAttribute("href", "/");
+  await expect(docsLink).toHaveAttribute("href", "/docs/");
+
+  await docsLink.click();
+  await expect(page).toHaveURL(/\/docs\/$/);
+  await expect(page.locator("main h1")).toHaveText("Everyinit");
+
+  await page.locator(".docs-brand-home").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Development");
+});
+
+test("daily accent color auto-updates across midnight", async ({ page }) => {
+  await page.clock.install({ time: new Date(2026, 10, 18, 23, 59, 58) });
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("/docs/");
+
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "amber");
+  await expect(page.locator("html")).toHaveClass(/is-accent-ready/);
+
+  await page.clock.fastForward(4000);
+  await expect(page.locator("html")).toHaveAttribute("data-accent", "apricot");
 });

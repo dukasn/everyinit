@@ -69,17 +69,18 @@ const navigationIconPaths = {
     </a>
     <nav class="hidden items-center gap-1 text-sm text-moss lg:flex xl:gap-2" aria-label={t("site-main-navigation")}>
       {navigation.map((menu) => <details data-nav-menu class="home-nav-menu group relative">
-        <summary class="inline-flex cursor-pointer list-none items-center gap-2 rounded-full px-3 py-2.5 font-medium transition hover:bg-[#e7e9df] hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-moss [&::-webkit-details-marker]:hidden">
+        <summary class="inline-flex cursor-pointer list-none items-center gap-2 rounded-full px-3.5 py-2 font-medium transition hover:bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] hover:text-ink group-open:bg-[color-mix(in_srgb,var(--color-lime)_22%,var(--color-surface))] group-open:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">
           {menu.title}<svg class="home-nav-chevron size-3.5 text-moss transition-transform" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
         </summary>
-        <div class:list={["absolute top-full z-50 w-[min(22rem,calc(100vw-2rem))] pt-3", { "left-0": !menu.alignRight, "right-0": menu.alignRight }]}>
-          <div class="rounded-2xl border border-[#d5dccf] bg-surface p-2 shadow-[0_22px_55px_-28px_rgba(23,33,26,.45)]">
-            <ul class="grid gap-1">
+        <div class:list={["absolute top-full z-50 w-[min(24rem,calc(100vw-2rem))] pt-2.5", { "left-0": !menu.alignRight, "right-0": menu.alignRight }]}>
+          <div class="rounded-2xl border border-line bg-surface/95 p-2 shadow-[0_24px_60px_-28px_rgba(16,25,18,.32)] backdrop-blur-xl">
+            <p class="px-3 pt-1.5 pb-2 text-[10px] font-semibold uppercase tracking-[.14em] text-moss/80">{menu.title}</p>
+            <ul class="grid gap-0.5">
               {menu.links.map((link) => <li>
-                <a class="group/link grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[#e9eee5] focus-visible:bg-[#e9eee5] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-moss" href={link.href}>
-                  <span class="grid size-10 place-items-center rounded-xl bg-[#edf1e9] text-moss transition group-hover/link:bg-white"><svg class="size-[18px]" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
-                  <span class="min-w-0"><span class="block text-sm font-semibold text-ink">{link.title}</span><span class="mt-1 block text-xs leading-5 text-[#667264]">{link.description}</span></span>
-                  <span class="text-moss opacity-0 transition group-hover/link:translate-x-0.5 group-hover/link:opacity-100 group-focus-visible/link:opacity-100" aria-hidden="true">↗</span>
+                <a class="group/link grid grid-cols-[2.25rem_1fr_auto] items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--accent-strong)]" href={link.href}>
+                  <span class="grid size-9 place-items-center rounded-xl border border-line/80 bg-paper text-moss transition group-hover/link:border-ink group-hover/link:bg-ink group-hover/link:text-lime"><svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
+                  <span class="min-w-0"><span class="block text-sm font-semibold text-ink">{link.title}</span><span class="mt-0.5 block text-xs leading-5 text-moss">{link.description}</span></span>
+                  <span class="text-xs text-[var(--accent-strong)] opacity-0 transition group-hover/link:translate-x-0.5 group-hover/link:opacity-100 group-focus-visible/link:opacity-100" aria-hidden="true">↗</span>
                 </a>
               </li>)}
             </ul>
@@ -88,30 +89,30 @@ const navigationIconPaths = {
       </details>)}
     </nav>
     {availableLocales.length > 1 && <details class="home-language-menu group relative">
-      <summary class="cursor-pointer list-none rounded-full border border-line px-3 py-2 text-xs font-medium text-moss hover:bg-[#e7e9df] [&::-webkit-details-marker]:hidden" aria-label={t("site-locale")}>{locale}</summary>
+      <summary class="cursor-pointer list-none rounded-full border border-line px-3 py-2 text-xs font-medium text-moss hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] [&::-webkit-details-marker]:hidden" aria-label={t("site-locale")}>{locale}</summary>
       <div class="absolute right-0 top-full z-50 min-w-36 pt-2">
         <ul class="rounded-xl border border-line bg-surface p-1 shadow-lg">
-          {availableLocales.map((language) => <li><a class:list={["block rounded-lg px-3 py-2 text-sm hover:bg-[#e9eee5]", { "font-semibold text-ink": language === locale }]} href={locale === language ? undefined : localeHref(language)} lang={language}>{localeNames.of(language) ?? language}</a></li>)}
+          {availableLocales.map((language) => <li><a class:list={["block rounded-lg px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))]", { "font-semibold text-ink": language === locale }]} href={locale === language ? undefined : localeHref(language)} lang={language}>{localeNames.of(language) ?? language}</a></li>)}
         </ul>
       </div>
     </details>}
-    <a href="/docs/book/installation/" class="hidden shrink-0 rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:bg-moss active:scale-[.98] lg:inline-flex">
-      {t("home-get-started")} <span class="ml-2" aria-hidden="true">↗</span>
+    <a href="/docs/book/installation/" class="hidden shrink-0 items-center rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:bg-moss active:scale-[.98] lg:inline-flex">
+      {t("home-get-started")} <span class="ml-2 text-lime" aria-hidden="true">↗</span>
     </a>
     <details data-nav-menu class="home-mobile-nav group relative lg:hidden">
-      <summary class="grid size-11 cursor-pointer list-none place-items-center rounded-full border border-line text-ink transition hover:bg-[#e7e9df] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-moss [&::-webkit-details-marker]:hidden">
+      <summary class="grid size-11 cursor-pointer list-none place-items-center rounded-full border border-line text-ink transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">
         <span class="grid gap-[5px]" aria-hidden="true"><span class="h-0.5 w-4 rounded-full bg-current transition group-open:translate-y-[3.5px] group-open:rotate-45"></span><span class="h-0.5 w-4 rounded-full bg-current transition group-open:-translate-y-[3.5px] group-open:-rotate-45"></span></span>
         <span class="sr-only">{t("site-menu")}</span>
       </summary>
-      <nav aria-label={t("site-mobile-navigation")} class="fixed left-1/2 top-[5.75rem] z-[60] max-h-[calc(100dvh-7rem)] w-[min(48rem,calc(100vw-3rem))] -translate-x-1/2 overflow-y-auto overscroll-contain rounded-[1.75rem] border border-[#d5dccf] bg-surface p-5 shadow-[0_28px_70px_-36px_rgba(23,33,26,.5)] sm:p-6">
-        <div class="mb-1 flex items-center justify-between gap-4 border-b border-[#d5dccf] px-1 pb-5 sm:px-2">
+      <nav aria-label={t("site-mobile-navigation")} class="fixed left-1/2 top-[5.75rem] z-[60] max-h-[calc(100dvh-7rem)] w-[min(48rem,calc(100vw-3rem))] -translate-x-1/2 overflow-y-auto overscroll-contain rounded-[1.75rem] border border-line bg-surface p-5 shadow-[0_28px_70px_-36px_rgba(16,25,18,.42)] sm:p-6">
+        <div class="mb-1 flex items-center justify-between gap-4 border-b border-line px-1 pb-5 sm:px-2">
           <span class="text-[10px] font-semibold uppercase tracking-[.18em] text-moss sm:text-xs">{t("home-explore")}</span>
           <a class="inline-flex shrink-0 items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-semibold text-paper transition hover:bg-moss" href="/docs/book/installation/">{t("home-get-started")} <span class="text-lime" aria-hidden="true">↗</span></a>
         </div>
-        {navigation.map((menu) => <details class="home-mobile-nav-group border-b border-[#d5dccf] last:border-b-0">
+        {navigation.map((menu) => <details class="home-mobile-nav-group border-b border-line last:border-b-0">
           <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-3 text-[clamp(1.125rem,2vw,1.25rem)] font-semibold tracking-[-.025em] text-ink [&::-webkit-details-marker]:hidden sm:py-3.5">{menu.title}<svg class="home-nav-chevron size-4 shrink-0 text-moss transition-transform" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></summary>
           <ul class="grid gap-1 pb-4 sm:grid-cols-2">
-            {menu.links.map((link) => <li><a class="group/link grid grid-cols-[2.25rem_1fr] items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[#e9eee5] focus-visible:bg-[#e9eee5] focus-visible:outline-2 focus-visible:outline-moss" href={link.href}><span class="grid size-9 place-items-center rounded-lg bg-[#edf1e9] text-moss transition group-hover/link:bg-white"><svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span><span class="min-w-0"><span class="block text-sm font-semibold text-ink">{link.title}</span><span class="mt-0.5 block text-xs leading-5 text-[#667264]">{link.description}</span></span></a></li>)}
+            {menu.links.map((link) => <li><a class="group/link grid grid-cols-[2.25rem_1fr] items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-[var(--accent-strong)]" href={link.href}><span class="grid size-9 place-items-center rounded-lg border border-line/80 bg-paper text-moss transition group-hover/link:border-ink group-hover/link:bg-ink group-hover/link:text-lime"><svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span><span class="min-w-0"><span class="block text-sm font-semibold text-ink">{link.title}</span><span class="mt-0.5 block text-xs leading-5 text-moss">{link.description}</span></span></a></li>)}
           </ul>
         </details>)}
       </nav>

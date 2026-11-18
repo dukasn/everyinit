@@ -11,6 +11,7 @@ interface Props {
 
 const { route } = Astro.props;
 const locale = resolveLocale(route.locale);
+const homeHref = locale === "en" ? "/" : `/${locale}/`;
 const docsPath = (path: string) => path === "/" ? "/docs/" : `/docs${path}`;
 const t = createTranslator(route.locale);
 const title = String(route.page.page.metadata.title ?? route.page.page.slug ?? t("docs-generic-title"));
@@ -72,32 +73,36 @@ const canonical = `https://everyinit.dev${docsPath(route.path)}`;
 <SiteLayout title={`${title} · Evin Docs`} description={description} canonical={canonical} locale={locale}>
   <div class="min-h-screen bg-paper">
     <header id="docs-site-header" class="docs-site-header sticky top-0 z-30 border-b border-line/80 bg-paper/90 backdrop-blur-xl">
-      <div class="mx-auto flex h-[4.25rem] max-w-[90rem] items-center gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
-        <a href="/docs/" class="flex shrink-0 items-center gap-2.5 font-semibold tracking-tight" aria-label={t("site-home")}>
-          <span class="grid size-8 place-items-center rounded-lg bg-ink text-lime"><span class="brand-mark size-5" aria-hidden="true"></span></span>
-          <span>{t("docs-brand")}</span>
-        </a>
-        <button id="docs-search-open" type="button" aria-label={t("docs-search-open")} class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center gap-2 rounded-full border border-line bg-surface px-0 text-left text-xs text-[#667263] transition hover:border-moss hover:text-ink sm:w-40 sm:justify-start sm:px-3 md:w-48">
-          <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
+      <div class="mx-auto flex h-[4.5rem] max-w-[96rem] items-center gap-1.5 px-3 sm:gap-4 sm:px-6 lg:px-8">
+        <div class="docs-brand flex shrink-0 items-center gap-0.5 text-sm font-semibold tracking-tight sm:gap-1 sm:text-base">
+          <a href={homeHref} class="docs-brand-home group flex items-center gap-2 rounded-lg px-1 py-1 transition hover:bg-[color-mix(in_srgb,var(--color-lime)_18%,var(--color-surface))] hover:text-ink sm:gap-2.5 sm:px-1.5" aria-label={t("site-home")}>
+            <span class="grid size-7 place-items-center rounded-lg bg-ink text-lime transition-transform duration-200 group-hover:scale-[1.04] sm:size-8"><span class="brand-mark size-4 sm:size-5" aria-hidden="true"></span></span>
+            <span>{t("docs-brand")}</span>
+          </a>
+          <span class="select-none font-normal text-moss/55" aria-hidden="true">/</span>
+          <a href="/docs/" class="docs-brand-docs rounded-md px-1.5 py-1 text-moss transition hover:bg-[color-mix(in_srgb,var(--color-lime)_18%,var(--color-surface))] hover:text-ink sm:px-2" aria-label={t("docs-home")}>{t("docs-brand-section")}</a>
+        </div>
+        <button id="docs-search-open" type="button" aria-label={t("docs-search-open")} class="ml-auto inline-flex size-8.5 shrink-0 items-center justify-center gap-2 rounded-full border border-line bg-surface px-0 text-left text-xs text-moss transition hover:border-[color-mix(in_srgb,var(--accent-strong)_45%,var(--color-line))] hover:bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] hover:text-ink sm:h-9 sm:w-48 sm:justify-start sm:px-3.5 md:w-64 lg:w-72">
+          <svg class="size-3.5 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
           <span class="hidden min-w-0 flex-1 truncate sm:block">{t("docs-search-open")}</span>
-          <kbd class="hidden rounded border border-line px-1.5 py-0.5 font-mono text-[9px] text-moss sm:block">⌘ K</kbd>
+          <kbd class="hidden rounded border border-line bg-paper/70 px-1.5 py-0.5 font-mono text-[9px] text-moss sm:block">⌘ K</kbd>
         </button>
-        <div class="flex shrink-0 items-center gap-1.5 md:ml-1 md:gap-2">
+        <div class="flex shrink-0 items-center gap-1.5 md:ml-1">
           <details class="docs-variant">
-            <summary aria-label={t("docs-version-aria", { version: route.version })}><span class="docs-variant-label">{t("docs-version-label")}</span><span class="docs-variant-value">{route.version}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
+            <summary aria-label={t("docs-version-aria", { version: route.version })}><span class="docs-variant-label hidden xl:inline">{t("docs-version-label")}</span><span class="docs-variant-value">{route.version}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
             <div class="docs-variant-menu">
               <p class="docs-variant-menu-title">{t("docs-version-menu")}</p>
               {variants.filter((variant) => variant.available && variant.locale === route.locale).map((variant) => <a href={variant.href} aria-current={variant.version === route.version ? "page" : undefined} class:list={["docs-variant-option", { "is-selected": variant.version === route.version }]}><span>{variant.version}</span><span class="docs-variant-check" aria-hidden="true">✓</span></a>)}
             </div>
           </details>
           <details class="docs-variant docs-variant-locale">
-            <summary aria-label={t("docs-language-aria", { locale: route.locale })}><span class="docs-variant-label">{t("docs-language-label")}</span><span class="docs-variant-value">{route.locale}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
+            <summary aria-label={t("docs-language-aria", { locale: route.locale })}><span class="docs-variant-label hidden xl:inline">{t("docs-language-label")}</span><span class="docs-variant-value">{route.locale}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
             <div class="docs-variant-menu">
               <p class="docs-variant-menu-title">{t("docs-language-menu")}</p>
               {variants.filter((variant) => variant.available && variant.version === route.version).map((variant) => <a href={variant.href} aria-current={variant.locale === route.locale ? "page" : undefined} class:list={["docs-variant-option", { "is-selected": variant.locale === route.locale }]}><span>{variant.locale}</span><span class="docs-variant-check" aria-hidden="true">✓</span></a>)}
             </div>
           </details>
-          <a href="https://github.com/dukasn/everyinit" class="hidden rounded-full px-2 py-2 text-xs font-medium text-moss transition hover:text-ink md:inline-flex">{t("docs-github")}</a>
+          <a href="https://github.com/dukasn/everyinit" class="hidden h-9 items-center rounded-full border border-transparent px-3 text-xs font-medium text-moss transition hover:border-[color-mix(in_srgb,var(--accent-strong)_38%,var(--color-line))] hover:bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] hover:text-ink md:inline-flex">{t("docs-github")}</a>
         </div>
       </div>
     </header>
@@ -144,31 +149,72 @@ const canonical = `https://everyinit.dev${docsPath(route.path)}`;
     </dialog>
 
     <details class="docs-mobile-nav lg:hidden">
-      <summary><span>{t("docs-mobile-browse")}</span><span class="docs-variant-caret" aria-hidden="true"></span></summary>
-      <nav aria-label={t("docs-mobile-browse")}>
-        <div class="docs-mobile-quick">
-          <a href="/docs/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
-          <a href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
-          <button id="docs-mobile-search" type="button">{t("docs-search-open")}</button>
-        </div>
-        {navGroups.map((group) => <section class="docs-mobile-nav-group">
-          <h2>{group.title}</h2>
-          {group.sections.map((section) => <div class="docs-mobile-nav-section">
-            <h3>{section.title}</h3>
-            {section.entries.map((item) => <a href={docsPath(item.path)} aria-current={item.path === route.path ? "page" : undefined} class:list={["docs-nav-link", { "is-current": item.path === route.path }]}>{String(item.page.page.metadata.title ?? item.path)}</a>)}
-          </div>)}
-        </section>)}
-      </nav>
+      <summary>
+        <span class="docs-mobile-nav-trigger">
+          <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h14" stroke-linecap="round"></path></svg>
+          <span>{t("docs-mobile-browse")}</span>
+        </span>
+        <span class="docs-mobile-nav-meta">
+          <span class="hidden truncate text-[11px] font-medium text-moss sm:inline">{route.path === "/" ? t("docs-mobile-overview") : title}</span>
+          <span class="docs-variant-caret" aria-hidden="true"></span>
+        </span>
+      </summary>
+      <div class="docs-mobile-nav-drawer">
+        <nav aria-label={t("docs-mobile-browse")}>
+          <div class="docs-mobile-quick">
+            <a href="/docs/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
+            <a href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
+            <button id="docs-mobile-search" type="button" class="docs-mobile-search-btn">
+              <span class="inline-flex items-center gap-2">
+                <svg class="size-3.5 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2"></path></svg>
+                <span>{t("docs-search-open")}</span>
+              </span>
+              <kbd class="rounded border border-line px-1.5 py-0.5 font-mono text-[9px] text-moss">⌘ K</kbd>
+            </button>
+          </div>
+          <div class="docs-mobile-groups">
+            {navGroups.map((group) => <section class="docs-mobile-nav-group">
+              <div class="docs-mobile-group-heading">
+                <h2>{group.title}</h2>
+                <span>{group.sections.reduce((total, section) => total + section.entries.length, 0)}</span>
+              </div>
+              <div class="docs-mobile-sections">
+                {group.sections.map((section) => <details class="docs-nav-section" open={section.entries.some((item) => item.path === route.path)}>
+                  <summary><span>{section.title}</span><span class="docs-nav-count">{section.entries.length}</span></summary>
+                  <nav aria-label={`${group.title}: ${section.title}`}>
+                    {section.entries.map((item) => <a href={docsPath(item.path)} aria-current={item.path === route.path ? "page" : undefined} class:list={["docs-nav-link", { "is-current": item.path === route.path }]}>{String(item.page.page.metadata.title ?? item.path)}</a>)}
+                  </nav>
+                </details>)}
+              </div>
+            </section>)}
+          </div>
+        </nav>
+      </div>
     </details>
 
-    <div class="mx-auto grid max-w-[90rem] lg:grid-cols-[15rem_minmax(0,1fr)_12rem]">
+    <div class="mx-auto grid max-w-[96rem] lg:grid-cols-[17.5rem_minmax(0,1fr)_14rem]">
       <aside class="docs-sidebar hidden lg:block">
         <section class="docs-sidebar-quick" aria-label={t("docs-quick-get-started")}>
           <h2>{t("docs-quick-get-started")}</h2>
-          <a class="docs-quick-primary" href="/docs/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
-          <a class="docs-quick-secondary" href="/docs/book/first-workflow">{t("docs-quick-first-workflow")}</a>
-          <a class="docs-quick-secondary docs-quick-overview" href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
-          <button id="docs-sidebar-search" type="button"><span aria-hidden="true">⌕</span> {t("docs-search-open")}</button>
+          <a class="docs-quick-primary group" href="/docs/book/installation">
+            <span>{t("docs-mobile-install")}</span>
+            <span class="transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">↗</span>
+          </a>
+          <div class="docs-quick-list">
+            <a class="docs-quick-secondary" href="/docs/book/first-workflow" aria-current={route.path === "/book/first-workflow" ? "page" : undefined}>
+              <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span class="min-w-0 flex-1 truncate">{t("docs-quick-first-workflow")}</span>
+            </a>
+            <a class="docs-quick-secondary docs-quick-overview" href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>
+              <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22zM4 5.5v14A2.5 2.5 0 0 1 6.5 17H20" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span class="min-w-0 flex-1 truncate">{t("docs-mobile-overview")}</span>
+            </a>
+            <button id="docs-sidebar-search" type="button">
+              <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m15.5 15.5 4.2 4.2" stroke-linecap="round"></path></svg>
+              <span class="min-w-0 flex-1 truncate">{t("docs-search-open")}</span>
+              <kbd class="rounded border border-line bg-paper/80 px-1.5 py-0.5 font-mono text-[9px] text-moss">⌘K</kbd>
+            </button>
+          </div>
         </section>
         {navGroups.map((group) => <section class="mb-7">
           <div class="docs-sidebar-heading"><h2>{group.title}</h2><span>{group.sections.reduce((total, section) => total + section.entries.length, 0)}</span></div>
@@ -180,14 +226,14 @@ const canonical = `https://everyinit.dev${docsPath(route.path)}`;
           </details>)}
         </section>)}
         <div class="rounded-xl border border-line bg-surface p-4">
-          <p class="text-[10px] font-semibold uppercase tracking-[.12em] text-moss">{t("docs-quick-need-help")}</p>
-          <p class="mt-2 text-xs leading-5 text-[#6b776a]">{t("docs-quick-help-description")}</p>
-          <a href="https://github.com/dukasn/everyinit/issues" class="mt-3 inline-flex text-xs font-semibold text-ink">{t("docs-quick-open-issue")}</a>
+          <p class="text-[11px] font-semibold uppercase tracking-[.12em] text-moss">{t("docs-quick-need-help")}</p>
+          <p class="mt-2 text-[13px] leading-5 text-moss">{t("docs-quick-help-description")}</p>
+          <a href="https://github.com/dukasn/everyinit/issues" class="mt-3 inline-flex text-[13px] font-semibold text-ink hover:text-[var(--accent-strong)]">{t("docs-quick-open-issue")}</a>
         </div>
       </aside>
 
-      <main class:list={["docs-main min-w-0 px-5 py-8 sm:px-8 sm:py-12 lg:px-12 lg:py-14", { "docs-index-main": route.path === "/" }]}>
-        <div class="docs-breadcrumb mb-8 flex items-center gap-2 text-[11px]">
+      <main class:list={["docs-main min-w-0 px-5 py-8 sm:px-8 sm:py-12 lg:px-14 lg:py-14", { "docs-index-main": route.path === "/" }]}>
+        <div class="docs-breadcrumb mb-8 flex items-center gap-2 text-xs">
           <a href="/docs/" class="hover:text-ink">{t("docs-breadcrumb")}</a><span aria-hidden="true">/</span><span class="text-moss">{route.path === "/" ? t("docs-mobile-overview") : title}</span>
         </div>
         {route.is_fallback && <aside class="mb-8 rounded-xl border border-[#d8dfcf] bg-[#edf1e9] px-4 py-3 text-sm text-moss">{t("docs-fallback", { contentLocale: route.content_locale, requestedLocale: route.locale })}</aside>}
@@ -205,16 +251,16 @@ const canonical = `https://everyinit.dev${docsPath(route.path)}`;
           <a href="/docs/book/installation">{t("docs-index-start")} <span aria-hidden="true">→</span></a>
           <a href="/docs/book/first-workflow">{t("docs-quick-first-workflow")} <span aria-hidden="true">→</span></a>
         </div> : null}
-        <div class="docs-page-source mt-12 border-t border-line pt-5 text-xs">
-          {t("docs-source")} <code class="font-mono text-[10px]">{route.page.source_path}</code>
+        <div class="docs-page-source mt-12 border-t border-line pt-5 text-sm">
+          {t("docs-source")} <code class="font-mono text-xs">{route.page.source_path}</code>
         </div>
       </main>
 
       <aside class="docs-toc hidden xl:block">
         {toc.length > 1 && <div class="sticky top-24">
-          <h2 class="mb-4 px-2 text-[10px] font-semibold uppercase tracking-[.15em] text-[#8a9586]">{t("docs-toc")}</h2>
+          <h2 class="mb-4 px-2 text-xs font-semibold uppercase tracking-[.14em] text-moss/80">{t("docs-toc")}</h2>
           <nav aria-label={t("docs-toc")} class="space-y-1">
-            {toc.map((item) => <a href={`#${item.anchor}`} class="block border-l border-line py-1.5 pr-1 text-[11px] leading-4 text-[#6a7668] transition hover:border-moss hover:text-ink" style={`padding-left: ${8 + Math.max(0, item.level - 1) * 10}px`}>{item.text}</a>)}
+            {toc.map((item) => <a href={`#${item.anchor}`} class="block border-l border-line py-1.5 pr-2 text-[13px] leading-5 text-moss transition hover:border-moss hover:text-ink" style={`padding-left: ${10 + Math.max(0, item.level - 1) * 10}px`}>{item.text}</a>)}
           </nav>
         </div>}
       </aside>

@@ -32,6 +32,48 @@ let scrollLock: {
 } | null = null;
 const resultCache = new Map<string, Awaited<ReturnType<typeof searchDocs>>>();
 const resultCacheLimit = 40;
+const highlightName = "docs-search-match";
+
+const clearSearchHighlights = () => {
+  if ("highlights" in CSS) {
+    CSS.highlights.delete(highlightName);
+  }
+};
+
+const highlightSearchMatches = (query: string) => {
+  clearSearchHighlights();
+  if (!("highlights" in CSS) || typeof Highlight !== "function" || !results) return;
+  const terms = [...new Set(query.trim().toLowerCase().split(/\s+/).filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
+  if (!terms.length) return;
+
+  const ranges: Range[] = [];
+  const targets = results.querySelectorAll<HTMLElement>(
+    ".docs-search-option-title, .docs-search-option-path, .docs-search-option-snippet",
+  );
+  for (const element of targets) {
+    const textNode = element.firstChild;
+    if (!(textNode instanceof Text) || !textNode.data) continue;
+    const haystack = textNode.data.toLowerCase();
+    for (const term of terms) {
+      let fromIndex = 0;
+      while (fromIndex < haystack.length) {
+        const matchIndex = haystack.indexOf(term, fromIndex);
+        if (matchIndex === -1) break;
+        const range = new Range();
+        range.setStart(textNode, matchIndex);
+        range.setEnd(textNode, matchIndex + term.length);
+        ranges.push(range);
+        fromIndex = matchIndex + term.length;
+      }
+    }
+  }
+
+  if (ranges.length) {
+    CSS.highlights.set(highlightName, new Highlight(...ranges));
+  }
+};
 
 const setActive = (index: number) => {
   activeIndex =
@@ -57,6 +99,7 @@ const search = async (value: string) => {
   const query = value.trim();
   visibleOptions = [];
   results?.replaceChildren();
+  clearSearchHighlights();
   results?.classList.toggle("hidden", !query);
   prompt?.classList.toggle("hidden", Boolean(query));
   input?.removeAttribute("aria-activedescendant");
@@ -119,6 +162,7 @@ const search = async (value: string) => {
       status.textContent = matches.length
         ? t("docs-search-results", { count: matches.length })
         : t("docs-search-no-results");
+    highlightSearchMatches(query);
     setActive(-1);
   } catch (error) {
     if (request !== searchRequest) return;

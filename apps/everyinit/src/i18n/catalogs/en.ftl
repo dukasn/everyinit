@@ -122,7 +122,9 @@ home-footer-acknowledgments = Acknowledgments
 home-footer-trademarks = Trademark policy
 home-footer-licenses = Bundled license texts ↗
 
-docs-brand = everyinit / docs
+docs-brand = everyinit
+docs-brand-section = docs
+docs-home = Documentation home
 docs-generic-title = Documentation
 docs-generic-description = Evin documentation, generated from the project source.
 docs-search-open = Search documentation

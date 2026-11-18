@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import { ACCENT_PRESETS } from "../lib/accent";
 
 interface Props {
   title?: string;
@@ -14,6 +15,7 @@ const {
   canonical = "https://everyinit.dev/",
   locale = "en",
 } = Astro.props;
+const accentBoot = JSON.stringify(ACCENT_PRESETS);
 ---
 
 <!doctype html>
@@ -21,7 +23,7 @@ const {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f4f3ec" />
+    <meta name="theme-color" content="#faf9f5" />
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonical} />
@@ -30,8 +32,23 @@ const {
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <title>{title}</title>
+    <script is:inline define:vars={{ accentBoot }}>
+      (() => {
+        try {
+          const presets = JSON.parse(accentBoot);
+          const preset = presets[new Date().getDay()] || presets[0];
+          const root = document.documentElement;
+          root.dataset.accent = preset.id;
+          root.style.setProperty("--color-lime", preset.accent);
+          root.style.setProperty("--accent-strong", preset.strong);
+        } catch {}
+      })();
+    </script>
   </head>
   <body>
     <slot />
+    <script>
+      import "../scripts/accent";
+    </script>
   </body>
 </html>

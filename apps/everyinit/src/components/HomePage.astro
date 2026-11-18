@@ -60,11 +60,11 @@ const projects = [
   <main>
     <HomeHero locale={locale} />
 
-    <section id="integrations" class="border-y border-[#dfe3d9] bg-[#eeeee6]">
+    <section id="integrations" class="border-y border-line bg-[color-mix(in_srgb,var(--color-lime)_5%,var(--color-paper))]">
       <div class="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-7 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-12">
         <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">{t("home-integrations-eyebrow")}</p>
-        <div class="flex flex-wrap gap-x-7 gap-y-3 text-sm text-[#536052]">
-          {integrations.map((integration) => <span class="inline-flex items-center gap-2"><span class="size-1.5 rounded-full bg-[#8eaa7b]"></span>{integration}</span>)}
+        <div class="flex flex-wrap gap-x-7 gap-y-3 text-sm text-moss">
+          {integrations.map((integration) => <span class="inline-flex items-center gap-2"><span class="size-1.5 rounded-full bg-[var(--accent-strong)]"></span>{integration}</span>)}
         </div>
       </div>
     </section>
@@ -74,63 +74,63 @@ const projects = [
         <div class="max-w-md">
           <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">{t("home-workflow-eyebrow")}</p>
           <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">{t("home-workflow-title")}</h2>
-          <p class="mt-6 text-base leading-7 text-[#637063]">{t("home-workflow-description")}</p>
-          <a href="/docs/book" class="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-[#a6b69a] underline-offset-4">{t("home-workflow-link")} <span aria-hidden="true">↗</span></a>
+          <p class="mt-6 text-base leading-7 text-moss">{t("home-workflow-description")}</p>
+          <a href="/docs/book" class="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-[color-mix(in_srgb,var(--accent-strong)_45%,transparent)] underline-offset-4 transition hover:text-[var(--accent-strong)]">{t("home-workflow-link")} <span aria-hidden="true">↗</span></a>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
-          {principles.map((item) => <article class="rounded-2xl border border-line bg-surface p-6 transition-[border-color,box-shadow] duration-300 hover:border-[#aab8a0] hover:shadow-[0_16px_36px_-28px_rgba(23,33,26,.5)] sm:p-7 motion-safe:transition-transform motion-safe:duration-300 motion-safe:hover:-translate-y-1">
+          {principles.map((item) => <article class="rounded-2xl border border-line bg-surface p-6 sm:p-7">
             <p class="font-mono text-xs text-moss">{item.number} / {t("home-workflow-label")}</p>
             <h3 class="mt-8 text-xl font-semibold tracking-tight">{item.title}</h3>
-            <p class="mt-3 text-sm leading-6 text-[#647064]">{item.text}</p>
+            <p class="mt-3 text-sm leading-6 text-moss">{item.text}</p>
           </article>)}
-          <article class="rounded-2xl bg-[#d9e5cf] p-6 sm:p-7">
-            <p class="font-mono text-xs text-[#435741]">{t("home-workflow-repository-label")}</p>
+          <a href="/docs/book/first-workflow" class="group flex flex-col justify-between rounded-2xl border border-[color-mix(in_srgb,var(--accent-strong)_22%,var(--color-line))] bg-[color-mix(in_srgb,var(--color-lime)_24%,var(--color-surface))] p-6 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--accent-strong)_45%,var(--color-line))] hover:shadow-[0_16px_36px_-28px_rgba(23,33,26,.5)] sm:p-7">
+            <p class="font-mono text-xs text-moss">{t("home-workflow-repository-label")}</p>
             <div class="mt-8 flex items-end justify-between gap-4">
-              <p class="max-w-[15rem] text-xl font-semibold leading-snug tracking-tight">{t("home-workflow-repository-copy")}</p>
-              <span class="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-xl text-lime">↗</span>
+              <p class="max-w-[15rem] text-xl font-semibold leading-snug tracking-tight text-ink">{t("home-workflow-repository-copy")}</p>
+              <span class="grid size-11 shrink-0 place-items-center rounded-full bg-ink text-xl text-lime transition-transform duration-200 group-hover:scale-105" aria-hidden="true">↗</span>
             </div>
-          </article>
+          </a>
         </div>
       </div>
     </section>
 
-    <section id="projects" class="border-y border-[#dfe3d9] bg-[#eeeee6]">
+    <section id="projects" class="border-y border-line bg-[color-mix(in_srgb,var(--color-lime)_5%,var(--color-paper))]">
       <div class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12 lg:py-28">
         <div class="mb-10 grid gap-6 sm:mb-12 lg:grid-cols-[1fr_auto] lg:items-end">
           <div class="max-w-2xl">
             <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">{t("home-ecosystem-eyebrow")}</p>
             <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">{t("home-ecosystem-title")}</h2>
           </div>
-          <p class="max-w-md text-sm leading-6 text-[#637063]">{t("home-ecosystem-description")}</p>
+          <p class="max-w-md text-sm leading-6 text-moss">{t("home-ecosystem-description")}</p>
         </div>
 
-        <div class="grid overflow-hidden rounded-[1.75rem] border border-[#cbd4c4] bg-surface lg:grid-cols-[.78fr_1.22fr]">
+        <div class="grid overflow-hidden rounded-[1.75rem] border border-line bg-surface lg:grid-cols-[.78fr_1.22fr]">
           <article class="relative flex flex-col justify-between gap-10 bg-ink p-7 text-paper sm:p-10">
             <div>
               <p class="font-mono text-xs uppercase tracking-[.14em] text-[#bac8b0]">01 <span class="px-1 text-[#71806e]">/</span> {t("home-ecosystem-core-label")}</p>
               <h3 class="mt-8 text-4xl font-semibold tracking-[-.05em] sm:text-5xl">Evin</h3>
               <p class="mt-4 max-w-sm text-sm leading-6 text-[#c0c9bc]">{t("home-ecosystem-evin-description")}</p>
             </div>
-            <a href="/docs/book/first-workflow" class="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#d8eba9] underline decoration-[#829871] underline-offset-4 hover:text-white">
+            <a href="/docs/book/first-workflow" class="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-lime underline decoration-lime/45 underline-offset-4 hover:text-white">
               {t("home-ecosystem-first-workflow")} <span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span>
             </a>
-            <span aria-hidden="true" class="pointer-events-none absolute -right-5 top-1/2 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border-[6px] border-[#eeeee6] bg-[#91ad78] text-lg text-ink lg:flex">›</span>
+            <span aria-hidden="true" class="pointer-events-none absolute -right-5 top-1/2 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border-[6px] border-[color-mix(in_srgb,var(--color-lime)_5%,var(--color-paper))] bg-lime text-lg text-ink lg:flex">›</span>
           </article>
 
-          <div class="divide-y divide-line px-6 sm:px-10">
-            {projects.map((project) => <article class="grid gap-3 py-6 sm:grid-cols-[3.5rem_1fr_auto] sm:items-center sm:gap-5 sm:py-7">
-              <span class="font-mono text-xs text-[#84917f]">{project.number}</span>
+          <div class="divide-y divide-line">
+            {projects.map((project) => <a href={project.href} aria-label={`${project.link} — ${project.name}`} class="group grid gap-3 px-6 py-6 transition-colors hover:bg-[color-mix(in_srgb,var(--color-lime)_10%,var(--color-surface))] sm:grid-cols-[3.5rem_1fr_auto] sm:items-center sm:gap-5 sm:px-10 sm:py-7">
+              <span class="font-mono text-xs text-moss/80">{project.number}</span>
               <div>
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <h3 class="text-lg font-semibold tracking-tight text-ink">{project.name}</h3>
-                  <span class="text-[9px] font-semibold uppercase tracking-[.13em] text-[#64735e]">{project.label}</span>
+                  <span class="text-[9px] font-semibold uppercase tracking-[.13em] text-moss">{project.label}</span>
                 </div>
-                <p class="mt-1.5 max-w-xl text-sm leading-6 text-[#637063]">{project.description}</p>
+                <p class="mt-1.5 max-w-xl text-sm leading-6 text-moss">{project.description}</p>
               </div>
-              <a href={project.href} aria-label={`${project.link} — ${project.name}`} class="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-ink underline decoration-[#a6b69a] underline-offset-4 hover:text-moss sm:justify-self-end">
+              <span class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-ink underline decoration-[color-mix(in_srgb,var(--accent-strong)_45%,transparent)] underline-offset-4 group-hover:text-[var(--accent-strong)] sm:justify-self-end">
                 <span class="sm:hidden">{project.link}</span><span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span>
-              </a>
-            </article>)}
+              </span>
+            </a>)}
           </div>
         </div>
       </div>
@@ -140,18 +140,18 @@ const projects = [
       <div class="overflow-hidden rounded-[2rem] bg-ink text-paper">
         <div class="grid gap-10 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-end lg:p-14">
           <div class="max-w-2xl">
-            <p class="text-xs font-semibold uppercase tracking-[.16em] text-[#b1c29e]">{t("home-install-eyebrow")}</p>
+            <p class="text-xs font-semibold uppercase tracking-[.16em] text-lime/85">{t("home-install-eyebrow")}</p>
             <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">{t("home-install-title")}</h2>
             <p class="mt-5 max-w-xl leading-7 text-[#b5c0b1]">{t("home-install-description")}</p>
           </div>
           <div class="flex flex-col gap-3 sm:flex-row lg:flex-col">
-            <a href="/docs/book/installation/" class="group inline-flex items-center justify-center gap-3 rounded-full bg-lime px-6 py-4 text-sm font-semibold text-ink transition hover:bg-[#e4f8aa] active:scale-[.98]">{t("home-install-button")} <span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span></a>
+            <a href="/docs/book/installation/" class="group inline-flex items-center justify-center gap-3 rounded-full bg-lime px-6 py-4 text-sm font-semibold text-ink transition hover:brightness-105 active:scale-[.98]">{t("home-install-button")} <span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span></a>
             <a href="https://github.com/dukasn/everyinit/releases" class="inline-flex items-center justify-center gap-3 rounded-full border border-white/20 px-6 py-4 text-sm font-semibold text-paper transition hover:bg-white/10">{t("home-install-releases")} <span aria-hidden="true">↗</span></a>
           </div>
         </div>
         <div class="grid divide-y divide-white/10 border-t border-white/10 text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0">
           <a href="https://github.com/dukasn/everyinit/releases/latest" class="flex items-center justify-between gap-3 px-7 py-5 text-[#e0e8dc] transition hover:bg-white/5 sm:px-8">
-            <span>{t("home-install-linux")}</span><span class="text-[10px] font-mono uppercase tracking-wide text-[#a9be9a]">{t("home-install-downloads")}</span>
+            <span>{t("home-install-linux")}</span><span class="text-[10px] font-mono uppercase tracking-wide text-lime/85">{t("home-install-downloads")}</span>
           </a>
           <div class="flex items-center justify-between gap-3 px-7 py-5 text-[#bbc6b7] sm:px-8">
             <span>{t("home-install-macos")}</span><span class="text-[10px] font-mono uppercase tracking-wide text-[#819080]">{t("home-install-unavailable")}</span>
@@ -163,33 +163,33 @@ const projects = [
       </div>
     </section>
 
-    <section aria-labelledby="support-heading" class="border-y border-[#dfe3d9] bg-[#eeeee6]">
+    <section aria-labelledby="support-heading" class="border-y border-line bg-[color-mix(in_srgb,var(--color-lime)_5%,var(--color-paper))]">
       <div class="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:gap-16 lg:px-12 lg:py-24">
         <div class="max-w-2xl">
           <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">{t("home-support-eyebrow")}</p>
           <h2 id="support-heading" class="mt-5 max-w-[15ch] text-4xl font-semibold leading-[1.05] tracking-[-.055em] text-ink sm:text-5xl">{t("home-support-title")}</h2>
           <p class="mt-5 max-w-xl text-base leading-7 text-[#637063] sm:text-lg sm:leading-8">{t("home-support-description")}</p>
-          <a href="https://github.com/dukasn/everyinit" class="group mt-7 inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-[#a6b69a] underline-offset-4 transition hover:text-moss">
+          <a href="https://github.com/dukasn/everyinit" class="group mt-7 inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-[color-mix(in_srgb,var(--accent-strong)_45%,transparent)] underline-offset-4 transition hover:text-[var(--accent-strong)]">
               {t("home-support-github")} <span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span>
           </a>
         </div>
 
-        <div class="grid gap-px overflow-hidden rounded-2xl border border-[#cbd4c4] bg-[#cbd4c4] sm:grid-cols-2">
+        <div class="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2">
           <div class="bg-surface p-6 sm:p-7">
             <p class="font-mono text-[10px] font-medium uppercase tracking-[.14em] text-moss">{t("home-support-costs")}</p>
             <ul class="mt-5 space-y-3 text-sm text-[#536052]">
-              <li class="flex items-center gap-3"><span class="size-1.5 rounded-full bg-[#8eaa7b]"></span>{t("home-support-hosting")}</li>
-              <li class="flex items-center gap-3"><span class="size-1.5 rounded-full bg-[#8eaa7b]"></span>{t("home-support-infrastructure")}</li>
-              <li class="flex items-center gap-3"><span class="size-1.5 rounded-full bg-[#8eaa7b]"></span>{t("home-support-development")}</li>
+              <li class="flex items-center gap-3"><span class="size-1.5 rounded-full bg-[var(--accent-strong)]"></span>{t("home-support-hosting")}</li>
+              <li class="flex items-center gap-3"><span class="size-1.5 rounded-full bg-[var(--accent-strong)]"></span>{t("home-support-infrastructure")}</li>
+              <li class="flex items-center gap-3"><span class="size-1.5 rounded-full bg-[var(--accent-strong)]"></span>{t("home-support-development")}</li>
             </ul>
           </div>
-          <div class="flex flex-col justify-between gap-7 bg-[#e3e9dc] p-6 sm:p-7">
+          <div class="flex flex-col justify-between gap-7 bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] p-6 sm:p-7">
             <div>
               <p class="font-mono text-[10px] font-medium uppercase tracking-[.14em] text-moss">{t("home-support-maintainer")}</p>
               <p class="mt-4 text-lg font-semibold tracking-tight text-ink">dukasn</p>
               <p class="mt-1 text-sm text-[#637063]">{t("home-support-maintainer-description")}</p>
             </div>
-            <a href="https://github.com/dukasn" class="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-ink underline decoration-[#a6b69a] underline-offset-4 transition hover:text-moss">
+            <a href="https://github.com/dukasn" class="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-ink underline decoration-[color-mix(in_srgb,var(--accent-strong)_45%,transparent)] underline-offset-4 transition hover:text-[var(--accent-strong)]">
               {t("home-support-profile")} <span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span>
             </a>
           </div>
@@ -198,16 +198,16 @@ const projects = [
     </section>
   </main>
 
-  <footer id="legal" class="border-t border-line bg-[#f0efe8]">
+  <footer id="legal" class="border-t border-line bg-[color-mix(in_srgb,var(--color-lime)_4%,var(--color-paper))]">
     <div class="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:px-8 lg:grid-cols-[1.2fr_1fr_1fr] lg:px-12 lg:py-16">
       <div>
         <a href="/" class="inline-flex items-center gap-2 font-semibold text-ink"><span class="brand-mark size-5" aria-hidden="true"></span> everyinit</a>
-        <p class="mt-4 max-w-xs text-xs leading-5 text-[#647064]">{t("home-footer-description")}</p>
-        <p class="mt-5 text-[10px] text-[#788276]">© {new Date().getFullYear()} {t("home-footer-contributors")}</p>
+        <p class="mt-4 max-w-xs text-xs leading-5 text-moss">{t("home-footer-description")}</p>
+        <p class="mt-5 text-[10px] text-moss/80">© {new Date().getFullYear()} {t("home-footer-contributors")}</p>
       </div>
       <div>
-        <h2 class="text-[10px] font-semibold uppercase tracking-[.16em] text-[#52634f]">{t("home-footer-explore")}</h2>
-        <div class="mt-4 grid justify-start gap-3 text-xs text-[#647064]">
+        <h2 class="text-[10px] font-semibold uppercase tracking-[.16em] text-moss">{t("home-footer-explore")}</h2>
+        <div class="mt-4 grid justify-start gap-3 text-xs text-moss">
           <a href="/docs/">{t("home-footer-documentation")}</a>
           <a href="/docs/contributing/development">{t("home-footer-development-guide")}</a>
           <a href="https://github.com/dukasn/everyinit">{t("home-footer-source")}</a>
@@ -215,8 +215,8 @@ const projects = [
         </div>
       </div>
       <div>
-        <h2 class="text-[10px] font-semibold uppercase tracking-[.16em] text-[#52634f]">{t("home-footer-legal")}</h2>
-        <div class="mt-4 grid justify-start gap-3 text-xs text-[#647064]">
+        <h2 class="text-[10px] font-semibold uppercase tracking-[.16em] text-moss">{t("home-footer-legal")}</h2>
+        <div class="mt-4 grid justify-start gap-3 text-xs text-moss">
           <a href="https://github.com/dukasn/everyinit/blob/main/LICENSE">{t("home-footer-license")}</a>
           <a href="https://github.com/dukasn/everyinit/blob/main/THIRD_PARTY_NOTICES.md">{t("home-footer-third-party")}</a>
           <a href="https://github.com/dukasn/everyinit/blob/main/ACKNOWLEDGMENTS.md">{t("home-footer-acknowledgments")}</a>
