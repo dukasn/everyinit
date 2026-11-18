@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.3.0]
+
+### Bug Fixes
+
+- **ci:** use pinned npm for release reconciliation (3845dc8)
+
+### Documentation
+
+- add security reporting policy (78b988b)
+- **book:** make installation CLI-first (32c621f)
+
+### Features
+
+- **site:** refresh home and docs experience (7cce4c5)
+- **docs:** render diagrams inline in generated sites (1246400)
+- **highlighting:** add standard JSON grammar support (afe215b)
+- move policy and environment manifests to JSON (63fb939)
+
+### Maintenance
+
+- **ci:** configure platform probe tool installs (7b39b32)
+- **ci:** add optional platform probe (5506ab5)
+
 ## [v0.2.10]
 
 ### Bug Fixes
