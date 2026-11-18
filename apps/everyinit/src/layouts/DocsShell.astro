@@ -61,7 +61,11 @@ const variants = docs.manifest.versions.flatMap((version) => docs.manifest.local
   const counterpart = docs.routeForPage(page);
   return { version: version.id, locale, href: counterpart ? docsPath(counterpart.path) : undefined, available: Boolean(counterpart) };
 }));
-const content = renderDocument(route.page.page.ast, docs.assets[route.page.id] ?? {});
+const content = renderDocument(
+  route.page.page.ast,
+  docs.assets[route.page.id] ?? {},
+  docs.diagrams[route.page.id] ?? {},
+);
 const canonical = `https://everyinit.dev${docsPath(route.path)}`;
 ---
 

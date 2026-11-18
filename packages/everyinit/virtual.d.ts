@@ -5,6 +5,7 @@ declare module "virtual:evin/docs" {
   export const routes: EvinDocsRouteData[];
   export const pages: Record<string, EvinDocsPage>;
   export const assets: Record<string, Record<string, string>>;
+  export const diagrams: Record<string, Record<string, string>>;
   export function resolveRoute(path: string): EvinDocsRouteData | null;
   export function counterpart(
     route: EvinDocsRouteData,
@@ -18,6 +19,7 @@ declare module "virtual:evin/docs" {
     routes: EvinDocsRouteData[];
     pages: Record<string, EvinDocsPage>;
     assets: Record<string, Record<string, string>>;
+    diagrams: Record<string, Record<string, string>>;
     resolveRoute: typeof resolveRoute;
     counterpart: typeof counterpart;
     routeForPage: typeof routeForPage;

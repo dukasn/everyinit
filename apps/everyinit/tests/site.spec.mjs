@@ -160,6 +160,22 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   expect(await enumToken.evaluate((element) => getComputedStyle(element).color)).toBe(
     "rgb(167, 207, 140)",
   );
+  await page.goto("/docs/book/compose-workflows/");
+  const diagram = page.locator(".doc-content .diagram-svg").first();
+  await expect(diagram).toBeVisible();
+  await expect(diagram).toHaveAttribute("role", "img");
+  await expect(diagram.locator(":scope > title")).toHaveCount(1);
+  const mermaidFallback = diagram.locator(".merman-foreignobject-fallback").first();
+  await expect(mermaidFallback).toHaveCount(1);
+  expect(await mermaidFallback.evaluate((element) => getComputedStyle(element).display)).toBe(
+    "none",
+  );
+  expect(
+    await diagram.evaluate((element) =>
+      getComputedStyle(element).getPropertyValue("--diagram-ink").trim(),
+    ),
+  ).toBe("#15241b");
+  await expect(page.locator(".doc-content figure.diagram img")).toHaveCount(0);
   const latestVersion = (await page.locator("header details summary").first().innerText()).match(
     /v\d+\.\d+\.\d+/,
   )?.[0];

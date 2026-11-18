@@ -15,6 +15,7 @@
 mod action;
 pub mod assets;
 pub mod ast;
+pub mod diagrams;
 pub mod headless;
 pub mod reference;
 pub mod search;

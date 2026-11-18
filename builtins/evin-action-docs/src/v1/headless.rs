@@ -289,8 +289,13 @@ fn clear_rendered_fields(nodes: &mut [crate::v1::ast::DocNode]) {
         match node {
             crate::v1::ast::DocNode::Tape { rendered_svg, .. } => *rendered_svg = None,
             crate::v1::ast::DocNode::Diagram {
-                rendered_mermaid, ..
-            } => *rendered_mermaid = None,
+                rendered_mermaid,
+                svg_path,
+                ..
+            } => {
+                *rendered_mermaid = None;
+                *svg_path = None;
+            }
             crate::v1::ast::DocNode::Admonition { children, .. }
             | crate::v1::ast::DocNode::Directive { body: children, .. }
             | crate::v1::ast::DocNode::LspSymbol { children, .. } => {
@@ -585,7 +590,7 @@ fn publish(
     config: &HeadlessConfig,
     logger: &evin_action_sdk::Logger,
 ) -> Result<(PathBuf, usize), Diagnostic> {
-    let (locales, latest, variants) = build_variants(root, config, logger)?;
+    let (locales, latest, mut variants) = build_variants(root, config, logger)?;
     for variant in variants.iter().filter(|variant| variant.is_fallback) {
         logger.diagnostic(
             Diagnostic::new(
@@ -620,8 +625,14 @@ fn publish(
         );
     }
     let mut written_assets = HashSet::new();
-    for variant in &variants {
+    for variant in &mut variants {
         let id = page_id(&variant.version, &variant.locale, &variant.page.slug);
+        crate::v1::diagrams::render_page_diagrams(
+            &mut variant.page.ast,
+            &id,
+            &variant.page.source_path,
+            &out,
+        )?;
         write_json(
             &out.join(&variant.page_file),
             &PageArtifact {

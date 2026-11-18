@@ -31,6 +31,52 @@ pub struct MarkdownParseResult {
 pub struct MarkdownParser;
 
 impl MarkdownParser {
+    fn parse_diagram_fence_info(info: &str) -> (Option<String>, Option<String>, Option<String>) {
+        let (language, raw) = Self::parse_fence_info(info);
+        let Some(language) = language else {
+            return (None, None, None);
+        };
+        let mut title = Vec::new();
+        let mut id = None;
+        let mut quoted = false;
+        let mut quote = '\0';
+        let mut token = String::new();
+        let mut tokens = Vec::new();
+        for character in raw.unwrap_or_default().chars() {
+            if quoted {
+                if character == quote {
+                    quoted = false;
+                } else {
+                    token.push(character);
+                }
+            } else if character == '"' || character == '\'' {
+                quoted = true;
+                quote = character;
+            } else if character.is_whitespace() {
+                if !token.is_empty() {
+                    tokens.push(std::mem::take(&mut token));
+                }
+            } else {
+                token.push(character);
+            }
+        }
+        if !token.is_empty() {
+            tokens.push(token);
+        }
+        for value in tokens {
+            if let Some(value) = value.strip_prefix("id=") {
+                id = Some(value.to_string());
+            } else {
+                title.push(value);
+            }
+        }
+        (
+            Some(language),
+            (!title.is_empty()).then(|| title.join(" ")),
+            id,
+        )
+    }
+
     fn parse_fence_info(info: &str) -> (Option<String>, Option<String>) {
         let info = info.trim();
         if info.is_empty() {
@@ -312,7 +358,7 @@ impl MarkdownParser {
                         || l.starts_with("svgbob")
                         || l.starts_with("pikchr"))
                 {
-                    let (diagram_language, title) = Self::parse_fence_info(l);
+                    let (diagram_language, title, id) = Self::parse_diagram_fence_info(l);
                     let kind = match diagram_language.as_deref().unwrap_or("mermaid") {
                         "svgbob" => DiagramKind::Svgbob,
                         "pikchr" => DiagramKind::Pikchr,
@@ -326,6 +372,8 @@ impl MarkdownParser {
                             title,
                             caption: None,
                             alt: None,
+                            id,
+                            svg_path: None,
                             rendered_mermaid: None,
                         },
                         start,
@@ -1504,7 +1552,7 @@ Task documentation.
 +---+      +---+
 ```
 
-```mermaid "Auth Sequence"
+```mermaid "Auth Sequence" id=auth-sequence
 sequenceDiagram
     Client->>Server: Hello
 ```
@@ -1525,12 +1573,14 @@ sequenceDiagram
             DocNode::Diagram {
                 kind,
                 title,
+                id,
                 code,
                 rendered_mermaid,
                 ..
             } => {
                 assert_eq!(*kind, DiagramKind::Mermaid);
                 assert_eq!(title.as_deref(), Some("Auth Sequence"));
+                assert_eq!(id.as_deref(), Some("auth-sequence"));
                 assert!(code.contains("sequenceDiagram"));
                 assert!(rendered_mermaid.is_none());
             }

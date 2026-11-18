@@ -24,6 +24,9 @@ evin-locales = { workspace = true }
 unicode-width = { workspace = true }
 latex2mathml = { workspace = true }
 tempfile = { workspace = true }
+svgbob = { workspace = true }
+merman = { workspace = true }
+pikchr = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

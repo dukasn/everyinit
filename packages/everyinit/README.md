@@ -4,6 +4,12 @@ The official JavaScript package for consuming Evin's generated documentation
 data. Install once, then import the core API or a supported integration by
 subpath:
 
+For a step-by-step walkthrough, see the
+[guide to writing project documentation](https://everyinit.dev/docs/book/write-project-documentation)
+and [building a documentation site](https://everyinit.dev/docs/book/delivery/build-a-documentation-site).
+The [hosted API reference](https://everyinit.dev/docs/reference/everyinit-package)
+covers the exported helpers, Vite modules, search, and highlighting APIs.
+
 ```sh
 npm install everyinit
 ```
@@ -63,6 +69,33 @@ initialized highlighter.
 
 Framework adapters consume Evin's output; parsing, validation, and route
 semantics remain in the Evin CLI action.
+
+The package does not provide ready-made documentation components or a site
+theme. Your app renders the page AST and embeds any SVG string from
+`diagrams[pageId][diagramId]` inline; the diagram ID then remains available to
+your CSS. The Book's site-building guide shows the full Vite setup and a route
+lookup example.
+
+## Diagram SVGs
+
+The docs action renders Mermaid, Svgbob, and Pikchr diagrams into generated SVG
+files. `everyinit/vite` imports the SVG source and exposes it through
+`virtual:evin/docs` as `diagrams[pageId][diagramId]`. Render that string inline
+so site CSS can style the SVG:
+
+```js
+import docs from "virtual:evin/docs";
+
+const svg = docs.diagrams[page.id]?.[diagram.id];
+```
+
+Diagram IDs are authored with `id=...` after the language and optional quoted
+title in a Markdown fence, or with the `:id:` option in an RST diagram
+directive. The docs build generates a stable ID if none is supplied. IDs must
+be unique on a page and use a letter followed by letters, numbers, `_`, or `-`.
+Generated SVGs include accessible titles and CSS variables for ink, accent,
+surface, highlight, and muted colors. For example, a site stylesheet can
+override a selected diagram with `#release-flow { --diagram-ink: #173126; }`.
 
 ```js
 import { defineConfig } from "vite";

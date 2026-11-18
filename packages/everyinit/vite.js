@@ -48,11 +48,13 @@ export default function evinDocs(options = {}) {
       const outputRoot = path.dirname(manifestPath);
       const assetsPath = path.resolve(outputRoot, manifest.assets);
       const assets = JSON.parse(await readFile(assetsPath, "utf8"));
+      const outputRootPath = `${path.resolve(outputRoot)}${path.sep}`;
       const pageEntries = new Map();
       for (const route of manifest.routes) pageEntries.set(route.page_id, route.page_file);
       const imports = [];
       const pairs = [];
       const assetPairs = [];
+      const diagramPairs = [];
       const searchImports = [];
       const searchPairs = [];
       let index = 0;
@@ -62,11 +64,39 @@ export default function evinDocs(options = {}) {
         if (page.schema !== "evin.docs.page/v1" || page.id !== id) {
           throw new Error(`Invalid Evin page data for ${id}: ${relativeFile}`);
         }
+        const diagrams = [];
+        const visit = (value) => {
+          if (!value || typeof value !== "object") return;
+          if (Array.isArray(value)) {
+            for (const child of value) visit(child);
+            return;
+          }
+          if (value.type === "Diagram" && value.svg_path) {
+            diagrams.push(value);
+          }
+          for (const child of Object.values(value)) visit(child);
+        };
+        visit(page.page?.ast);
+        const mappedDiagrams = [];
+        for (const diagram of diagrams.sort((a, b) => String(a.id).localeCompare(String(b.id)))) {
+          if (typeof diagram.id !== "string" || !diagram.id) {
+            throw new Error(`Generated Evin diagram on ${id} has no ID`);
+          }
+          const diagramPath = path.resolve(outputRoot, diagram.svg_path);
+          if (!diagramPath.startsWith(outputRootPath)) {
+            throw new Error(`Invalid Evin diagram path for ${id}: ${diagram.svg_path}`);
+          }
+          const importName = `diagram${index++}`;
+          imports.push(
+            `import ${importName} from ${JSON.stringify(`${viteFilePath(diagramPath)}?raw`)};`,
+          );
+          mappedDiagrams.push(`${JSON.stringify(diagram.id)}: ${importName}`);
+        }
+        diagramPairs.push(`${JSON.stringify(id)}: { ${mappedDiagrams.join(", ")} }`);
         const importName = `page${index++}`;
         imports.push(`import ${importName} from ${JSON.stringify(viteFilePath(pagePath))};`);
         pairs.push(`${JSON.stringify(id)}: ${importName}`);
       }
-      const outputRootPath = `${path.resolve(outputRoot)}${path.sep}`;
       for (const [pageId, entries] of Object.entries(assets).sort(([a], [b]) =>
         a.localeCompare(b),
       )) {
@@ -119,9 +149,10 @@ export default function evinDocs(options = {}) {
         `import { createDocsRuntime } from "everyinit";`,
         ...imports,
         `const assets = { ${assetPairs.join(", ")} };`,
+        `const diagrams = { ${diagramPairs.join(", ")} };`,
         `const pages = { ${pairs.join(", ")} };`,
-        `const docs = createDocsRuntime(manifest, pages, assets);`,
-        `export { manifest, pages, assets };`,
+        `const docs = { ...createDocsRuntime(manifest, pages, assets), diagrams };`,
+        `export { manifest, pages, assets, diagrams };`,
         `export const { routes, resolveRoute, counterpart, routeForPage } = docs;`,
         `export default docs;`,
       ].join("\n");

@@ -792,6 +792,8 @@ impl RstParser {
                 title,
                 caption,
                 alt,
+                id: options.get("id").cloned(),
+                svg_path: None,
                 rendered_mermaid: None,
             })
         } else if name == "tape" {
@@ -842,6 +844,8 @@ impl RstParser {
                     title,
                     caption,
                     alt,
+                    id: options.get("id").cloned(),
+                    svg_path: None,
                     rendered_mermaid: None,
                 })
             } else {
@@ -1949,6 +1953,7 @@ mod tests {
 
 .. mermaid:: Auth Sequence
    :caption: Figure 2: Auth
+   :id: auth-sequence
 
    sequenceDiagram
        Client->>Server: Hello
@@ -1977,6 +1982,7 @@ mod tests {
                 kind,
                 title,
                 caption,
+                id,
                 code,
                 rendered_mermaid,
                 ..
@@ -1984,6 +1990,7 @@ mod tests {
                 assert_eq!(*kind, DiagramKind::Mermaid);
                 assert_eq!(title.as_deref(), Some("Auth Sequence"));
                 assert_eq!(caption.as_deref(), Some("Figure 2: Auth"));
+                assert_eq!(id.as_deref(), Some("auth-sequence"));
                 assert!(code.contains("sequenceDiagram"));
                 assert!(rendered_mermaid.is_none());
             }

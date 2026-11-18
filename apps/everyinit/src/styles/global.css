@@ -978,6 +978,38 @@ input {
   background: #18211b;
   color: #e8eee4;
 }
+.doc-content .diagram {
+  margin: 1.75rem 0;
+  padding: 1rem 1.1rem;
+  overflow: hidden;
+  border: 1px solid #d1dccb;
+  border-radius: 0.9rem;
+  background: #f5f6ef;
+}
+.doc-content .diagram figcaption {
+  margin-bottom: 0.8rem;
+  color: #536b51;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.doc-content .diagram-svg {
+  --diagram-ink: #15241b;
+  --diagram-accent: #536b51;
+  --diagram-surface: #e6ece1;
+  --diagram-highlight: #d5f05b;
+  --diagram-muted: #cbd6c6;
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: 42rem;
+  overflow: visible;
+}
+.doc-content .diagram-svg foreignObject {
+  color: var(--diagram-ink);
+}
 .doc-content .code-title {
   padding: 0.7rem 1rem;
   border-bottom: 1px solid #35443a;

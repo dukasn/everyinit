@@ -228,12 +228,19 @@ fn render_node(node: &DocNode, out: &mut String) {
             out.push_str("---");
         }
         DocNode::Diagram {
-            kind, code, title, ..
+            kind,
+            code,
+            title,
+            id,
+            ..
         } => {
             out.push_str("```");
             out.push_str(&kind.to_string());
             if let Some(t) = title {
                 out.push_str(&format!(" \"{}\"", t));
+            }
+            if let Some(id) = id {
+                out.push_str(&format!(" id={id}"));
             }
             out.push('\n');
             out.push_str(code.trim_end());

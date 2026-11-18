@@ -67,6 +67,7 @@ ring = "0.17.14"
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 svgbob = "0.6.7"
 merman = { version = "=0.7.0", features = ["render"] }
+pikchr = "0.1.4"
 unicode-width = "0.2"
 latex2mathml = "0.2"
 

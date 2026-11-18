@@ -149,6 +149,10 @@ pub enum DocNode {
         caption: Option<String>,
         alt: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        svg_path: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         rendered_mermaid: Option<RenderedMermaid>,
     },
     MathBlock {

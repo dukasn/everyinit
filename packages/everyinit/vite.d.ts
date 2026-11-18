@@ -3,7 +3,7 @@ import type { Plugin } from "vite";
 import type { EvinDocsRouteData } from "./index.js";
 
 export interface EvinDocsViteOptions {
-  /** Manifest path, relative to the Vite project root. Defaults to dist/docs-data/manifest.json. */
+  /** Manifest path, relative to `cwd`. Defaults to dist/docs-data/manifest.json. */
   manifest?: string;
   /** Command and arguments used to regenerate the Evin data package. */
   command?: string[];

@@ -87,16 +87,24 @@ const inline = (value: unknown, assets: Record<string, string>): string => {
   }
 };
 
-const blocks = (values: unknown, assets: Record<string, string>): string =>
-  Array.isArray(values) ? values.map((value) => block(value, assets)).join("\n") : "";
+const blocks = (
+  values: unknown,
+  assets: Record<string, string>,
+  diagrams: Record<string, string>,
+): string =>
+  Array.isArray(values) ? values.map((value) => block(value, assets, diagrams)).join("\n") : "";
 
-const block = (value: unknown, assets: Record<string, string>): string => {
+const block = (
+  value: unknown,
+  assets: Record<string, string>,
+  diagrams: Record<string, string>,
+): string => {
   if (!value || typeof value !== "object") return "";
   const node = value as AstNode;
   const children = Array.isArray(node.children)
     ? node.children.map((child) => inline(child, assets)).join("")
     : "";
-  const body = blocks(node.body ?? node.items, assets);
+  const body = blocks(node.body ?? node.items, assets, diagrams);
   switch (node.type) {
     case "Heading": {
       const level = Math.min(6, Math.max(1, Number(node.level) || 2));
@@ -123,12 +131,12 @@ const block = (value: unknown, assets: Record<string, string>): string => {
       return `<figure><img src="${escapeHtml(safeUrl(assets[String(node.src)] ?? node.src))}" alt="${escapeHtml(node.alt)}" loading="lazy"><figcaption>${escapeHtml(node.title ?? node.alt)}</figcaption></figure>`;
     }
     case "Admonition":
-      return `<aside class="admonition ${escapeHtml(node.kind)}"><strong>${escapeHtml(node.title ?? node.kind)}</strong>${blocks(node.children, assets)}</aside>`;
+      return `<aside class="admonition ${escapeHtml(node.kind)}"><strong>${escapeHtml(node.title ?? node.kind)}</strong>${blocks(node.children, assets, diagrams)}</aside>`;
     case "List": {
       const tag = node.ordered ? "ol" : "ul";
       const start = node.ordered && Number(node.start) > 1 ? ` start="${Number(node.start)}"` : "";
       const items = Array.isArray(node.items)
-        ? node.items.map((item) => `<li>${blocks(item, assets)}</li>`).join("")
+        ? node.items.map((item) => `<li>${blocks(item, assets, diagrams)}</li>`).join("")
         : "";
       return `<${tag}${start}>${items}</${tag}>`;
     }
@@ -137,7 +145,7 @@ const block = (value: unknown, assets: Record<string, string>): string => {
         ? node.items
             .map((item) => {
               const task = item as AstNode;
-              return `<li><input type="checkbox" disabled${task.checked ? " checked" : ""}>${blocks(task.body, assets)}</li>`;
+              return `<li><input type="checkbox" disabled${task.checked ? " checked" : ""}>${blocks(task.body, assets, diagrams)}</li>`;
             })
             .join("")
         : "";
@@ -166,23 +174,29 @@ const block = (value: unknown, assets: Record<string, string>): string => {
       return "<hr>";
     case "MathBlock":
       return `<pre class="math-block">${escapeHtml(node.latex)}</pre>`;
-    case "Diagram":
-      return `<figure class="diagram"><figcaption>${escapeHtml(node.title ?? node.caption ?? node.alt ?? node.kind)}</figcaption><pre><code>${escapeHtml(node.code)}</code></pre></figure>`;
+    case "Diagram": {
+      const id = String(node.id ?? "");
+      const svg = diagrams[id];
+      const caption = node.caption ?? node.title ?? node.alt ?? node.kind;
+      return svg
+        ? `<figure class="diagram" data-diagram-kind="${escapeHtml(node.kind)}"><figcaption>${escapeHtml(caption)}</figcaption>${svg}</figure>`
+        : `<figure class="diagram"><figcaption>${escapeHtml(caption)}</figcaption><pre><code>${escapeHtml(node.code)}</code></pre></figure>`;
+    }
     case "Tape":
       return `<pre class="tape-block"><code>${escapeHtml(node.script)}</code></pre>`;
     case "RawHtml":
       return `<pre class="raw-html"><code>${escapeHtml(node.content)}</code></pre>`;
     case "LspSymbol":
-      return `<details class="api-symbol"><summary><code>${escapeHtml(node.name)}</code> <span>${escapeHtml(node.summary)}</span></summary>${blocks(node.children, assets)}</details>`;
+      return `<details class="api-symbol"><summary><code>${escapeHtml(node.name)}</code> <span>${escapeHtml(node.summary)}</span></summary>${blocks(node.children, assets, diagrams)}</details>`;
     case "Directive":
-      return blocks(node.body, assets);
+      return blocks(node.body, assets, diagrams);
     case "DefinitionList":
       return `<dl>${
         Array.isArray(node.items)
           ? node.items
               .map((item) => {
                 const entry = item as AstNode;
-                return `<dt>${Array.isArray(entry.term) ? entry.term.map((child) => inline(child, assets)).join("") : ""}</dt><dd>${blocks(entry.body, assets)}</dd>`;
+                return `<dt>${Array.isArray(entry.term) ? entry.term.map((child) => inline(child, assets)).join("") : ""}</dt><dd>${blocks(entry.body, assets, diagrams)}</dd>`;
               })
               .join("")
           : ""
@@ -193,7 +207,7 @@ const block = (value: unknown, assets: Record<string, string>): string => {
           ? node.items
               .map((item) => {
                 const entry = item as AstNode;
-                return `<dt><code>${escapeHtml([...(Array.isArray(entry.flags) ? entry.flags : []), entry.argument].filter(Boolean).join(" "))}</code></dt><dd>${blocks(entry.body, assets)}</dd>`;
+                return `<dt><code>${escapeHtml([...(Array.isArray(entry.flags) ? entry.flags : []), entry.argument].filter(Boolean).join(" "))}</code></dt><dd>${blocks(entry.body, assets, diagrams)}</dd>`;
               })
               .join("")
           : ""
@@ -204,7 +218,7 @@ const block = (value: unknown, assets: Record<string, string>): string => {
           ? node.items
               .map((item) => {
                 const entry = item as AstNode;
-                return `<dt>${escapeHtml(entry.name)}</dt><dd>${blocks(entry.body, assets)}</dd>`;
+                return `<dt>${escapeHtml(entry.name)}</dt><dd>${blocks(entry.body, assets, diagrams)}</dd>`;
               })
               .join("")
           : ""
@@ -215,7 +229,7 @@ const block = (value: unknown, assets: Record<string, string>): string => {
           ? node.steps
               .map((item) => {
                 const step = item as AstNode;
-                return `<li><strong>${Array.isArray(step.title) ? step.title.map((child) => inline(child, assets)).join("") : escapeHtml(step.title)}</strong>${blocks(step.body, assets)}</li>`;
+                return `<li><strong>${Array.isArray(step.title) ? step.title.map((child) => inline(child, assets)).join("") : escapeHtml(step.title)}</strong>${blocks(step.body, assets, diagrams)}</li>`;
               })
               .join("")
           : ""
@@ -225,6 +239,10 @@ const block = (value: unknown, assets: Record<string, string>): string => {
   }
 };
 
-export function renderDocument(ast: unknown, assets: Record<string, string> = {}): string {
-  return blocks(ast, assets);
+export function renderDocument(
+  ast: unknown,
+  assets: Record<string, string> = {},
+  diagrams: Record<string, string> = {},
+): string {
+  return blocks(ast, assets, diagrams);
 }
