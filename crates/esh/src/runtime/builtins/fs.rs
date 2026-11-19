@@ -2190,10 +2190,9 @@ pub fn stat<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        intermediate_directory_mode, move_by_copy_and_remove, parse_touch_date_time,
-        parse_touch_timestamp,
-    };
+    #[cfg(unix)]
+    use super::intermediate_directory_mode;
+    use super::{move_by_copy_and_remove, parse_touch_date_time, parse_touch_timestamp};
     use std::fs;
     #[cfg(unix)]
     use std::os::unix::fs::{MetadataExt, PermissionsExt};
