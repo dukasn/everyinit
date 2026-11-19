@@ -45,17 +45,22 @@ async fn test_trap_err_handler() {
 async fn prefix_assignment_is_restored_after_trap_registration() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
+    ctx.set_var("ESH_TEST_PREFIX_ASSIGNMENT_SENTINEL", "original");
 
     let status = engine
         .eval_str(
-            "register_error() { TEMP=trap trap 'echo handled' ERR; }\nregister_error",
+            "register_error() { ESH_TEST_PREFIX_ASSIGNMENT_SENTINEL=trap trap 'echo handled' ERR; }\nregister_error",
             &mut ctx,
         )
         .await
         .unwrap();
 
     assert_eq!(status, 0);
-    assert_eq!(ctx.get_var("TEMP"), None);
+    assert_eq!(
+        ctx.get_var("ESH_TEST_PREFIX_ASSIGNMENT_SENTINEL")
+            .as_deref(),
+        Some("original")
+    );
     assert!(ctx.get_trap(TrapSignal::Err).is_some());
 }
 
@@ -96,7 +101,7 @@ async fn err_trap_observes_failures_inside_command_substitution_and_parent_comma
 
     let status = engine
         .eval_str(
-            "trap 'echo handled >&2' ERR\nfalse \"$(false)\"\n",
+            "trap 'echo handled >&2' ERR\ntest \"$(test 1 -eq 2)\" = x\n",
             &mut ctx,
         )
         .await
@@ -114,7 +119,7 @@ async fn failing_err_handler_does_not_recurse_or_replace_original_status() {
 
     let status = engine
         .eval_str(
-            "COUNT=0\ntrap 'COUNT=$((COUNT + 1)); false' ERR\nfalse\nSAVED=$?\nprintf '%s:%s\\n' \"$COUNT\" \"$SAVED\"\n",
+            "COUNT=0\ntrap 'COUNT=$((COUNT + 1)); test 1 -eq 2' ERR\ntest 1 -eq 2\nSAVED=$?\nprintf '%s:%s\\n' \"$COUNT\" \"$SAVED\"\n",
             &mut ctx,
         )
         .await
@@ -153,7 +158,7 @@ async fn failing_exit_handler_does_not_replace_script_status() {
 
     assert_eq!(
         engine
-            .eval_str("trap 'false' EXIT\nfalse\n", &mut ctx)
+            .eval_str("trap 'test 1 -eq 2' EXIT\ntest 1 -eq 2\n", &mut ctx)
             .await
             .unwrap(),
         1
@@ -161,7 +166,7 @@ async fn failing_exit_handler_does_not_replace_script_status() {
 
     assert_eq!(
         engine
-            .eval_str("trap 'false' EXIT\ntrue\n", &mut ctx)
+            .eval_str("trap 'test 1 -eq 2' EXIT\ntest 1 -eq 1\n", &mut ctx)
             .await
             .unwrap(),
         0
