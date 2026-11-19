@@ -2959,8 +2959,8 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
 
         for (shell, args) in &reference_shells {
             // macOS ships Bash 3.2, whose behavior differs from the behavior
-            // these ESH cases test for CDPATH, here-documents, and assignment
-            // only command status.
+            // these ESH cases test for CDPATH, here-documents, assignment-only
+            // status, and NaN formatting flags.
             if cfg!(target_os = "macos")
                 && *shell == "bash"
                 && matches!(
@@ -2968,6 +2968,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                     "posix_cdpath_falls_back_and_ignores_explicit_relative_paths"
                         | "posix_heredoc_expands_positional_lists_without_removing_body_quotes"
                         | "posix_assignment_only_command_status"
+                        | "posix_printf_float_sign_flags_apply_to_nan"
                 )
             {
                 continue;
