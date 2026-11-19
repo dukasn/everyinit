@@ -2960,7 +2960,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         for (shell, args) in &reference_shells {
             // macOS ships Bash 3.2, whose behavior differs from the behavior
             // these ESH cases test for CDPATH, here-documents, assignment-only
-            // status, and NaN formatting flags.
+            // status, NaN formatting flags, and special-parameter defaults.
             if cfg!(target_os = "macos")
                 && *shell == "bash"
                 && matches!(
@@ -2970,6 +2970,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                         | "posix_assignment_only_command_status"
                         | "posix_printf_float_sign_flags_apply_to_nan"
                         | "posix_printf_zero_padding_is_ignored_for_infinity_and_nan"
+                        | "posix_special_parameter_default_operators_preserve_at_fields"
                 )
             {
                 continue;
