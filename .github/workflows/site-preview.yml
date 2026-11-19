@@ -298,13 +298,17 @@ jobs:
           version=$(printf '%s' "$PR_TITLE" | sed -nE 's/^chore\(release\): v?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/p')
           [ -n "$version" ] || version='see release proposal'
           if [ "$AUDIT_RESULT" = success ] && [ "$VULNERABILITIES" = 0 ] && [ "$MAINTENANCE" = 0 ]; then
-            alert='> [!TIP] Dependency audit passed with no known vulnerabilities or maintenance notices.'
+            alert='> [!TIP]
+          > Dependency audit passed with no known vulnerabilities or maintenance notices.'
           elif [ "$AUDIT_RESULT" = success ] && [ "$VULNERABILITIES" = 0 ]; then
-            alert='> [!WARNING] Dependency audit passed; maintenance notices are informational.'
+            alert='> [!WARNING]
+          > Dependency audit passed; maintenance notices are informational.'
           elif [ "$AUDIT_RESULT" = success ]; then
-            alert='> [!CAUTION] Dependency audit found known vulnerabilities. Review the report before merging.'
+            alert='> [!CAUTION]
+          > Dependency audit found known vulnerabilities. Review the report before merging.'
           else
-            alert='> [!WARNING] Dependency audit did not complete cleanly. Review the report and check run.'
+            alert='> [!WARNING]
+          > Dependency audit did not complete cleanly. Review the report and check run.'
           fi
           deployed=${deployed_sha:-unavailable}
           if [ "$EVENT_ACTION" = closed ]; then
