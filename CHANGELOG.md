@@ -3,6 +3,35 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.3.1]
+
+### Bug Fixes
+
+- **platform:** read Windows shell variables case-insensitively (5724167)
+- **platform:** preserve Windows shell environment (077e412)
+- **platform:** make native probes portable (33442c4)
+- **ci:** render preview audit alerts (3612e14)
+- **vscode:** align engine with terminal APIs (8294fac)
+- **platform:** compile probes on macOS and Windows (6087edd)
+
+### Documentation
+
+- **contributing:** reorganize contributor guidance (e8e6f01)
+
+### Features
+
+- **ci:** audit release proposal dependencies (725179f)
+
+### Maintenance
+
+- **infra:** refresh generated worker types (958ea78)
+- **deps:** upgrade Rust and Node dependencies (426cc87)
+
+### Tests
+
+- **platform:** improve probe diagnostics (2098e4d)
+- **site:** assert rendered Mermaid labels (bb0ff5b)
+
 ## [v0.3.0]
 
 ### Bug Fixes
