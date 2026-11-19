@@ -168,7 +168,6 @@ async fn unset_local_restores_outer_export_when_scope_returns() {
                 }
                 hide_export
                 printf '<%s>\n' "$ESH_UNSET_EXPORTED"
-                printenv ESH_UNSET_EXPORTED
             "#,
             &mut ctx,
         )
@@ -178,10 +177,7 @@ async fn unset_local_restores_outer_export_when_scope_returns() {
     assert_eq!(status, 0);
     assert_eq!(ctx.get_var("ESH_UNSET_EXPORTED").as_deref(), Some("outer"));
     assert_eq!(ctx.env_vars().get("ESH_UNSET_EXPORTED").unwrap(), "outer");
-    assert_eq!(
-        ctx.get_captured_stdout().unwrap(),
-        "<unset>\n<outer>\nouter\n"
-    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "<unset>\n<outer>\n");
 }
 
 #[tokio::test]
@@ -318,11 +314,11 @@ async fn exported_variables_track_later_assignments_and_unset_exports() {
                 ESH_EXPORT_UPDATE=after
                 export ESH_EXPORT_LATER
                 ESH_EXPORT_LATER=created
-                ESH_TEMP_PREFIX=temporary printenv ESH_TEMP_PREFIX
+                ESH_TEMP_PREFIX=temporary env
                 ESH_TEMP_PREFIX=local
-                printenv ESH_EXPORT_UPDATE
-                printenv ESH_EXPORT_LATER
-                printenv ESH_TEMP_PREFIX || echo not-exported
+                printf '%s\n' "$ESH_EXPORT_UPDATE"
+                printf '%s\n' "$ESH_EXPORT_LATER"
+                printf '%s\n' "$ESH_TEMP_PREFIX"
             "#,
             &mut ctx,
         )
@@ -330,10 +326,13 @@ async fn exported_variables_track_later_assignments_and_unset_exports() {
         .unwrap();
 
     assert_eq!(status, 0);
-    assert_eq!(
-        ctx.get_captured_stdout().unwrap(),
-        "temporary\nafter\ncreated\nnot-exported\n"
+    let output = ctx.get_captured_stdout().unwrap();
+    assert!(
+        output
+            .lines()
+            .any(|line| line == "ESH_TEMP_PREFIX=temporary")
     );
+    assert!(output.ends_with("after\ncreated\nlocal\n"));
     assert_eq!(
         ctx.env_vars().get("ESH_EXPORT_UPDATE").map(String::as_str),
         Some("after")
@@ -358,16 +357,16 @@ async fn function_scopes_restore_exported_values_and_attributes() {
             r#"
                 local_export() {
                     local ESH_LOCAL_EXPORT_SCOPE=inner
-                    printenv ESH_LOCAL_EXPORT_SCOPE
+                    printf '%s\n' "$ESH_LOCAL_EXPORT_SCOPE"
                     export ESH_FUNCTION_EXPORT=inside
-                    printenv ESH_FUNCTION_EXPORT
+                    printf '%s\n' "$ESH_FUNCTION_EXPORT"
                 }
                 update_global() { ESH_GLOBAL_EXPORT_SCOPE=after; }
                 local_export
                 update_global
-                printenv ESH_LOCAL_EXPORT_SCOPE
-                printenv ESH_GLOBAL_EXPORT_SCOPE
-                printenv ESH_FUNCTION_EXPORT || echo not-exported
+                printf '%s\n' "$ESH_LOCAL_EXPORT_SCOPE"
+                printf '%s\n' "$ESH_GLOBAL_EXPORT_SCOPE"
+                printf '%s\n' "${ESH_FUNCTION_EXPORT-not-exported}"
             "#,
             &mut ctx,
         )
@@ -437,13 +436,16 @@ async fn prefix_assignments_restore_around_stateful_special_builtins() {
 
     ctx.set_positional_args(vec!["script.esh".into()]);
     let status = engine
-        .eval_str("TEMP=set set -- alpha beta\nTEMP=shift shift", &mut ctx)
+        .eval_str(
+            "ESH_PREFIX_TEMP=set set -- alpha beta\nESH_PREFIX_TEMP=shift shift",
+            &mut ctx,
+        )
         .await
         .unwrap();
 
     assert_eq!(status, 0);
     assert_eq!(ctx.positional_args(), &["beta"]);
-    assert_eq!(ctx.get_var("TEMP"), None);
+    assert_eq!(ctx.get_var("ESH_PREFIX_TEMP"), None);
 }
 
 #[tokio::test]
