@@ -250,17 +250,18 @@ async fn test_runtime_logical_chains() {
 async fn cd_dash_toggles_exported_pwd_and_prints_the_destination() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let child = temp.path().join("child");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let child = temp_path.join("child");
     std::fs::create_dir(&child).unwrap();
 
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.enable_capture();
 
     let script = "cd child\nprintf '<%s>\\n' \"$PWD\"\ncd -\nprintf '<%s>\\n' \"$OLDPWD\"\ncd -\n";
     let status = engine.eval_str(script, &mut ctx).await.unwrap();
 
-    let temp_path = temp.path().to_string_lossy();
+    let temp_path = temp_path.to_string_lossy();
     let child_path = child.to_string_lossy();
     assert_eq!(status, 0);
     assert_eq!(
@@ -278,12 +279,13 @@ async fn cd_dash_toggles_exported_pwd_and_prints_the_destination() {
 async fn prefixed_pwd_assignments_do_not_stale_cd_state() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let child = temp.path().join("child");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let child = temp_path.join("child");
     std::fs::create_dir(&child).unwrap();
 
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
-    ctx.set_var("PWD", temp.path().to_string_lossy().as_ref());
+    ctx.set_cwd(&temp_path).unwrap();
+    ctx.set_var("PWD", temp_path.to_string_lossy().as_ref());
     ctx.set_var("OLDPWD", "/previous");
     ctx.enable_capture();
 
@@ -299,10 +301,10 @@ async fn prefixed_pwd_assignments_do_not_stale_cd_state() {
     assert_eq!(status, 0);
     assert_eq!(ctx.cwd(), child_path.as_path());
     assert_eq!(ctx.get_var("PWD").as_deref(), child_path.to_str());
-    assert_eq!(ctx.get_var("OLDPWD").as_deref(), temp.path().to_str());
+    assert_eq!(ctx.get_var("OLDPWD").as_deref(), temp_path.to_str());
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}:{}\n", child_path.display(), temp.path().display())
+        format!("{}:{}\n", child_path.display(), temp_path.display())
     );
 }
 
@@ -342,11 +344,12 @@ async fn cd_uses_physical_pwd_when_the_shell_pwd_is_invalid() {
 async fn cd_without_operand_uses_the_shell_home_variable() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let home = temp.path().join("home");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let home = temp_path.join("home");
     std::fs::create_dir(&home).unwrap();
 
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.set_var("HOME", home.to_string_lossy().as_ref());
 
     let status = engine.eval_str("cd", &mut ctx).await.unwrap();
@@ -359,54 +362,57 @@ async fn cd_without_operand_uses_the_shell_home_variable() {
 async fn cd_without_home_variables_stays_in_the_execution_context_directory() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.unset_var("HOME");
     ctx.unset_var("USERPROFILE");
 
     let status = engine.eval_str("cd\ncd --\n", &mut ctx).await.unwrap();
 
     assert_eq!(status, 0);
-    assert_eq!(ctx.cwd(), temp.path());
-    assert_eq!(ctx.get_var("PWD").as_deref(), temp.path().to_str());
-    assert_eq!(ctx.get_var("OLDPWD").as_deref(), temp.path().to_str());
+    assert_eq!(ctx.cwd(), temp_path.as_path());
+    assert_eq!(ctx.get_var("PWD").as_deref(), temp_path.to_str());
+    assert_eq!(ctx.get_var("OLDPWD").as_deref(), temp_path.to_str());
 }
 
 #[tokio::test]
 async fn cd_with_empty_home_falls_back_to_nonempty_userprofile_or_current_directory() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let profile = temp.path().join("profile");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let profile = temp_path.join("profile");
     std::fs::create_dir(&profile).unwrap();
 
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.set_var("HOME", "");
     ctx.set_var("USERPROFILE", profile.to_string_lossy().as_ref());
 
     assert_eq!(engine.eval_str("cd\n", &mut ctx).await.unwrap(), 0);
     assert_eq!(ctx.cwd(), profile.as_path());
 
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.set_var("HOME", "");
     ctx.unset_var("USERPROFILE");
     assert_eq!(engine.eval_str("cd --\n", &mut ctx).await.unwrap(), 0);
-    assert_eq!(ctx.cwd(), temp.path());
+    assert_eq!(ctx.cwd(), temp_path.as_path());
 }
 
 #[tokio::test]
 async fn cd_double_dash_ends_options_and_alone_selects_home() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let home = temp.path().join("home");
-    let dash_directory = temp.path().join("-dash");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let home = temp_path.join("home");
+    let dash_directory = temp_path.join("-dash");
     let literal_dash_directory = dash_directory.join("-");
     std::fs::create_dir(&home).unwrap();
     std::fs::create_dir(&dash_directory).unwrap();
     std::fs::create_dir(&literal_dash_directory).unwrap();
 
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.set_var("HOME", home.to_string_lossy().as_ref());
     ctx.enable_capture();
 
@@ -436,14 +442,15 @@ async fn cd_double_dash_ends_options_and_alone_selects_home() {
 async fn cd_rejects_an_empty_directory_operand_without_changing_directory() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.enable_capture();
 
     let status = engine.eval_str("cd ''\n", &mut ctx).await.unwrap();
 
     assert_ne!(status, 0);
-    assert_eq!(ctx.cwd(), temp.path());
+    assert_eq!(ctx.cwd(), temp_path.as_path());
     assert!(!ctx.get_captured_stderr().unwrap().is_empty());
 }
 
@@ -451,13 +458,14 @@ async fn cd_rejects_an_empty_directory_operand_without_changing_directory() {
 async fn cd_searches_cdpath_in_order_and_prints_selected_directory() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let first = temp.path().join("first");
-    let second = temp.path().join("second");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let first = temp_path.join("first");
+    let second = temp_path.join("second");
     std::fs::create_dir_all(first.join("shared")).unwrap();
     std::fs::create_dir_all(second.join("shared")).unwrap();
 
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.set_var("CDPATH", "first:second");
     ctx.enable_capture();
 
@@ -472,7 +480,7 @@ async fn cd_searches_cdpath_in_order_and_prints_selected_directory() {
     );
     assert_eq!(
         ctx.get_var("OLDPWD").as_deref(),
-        Some(temp.path().to_str().unwrap())
+        Some(temp_path.to_str().unwrap())
     );
 }
 
@@ -480,14 +488,15 @@ async fn cd_searches_cdpath_in_order_and_prints_selected_directory() {
 async fn cd_uses_current_directory_fallback_and_skips_cdpath_for_explicit_paths() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let local = temp.path().join("local");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let local = temp_path.join("local");
     let local_child = local.join("child");
-    let search = temp.path().join("search");
+    let search = temp_path.join("search");
     std::fs::create_dir_all(&local_child).unwrap();
     std::fs::create_dir_all(search.join("child")).unwrap();
 
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.set_var("CDPATH", "search");
     ctx.enable_capture();
 
@@ -505,18 +514,19 @@ async fn cd_uses_current_directory_fallback_and_skips_cdpath_for_explicit_paths(
 async fn cd_rejects_missing_oldpwd_and_extra_operands_without_changing_directory() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
     let mut ctx = ExecutionContext::new();
-    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_cwd(&temp_path).unwrap();
     ctx.unset_var("OLDPWD");
     ctx.enable_capture();
 
     let missing_oldpwd = engine.eval_str("cd -", &mut ctx).await.unwrap();
     assert_eq!(missing_oldpwd, 1);
-    assert_eq!(ctx.cwd(), temp.path());
+    assert_eq!(ctx.cwd(), temp_path.as_path());
 
     let extra_operands = engine.eval_str("cd one two", &mut ctx).await.unwrap();
     assert_eq!(extra_operands, 2);
-    assert_eq!(ctx.cwd(), temp.path());
+    assert_eq!(ctx.cwd(), temp_path.as_path());
     assert_eq!(
         ctx.get_captured_stderr().unwrap(),
         "esh: cd: OLDPWD is not set\nesh: cd: too many operands\n"
@@ -528,8 +538,9 @@ async fn cd_rejects_missing_oldpwd_and_extra_operands_without_changing_directory
 async fn pwd_logical_and_physical_modes_respect_the_current_directory() {
     let engine = Engine::new();
     let temp = tempdir().unwrap();
-    let physical = temp.path().join("real");
-    let logical = temp.path().join("alias");
+    let temp_path = std::fs::canonicalize(temp.path()).unwrap();
+    let physical = temp_path.join("real");
+    let logical = temp_path.join("alias");
     std::fs::create_dir(&physical).unwrap();
     std::os::unix::fs::symlink(&physical, &logical).unwrap();
 

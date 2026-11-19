@@ -36,7 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export RUST_BACKTRACE=1
+          export RUST_BACKTRACE=short
           cargo check --workspace --all-targets --locked 2>&1 | tee platform-probe.log
           cargo test --workspace --locked -- --show-output 2>&1 | tee -a platform-probe.log
       - name: Upload platform probe log
@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export RUST_BACKTRACE=1
+          export RUST_BACKTRACE=short
           cargo check --workspace --all-targets --locked 2>&1 | tee platform-probe.log
           cargo test --workspace --locked -- --show-output 2>&1 | tee -a platform-probe.log
       - name: Upload platform probe log
