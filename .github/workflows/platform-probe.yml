@@ -35,8 +35,9 @@ jobs:
       - name: Run exploratory workspace checks
         shell: bash
         run: |
-          set -o pipefail
-          cargo evin-dev run --verbose --debug platform-probe 2>&1 | tee platform-probe.log
+          set -euo pipefail
+          cargo check --workspace --all-targets --locked -vv 2>&1 | tee platform-probe.log
+          cargo test --workspace --locked -vv -- --show-output 2>&1 | tee -a platform-probe.log
       - name: Upload platform probe log
         if: always()
         uses: actions/upload-artifact@v6
@@ -59,8 +60,9 @@ jobs:
       - name: Run exploratory workspace checks
         shell: bash
         run: |
-          set -o pipefail
-          cargo evin-dev run --verbose --debug platform-probe 2>&1 | tee platform-probe.log
+          set -euo pipefail
+          cargo check --workspace --all-targets --locked -vv 2>&1 | tee platform-probe.log
+          cargo test --workspace --locked -vv -- --show-output 2>&1 | tee -a platform-probe.log
       - name: Upload platform probe log
         if: always()
         uses: actions/upload-artifact@v6

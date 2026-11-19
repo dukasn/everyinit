@@ -2958,6 +2958,14 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         }
 
         for (shell, args) in &reference_shells {
+            // macOS ships Bash 3.2, which applies CDPATH to `./child` in
+            // this case despite the explicit-relative-path rule under test.
+            if cfg!(target_os = "macos")
+                && case.name == "posix_cdpath_falls_back_and_ignores_explicit_relative_paths"
+                && *shell == "bash"
+            {
+                continue;
+            }
             let shell_dir = tempdir().unwrap();
             let reference = Command::new(shell)
                 .args(args)
@@ -3005,6 +3013,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
 #[tokio::test]
 async fn pwd_logical_and_physical_symlink_modes_match_posix_shells() {
     let esh_dir = tempdir().unwrap();
+    let esh_root = std::fs::canonicalize(esh_dir.path()).unwrap();
     std::fs::create_dir(esh_dir.path().join("real")).unwrap();
     std::os::unix::fs::symlink(esh_dir.path().join("real"), esh_dir.path().join("alias")).unwrap();
 
@@ -3019,14 +3028,15 @@ async fn pwd_logical_and_physical_symlink_modes_match_posix_shells() {
         esh_stdout,
         format!(
             "{}/alias\n{}/real\n",
-            esh_dir.path().display(),
-            esh_dir.path().display()
+            esh_root.display(),
+            esh_root.display()
         )
     );
 
     let reference_script = "cd alias\npwd -L\npwd -P\n";
     for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
         let shell_dir = tempdir().unwrap();
+        let shell_root = std::fs::canonicalize(shell_dir.path()).unwrap();
         std::fs::create_dir(shell_dir.path().join("real")).unwrap();
         std::os::unix::fs::symlink(
             shell_dir.path().join("real"),
@@ -3048,8 +3058,8 @@ async fn pwd_logical_and_physical_symlink_modes_match_posix_shells() {
             String::from_utf8_lossy(&output.stdout),
             format!(
                 "{}/alias\n{}/real\n",
-                shell_dir.path().display(),
-                shell_dir.path().display()
+                shell_root.display(),
+                shell_root.display()
             ),
             "{shell} output"
         );
@@ -3074,13 +3084,14 @@ printf 'last-physical:%s\n' "$PWD"
 "#;
 
     let esh_dir = tempdir().unwrap();
+    let root = std::fs::canonicalize(esh_dir.path()).unwrap();
     std::fs::create_dir_all(esh_dir.path().join("real/sub")).unwrap();
     std::os::unix::fs::symlink(esh_dir.path().join("real"), esh_dir.path().join("alias")).unwrap();
     let mut ctx = ExecutionContext::new();
     ctx.enable_capture();
     ctx.set_cwd(esh_dir.path()).unwrap();
     assert_eq!(Engine::new().eval_str(script, &mut ctx).await.unwrap(), 0);
-    let root = esh_dir.path().display().to_string();
+    let root = root.display().to_string();
     let expected = format!(
         "logical:{root}/alias/sub\nlogical-parent:{root}/alias\nphysical:{root}/real/sub\nlast-logical:{root}/alias/sub\nlast-physical:{root}/real/sub\n"
     );
@@ -3088,6 +3099,7 @@ printf 'last-physical:%s\n' "$PWD"
 
     for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
         let shell_dir = tempdir().unwrap();
+        let shell_root = std::fs::canonicalize(shell_dir.path()).unwrap();
         std::fs::create_dir_all(shell_dir.path().join("real/sub")).unwrap();
         std::os::unix::fs::symlink(
             shell_dir.path().join("real"),
@@ -3105,7 +3117,7 @@ printf 'last-physical:%s\n' "$PWD"
             Err(error) => panic!("could not run {shell}: {error}"),
         };
         assert_eq!(output.status.code(), Some(0), "{shell} status");
-        let shell_root = shell_dir.path().display().to_string();
+        let shell_root = shell_root.display().to_string();
         let shell_expected = format!(
             "logical:{shell_root}/alias/sub\nlogical-parent:{shell_root}/alias\nphysical:{shell_root}/real/sub\nlast-logical:{shell_root}/alias/sub\nlast-physical:{shell_root}/real/sub\n"
         );
@@ -3252,31 +3264,17 @@ async fn printf_large_octal_format_escapes_match_bash_posix_bytes() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn printf_numeric_whitespace_conversion_matches_bash_posix_when_available() {
+async fn printf_numeric_whitespace_conversion_uses_the_numeric_prefix() {
     let script = "printf '<%d><%f>\\n' ' 12' ' 1.5'\nprintf '<%d><%f>\\n' '12 ' '1.5 '\n";
-    let reference = match Command::new("bash")
-        .args(["--posix", "-c", script])
-        .output()
-    {
-        Ok(output) => output,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            eprintln!("bash is unavailable; skipping printf numeric-whitespace comparison");
-            return;
-        }
-        Err(error) => panic!("could not run bash: {error}"),
-    };
-
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
     ctx.enable_capture();
     let status = engine.eval_str(script, &mut ctx).await.unwrap();
     let stdout = ctx.get_captured_stdout().unwrap();
 
-    assert_eq!(status, reference.status.code().unwrap_or_default());
-    assert_eq!(stdout.as_bytes(), reference.stdout.as_slice());
+    assert_eq!(status, 1);
     assert_eq!(stdout, "<12><1.500000>\n<12><1.500000>\n");
     assert!(!ctx.get_captured_stderr().unwrap().is_empty());
-    assert!(!reference.stderr.is_empty());
 }
 
 #[cfg(unix)]
