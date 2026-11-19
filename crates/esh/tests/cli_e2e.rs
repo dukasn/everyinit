@@ -44,8 +44,8 @@ fn run_esh_with_pty(
         libc::forkpty(
             &mut master,
             std::ptr::null_mut(),
-            std::ptr::null(),
-            std::ptr::null(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
         )
     };
     assert!(

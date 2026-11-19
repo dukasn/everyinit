@@ -33,7 +33,17 @@ jobs:
         with:
           prefix-key: v1-platform-probe
       - name: Run exploratory workspace checks
-        run: cargo evin-dev run platform-probe
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo evin-dev run --verbose --debug platform-probe 2>&1 | tee platform-probe.log
+      - name: Upload platform probe log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-probe-windows-${{ github.run_id }}
+          path: platform-probe.log
+          if-no-files-found: warn
 
   macos:
     name: Experimental macOS probe
@@ -47,4 +57,14 @@ jobs:
         with:
           prefix-key: v1-platform-probe
       - name: Run exploratory workspace checks
-        run: cargo evin-dev run platform-probe
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo evin-dev run --verbose --debug platform-probe 2>&1 | tee platform-probe.log
+      - name: Upload platform probe log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-probe-macos-${{ github.run_id }}
+          path: platform-probe.log
+          if-no-files-found: warn
