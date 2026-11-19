@@ -659,6 +659,7 @@ pub fn mkdir<'a>(
     })
 }
 
+#[cfg(unix)]
 fn create_dir_with_posix_parents(path: &Path) -> std::io::Result<()> {
     if path.is_dir() {
         return Ok(());
@@ -677,6 +678,12 @@ fn create_dir_with_posix_parents(path: &Path) -> std::io::Result<()> {
     }
 }
 
+#[cfg(not(unix))]
+fn create_dir_with_posix_parents(path: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(path)
+}
+
+#[cfg(unix)]
 fn create_posix_intermediate_directories(path: &Path) -> std::io::Result<()> {
     let mut current = PathBuf::new();
     for component in path.components() {

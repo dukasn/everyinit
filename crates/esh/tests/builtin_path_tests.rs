@@ -830,7 +830,9 @@ async fn touch_copies_reference_timestamps_and_honors_access_modification_select
     fs::write(&target, "target").unwrap();
     let reference_access = UNIX_EPOCH + Duration::from_secs(1_600_000_000);
     let reference_modified = UNIX_EPOCH + Duration::from_secs(1_650_000_000);
-    fs::File::open(&reference)
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&reference)
         .unwrap()
         .set_times(
             fs::FileTimes::new()
@@ -852,7 +854,9 @@ async fn touch_copies_reference_timestamps_and_honors_access_modification_select
 
     let target_access = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
     let target_modified = UNIX_EPOCH + Duration::from_secs(1_710_000_000);
-    fs::File::open(&target)
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&target)
         .unwrap()
         .set_times(
             fs::FileTimes::new()
