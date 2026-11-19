@@ -36,8 +36,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo check --workspace --all-targets --locked -vv 2>&1 | tee platform-probe.log
-          cargo test --workspace --locked -vv -- --show-output 2>&1 | tee -a platform-probe.log
+          export RUST_BACKTRACE=1
+          cargo check --workspace --all-targets --locked 2>&1 | tee platform-probe.log
+          cargo test --workspace --locked -- --show-output 2>&1 | tee -a platform-probe.log
       - name: Upload platform probe log
         if: always()
         uses: actions/upload-artifact@v6
@@ -61,8 +62,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo check --workspace --all-targets --locked -vv 2>&1 | tee platform-probe.log
-          cargo test --workspace --locked -vv -- --show-output 2>&1 | tee -a platform-probe.log
+          export RUST_BACKTRACE=1
+          cargo check --workspace --all-targets --locked 2>&1 | tee platform-probe.log
+          cargo test --workspace --locked -- --show-output 2>&1 | tee -a platform-probe.log
       - name: Upload platform probe log
         if: always()
         uses: actions/upload-artifact@v6

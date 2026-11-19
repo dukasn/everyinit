@@ -1248,18 +1248,101 @@ fn copy_metadata(
     #[cfg(not(unix))]
     {
         if !symlink {
-            let file = fs::OpenOptions::new().write(true).open(destination)?;
-            file.set_times(
-                fs::FileTimes::new()
-                    .set_accessed(metadata.accessed()?)
-                    .set_modified(metadata.modified()?),
-            )?;
-            drop(file);
+            let accessed = metadata.accessed()?;
+            let modified = metadata.modified()?;
+            #[cfg(windows)]
+            set_windows_file_times(destination, accessed, modified)?;
+            #[cfg(not(windows))]
+            {
+                let file = fs::OpenOptions::new().write(true).open(destination)?;
+                file.set_times(
+                    fs::FileTimes::new()
+                        .set_accessed(accessed)
+                        .set_modified(modified),
+                )?;
+            }
             fs::set_permissions(destination, metadata.permissions())?;
         }
     }
 
     Ok(())
+}
+
+#[cfg(windows)]
+fn set_windows_file_times(
+    path: &Path,
+    accessed: std::time::SystemTime,
+    modified: std::time::SystemTime,
+) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::{
+        Foundation::{CloseHandle, FILETIME, INVALID_HANDLE_VALUE},
+        Storage::FileSystem::{
+            CreateFileW, FILE_FLAG_BACKUP_SEMANTICS, FILE_SHARE_DELETE, FILE_SHARE_READ,
+            FILE_SHARE_WRITE, FILE_WRITE_ATTRIBUTES, OPEN_EXISTING, SetFileTime,
+        },
+    };
+
+    fn filetime(time: std::time::SystemTime) -> std::io::Result<FILETIME> {
+        const WINDOWS_TO_UNIX_EPOCH_SECONDS: i128 = 11_644_473_600;
+        const TICKS_PER_SECOND: i128 = 10_000_000;
+
+        let ticks = match time.duration_since(std::time::UNIX_EPOCH) {
+            Ok(duration) => {
+                WINDOWS_TO_UNIX_EPOCH_SECONDS * TICKS_PER_SECOND
+                    + i128::from(duration.as_secs()) * TICKS_PER_SECOND
+                    + i128::from(duration.subsec_nanos() / 100)
+            }
+            Err(error) => {
+                WINDOWS_TO_UNIX_EPOCH_SECONDS * TICKS_PER_SECOND
+                    - i128::from(error.duration().as_secs()) * TICKS_PER_SECOND
+                    - i128::from(error.duration().subsec_nanos() / 100)
+            }
+        };
+        let ticks = u64::try_from(ticks).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "time is outside FILETIME range",
+            )
+        })?;
+        Ok(FILETIME {
+            dwLowDateTime: ticks as u32,
+            dwHighDateTime: (ticks >> 32) as u32,
+        })
+    }
+
+    let accessed = filetime(accessed)?;
+    let modified = filetime(modified)?;
+    let mut wide_path: Vec<u16> = path.as_os_str().encode_wide().collect();
+    wide_path.push(0);
+
+    // Opening with backup semantics allows timestamp preservation on directories.
+    // SAFETY: wide_path is NUL-terminated and all pointers are valid for the call.
+    let handle = unsafe {
+        CreateFileW(
+            wide_path.as_ptr(),
+            FILE_WRITE_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    // SAFETY: handle is valid and both FILETIME values live through the call.
+    let success = unsafe { SetFileTime(handle, std::ptr::null(), &accessed, &modified) };
+    let result = if success == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    };
+    // SAFETY: handle was returned by CreateFileW and is closed exactly once.
+    unsafe { CloseHandle(handle) };
+    result
 }
 
 #[cfg(unix)]
