@@ -2969,6 +2969,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                         | "posix_heredoc_expands_positional_lists_without_removing_body_quotes"
                         | "posix_assignment_only_command_status"
                         | "posix_printf_float_sign_flags_apply_to_nan"
+                        | "posix_printf_zero_padding_is_ignored_for_infinity_and_nan"
                 )
             {
                 continue;

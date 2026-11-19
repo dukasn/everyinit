@@ -26,13 +26,16 @@ async fn http_uses_curl_style_request_options() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
     ctx.enable_capture();
-    let url = format!("file://{}", source.display());
+    // ESH treats backslashes in bare words as escapes. Use URL separators and
+    // quote the value so Windows drive paths reach the builtin intact.
+    let file_path = source.to_string_lossy().replace('\\', "/");
+    let url = format!("file://{file_path}");
     let code = engine
-        .eval_str(&format!("http -X GET {url}"), &mut ctx)
+        .eval_str(&format!("http -X GET '{url}'"), &mut ctx)
         .await
         .unwrap();
 
-    assert_eq!(code, 0);
+    assert_eq!(code, 0, "{}", ctx.get_captured_stderr().unwrap());
     assert_eq!(ctx.get_captured_stdout().unwrap(), "local response");
 
     let mut legacy_ctx = ExecutionContext::new();
