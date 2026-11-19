@@ -4,15 +4,74 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: Open automation/release pull request number
+        required: true
+        type: number
 
 permissions:
   contents: read
 
 concurrency:
-  group: site-preview-pr-${{ github.event.pull_request.number }}
+  group: site-preview-pr-${{ github.event.pull_request.number || inputs.pull_request_number }}
   cancel-in-progress: true
 
 jobs:
+  resolve-target:
+    name: Resolve release pull request
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.ref == 'automation/release' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.action != 'closed')
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    outputs:
+      number: ${{ steps.target.outputs.number }}
+      sha: ${{ steps.target.outputs.sha }}
+      title: ${{ steps.target.outputs.title }}
+      url: ${{ steps.target.outputs.url }}
+    steps:
+      - name: Validate and resolve the release pull request
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_SHA: ${{ github.event.pull_request.head.sha }}
+          INPUT_NUMBER: ${{ inputs.pull_request_number }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            number="$INPUT_NUMBER"
+          else
+            number="$EVENT_NUMBER"
+          fi
+          pr=$(gh pr view "$number" --repo "$GH_REPO" \
+            --json state,baseRefName,headRefName,headRepository,headRefOid,title,url)
+          jq -e '.state == "OPEN" and .baseRefName == "main" and .headRefName == "automation/release" and .headRepository.name != null' <<< "$pr" >/dev/null
+          head_repo=$(jq -r '.headRepository.nameWithOwner' <<< "$pr")
+          [ "$head_repo" = "$GH_REPO" ] || { echo "Only same-repository release pull requests can be audited" >&2; exit 1; }
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            sha=$(jq -r '.headRefOid' <<< "$pr")
+          else
+            # Pull request events audit the exact event commit, even if the branch moved later.
+            sha="$EVENT_SHA"
+          fi
+          {
+            echo "number=$number"
+            echo "sha=$sha"
+            echo "title=$(jq -r '.title' <<< "$pr" | tr -d '\n')"
+            echo "url=$(jq -r '.url' <<< "$pr")"
+          } >> "$GITHUB_OUTPUT"
+
   build:
     name: Build the PR site preview
     if: >-
@@ -45,7 +104,6 @@ jobs:
       github.event.action != 'closed'
     permissions:
       contents: read
-      pull-requests: write
     needs: build
     runs-on: ubuntu-latest
     environment: unstable
@@ -55,7 +113,6 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -78,21 +135,219 @@ jobs:
             --branch "$SITE_BRANCH" \
             --commit-hash "$PR_HEAD_SHA" \
             --commit-message "Website preview for PR #$PR_NUMBER"
-      - name: Update the PR preview comment
-        env:
-          GH_REPO: ${{ github.repository }}
-          PREVIEW_URL: https://pr-${{ github.event.pull_request.number }}.everyinit-site.pages.dev
+
+  dependency-audit:
+    name: Dependency audit
+    if: needs.resolve-target.result == 'success'
+    needs: resolve-target
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    outputs:
+      vulnerabilities: ${{ steps.report.outputs.vulnerabilities }}
+      maintenance: ${{ steps.report.outputs.maintenance }}
+      audit_status: ${{ steps.report.outputs.audit_status }}
+    env:
+      AUDIT_SHA: ${{ needs.resolve-target.outputs.sha }}
+      PR_NUMBER: ${{ needs.resolve-target.outputs.number }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-target.outputs.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Install pinned scanners
+        id: scanners
+        continue-on-error: true
+        working-directory: /tmp
         run: |
+          set +e
+          cargo install --locked --version 0.22.2 cargo-audit
+          cargo_install=$?
+          npm install --global --force npm@10.9.9
+          npm_install=$?
+          echo "cargo_install=$cargo_install" >> "$GITHUB_OUTPUT"
+          echo "npm_install=$npm_install" >> "$GITHUB_OUTPUT"
+      - name: Run lockfile audits and preserve scanner output
+        id: scan
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p audit-input reports
+          cargo --version > audit-input/rustc-cargo-version.txt 2>&1
+          cargo audit --json > audit-input/cargo-audit.json 2> audit-input/cargo-audit.stderr
+          cargo_code=$?
+          npm --version > audit-input/npm-version.txt 2>&1
+          npm audit --json --package-lock-only > audit-input/npm-root-audit.json 2> audit-input/npm-root-audit.stderr
+          root_code=$?
+          (cd editors/vscode && npm audit --json --package-lock-only) > audit-input/npm-vscode-audit.json 2> audit-input/npm-vscode-audit.stderr
+          vscode_code=$?
+          printf '{"cargo-audit":{"exit_code":%s},"npm-root":{"exit_code":%s},"npm-vscode":{"exit_code":%s}}\n' \
+            "$cargo_code" "$root_code" "$vscode_code" > audit-input/scanner-status.json
+          printf '%s\n' "$cargo_code" > audit-input/cargo-audit.exit-code
+          printf '%s\n' "$root_code" > audit-input/npm-root-audit.exit-code
+          printf '%s\n' "$vscode_code" > audit-input/npm-vscode-audit.exit-code
+          exit 0
+      - name: Prepare audit metadata
+        id: metadata
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+          inputs = Path('audit-input')
+          def version(command):
+              try:
+                  return subprocess.check_output(command, text=True, stderr=subprocess.STDOUT).strip().splitlines()[0]
+              except Exception as error:
+                  return f'unavailable: {error}'
+          metadata = {
+              'commit': os.environ['AUDIT_SHA'],
+              'pull_request': int(os.environ['PR_NUMBER']),
+              'checked_at': datetime.now(timezone.utc).isoformat(),
+              'tools': {'cargo-audit': version(['cargo', 'audit', '--version']), 'cargo': version(['cargo', '--version']), 'node': version(['node', '--version']), 'npm': version(['npm', '--version'])},
+              'scope': ['Cargo.lock', 'package-lock.json', 'editors/vscode/package-lock.json'],
+              'scanner_status': json.loads((inputs / 'scanner-status.json').read_text()),
+          }
+          (inputs / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          PY
+      - name: Generate normalized reports
+        id: report
+        continue-on-error: true
+        run: python3 scripts/security/dependency-audit-report.py --input-dir audit-input --output-dir reports --metadata audit-input/metadata.json
+      - name: Include raw scanner output in report bundle
+        if: always()
+        run: |
+          mkdir -p reports
+          cp audit-input/cargo-audit.json audit-input/npm-root-audit.json audit-input/npm-vscode-audit.json \
+            audit-input/scanner-status.json audit-input/*.stderr audit-input/*.exit-code \
+            audit-input/*version.txt reports/ 2>/dev/null || true
+      - name: Upload dependency audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-audit-pr-${{ env.PR_NUMBER }}-${{ env.AUDIT_SHA }}
+          path: reports/
+          if-no-files-found: warn
+      - name: Fail for vulnerabilities or audit execution errors
+        if: always()
+        run: |
+          if [ "${{ steps.report.outputs.audit_status }}" != PASSED ]; then
+            echo "Dependency audit failed; inspect the uploaded report artifact."
+            exit 1
+          fi
+
+  update-preview-comment:
+    name: Update release preview comment
+    if: >-
+      always() &&
+      ((needs.resolve-target.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || github.event.pull_request.head.ref == 'automation/release')) ||
+      (github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.ref == 'automation/release' &&
+      github.event.pull_request.head.repo.full_name == github.repository))
+    needs: [resolve-target, dependency-audit, deploy, retire-preview]
+    permissions:
+      contents: read
+      pull-requests: write
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ needs.resolve-target.outputs.number || github.event.pull_request.number || inputs.pull_request_number }}
+      PR_URL: ${{ needs.resolve-target.outputs.url || github.event.pull_request.html_url }}
+      PR_TITLE: ${{ needs.resolve-target.outputs.title || github.event.pull_request.title }}
+      AUDIT_SHA: ${{ needs.resolve-target.outputs.sha || github.event.pull_request.head.sha }}
+      AUDIT_RESULT: ${{ needs.dependency-audit.result }}
+      VULNERABILITIES: ${{ needs.dependency-audit.outputs.vulnerabilities || 'unknown' }}
+      MAINTENANCE: ${{ needs.dependency-audit.outputs.maintenance || 'unknown' }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+      PREVIEW_URL: https://pr-${{ needs.resolve-target.outputs.number }}.everyinit-site.pages.dev
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      EVENT_NAME: ${{ github.event_name }}
+      EVENT_ACTION: ${{ github.event.action }}
+      EVENT_SHA: ${{ github.event.pull_request.head.sha }}
+      RETIRE_RESULT: ${{ needs.retire-preview.result }}
+      RETIRED_MAIN_SHA: ${{ needs.retire-preview.outputs.main_sha }}
+    steps:
+      - name: Update the single release preview and audit comment
+        run: |
+          set -euo pipefail
           marker='<!-- everyinit-site-preview -->'
-          body=$(cat <<EOF
+          existing=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" --jq \
+            '.[] | select(.body | contains("<!-- everyinit-site-preview -->")) | .body' || true)
+          deployed_sha=''
+          if [ "$EVENT_ACTION" = closed ]; then
+            deployed_sha="$RETIRED_MAIN_SHA"
+          elif [ "$EVENT_NAME" = workflow_dispatch ]; then
+            deployed_sha=$(printf '%s' "$existing" | sed -n 's/.*<!-- deployed-sha:\([0-9a-f]*\) -->.*/\1/p' | head -n 1)
+            if [ -z "$deployed_sha" ]; then
+              deployed_sha=$(printf '%s\n' "$existing" | sed -nE 's/.*(Preview for commit|Built from) `([0-9a-f]+)`.*/\2/p' | head -n 1)
+            fi
+          elif [ "$DEPLOY_RESULT" = success ]; then
+            deployed_sha="$EVENT_SHA"
+          else
+            deployed_sha=$(printf '%s' "$existing" | sed -n 's/.*<!-- deployed-sha:\([0-9a-f]*\) -->.*/\1/p' | head -n 1)
+            if [ -z "$deployed_sha" ]; then
+              deployed_sha=$(printf '%s\n' "$existing" | sed -nE 's/.*(Preview for commit|Built from) `([0-9a-f]+)`.*/\2/p' | head -n 1)
+            fi
+          fi
+          version=$(printf '%s' "$PR_TITLE" | sed -nE 's/^chore\(release\): v?([0-9]+\.[0-9]+\.[0-9]+).*$/\1/p')
+          [ -n "$version" ] || version='see release proposal'
+          if [ "$AUDIT_RESULT" = success ] && [ "$VULNERABILITIES" = 0 ] && [ "$MAINTENANCE" = 0 ]; then
+            alert='> [!TIP] Dependency audit passed with no known vulnerabilities or maintenance notices.'
+          elif [ "$AUDIT_RESULT" = success ] && [ "$VULNERABILITIES" = 0 ]; then
+            alert='> [!WARNING] Dependency audit passed; maintenance notices are informational.'
+          elif [ "$AUDIT_RESULT" = success ]; then
+            alert='> [!CAUTION] Dependency audit found known vulnerabilities. Review the report before merging.'
+          else
+            alert='> [!WARNING] Dependency audit did not complete cleanly. Review the report and check run.'
+          fi
+          deployed=${deployed_sha:-unavailable}
+          if [ "$EVENT_ACTION" = closed ]; then
+            if [ "$RETIRE_RESULT" = success ]; then
+              body=$(cat <<EOF
           $marker
+          <!-- deployed-sha:$deployed_sha -->
           ## Everyinit site preview
 
-          Preview for commit `$PR_HEAD_SHA`: $PREVIEW_URL
-
-          This preview updates when the release pull request changes.
+          This preview was retired when the pull request closed. Its deployments were deleted, and the branch alias now serves the current main site.
           EOF
-          )
+              )
+            else
+              body=$(cat <<EOF
+          $marker
+          <!-- deployed-sha:$deployed_sha -->
+          ## Everyinit site preview
+
+          The pull request closed, but preview retirement did not complete. Check this workflow run before relying on the branch alias.
+          EOF
+              )
+            fi
+          else
+            body=$(cat <<EOF
+          $marker
+          <!-- deployed-sha:$deployed_sha -->
+          ## Everyinit release preview
+
+          $alert
+
+          | | Status |
+          | --- | --- |
+          | Proposed version | <code>$version</code> |
+          | Preview | [$PREVIEW_URL]($PREVIEW_URL) |
+          | Preview deployed commit | <code>$deployed</code> |
+          | Audited commit | <code>$AUDIT_SHA</code> |
+          | Known vulnerabilities | $VULNERABILITIES |
+          | Maintenance notices | $MAINTENANCE (informational) |
+          | CI checks | [View native pull request checks]($PR_URL/checks) |
+          | Downloadable audit reports | [Workflow run and artifacts]($RUN_URL) |
+          EOF
+            )
+          fi
           comment_id=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
             --jq '.[] | select(.body | contains("<!-- everyinit-site-preview -->")) | .id' | head -n 1)
           if [ -n "$comment_id" ]; then
@@ -100,13 +355,6 @@ jobs:
           else
             gh api --method POST "repos/$GH_REPO/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
           fi
-          {
-            echo "## Everyinit site preview"
-            echo
-            echo "[$PREVIEW_URL]($PREVIEW_URL)"
-            echo
-            echo "Built from `$PR_HEAD_SHA`."
-          } >> "$GITHUB_STEP_SUMMARY"
 
   build-current-site:
     name: Build current main site for preview retirement
@@ -140,7 +388,6 @@ jobs:
       github.event.action == 'closed'
     permissions:
       contents: read
-      pull-requests: write
     needs: build-current-site
     runs-on: ubuntu-latest
     environment: unstable
@@ -149,8 +396,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_PREVIEW_DEPLOY_API_TOKEN }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
-      GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
+    outputs:
+      main_sha: ${{ steps.main.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -198,18 +445,3 @@ jobs:
             [ "$page" -lt "$total_pages" ] || break
             page=$((page + 1))
           done
-      - name: Mark the PR preview as retired
-        run: |
-          marker='<!-- everyinit-site-preview -->'
-          comment_id=$(gh api --paginate "repos/$GH_REPO/issues/$PR_NUMBER/comments" \
-            --jq '.[] | select(.body | contains("<!-- everyinit-site-preview -->")) | .id' | head -n 1)
-          if [ -n "$comment_id" ]; then
-            body=$(cat <<EOF
-          $marker
-          ## Everyinit site preview
-
-          This preview was retired when the pull request closed. Its deployments were deleted, and the branch alias now serves the current `main` site.
-          EOF
-          )
-            gh api --method PATCH "repos/$GH_REPO/issues/comments/$comment_id" -f body="$body" >/dev/null
-          fi
