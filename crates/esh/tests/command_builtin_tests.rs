@@ -223,6 +223,7 @@ async fn command_search_uses_unexported_shell_path_assignments() {
     let tool = bin.join("shell-path-tool");
     std::fs::write(&tool, "#!/bin/sh\nprintf 'ran\\n'\n").unwrap();
     std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let canonical_tool = std::fs::canonicalize(&tool).unwrap();
 
     let mut ctx = ExecutionContext::new();
     ctx.set_cwd(temp.path()).unwrap();
@@ -240,7 +241,7 @@ async fn command_search_uses_unexported_shell_path_assignments() {
     assert_eq!(status, 0);
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}\nran\n", tool.display())
+        format!("{}\nran\n", canonical_tool.display())
     );
     assert_eq!(ctx.get_captured_stderr().unwrap_or_default(), "");
 

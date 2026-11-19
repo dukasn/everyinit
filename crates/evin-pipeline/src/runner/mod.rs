@@ -275,6 +275,12 @@ impl<S: RunnerStrategy> ShellRunner<S> {
 
         let cwd_str = ctx.cwd.as_deref().unwrap_or(".");
         let shell_binary = if cfg!(windows) { "cmd.exe" } else { "sh" };
+        #[cfg(windows)]
+        let env = {
+            let mut env = env;
+            preserve_platform_shell_environment(&mut env);
+            env
+        };
         ctx.log
             .debug_event(evin_action_sdk::debug::SubprocessStart {
                 command: script.to_string(),
@@ -357,6 +363,25 @@ impl<S: RunnerStrategy> ShellRunner<S> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(windows)]
+fn preserve_platform_shell_environment(env: &mut HashMap<String, String>) {
+    for name in [
+        "SystemRoot",
+        "WINDIR",
+        "COMSPEC",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+    ] {
+        if env.keys().any(|key| key.eq_ignore_ascii_case(name)) {
+            continue;
+        }
+        if let Ok(value) = std::env::var(name) {
+            env.insert(name.to_string(), value);
+        }
     }
 }
 

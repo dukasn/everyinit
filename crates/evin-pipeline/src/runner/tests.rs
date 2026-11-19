@@ -14,6 +14,30 @@
 
 use super::*;
 use std::collections::HashMap;
+
+#[cfg(windows)]
+#[test]
+fn shell_process_environment_keeps_required_windows_variables() {
+    let mut env = HashMap::new();
+    preserve_platform_shell_environment(&mut env);
+
+    for name in [
+        "SystemRoot",
+        "WINDIR",
+        "COMSPEC",
+        "TEMP",
+        "TMP",
+        "USERPROFILE",
+    ] {
+        if let Ok(value) = std::env::var(name) {
+            assert!(
+                env.iter()
+                    .any(|(key, actual)| { key.eq_ignore_ascii_case(name) && actual == &value })
+            );
+        }
+    }
+}
+
 #[tokio::test]
 async fn test_shell_runner_success() {
     let runner = ShellRunner::new();
