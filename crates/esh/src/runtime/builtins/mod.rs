@@ -42,8 +42,9 @@ pub use date_tool::date;
 pub use diff_tool::diff;
 pub use duration_tool::duration;
 pub use flow::{
-    assert, r#break, colon, r#continue, declare, dot, echo, exit, export, local, printf, read,
-    retry, r#return, set, shift, sleep, time, timeout, trap, unset, wait,
+    assert, r#break, colon, r#continue, declare, dot, echo, exit, export, false_command, local,
+    printf, read, retry, r#return, set, shift, sleep, time, timeout, trap, true_command, unset,
+    wait,
 };
 pub use fs::{cat, cd, cp, head, mkdir, mv, pwd, rm, stat, tail, touch};
 pub use getopts::getopts;

@@ -468,6 +468,25 @@ async fn colon_uses_esh_prefix_assignment_scope_instead_of_posix_persistence() {
 }
 
 #[tokio::test]
+async fn true_and_false_return_statuses_without_external_commands() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "true ignored operands\nTRUE_STATUS=$?\nfalse ignored operands\nFALSE_STATUS=$?\nprintf '%s:%s\\n' \"$TRUE_STATUS\" \"$FALSE_STATUS\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "0:1\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
 async fn shift_validates_count_and_preserves_arguments_on_error() {
     let engine = Engine::new();
 

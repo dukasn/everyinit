@@ -1461,6 +1461,20 @@ pub fn colon<'a>(
     Box::pin(async { Ok(0) })
 }
 
+pub fn true_command<'a>(
+    _args: &'a [String],
+    _ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async { Ok(0) })
+}
+
+pub fn false_command<'a>(
+    _args: &'a [String],
+    _ctx: &'a mut ExecutionContext,
+) -> BoxFuture<'a, Result<i32, ExecError>> {
+    Box::pin(async { Ok(1) })
+}
+
 pub fn dot<'a>(
     args: &'a [String],
     ctx: &'a mut ExecutionContext,
