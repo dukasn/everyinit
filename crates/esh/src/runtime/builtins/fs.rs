@@ -67,7 +67,7 @@ fn set_touch_times(path: &Path, access: bool, modification: bool) -> std::io::Re
 
 #[cfg(not(unix))]
 fn set_touch_times(path: &Path, access: bool, modification: bool) -> std::io::Result<()> {
-    let file = fs::OpenOptions::new().read(true).open(path)?;
+    let file = fs::OpenOptions::new().write(true).open(path)?;
     let now = std::time::SystemTime::now();
     let mut times = fs::FileTimes::new();
     if access {
@@ -111,7 +111,7 @@ fn set_touch_times_from(
 
     #[cfg(not(unix))]
     {
-        let file = fs::OpenOptions::new().read(true).open(path)?;
+        let file = fs::OpenOptions::new().write(true).open(path)?;
         let mut times = fs::FileTimes::new();
         if let Some(accessed) = accessed {
             times = times.set_accessed(accessed);

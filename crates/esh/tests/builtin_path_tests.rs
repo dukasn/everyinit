@@ -17,6 +17,13 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::tempdir;
 
+fn expected_canonical_path(path: &std::path::Path) -> String {
+    let path = path.to_string_lossy();
+    #[cfg(windows)]
+    let path = path.strip_prefix(r"\\?\").unwrap_or(&path);
+    path.replace('\\', "/")
+}
+
 #[tokio::test]
 async fn realpath_canonicalizes_operands_and_continues_after_resolution_errors() {
     let tmp = tempdir().unwrap();
@@ -41,8 +48,8 @@ async fn realpath_canonicalizes_operands_and_continues_after_resolution_errors()
         ctx.get_captured_stdout().unwrap(),
         format!(
             "{}/sub/file\n{}/other\n",
-            canonical_tmp.display(),
-            canonical_tmp.display()
+            expected_canonical_path(&canonical_tmp),
+            expected_canonical_path(&canonical_tmp)
         )
     );
     assert!(
@@ -121,7 +128,7 @@ async fn realpath_relative_base_and_option_errors_are_explicit() {
     );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}/sub/new-file\n", canonical_tmp.display())
+        format!("{}/sub/new-file\n", expected_canonical_path(&canonical_tmp))
     );
 
     ctx.enable_capture();
@@ -154,7 +161,7 @@ async fn realpath_relative_base_and_option_errors_are_explicit() {
     );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}/sub/new-file\n", canonical_tmp.display())
+        format!("{}/sub/new-file\n", expected_canonical_path(&canonical_tmp))
     );
 
     ctx.enable_capture();
@@ -199,7 +206,10 @@ async fn realpath_permissive_mode_resolves_dangling_leaf_symlinks() {
     );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}/missing-target\n", canonical_tmp.display())
+        format!(
+            "{}/missing-target\n",
+            expected_canonical_path(&canonical_tmp)
+        )
     );
 
     ctx.enable_capture();
@@ -348,8 +358,18 @@ async fn mkdir_continues_after_operand_errors_and_accepts_grouped_parents() {
             .unwrap(),
         1
     );
-    assert!(tmp.path().join("created").is_dir());
-    assert!(tmp.path().join("nested/child").is_dir());
+    assert!(
+        tmp.path().join("created").is_dir(),
+        "stdout: {}\nstderr: {}",
+        ctx.get_captured_stdout().unwrap(),
+        ctx.get_captured_stderr().unwrap()
+    );
+    assert!(
+        tmp.path().join("nested/child").is_dir(),
+        "stdout: {}\nstderr: {}",
+        ctx.get_captured_stdout().unwrap(),
+        ctx.get_captured_stderr().unwrap()
+    );
     assert!(
         ctx.get_captured_stderr()
             .unwrap()
@@ -727,7 +747,9 @@ async fn touch_updates_times_without_truncating_and_handles_operands() {
             .eval_str("touch -m existing", &mut ctx)
             .await
             .unwrap(),
-        0
+        0,
+        "{}",
+        ctx.get_captured_stderr().unwrap()
     );
     assert_eq!(fs::read(&file_path).unwrap(), b"preserve this content");
     assert!(fs::metadata(&file_path).unwrap().modified().unwrap() > old_time);
@@ -1663,8 +1685,24 @@ async fn test_path_exists_and_checks() {
     assert_eq!(status, 0);
 
     let output = ctx.get_captured_stdout().unwrap();
-    assert!(output.contains("dir exists"));
-    assert!(output.contains("is a dir"));
-    assert!(output.contains("is a file"));
-    assert!(output.contains("not exists"));
+    assert!(
+        output.contains("dir exists"),
+        "{output}\n{}",
+        ctx.get_captured_stderr().unwrap()
+    );
+    assert!(
+        output.contains("is a dir"),
+        "{output}\n{}",
+        ctx.get_captured_stderr().unwrap()
+    );
+    assert!(
+        output.contains("is a file"),
+        "{output}\n{}",
+        ctx.get_captured_stderr().unwrap()
+    );
+    assert!(
+        output.contains("not exists"),
+        "{output}\n{}",
+        ctx.get_captured_stderr().unwrap()
+    );
 }
