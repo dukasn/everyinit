@@ -71,7 +71,7 @@ jobs:
           RELEASE_SIGNING_KEY: ${{ secrets.EVERYINIT_RELEASE_SIGNING_KEY || secrets.RELEASE_SIGNING_KEY }}
         run: cargo evin-dev run --verbose release:archives-verify
       - name: Upload distribution packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: everyinit-packages-${{ env.RELEASE_VERSION }}
           path: target/release-archives/

@@ -78,10 +78,11 @@ unless it is required by the architecture.
 
 The `Platform probe` workflow is available through `workflow_dispatch` only.
 Select the branch to inspect and choose Windows, macOS, or both. It runs the
-root Evin task `platform-probe`, which starts an ESH script to run
-`cargo check --workspace --all-targets --locked` and
-`cargo test --workspace --locked` on the selected native runner. The OS jobs
-are independent, so one platform's failure does not cancel the other's result.
+root Evin task `platform-probe`, which runs `cargo check --workspace
+--all-targets --locked` and `cargo test --workspace --locked` on the selected
+native runner. The OS jobs are independent, so one platform's failure does not
+cancel the other's result. Each job uploads its verbose/debug log as a workflow
+artifact, including when a check fails.
 
 Dispatch it from the Actions tab, or use GitHub CLI:
 

@@ -39,7 +39,7 @@ jobs:
           cargo evin-dev run --verbose --debug platform-probe 2>&1 | tee platform-probe.log
       - name: Upload platform probe log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: platform-probe-windows-${{ github.run_id }}
           path: platform-probe.log
@@ -63,7 +63,7 @@ jobs:
           cargo evin-dev run --verbose --debug platform-probe 2>&1 | tee platform-probe.log
       - name: Upload platform probe log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: platform-probe-macos-${{ github.run_id }}
           path: platform-probe.log

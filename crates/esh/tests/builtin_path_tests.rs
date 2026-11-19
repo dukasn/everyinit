@@ -20,6 +20,7 @@ use tempfile::tempdir;
 #[tokio::test]
 async fn realpath_canonicalizes_operands_and_continues_after_resolution_errors() {
     let tmp = tempdir().unwrap();
+    let canonical_tmp = fs::canonicalize(tmp.path()).unwrap();
     fs::create_dir(tmp.path().join("sub")).unwrap();
     fs::write(tmp.path().join("sub/file"), b"data").unwrap();
     fs::write(tmp.path().join("other"), b"more").unwrap();
@@ -40,8 +41,8 @@ async fn realpath_canonicalizes_operands_and_continues_after_resolution_errors()
         ctx.get_captured_stdout().unwrap(),
         format!(
             "{}/sub/file\n{}/other\n",
-            tmp.path().display(),
-            tmp.path().display()
+            canonical_tmp.display(),
+            canonical_tmp.display()
         )
     );
     assert!(
@@ -65,6 +66,7 @@ async fn realpath_canonicalizes_operands_and_continues_after_resolution_errors()
 #[tokio::test]
 async fn realpath_relative_base_and_option_errors_are_explicit() {
     let tmp = tempdir().unwrap();
+    let canonical_tmp = fs::canonicalize(tmp.path()).unwrap();
     fs::create_dir(tmp.path().join("sub")).unwrap();
     fs::write(tmp.path().join("sub/file"), b"data").unwrap();
     let engine = Engine::new();
@@ -119,7 +121,7 @@ async fn realpath_relative_base_and_option_errors_are_explicit() {
     );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}/sub/new-file\n", tmp.path().display())
+        format!("{}/sub/new-file\n", canonical_tmp.display())
     );
 
     ctx.enable_capture();
@@ -152,7 +154,7 @@ async fn realpath_relative_base_and_option_errors_are_explicit() {
     );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}/sub/new-file\n", tmp.path().display())
+        format!("{}/sub/new-file\n", canonical_tmp.display())
     );
 
     ctx.enable_capture();
@@ -171,6 +173,7 @@ async fn realpath_permissive_mode_resolves_dangling_leaf_symlinks() {
     use std::os::unix::fs::symlink;
 
     let tmp = tempdir().unwrap();
+    let canonical_tmp = fs::canonicalize(tmp.path()).unwrap();
     fs::create_dir(tmp.path().join("sub")).unwrap();
     symlink(
         tmp.path().join("missing-target"),
@@ -196,7 +199,7 @@ async fn realpath_permissive_mode_resolves_dangling_leaf_symlinks() {
     );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}/missing-target\n", tmp.path().display())
+        format!("{}/missing-target\n", canonical_tmp.display())
     );
 
     ctx.enable_capture();
@@ -229,6 +232,7 @@ async fn realpath_existing_mode_matches_host_utility_when_supported() {
     if !reference.status.success() {
         let diagnostic = String::from_utf8_lossy(&reference.stderr);
         if diagnostic.contains("invalid option")
+            || diagnostic.contains("illegal option")
             || diagnostic.contains("unrecognized option")
             || diagnostic.contains("unknown option")
         {

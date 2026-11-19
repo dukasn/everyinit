@@ -857,6 +857,11 @@ pub fn rm<'a>(
         let mut status = 0;
         for path_str in paths {
             let path = resolve_path(ctx, path_str);
+            let trimmed_path = path_str.trim_end_matches(std::path::MAIN_SEPARATOR);
+            let symlink_with_trailing_separator = path_str.ends_with(std::path::MAIN_SEPARATOR)
+                && !trimmed_path.is_empty()
+                && fs::symlink_metadata(resolve_path(ctx, trimmed_path))
+                    .is_ok_and(|metadata| metadata.file_type().is_symlink());
             let metadata = match fs::symlink_metadata(&path) {
                 Ok(metadata) => metadata,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound && force => continue,
@@ -868,7 +873,6 @@ pub fn rm<'a>(
                     continue;
                 }
             };
-            let trimmed_path = path_str.trim_end_matches(std::path::MAIN_SEPARATOR);
             let final_component = trimmed_path
                 .rsplit(std::path::MAIN_SEPARATOR)
                 .next()
@@ -904,6 +908,11 @@ pub fn rm<'a>(
                 }
                 ctx.write_stderr(
                     format!("esh: rm: cannot remove '{}': {}\n", path_str, error).as_bytes(),
+                );
+                status = 1;
+            } else if symlink_with_trailing_separator {
+                ctx.write_stderr(
+                    format!("esh: rm: cannot remove '{}': Not a directory\n", path_str).as_bytes(),
                 );
                 status = 1;
             }

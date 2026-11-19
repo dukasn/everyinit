@@ -1,5 +1,0 @@
-#!/usr/bin/env esh
-set -e
-
-cargo check --workspace --all-targets --locked
-cargo test --workspace --locked

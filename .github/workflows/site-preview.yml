@@ -90,7 +90,7 @@ jobs:
       - name: Verify and build the site
         run: cargo evin-dev run site:verify
       - name: Upload the built site
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: site-preview-${{ github.event.pull_request.number }}
           path: apps/everyinit/dist/
@@ -227,7 +227,7 @@ jobs:
             audit-input/*version.txt reports/ 2>/dev/null || true
       - name: Upload dependency audit reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dependency-audit-pr-${{ env.PR_NUMBER }}-${{ env.AUDIT_SHA }}
           path: reports/
@@ -378,7 +378,7 @@ jobs:
       - name: Verify and build the current site
         run: cargo evin-dev run site:verify
       - name: Upload current site build
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: site-preview-retirement-${{ github.event.pull_request.number }}
           path: apps/everyinit/dist/

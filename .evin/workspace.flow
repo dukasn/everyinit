@@ -80,7 +80,8 @@ tasks:
     stage: Test
     description: "Probe workspace compilation and tests on experimental platforms"
     steps:
-      - run: cargo run --locked -p esh -- scripts/ci/platform-probe.esh
+      - run: cargo check --workspace --all-targets --locked
+      - run: cargo test --workspace --locked
 
   quality:
     stage: Check
