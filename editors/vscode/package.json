@@ -33,7 +33,7 @@
     "lsp"
   ],
   "engines": {
-    "vscode": "^1.91.0"
+    "vscode": "^1.93.0"
   },
   "activationEvents": [
     "workspaceContains:.evin/workspace.flow"
@@ -70,7 +70,12 @@
         "extensions": [
           ".flow"
         ],
-        "filenames": ["workspace.flow", "release.flow", "module.flow", "package.flow"],
+        "filenames": [
+          "workspace.flow",
+          "release.flow",
+          "module.flow",
+          "package.flow"
+        ],
         "firstLine": "^#!evin/v[0-9]+",
         "icon": {
           "light": "./assets/logo-light.svg",
@@ -626,7 +631,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "@types/vscode": "^1.146.0",
+    "@types/vscode": "1.93.0",
     "@vscode/vsce": "^4.1.1",
     "esbuild": "^0.28.2",
     "fantasticon": "^4.1.0",
