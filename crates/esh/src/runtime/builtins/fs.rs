@@ -1248,13 +1248,14 @@ fn copy_metadata(
     #[cfg(not(unix))]
     {
         if !symlink {
-            fs::set_permissions(destination, metadata.permissions())?;
-            let file = fs::OpenOptions::new().read(true).open(destination)?;
+            let file = fs::OpenOptions::new().write(true).open(destination)?;
             file.set_times(
                 fs::FileTimes::new()
                     .set_accessed(metadata.accessed()?)
                     .set_modified(metadata.modified()?),
             )?;
+            drop(file);
+            fs::set_permissions(destination, metadata.permissions())?;
         }
     }
 

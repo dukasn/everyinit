@@ -2958,14 +2958,16 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         }
 
         for (shell, args) in &reference_shells {
-            // macOS ships Bash 3.2, whose CDPATH and here-document behavior
-            // differs from the behavior these ESH cases test.
+            // macOS ships Bash 3.2, whose behavior differs from the behavior
+            // these ESH cases test for CDPATH, here-documents, and assignment
+            // only command status.
             if cfg!(target_os = "macos")
                 && *shell == "bash"
                 && matches!(
                     case.name,
                     "posix_cdpath_falls_back_and_ignores_explicit_relative_paths"
                         | "posix_heredoc_expands_positional_lists_without_removing_body_quotes"
+                        | "posix_assignment_only_command_status"
                 )
             {
                 continue;

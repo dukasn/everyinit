@@ -87,8 +87,8 @@ mod tests {
 
     #[test]
     fn embedded_catalog_matches_the_checked_in_v1_artifact() {
-        let raw = include_str!("../assets/builtins-catalog.json");
-        let expected = CatalogExport::from_json(raw).expect("checked-in catalog must be valid");
+        let raw = include_str!("../assets/builtins-catalog.json").replace("\r\n", "\n");
+        let expected = CatalogExport::from_json(&raw).expect("checked-in catalog must be valid");
 
         assert_eq!(serde_json::to_string_pretty(&expected).unwrap(), raw);
 
