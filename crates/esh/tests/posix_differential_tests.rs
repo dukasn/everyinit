@@ -2958,11 +2958,15 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         }
 
         for (shell, args) in &reference_shells {
-            // macOS ships Bash 3.2, which applies CDPATH to `./child` in
-            // this case despite the explicit-relative-path rule under test.
+            // macOS ships Bash 3.2, whose CDPATH and here-document behavior
+            // differs from the behavior these ESH cases test.
             if cfg!(target_os = "macos")
-                && case.name == "posix_cdpath_falls_back_and_ignores_explicit_relative_paths"
                 && *shell == "bash"
+                && matches!(
+                    case.name,
+                    "posix_cdpath_falls_back_and_ignores_explicit_relative_paths"
+                        | "posix_heredoc_expands_positional_lists_without_removing_body_quotes"
+                )
             {
                 continue;
             }
