@@ -379,8 +379,10 @@ fn preserve_platform_shell_environment(env: &mut HashMap<String, String>) {
         if env.keys().any(|key| key.eq_ignore_ascii_case(name)) {
             continue;
         }
-        if let Ok(value) = std::env::var(name) {
-            env.insert(name.to_string(), value);
+        if let Some((_, value)) =
+            std::env::vars_os().find(|(key, _)| key.to_string_lossy().eq_ignore_ascii_case(name))
+        {
+            env.insert(name.to_string(), value.to_string_lossy().into_owned());
         }
     }
 }
