@@ -2958,9 +2958,10 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         }
 
         for (shell, args) in &reference_shells {
-            // macOS ships Bash 3.2, whose behavior differs from the behavior
+            // macOS ships Bash 3.2 and BSD grep, which differ from the behavior
             // these ESH cases test for CDPATH, here-documents, assignment-only
-            // status, NaN formatting flags, and special-parameter defaults.
+            // status, NaN formatting flags, special-parameter defaults, and
+            // grep's combined -l/-c output.
             if cfg!(target_os = "macos")
                 && *shell == "bash"
                 && matches!(
@@ -2971,6 +2972,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                         | "posix_printf_float_sign_flags_apply_to_nan"
                         | "posix_printf_zero_padding_is_ignored_for_infinity_and_nan"
                         | "posix_special_parameter_default_operators_preserve_at_fields"
+                        | "posix_grep_multi_file_count_listing_and_quiet_status"
                 )
             {
                 continue;
