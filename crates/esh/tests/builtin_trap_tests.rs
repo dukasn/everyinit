@@ -181,7 +181,7 @@ async fn exit_trap_observes_the_status_that_triggered_it() {
 
     let status = engine
         .eval_str(
-            "trap 'printf \"exit-status=%s\\n\" \"$?\"' EXIT\nfalse\n",
+            "trap 'printf \"exit-status=%s\\n\" \"$?\"' EXIT\ntest 1 -eq 2\n",
             &mut ctx,
         )
         .await
@@ -233,7 +233,7 @@ async fn exit_trap_runs_for_explicit_exit_and_errexit_without_changing_status() 
     assert_eq!(
         engine
             .eval_str(
-                "trap 'echo cleanup' EXIT\nset -e\nfalse\necho unreachable\n",
+                "trap 'echo cleanup' EXIT\nset -e\ntest 1 -eq 2\necho unreachable\n",
                 &mut errexit
             )
             .await
