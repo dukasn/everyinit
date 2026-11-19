@@ -165,11 +165,9 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   await expect(diagram).toBeVisible();
   await expect(diagram).toHaveAttribute("role", "img");
   await expect(diagram.locator(":scope > title")).toHaveCount(1);
-  const mermaidFallback = diagram.locator(".merman-foreignobject-fallback").first();
-  await expect(mermaidFallback).toHaveCount(1);
-  expect(await mermaidFallback.evaluate((element) => getComputedStyle(element).display)).toBe(
-    "none",
-  );
+  const diagramLabels = diagram.locator("foreignObject .nodeLabel p");
+  await expect(diagramLabels).toHaveCount(3);
+  await expect(diagramLabels).toContainText(["lint", "package", "test"]);
   expect(
     await diagram.evaluate((element) =>
       getComputedStyle(element).getPropertyValue("--diagram-ink").trim(),
