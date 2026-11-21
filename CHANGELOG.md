@@ -3,6 +3,53 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.3.1]
+
+### Bug Fixes
+
+- **esh:** create parent directories portably (a290696)
+- **platform:** correct Windows path and touch tests (f80ba19)
+- **platform:** preserve Windows copy metadata (7cbfefe)
+- **platform:** handle native test differences (e651297)
+- **esh:** gate Unix-only test helper import (7ba705e)
+- **platform:** run native probes directly (9b9a654)
+- **platform:** read Windows shell variables case-insensitively (5724167)
+- **platform:** preserve Windows shell environment (077e412)
+- **platform:** make native probes portable (33442c4)
+- **ci:** render preview audit alerts (3612e14)
+- **vscode:** align engine with terminal APIs (8294fac)
+- **platform:** compile probes on macOS and Windows (6087edd)
+
+### Documentation
+
+- **contributing:** reorganize contributor guidance (e8e6f01)
+
+### Features
+
+- **esh:** add portable true and false builtins (2e6b4b0)
+- **ci:** audit release proposal dependencies (725179f)
+
+### Maintenance
+
+- **infra:** refresh generated worker types (958ea78)
+- **deps:** upgrade Rust and Node dependencies (426cc87)
+
+### Tests
+
+- **esh:** remove remaining Unix trap commands (0cc7b0b)
+- **esh:** make trap tests platform independent (3c0c6d1)
+- **platform:** normalize macOS temporary paths (5d702b7)
+- **esh:** account for Apple grep quiet mode (c00d405)
+- **esh:** account for Apple BSD grep output (91616f6)
+- **esh:** make environment tests portable (4d341c6)
+- **esh:** account for Apple Bash parameter expansion (724600f)
+- **platform:** cover Windows paths and Apple Bash (9e93012)
+- **esh:** skip legacy Bash NaN comparison (e6249a1)
+- **evin:** gate POSIX release workflow suite (18d3b64)
+- **esh:** account for Apple Bash 3.2 differences (935e885)
+- **platform:** improve probe diagnostics (2098e4d)
+- **site:** assert rendered Mermaid labels (bb0ff5b)
+
 ## [v0.3.0]
 
 ### Bug Fixes
