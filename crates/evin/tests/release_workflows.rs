@@ -143,7 +143,14 @@ fn automation_only_publishes_merged_proposals_after_ci() {
             < pos("Tag and publish the merged release")
     );
     assert!(
-        pos("Tag and publish the merged release")
+        pos("Tag and publish the merged release") < pos("Configure GitHub Packages authentication")
+    );
+    assert!(
+        pos("Configure GitHub Packages authentication")
+            < pos("Use npm CLI with trusted publishing support")
+    );
+    assert!(
+        pos("Use npm CLI with trusted publishing support")
             < pos("Publish the npm package to both registries")
     );
     assert!(
@@ -237,6 +244,9 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         "npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org"
     ));
     assert!(!npm_publisher.contains("NPM_CONFIG_USERCONFIG"));
+    let npm_cli = workflow_step_run("Use npm CLI with trusted publishing support");
+    assert!(npm_cli.contains("npm install --global npm@11.5.1"));
+    assert!(npm_cli.contains("test \"$(npm --version)\" = \"11.5.1\""));
     let ci = flow(".github/workflows/ci.yml");
     assert!(
         ci["on"]["pull_request"]["branches"]
