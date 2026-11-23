@@ -254,6 +254,15 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     let npm_cli = workflow_step_run("Use npm CLI with trusted publishing support");
     assert!(npm_cli.contains("npm install --global npm@11.5.1"));
     assert!(npm_cli.contains("test \"$(npm --version)\" = \"11.5.1\""));
+    let publisher = flow(".evin/release/pub.flow");
+    let npm_task_env = publisher["tasks"]["registries"]["env"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .filter_map(serde_yaml::Value::as_str)
+        .collect::<Vec<_>>();
+    assert!(npm_task_env.contains(&"ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    assert!(npm_task_env.contains(&"ACTIONS_ID_TOKEN_REQUEST_URL"));
     let ci = flow(".github/workflows/ci.yml");
     assert!(
         ci["on"]["pull_request"]["branches"]
