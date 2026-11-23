@@ -50,7 +50,13 @@ jobs:
       - name: Load the current release publisher configuration
         run: |
           git fetch origin main --no-tags
-          git checkout origin/main -- .evin/release.flow scripts/release/mirror/publish.esh scripts/release/npm/publish.esh
+          git checkout origin/main -- \
+            .evin/release.flow \
+            .evin/release/pub.flow \
+            .github/workflows/release.yml \
+            crates/evin/tests/release_workflows.rs \
+            scripts/release/mirror/publish.esh \
+            scripts/release/npm/publish.esh
       - uses: jdx/mise-action@v5
         with:
           cache: false

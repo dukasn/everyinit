@@ -109,7 +109,19 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         Some("${{ secrets.RELEASE_BOT_TOKEN }}")
     );
     let publisher_config = workflow_step_run("Load the current release publisher configuration");
-    assert!(publisher_config.contains(".evin/release.flow"));
+    for path in [
+        ".evin/release.flow",
+        ".evin/release/pub.flow",
+        ".github/workflows/release.yml",
+        "crates/evin/tests/release_workflows.rs",
+        "scripts/release/mirror/publish.esh",
+        "scripts/release/npm/publish.esh",
+    ] {
+        assert!(
+            publisher_config.contains(path),
+            "publisher config omits {path}"
+        );
+    }
     let pos = |name| {
         steps
             .iter()
