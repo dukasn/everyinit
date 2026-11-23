@@ -1,47 +1,47 @@
 {
   "version": 1,
   "release": {
-    "version": "0.3.1",
-    "tag": "v0.3.1"
+    "version": "0.3.2",
+    "tag": "v0.3.2"
   },
   "packages": {
     "esh": {
-      "fingerprint": "sha256:fb8654cbce6f308cd55057f9827b772bc9c6f4e472a3362625e0e202905e269c",
+      "fingerprint": "sha256:3a190dacc5090472be00566d2204da37a2e9d94c3f78cc3c0e77eb0c8f56541b",
       "targets": {
         "apk": {
-          "version": "0.3.1",
+          "version": "0.3.2",
           "revision": 1
         },
         "arch": {
-          "version": "0.3.1",
+          "version": "0.3.2",
           "revision": 1
         },
         "deb": {
-          "version": "0.3.1",
+          "version": "0.3.2",
           "revision": 1
         }
       }
     },
     "evin": {
-      "fingerprint": "sha256:fb8654cbce6f308cd55057f9827b772bc9c6f4e472a3362625e0e202905e269c",
+      "fingerprint": "sha256:3a190dacc5090472be00566d2204da37a2e9d94c3f78cc3c0e77eb0c8f56541b",
       "targets": {
         "apk": {
-          "version": "0.3.1",
+          "version": "0.3.2",
           "revision": 1
         },
         "arch": {
-          "version": "0.3.1",
+          "version": "0.3.2",
           "revision": 1
         },
         "deb": {
-          "version": "0.3.1",
+          "version": "0.3.2",
           "revision": 1
         }
       }
     },
     "vscode": {
-      "fingerprint": "sha256:91c68eb594fd9e4efdfb67a9db4e26fa0065ffce78e4d7af2a52188765c0e595",
-      "version": "0.3.1",
+      "fingerprint": "sha256:cb03e554ef03f306899a739e90b7e8628858e6929cf7574e48ffbbc37cf7c586",
+      "version": "0.3.2",
       "revision": 1
     }
   }

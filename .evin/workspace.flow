@@ -1,7 +1,7 @@
 #!evin/v1
 workspace:
   name: main
-  version: "0.3.1"
+  version: "0.3.2"
   policy: ".evin/policy.json"
   install_hint: "cargo install --path crates/evin"
   hook_runner:
