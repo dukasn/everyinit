@@ -23,15 +23,8 @@ assert [ -f packages/everyinit/package.json ] "run this script from the reposito
 if npm view "everyinit@$VERSION" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
   echo "everyinit@$VERSION is already on npmjs; skipping publish"
 else
-  if [ -n "${NPM_TOKEN:-}" ]; then
-    npmrc="${RUNNER_TEMP:-target}/everyinit-npmjs.npmrc"
-    mkdir -p "$(dirname "$npmrc")"
-    printf '%s\n' '//registry.npmjs.org/:_authToken=${NPM_TOKEN}' > "$npmrc"
-    chmod 600 "$npmrc"
-    NPM_CONFIG_USERCONFIG="$npmrc" npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
-  else
-    npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
-  fi
+  # Keep npm's default user config so the configured trusted publisher can use OIDC.
+  npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
 fi
 
 PACKAGE_DIR="${RUNNER_TEMP:-target}/everyinit-github-package"

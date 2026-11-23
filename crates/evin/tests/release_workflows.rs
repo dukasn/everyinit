@@ -217,11 +217,13 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     let yaml = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     assert!(!yaml.contains("github-script"));
     assert!(!yaml.contains("node "));
-    assert!(yaml.contains("NPM_TOKEN: ${{ secrets.NPM_TOKEN }}"));
+    assert!(!yaml.contains("NPM_TOKEN"));
     assert!(yaml.contains("NODE_AUTH_TOKEN: ${{ github.token }}"));
     let npm_publisher = step("Publish the npm package to both registries");
-    assert!(npm_publisher.contains("//registry.npmjs.org/:_authToken=${NPM_TOKEN}"));
-    assert!(npm_publisher.contains("NPM_CONFIG_USERCONFIG=\"$npmrc\""));
+    assert!(npm_publisher.contains(
+        "npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org"
+    ));
+    assert!(!npm_publisher.contains("NPM_CONFIG_USERCONFIG"));
     let ci = flow(".github/workflows/ci.yml");
     assert!(
         ci["on"]["pull_request"]["branches"]
