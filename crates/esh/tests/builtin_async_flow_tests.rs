@@ -63,6 +63,36 @@ async fn wait_reports_unknown_pids_and_rejects_unsupported_job_ids() {
             .unwrap()
             .contains("unsupported process identifier '%1'")
     );
+
+    for (operand, status) in [("not-a-pid", 2), ("", 2), ("-1", 2), ("12345", 127)] {
+        let mut ctx = ExecutionContext::new();
+        ctx.enable_capture();
+        assert_eq!(
+            engine
+                .eval_str(&format!("wait '{operand}'\n"), &mut ctx)
+                .await
+                .unwrap(),
+            status,
+            "wait operand {operand:?}"
+        );
+    }
+
+    let mut mixed_operands = ExecutionContext::new();
+    mixed_operands.enable_capture();
+    assert_eq!(
+        engine
+            .eval_str("wait 12345 malformed\n", &mut mixed_operands)
+            .await
+            .unwrap(),
+        2,
+        "a malformed operand should be diagnosed before numeric unknown-PID handling"
+    );
+    assert!(
+        mixed_operands
+            .get_captured_stderr()
+            .unwrap()
+            .contains("unsupported process identifier 'malformed'")
+    );
 }
 
 #[tokio::test]

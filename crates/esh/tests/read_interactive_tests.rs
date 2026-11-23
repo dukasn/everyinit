@@ -79,6 +79,18 @@ async fn test_read_default_and_silent_rejection() {
 }
 
 #[tokio::test]
+async fn read_default_is_used_when_stdin_is_already_at_eof() {
+    let plan = compile_script("read --default fallback VALUE").expect("compile");
+    let mut ctx = ExecutionContext::new();
+    ctx.set_stdin(Vec::new());
+
+    let status = plan.execute(&mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_var("VALUE").as_deref(), Some("fallback"));
+}
+
+#[tokio::test]
 async fn test_read_secret_input() {
     let script = r#"
         read -s -m "*" API_KEY
@@ -122,6 +134,18 @@ async fn test_read_confirm_mode() {
     let status3 = plan3.execute(&mut ctx3).await.unwrap();
     assert_eq!(status3, 0);
     assert_eq!(ctx3.get_var("PROCEED").as_deref(), Some("yes"));
+}
+
+#[tokio::test]
+async fn read_confirm_cancellation_returns_130_without_assigning_target() {
+    let plan = compile_script("TARGET=original\nread -c TARGET\n").expect("compile");
+    let mut ctx = ExecutionContext::new();
+    ctx.set_interactive_events(vec![make_ctrl_c()]);
+
+    let status = plan.execute(&mut ctx).await.unwrap();
+
+    assert_eq!(status, 130);
+    assert_eq!(ctx.get_var("TARGET").as_deref(), Some("original"));
 }
 
 #[tokio::test]
@@ -182,7 +206,10 @@ async fn test_read_multi_menu_and_array_target() {
     let shell_val = ctx.get_shell_val("SELECTED_SERVICES").expect("array set");
     match shell_val {
         ShellValue::Array(arr) => {
-            assert_eq!(arr.as_slice(), &["auth", "cache"]);
+            assert_eq!(
+                arr.values().map(String::as_str).collect::<Vec<_>>(),
+                ["auth", "cache"]
+            );
         }
         _ => panic!("Expected array shell value"),
     }

@@ -65,6 +65,36 @@ async fn prefix_assignment_is_restored_after_trap_registration() {
 }
 
 #[tokio::test]
+async fn exit_traps_registered_inside_functions_survive_function_return() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let script = r#"register_exit() {
+    trap 'printf "function-exit-trap\n"' EXIT
+}
+register_exit
+printf 'after-function\n'
+"#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "after-function\nfunction-exit-trap\n"
+    );
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, b"after-function\nfunction-exit-trap\n");
+    }
+}
+
+#[tokio::test]
 async fn err_trap_runs_once_for_a_failed_command_and_pipeline_stage() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -91,6 +121,110 @@ async fn err_trap_runs_once_for_a_failed_command_and_pipeline_stage() {
         .unwrap();
     assert_eq!(status, 1);
     assert_eq!(ctx.get_captured_stdout().unwrap(), "handled\n");
+}
+
+#[tokio::test]
+async fn err_traps_in_parallel_branches_are_buffered_in_source_order() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                trap 'printf "err:%s\n" "$ESH_FAILED_CMD"' ERR
+                first() { printf 'first-before\n'; false; }
+                second() { printf 'second-before\n'; false; }
+                first &| second
+                printf 'join-status=%s\n' "$?"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "first-before\nerr:false\nerr:first\nsecond-before\nerr:false\nerr:second\njoin-status=1\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn isolated_parallel_branches_run_local_exit_traps_in_source_order() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                trap 'echo parent-exit' EXIT
+                left() { trap 'echo left-exit' EXIT; echo left-work; }
+                right() { trap 'echo right-exit' EXIT; echo right-work; }
+                left &| right
+                echo joined
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "left-work\nleft-exit\nright-work\nright-exit\njoined\nparent-exit\n"
+    );
+}
+
+#[tokio::test]
+async fn err_trap_runs_for_each_failure_inside_conditions_and_logical_lists() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "trap 'printf \"failed:%s\\n\" \"$ESH_FAILED_CMD\"' ERR\nif false; then :; fi\nfalse || :\ntrue && false\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 1);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "failed:false\nfailed:false\nfailed:false\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn err_trap_reports_inner_function_and_call_failure_locations() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"trap 'printf "%s:%s:%s\n" "$ESH_FAILED_CMD" "$ESH_FAILED_LINE" "$?"' ERR
+fail_inside() {
+  false
+}
+fail_inside
+"#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 1);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "false:3:1\nfail_inside:5:1\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 }
 
 #[tokio::test]
@@ -149,6 +283,37 @@ async fn test_trap_exit_handler() {
     let output = ctx.get_captured_stdout().unwrap();
     assert!(output.contains("executing workload"));
     assert!(output.contains("cleaning up before exit"));
+}
+
+#[tokio::test]
+async fn isolated_subshells_and_command_substitutions_do_not_run_parent_exit_trap() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                trap 'echo cleanup' EXIT
+                (
+                    echo subshell
+                    exit 9
+                    echo wrong-subshell-tail
+                )
+                VALUE=$(printf 'substitution'; exit 7)
+                printf 'value=<%s> status=%s\n' "$VALUE" "$?"
+                echo parent
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "subshell\nvalue=<substitution> status=7\nparent\ncleanup\n"
+    );
 }
 
 #[tokio::test]
@@ -241,6 +406,30 @@ async fn exit_trap_runs_for_explicit_exit_and_errexit_without_changing_status() 
         1
     );
     assert_eq!(errexit.get_captured_stdout().unwrap(), "cleanup\n");
+}
+
+#[tokio::test]
+async fn err_and_exit_traps_run_in_order_for_errexit_failure() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"trap 'printf "err:%s:%s\n" "$ESH_FAILED_CMD" "$?"' ERR
+trap 'printf "exit:%s\n" "$?"' EXIT
+set -e
+false
+echo unreachable
+"#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 1);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "err:false:1\nexit:1\n");
+    assert!(ctx.is_exiting());
 }
 
 #[tokio::test]

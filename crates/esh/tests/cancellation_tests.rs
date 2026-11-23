@@ -57,6 +57,172 @@ async fn test_cancellation_mid_execution() {
 }
 
 #[tokio::test]
+async fn cancellation_during_control_flow_tests_and_expansions_returns_interrupted_status() {
+    let engine = Engine::new();
+
+    for script in [
+        "if sleep 30; then printf 'wrong-then\\n'; else printf 'wrong-else\\n'; fi",
+        "if sleep 30; then printf 'wrong-then\\n'; fi",
+        "if false; then printf 'wrong-if\\n'; elif sleep 30; then printf 'wrong-elif\\n'; fi",
+        "for item in $(sleep 30); do printf 'wrong-for-body\\n'; done",
+        "select item in $(sleep 30); do printf 'wrong-select-body\\n'; done",
+        "case $(sleep 30) in value) printf 'wrong-case-body\\n';; esac",
+        "while sleep 30; do printf 'wrong-body\\n'; done",
+        "until sleep 30; do printf 'wrong-body\\n'; done",
+    ] {
+        let token = CancellationToken::new();
+        let cancel = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            cancel.cancel();
+        });
+
+        let mut ctx = ExecutionContext::new().with_token(token);
+        ctx.enable_capture();
+        let status =
+            tokio::time::timeout(Duration::from_secs(3), engine.eval_str(script, &mut ctx))
+                .await
+                .expect("condition cancellation timed out")
+                .expect("evaluation failed");
+
+        assert_eq!(status, 130, "script: {script}");
+        assert_eq!(ctx.get_captured_stdout().unwrap(), "", "script: {script}");
+        assert!(!ctx.in_loop(), "loop scope leaked for: {script}");
+    }
+}
+
+#[tokio::test]
+async fn cancellation_inside_control_flow_bodies_returns_interrupted_status_and_unwinds_loops() {
+    let engine = Engine::new();
+
+    for script in [
+        "if true; then sleep 30; fi",
+        "for item in one; do if true; then sleep 30; fi; done",
+        "while true; do sleep 30; done",
+        "until false; do sleep 30; done",
+        "case value in value) sleep 30;; esac",
+    ] {
+        let token = CancellationToken::new();
+        let cancel = token.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            cancel.cancel();
+        });
+
+        let mut ctx = ExecutionContext::new().with_token(token);
+        ctx.enable_capture();
+        let status =
+            tokio::time::timeout(Duration::from_secs(3), engine.eval_str(script, &mut ctx))
+                .await
+                .expect("control-flow body cancellation timed out")
+                .expect("evaluation failed");
+
+        assert_eq!(status, 130, "script: {script}");
+        assert!(!ctx.in_loop(), "loop scope leaked for: {script}");
+    }
+}
+
+#[tokio::test]
+async fn cancellation_inside_select_body_returns_interrupted_status_and_unwinds_loop() {
+    let engine = Engine::new();
+    let token = CancellationToken::new();
+    let cancel = token.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        cancel.cancel();
+    });
+
+    let mut ctx = ExecutionContext::new().with_token(token);
+    ctx.enable_capture();
+    ctx.set_stdin(b"1\n".to_vec());
+    let status = tokio::time::timeout(
+        Duration::from_secs(3),
+        engine.eval_str("select choice in one; do sleep 30; done", &mut ctx),
+    )
+    .await
+    .expect("select body cancellation timed out")
+    .expect("evaluation failed");
+
+    assert_eq!(status, 130);
+    assert!(
+        !ctx.in_loop(),
+        "select loop scope leaked after cancellation"
+    );
+}
+
+#[tokio::test]
+async fn cancellation_inside_function_unwinds_function_and_loop_scopes() {
+    let engine = engine();
+    let token = CancellationToken::new();
+    let cancel = token.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        cancel.cancel();
+    });
+
+    let mut ctx = ExecutionContext::new().with_token(token);
+    ctx.enable_capture();
+    let status = tokio::time::timeout(
+        Duration::from_secs(3),
+        engine.eval_str(
+            "wait_for_server() { sleep 30; printf 'wrong-function-tail\\n'; }\nfor attempt in one two; do wait_for_server; printf 'wrong-loop-tail\\n'; done\nprintf 'wrong-script-tail\\n'",
+            &mut ctx,
+        ),
+    )
+    .await
+    .expect("function cancellation timed out")
+    .expect("evaluation failed");
+
+    assert_eq!(status, 130);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert!(
+        !ctx.in_function(),
+        "function scope leaked after cancellation"
+    );
+    assert!(!ctx.in_loop(), "loop scope leaked after cancellation");
+}
+
+#[tokio::test]
+async fn cancellation_inside_sourced_file_restores_caller_positionals() {
+    let temp = tempfile::tempdir().unwrap();
+    std::fs::write(
+        temp.path().join("interruptible.esh"),
+        "SOURCE_POSITIONALS=\"$#:$1\"\nsleep 30\nprintf 'wrong-source-tail\\n'\n",
+    )
+    .unwrap();
+
+    let engine = engine();
+    let token = CancellationToken::new();
+    let cancel = token.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        cancel.cancel();
+    });
+
+    let mut ctx = ExecutionContext::new().with_token(token);
+    ctx.enable_capture();
+    ctx.set_cwd(temp.path()).unwrap();
+    let status = tokio::time::timeout(
+        Duration::from_secs(3),
+        engine.eval_str(
+            "set -- caller-arg\n. ./interruptible.esh source-arg\nprintf 'wrong-caller-tail\\n'\n",
+            &mut ctx,
+        ),
+    )
+    .await
+    .expect("sourced-file cancellation timed out")
+    .expect("evaluation failed");
+
+    assert_eq!(status, 130);
+    assert_eq!(
+        ctx.get_var("SOURCE_POSITIONALS").as_deref(),
+        Some("1:source-arg")
+    );
+    assert_eq!(ctx.positional_args_with_zero(), ["esh", "caller-arg"]);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+}
+
+#[tokio::test]
 async fn test_captured_external_command_cancels_without_waiting_for_pipe_descendants() {
     let engine = Engine::new();
     let token = CancellationToken::new();
@@ -170,6 +336,73 @@ async fn test_cancellation_terminates_the_external_process_group() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("descendant process {pid} survived cancellation");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn terminal_sigint_cleans_up_external_descendants_and_runs_shell_traps() {
+    let temp = tempfile::tempdir().unwrap();
+    let engine = engine();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(temp.path()).unwrap();
+
+    let run = tokio::spawn(async move {
+        engine
+            .eval_str(
+                "trap 'echo INT > int-fired' INT; trap 'echo EXIT > exit-fired' EXIT; sh -c 'echo $$ > root.pid; sleep 30 & echo $! > child.pid; wait'",
+                &mut ctx,
+            )
+            .await
+    });
+
+    let (root_pid, child_pid) = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let root_pid = std::fs::read_to_string(temp.path().join("root.pid"))
+                .ok()
+                .and_then(|value| value.trim().parse::<i32>().ok());
+            let child_pid = std::fs::read_to_string(temp.path().join("child.pid"))
+                .ok()
+                .and_then(|value| value.trim().parse::<i32>().ok());
+            if let (Some(root_pid), Some(child_pid)) = (root_pid, child_pid) {
+                break (root_pid, child_pid);
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("external process tree was not created");
+
+    // SAFETY: ESH runs an interactive external command in its own process
+    // group; signal that group as a terminal would on Ctrl+C.
+    assert_eq!(
+        unsafe { libc::kill(-(root_pid as libc::pid_t), libc::SIGINT) },
+        0
+    );
+
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(4), run)
+            .await
+            .expect("ESH did not finish after terminal SIGINT")
+            .unwrap()
+            .unwrap(),
+        130
+    );
+    assert_eq!(
+        std::fs::read_to_string(temp.path().join("int-fired")).unwrap(),
+        "INT\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(temp.path().join("exit-fired")).unwrap(),
+        "EXIT\n"
+    );
+
+    for _ in 0..100 {
+        if unsafe { libc::kill(child_pid as libc::pid_t, 0) } == -1 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("server-like descendant process {child_pid} survived terminal SIGINT");
 }
 
 #[cfg(unix)]
@@ -311,7 +544,11 @@ async fn native_workflow_state_survives_parallel_cancellation_and_exit_cleanup()
         !stdout.contains("branch"),
         "parallel branch state leaked: {stdout}"
     );
-    assert!(stdout.contains("interrupt\n"), "{stdout}");
+    assert_eq!(
+        stdout.matches("interrupt\n").count(),
+        1,
+        "the INT trap should run once across the parent and isolated branches: {stdout}"
+    );
 }
 
 #[tokio::test]

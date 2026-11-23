@@ -13,9 +13,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::fs;
+use std::io::Write;
 #[cfg(not(windows))]
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use tempfile::tempdir;
 
 #[cfg(unix)]
@@ -133,6 +134,29 @@ fn run_esh_with_pty(
     // SAFETY: pid is the child created above and wait_status is writable.
     assert_eq!(unsafe { libc::waitpid(pid, &mut wait_status, 0) }, pid);
     (std::process::ExitStatus::from_raw(wait_status), output)
+}
+
+#[cfg(unix)]
+struct DescendantCleanup(Option<std::path::PathBuf>);
+
+#[cfg(unix)]
+impl Drop for DescendantCleanup {
+    fn drop(&mut self) {
+        let Some(pid_file) = &self.0 else {
+            return;
+        };
+        let Some(pid) = fs::read_to_string(pid_file)
+            .ok()
+            .and_then(|contents| contents.trim().parse::<libc::pid_t>().ok())
+        else {
+            return;
+        };
+        // SAFETY: this cleanup guard only signals the descendant PID written
+        // by the test process tree it created.
+        unsafe {
+            libc::kill(pid, libc::SIGKILL);
+        }
+    }
 }
 
 fn esh() -> Command {
@@ -266,6 +290,144 @@ fn read_consumes_real_terminal_input_and_applies_backslash_modes() {
 
 #[cfg(unix)]
 #[test]
+fn terminal_ctrl_c_cancels_esh_and_kills_sigint_ignoring_descendants() {
+    use std::time::Duration;
+
+    let temp = tempdir().unwrap();
+    let pid_file = temp.path().join("server-descendant.pid");
+    let mut cleanup = DescendantCleanup(Some(pid_file.clone()));
+    let script = format!(
+        r#"trap 'echo interrupt-trap' INT
+trap 'echo exit-trap' EXIT
+sh -c '( trap "" INT; sleep 30 & echo $! > {}; echo server-ready; wait ) & wait'
+echo after-interrupt
+"#,
+        pid_file.display()
+    );
+
+    let (status, output) = run_esh_with_pty(&script, b"\x03", Duration::ZERO, Some("server-ready"));
+    let output = String::from_utf8_lossy(&output).replace("\r\n", "\n");
+    assert_eq!(
+        status.code(),
+        Some(130),
+        "ESH should report interruption; PTY output: {}",
+        output
+    );
+    assert!(
+        !output.contains("after-interrupt"),
+        "execution continued after terminal Ctrl+C: {}",
+        output
+    );
+    assert_eq!(output.matches("interrupt-trap\n").count(), 1, "{output}");
+    assert_eq!(output.matches("exit-trap\n").count(), 1, "{output}");
+
+    let descendant_pid = fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse::<libc::pid_t>()
+        .unwrap();
+    for _ in 0..100 {
+        // SAFETY: signal zero only checks whether the recorded process still
+        // exists; the PID belongs to the descendant started by this test.
+        if unsafe { libc::kill(descendant_pid, 0) } == -1 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // SAFETY: signal zero only checks whether the test-owned descendant PID
+    // still exists.
+    assert_eq!(
+        unsafe { libc::kill(descendant_pid, 0) },
+        -1,
+        "descendant {descendant_pid} survived terminal Ctrl+C; PTY output: {}",
+        output
+    );
+    cleanup.0 = None;
+}
+
+#[cfg(unix)]
+#[test]
+fn terminal_ctrl_c_kills_node_server_started_through_npm() {
+    use std::time::Duration;
+
+    if Command::new("npm").arg("--version").output().is_err()
+        || Command::new("node").arg("--version").output().is_err()
+    {
+        eprintln!("skipping npm process-tree test because Node.js or npm is unavailable");
+        return;
+    }
+
+    let temp = tempdir().unwrap();
+    let pid_file = temp.path().join("server.pid");
+    let mut cleanup = DescendantCleanup(Some(pid_file.clone()));
+    fs::write(
+        temp.path().join("package.json"),
+        r#"{"name":"esh-ctrl-c-fixture","version":"1.0.0","scripts":{"start":"node server.cjs"}}"#,
+    )
+    .unwrap();
+    fs::write(
+        temp.path().join("server.cjs"),
+        r#"const fs = require('node:fs');
+fs.writeFileSync('server.pid', String(process.pid));
+console.log('server-ready');
+setInterval(() => {}, 1000);
+"#,
+    )
+    .unwrap();
+
+    let script = format!(
+        "trap 'echo interrupt-trap' INT\ntrap 'echo exit-trap' EXIT\ncd '{}'\nnpm run start\necho after-interrupt\n",
+        temp.path().display()
+    );
+    let (status, output) = run_esh_with_pty(&script, b"\x03", Duration::ZERO, Some("server-ready"));
+    let output = String::from_utf8_lossy(&output).replace("\r\n", "\n");
+
+    assert_eq!(
+        status.code(),
+        Some(130),
+        "ESH should report interruption; PTY output: {output}"
+    );
+    assert!(!output.contains("after-interrupt"), "{output}");
+    assert_eq!(output.matches("interrupt-trap\n").count(), 1, "{output}");
+    assert_eq!(output.matches("exit-trap\n").count(), 1, "{output}");
+
+    let server_pid = fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse::<libc::pid_t>()
+        .unwrap();
+    for _ in 0..100 {
+        // SAFETY: signal zero only checks whether the Node process created by
+        // this test still exists.
+        if unsafe { libc::kill(server_pid, 0) } == -1 {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    // SAFETY: this PID was written by the test-owned Node server process.
+    assert_eq!(
+        unsafe { libc::kill(server_pid, 0) },
+        -1,
+        "Node server process {server_pid} survived terminal Ctrl+C; PTY output: {output}"
+    );
+    cleanup.0 = None;
+}
+
+#[cfg(unix)]
+#[test]
+fn explicit_external_status_130_does_not_cancel_following_script_commands() {
+    use std::time::Duration;
+
+    let script = "sh -c 'exit 130'; printf 'after:%s\\n' \"$?\"";
+    let (status, output) = run_esh_with_pty(script, b"", Duration::ZERO, None);
+    let output = String::from_utf8_lossy(&output).replace("\r\n", "\n");
+
+    assert_eq!(status.code(), Some(0), "PTY output: {output}");
+    assert!(output.contains("after:130\n"), "PTY output: {output}");
+}
+
+#[cfg(unix)]
+#[test]
 fn read_reports_terminal_eof_and_preserves_partial_input() {
     let script = r#"read VALUE; printf "STATUS=<%s> VALUE=<%s>\n" "$?" "$VALUE""#;
 
@@ -352,6 +514,32 @@ fn menu_read_accepts_terminal_navigation_and_assigns_the_choice() {
 
 #[cfg(unix)]
 #[test]
+fn select_reads_a_choice_from_a_terminal() {
+    let (status, output) = run_esh_with_pty(
+        "select CHOICE in one two; do printf 'CHOICE=<%s>\\n' \"$CHOICE\"; break; done",
+        b"2\n",
+        std::time::Duration::ZERO,
+        None,
+    );
+
+    assert!(
+        status.success(),
+        "PTY output: {}",
+        String::from_utf8_lossy(&output)
+    );
+    let output = String::from_utf8_lossy(&output);
+    assert!(
+        output.contains("1) one\r\n2) two\r\n#? "),
+        "menu missing: {output}"
+    );
+    assert!(
+        output.contains("CHOICE=<two>"),
+        "selection missing: {output}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn timed_terminal_read_does_not_consume_the_next_readers_input() {
     let (status, output) = run_esh_with_pty(
         r#"read -t 50ms FIRST; printf "STATUS=<%s> FIRST=<%s>\n" "$?" "$FIRST"; read SECOND; printf "SECOND=<%s>\n" "$SECOND""#,
@@ -369,6 +557,38 @@ fn timed_terminal_read_does_not_consume_the_next_readers_input() {
     assert!(
         output.contains("STATUS=<1> FIRST=<>") && output.contains("SECOND=<later>"),
         "timed read lost or altered terminal input: {output}"
+    );
+}
+
+#[test]
+fn timed_pipe_read_assigns_partial_input_and_leaves_later_input_for_next_read() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_esh"))
+        .args([
+            "-c",
+            r#"read -t 50ms FIRST; printf "STATUS=<%s> FIRST=<%s>\n" "$?" "$FIRST"; read SECOND; printf "SECOND=<%s>\n" "$SECOND""#,
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("start ESH with piped stdin");
+    let mut stdin = child.stdin.take().expect("piped stdin");
+    let writer = std::thread::spawn(move || {
+        stdin.write_all(b"partial").expect("write partial input");
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        stdin.write_all(b"later\n").expect("write next input");
+    });
+
+    let output = child.wait_with_output().expect("wait for ESH");
+    writer.join().expect("stdin writer thread");
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "STATUS=<1> FIRST=<partial>\nSECOND=<later>\n"
     );
 }
 

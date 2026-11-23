@@ -129,6 +129,32 @@ async fn test_redirection_stderr() {
 }
 
 #[tokio::test]
+async fn stderr_append_redirection_preserves_existing_content_and_appends_each_command() {
+    let tmp = tempdir().unwrap();
+    std::fs::write(tmp.path().join("errors.log"), "existing\n").unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "sh -c 'printf first >&2' 2>> errors.log\nsh -c 'printf second >&2' 2>> errors.log\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+    assert_eq!(
+        std::fs::read(tmp.path().join("errors.log")).unwrap(),
+        b"existing\nfirstsecond"
+    );
+}
+
+#[tokio::test]
 async fn descriptor_duplication_obeys_left_to_right_redirection_order() {
     let tmp = tempdir().unwrap();
     let engine = Engine::new();
@@ -138,8 +164,13 @@ async fn descriptor_duplication_obeys_left_to_right_redirection_order() {
 
     let script = r#"
         sh -c 'printf out; printf err >&2' > both.log 2>&1
+        sh -c 'printf err >&2; printf out' > reversed.log 2>&1
+        write_both() { printf err >&2; printf out; }
+        write_both > builtin-reversed.log 2>&1
         sh -c 'printf out; printf err >&2' 2>&1 > stdout.log
         sh -c 'printf out; printf err >&2' 2>&1 | tr 'a-z' 'A-Z'
+        sh -c 'printf out; printf err >&2' 2> dup-first.log 1>&2
+        sh -c 'printf out; printf err >&2' 1>&2 2> stderr-later.log
     "#;
     let status = engine.eval_str(script, &mut ctx).await.unwrap();
 
@@ -149,10 +180,96 @@ async fn descriptor_duplication_obeys_left_to_right_redirection_order() {
         "outerr"
     );
     assert_eq!(
+        std::fs::read_to_string(tmp.path().join("reversed.log")).unwrap(),
+        "errout"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("builtin-reversed.log")).unwrap(),
+        "errout"
+    );
+    assert_eq!(
         std::fs::read_to_string(tmp.path().join("stdout.log")).unwrap(),
         "out"
     );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("dup-first.log")).unwrap(),
+        "outerr"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("stderr-later.log")).unwrap(),
+        "err"
+    );
     assert_eq!(ctx.get_captured_stdout().unwrap(), "errOUTERR");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "out");
+}
+
+#[tokio::test]
+async fn combined_output_redirections_capture_both_streams_and_append_together() {
+    let tmp = tempdir().unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "write_both() { printf out; printf err >&2; }\nwrite_both &> combined.log\nwrite_both &>> combined.log\nsh -c 'printf external-out; printf external-err >&2' &> external.log\nsh -c 'printf external-out; printf external-err >&2' &>> external.log\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("combined.log")).unwrap(),
+        "outerrouterr"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("external.log")).unwrap(),
+        "external-outexternal-errexternal-outexternal-err"
+    );
+}
+
+#[tokio::test]
+async fn redirections_apply_to_compound_commands_and_keep_brace_scope_changes() {
+    let tmp = tempdir().unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                VALUE=before
+                { VALUE=changed; printf group; } > group.log
+                if true; then printf conditional; fi > if.log
+                for ITEM in first second; do printf '%s ' "$ITEM"; done > for.log
+                case match in match) printf case;; esac > case.log
+                (printf subshell) > subshell.log
+                printf 'value=%s\n' "$VALUE"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    for (path, expected) in [
+        ("group.log", "group"),
+        ("if.log", "conditional"),
+        ("for.log", "first second "),
+        ("case.log", "case"),
+        ("subshell.log", "subshell"),
+    ] {
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join(path)).unwrap(),
+            expected
+        );
+    }
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "value=changed\n");
 }
 
 #[tokio::test]
@@ -191,6 +308,32 @@ SECOND
         ctx.get_captured_stdout().unwrap(),
         "Hello world\nsubstituted\n9\nlinecontinued\n$VALUE\n\\world\n$VALUE\n$(printf literal)\nkept\n"
     );
+}
+
+#[tokio::test]
+async fn here_document_delimiter_at_eof_without_line_ending_executes_body() {
+    let script = "cat <<EOF\nbody\nEOF";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"body\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(reference.status.success(), "{shell} rejected EOF delimiter");
+            assert_eq!(reference.stdout, expected, "{shell} here-document body");
+            assert_eq!(reference.stderr, b"", "{shell} here-document diagnostic");
+        }
+    }
 }
 
 #[tokio::test]
@@ -304,14 +447,16 @@ async fn noclobber_rejects_existing_files_and_force_redirection_overrides_it() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
     ctx.set_cwd(tmp.path()).unwrap();
+    ctx.enable_capture();
 
-    let error = engine
+    let status = engine
         .eval_str("set -C; touch marker > existing.txt\n", &mut ctx)
         .await
-        .expect_err("noclobber should reject an existing target");
+        .expect("noclobber is a failed command status");
+    assert_eq!(status, 1);
     assert!(
-        error
-            .to_string()
+        ctx.get_captured_stderr()
+            .unwrap()
             .contains("Cannot overwrite existing target")
     );
     assert_eq!(
@@ -321,13 +466,15 @@ async fn noclobber_rejects_existing_files_and_force_redirection_overrides_it() {
     assert!(!tmp.path().join("marker").exists());
 
     ctx.set_env("ESH_REDIR_ASSIGNMENT", "original");
-    let _ = engine
+    let status = engine
         .eval_str(
-            "ESH_REDIR_ASSIGNMENT=temporary echo blocked > existing.txt\n",
+            "ESH_REDIR_ASSIGNMENT=temporary echo blocked > existing.txt || STATUS=$?\nprintf 'status=%s\\n' \"$STATUS\"\n",
             &mut ctx,
         )
         .await
-        .expect_err("a failing output redirection should fail the command");
+        .expect("a failing output redirection should be handled by the OR list");
+    assert_eq!(status, 0);
+    assert!(ctx.get_captured_stdout().unwrap().ends_with("status=1\n"));
     assert_eq!(
         ctx.get_var("ESH_REDIR_ASSIGNMENT").as_deref(),
         Some("original")
@@ -349,6 +496,20 @@ async fn noclobber_rejects_existing_files_and_force_redirection_overrides_it() {
         "forced\n"
     );
 
+    std::fs::write(tmp.path().join("descriptor-force.txt"), "original\n").unwrap();
+    let status = engine
+        .eval_str(
+            "echo descriptor-forced 1>| descriptor-force.txt\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+    assert_eq!(status, 0);
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("descriptor-force.txt")).unwrap(),
+        "descriptor-forced\n"
+    );
+
     let status = engine
         .eval_str("echo created > new.txt\n", &mut ctx)
         .await
@@ -357,6 +518,69 @@ async fn noclobber_rejects_existing_files_and_force_redirection_overrides_it() {
     assert_eq!(
         std::fs::read_to_string(tmp.path().join("new.txt")).unwrap(),
         "created\n"
+    );
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        let reference_dir = tempdir().unwrap();
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg("set -C; printf original > file; printf forced 1>| file; cat file")
+            .current_dir(reference_dir.path())
+            .output()
+        {
+            assert!(reference.status.success(), "{shell} failed 1>| redirection");
+            assert_eq!(reference.stdout, b"forced", "{shell} 1>| output");
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn noclobber_rejects_symlinks_and_force_redirection_follows_them() {
+    let script = "set -C\nprintf replacement > link\nSTATUS=$?\nprintf 'status=%s target=' \"$STATUS\"\ncat target\nprintf 'forced\\n' >| link\nprintf 'forced-target='\ncat target\n";
+    let tmp = tempdir().unwrap();
+    std::fs::write(tmp.path().join("target"), "original\n").unwrap();
+    std::os::unix::fs::symlink("target", tmp.path().join("link")).unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = "status=1 target=original\nforced-target=forced\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap(), expected);
+    assert!(
+        tmp.path()
+            .join("link")
+            .symlink_metadata()
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("target")).unwrap(),
+        "forced\n"
+    );
+
+    let reference_dir = tempdir().unwrap();
+    std::fs::write(reference_dir.path().join("target"), "original\n").unwrap();
+    std::os::unix::fs::symlink("target", reference_dir.path().join("link")).unwrap();
+    let reference = std::process::Command::new("bash")
+        .args(["--posix", "-c"])
+        .arg(script)
+        .current_dir(reference_dir.path())
+        .output()
+        .expect("Bash should be available for the noclobber comparison");
+    assert!(
+        reference.status.success(),
+        "Bash failed to run the redirections"
+    );
+    assert_eq!(reference.stdout, expected.as_bytes());
+    assert_eq!(
+        std::fs::read_to_string(reference_dir.path().join("target")).unwrap(),
+        "forced\n"
     );
 }
 
@@ -396,6 +620,128 @@ async fn output_redirection_opens_files_before_dispatch_and_expands_target_once(
 }
 
 #[tokio::test]
+async fn failed_output_redirection_prevents_stateful_builtin_dispatch() {
+    let temp = tempdir().unwrap();
+    std::fs::create_dir(temp.path().join("child")).unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "cd child > missing/output\nREDIRECT_STATUS=$?\nprintf 'redirection=%s\\n' \"$REDIRECT_STATUS\"\nprintf 'reached-tail\\n'\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.cwd(), temp.path());
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "redirection=1\nreached-tail\n"
+    );
+    assert!(
+        ctx.get_captured_stderr()
+            .unwrap()
+            .contains("missing/output")
+    );
+}
+
+#[tokio::test]
+async fn unquoted_redirection_expansion_keeps_spaces_and_wildcards_in_one_path() {
+    let tmp = tempdir().unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let status = engine
+        .eval_str(
+            "TARGET='space name.txt'; echo spaced > $TARGET\nTARGET='literal*.txt'; echo wildcard > $TARGET\nTARGET=' spaced on both sides '; echo whitespace > $TARGET\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("space name.txt")).unwrap(),
+        "spaced\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("literal*.txt")).unwrap(),
+        "wildcard\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join(" spaced on both sides ")).unwrap(),
+        "whitespace\n"
+    );
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 3);
+}
+
+#[tokio::test]
+async fn descriptor_like_redirection_targets_are_ordinary_filenames() {
+    let tmp = tempdir().unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "echo one > 1; echo two > 2; echo amp-one > '&1'; echo amp-two > '&2'\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("1")).unwrap(),
+        "one\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("2")).unwrap(),
+        "two\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("&1")).unwrap(),
+        "amp-one\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tmp.path().join("&2")).unwrap(),
+        "amp-two\n"
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn empty_unquoted_redirection_expansion_fails_as_one_empty_path() {
+    let tmp = tempdir().unwrap();
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(tmp.path()).unwrap();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str("TARGET=; echo payload > $TARGET\n", &mut ctx)
+        .await
+        .unwrap();
+
+    assert_eq!(status, 1);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert!(!tmp.path().join("payload").exists());
+    assert!(
+        ctx.get_captured_stderr()
+            .unwrap()
+            .contains("Cannot open target ''"),
+        "empty target should remain an empty path"
+    );
+}
+
+#[tokio::test]
 async fn input_redirections_restore_the_callers_buffered_stdin() {
     let tmp = tempdir().unwrap();
     std::fs::write(tmp.path().join("source.txt"), "from file\n").unwrap();
@@ -417,4 +763,58 @@ async fn input_redirections_restore_the_callers_buffered_stdin() {
     assert_eq!(ctx.get_var("CALLER_VALUE").as_deref(), Some("from caller"));
     assert_eq!(ctx.get_var("HERE_VALUE").as_deref(), Some("here"));
     assert_eq!(ctx.get_var("CALLER_AGAIN"), None);
+}
+
+#[tokio::test]
+async fn here_strings_expand_as_one_value_and_append_one_newline() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "VALUE='two words *.txt'; cat <<< $VALUE; cat <<< ''; cat <<< \"$(printf 'substitution\\n\\n')\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "two words *.txt\n\nsubstitution\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn unsupported_descriptor_redirections_fail_before_any_script_command_runs() {
+    let engine = Engine::new();
+
+    for operator in [
+        "3> output",
+        "10>> output",
+        "2>&-",
+        "1>&-",
+        "0> output",
+        "<> file",
+    ] {
+        let tmp = tempdir().unwrap();
+        let mut ctx = ExecutionContext::new();
+        ctx.set_cwd(tmp.path()).unwrap();
+        ctx.enable_capture();
+
+        let script = format!("echo should-not-run > marker\necho invalid {operator}\n");
+        let error = engine
+            .eval_str(&script, &mut ctx)
+            .await
+            .expect_err("unsupported descriptor redirection must fail before execution");
+
+        assert!(
+            error.to_string().contains("redirection"),
+            "{operator}: {error}"
+        );
+        assert!(!tmp.path().join("marker").exists(), "{operator}");
+        assert_eq!(ctx.get_captured_stdout().unwrap(), "", "{operator}");
+    }
 }

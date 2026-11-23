@@ -69,6 +69,22 @@ fn test_lexer_simple_command() {
 }
 
 #[test]
+fn lexer_preserves_utf8_in_bare_words_and_byte_spans() {
+    let source = "printf 雪🌍\n";
+    let tokens = Lexer::new(source)
+        .tokenize_all()
+        .expect("UTF-8 text should be accepted in bare words");
+
+    assert_eq!(tokens[0].kind, TokenKind::Word("printf"));
+    assert_eq!(tokens[1].kind, TokenKind::Word("雪🌍"));
+    assert_eq!(
+        &source[tokens[1].span.start as usize..tokens[1].span.end as usize],
+        "雪🌍"
+    );
+    assert_eq!(tokens[2].kind, TokenKind::Newline);
+}
+
+#[test]
 fn unterminated_here_document_is_a_lexical_error() {
     let error = Lexer::new("cat <<EOF\npartial body\n")
         .tokenize_all()
@@ -147,6 +163,60 @@ fn test_lexer_quotes_and_variables() {
 }
 
 #[test]
+fn quoted_words_allow_newlines_but_reject_unterminated_quotes() {
+    let tokens = Lexer::new("'first\nsecond' \"third\nfourth\"")
+        .tokenize_all()
+        .expect("quoted words may span physical lines");
+
+    assert_eq!(
+        tokens.iter().map(|token| token.kind).collect::<Vec<_>>(),
+        vec![
+            TokenKind::SingleQuoted("first\nsecond"),
+            TokenKind::DoubleQuoted("third\nfourth"),
+            TokenKind::Eof,
+        ]
+    );
+
+    for (source, expected_message) in [
+        ("'unfinished", "Unterminated single quote string"),
+        ("\"unfinished", "Unterminated double quote string"),
+        ("\"unfinished\\", "Unterminated double quote string"),
+    ] {
+        let error = Lexer::new(source)
+            .tokenize_all()
+            .expect_err("an unterminated quote must not be accepted");
+
+        assert_eq!(error.message, expected_message, "source: {source:?}");
+        assert_eq!(error.span.start, 0, "source: {source:?}");
+        assert_eq!(error.span.line, 1, "source: {source:?}");
+        assert_eq!(error.span.column, 1, "source: {source:?}");
+        assert_eq!(error.span.end, source.len() as u32, "source: {source:?}");
+    }
+}
+
+#[test]
+fn unterminated_substitutions_and_braced_parameters_are_lexical_errors() {
+    for (source, expected_message) in [
+        ("$(printf value", "Unterminated command substitution $(...)"),
+        ("${VALUE", "Unterminated variable reference ${...}"),
+        (
+            "`printf value",
+            "Unterminated command substitution using backticks",
+        ),
+    ] {
+        let error = Lexer::new(source)
+            .tokenize_all()
+            .expect_err("an unterminated expansion must not be accepted");
+
+        assert_eq!(error.message, expected_message, "source: {source:?}");
+        assert_eq!(error.span.start, 0, "source: {source:?}");
+        assert_eq!(error.span.line, 1, "source: {source:?}");
+        assert_eq!(error.span.column, 1, "source: {source:?}");
+        assert_eq!(error.span.end, source.len() as u32, "source: {source:?}");
+    }
+}
+
+#[test]
 fn test_lexer_command_substitution() {
     let script = "BUILD_REV=$(git rev-parse HEAD)";
     let tokens = Lexer::new(script)
@@ -212,6 +282,37 @@ fn test_lexer_rejects_unstructured_background_operator() {
         .expect_err("standalone '&' is outside the ESH command language");
 
     assert!(error.message.contains("Unexpected single '&' operator"));
+}
+
+#[test]
+fn ampersand_operators_are_distinguished_from_literal_ampersands() {
+    let tokens =
+        Lexer::new("left && right || fallback &| joined &> all.log &>> all.log; printf '&' \\&")
+            .tokenize_all()
+            .expect("supported ESH ampersand operators should tokenize");
+    let kinds = tokens.iter().map(|token| token.kind).collect::<Vec<_>>();
+
+    for operator in [
+        TokenKind::AndIf,
+        TokenKind::OrIf,
+        TokenKind::ParallelPipe,
+        TokenKind::RedirectAll,
+        TokenKind::RedirectAllAppend,
+        TokenKind::SingleQuoted("&"),
+        TokenKind::Word("\\&"),
+    ] {
+        assert!(
+            kinds.contains(&operator),
+            "missing {operator:?} in {kinds:?}"
+        );
+    }
+
+    for script in ["&", "left & right", "left; & right"] {
+        let error = Lexer::new(script)
+            .tokenize_all()
+            .expect_err("standalone '&' must not become an unsupervised job");
+        assert!(error.message.contains("Unexpected single '&' operator"));
+    }
 }
 
 #[test]

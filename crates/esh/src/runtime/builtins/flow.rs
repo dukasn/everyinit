@@ -14,7 +14,7 @@
 
 use crate::error::ExecError;
 use crate::planner::compiler::compile_script;
-use crate::runtime::context::{ExecutionContext, TrapSignal};
+use crate::runtime::context::{ExecutionContext, ShellValue, TrapSignal};
 use crate::runtime::traits::{BoxFuture, Executable, ScopeManager};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -1396,6 +1396,35 @@ pub fn unset<'a>(
         let mode = mode.unwrap_or(UnsetMode::Variable);
         let mut status = 0;
         for name in names {
+            if mode == UnsetMode::Variable
+                && let Some((variable, subscript)) = split_variable_subscript(name)
+            {
+                if !is_shell_identifier(variable) {
+                    ctx.write_stderr(
+                        format!("esh: unset: invalid identifier: {name}\n").as_bytes(),
+                    );
+                    status = 2;
+                    continue;
+                }
+
+                match ctx.get_shell_val(variable) {
+                    Some(ShellValue::Array(_)) => match subscript.parse::<usize>() {
+                        Ok(index) => ctx.unset_array_elem(variable, index),
+                        Err(_) => {
+                            ctx.write_stderr(
+                                format!("esh: unset: invalid array index: {subscript}\n")
+                                    .as_bytes(),
+                            );
+                            status = 2;
+                        }
+                    },
+                    Some(ShellValue::Map(_)) => ctx.unset_map_elem(variable, subscript),
+                    Some(ShellValue::String(_)) if subscript == "0" => ctx.unset_var(variable),
+                    _ => {}
+                }
+                continue;
+            }
+
             if !is_shell_identifier(name) {
                 ctx.write_stderr(format!("esh: unset: invalid identifier: {name}\n").as_bytes());
                 status = 2;
@@ -1408,6 +1437,14 @@ pub fn unset<'a>(
         }
         Ok(status)
     })
+}
+
+fn split_variable_subscript(name: &str) -> Option<(&str, &str)> {
+    let open = name.find('[')?;
+    if !name.ends_with(']') {
+        return None;
+    }
+    Some((&name[..open], &name[open + 1..name.len() - 1]))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2137,11 +2174,26 @@ pub fn local<'a>(
     ctx: &'a mut ExecutionContext,
 ) -> BoxFuture<'a, Result<i32, ExecError>> {
     Box::pin(async move {
+        if !ctx.in_function() {
+            ctx.write_stderr(b"esh: local: only valid in a function\n");
+            return Ok(2);
+        }
+
         for arg in args {
-            if let Some((k, v)) = arg.split_once('=') {
-                ctx.set_local_var(k, v.to_string());
+            let (key, value) = if let Some((key, value)) = arg.split_once('=') {
+                (key, Some(value))
             } else {
-                ctx.set_local_var(arg, String::new());
+                (arg.as_str(), None)
+            };
+            if !is_shell_identifier(key) {
+                ctx.write_stderr(format!("esh: local: invalid identifier: {key}\n").as_bytes());
+                return Ok(2);
+            }
+
+            if let Some(value) = value {
+                ctx.set_local_var(key, value.to_string());
+            } else {
+                ctx.set_local_var(key, String::new());
             }
         }
         Ok(0)
@@ -2395,7 +2447,7 @@ pub fn read<'a>(
                                 }
                             }
                             crate::runtime::context::ShellValue::Array(arr) => {
-                                for item in arr {
+                                for item in arr.values() {
                                     menu_items.push((item.clone(), item.clone()));
                                 }
                             }
@@ -2449,7 +2501,7 @@ pub fn read<'a>(
                         match shell_val {
                             crate::runtime::context::ShellValue::Array(arr) => {
                                 let mut seen = std::collections::HashSet::new();
-                                for k in arr {
+                                for k in arr.values() {
                                     if !seen.insert(k.clone()) {
                                         ctx.write_stderr(
                                             b"esh: read: duplicate key in menu --defaults array\n",
@@ -2463,7 +2515,7 @@ pub fn read<'a>(
                                         );
                                         return Ok(2);
                                     }
-                                    pre_defaults.push(k);
+                                    pre_defaults.push(k.clone());
                                 }
                             }
                             _ => {
@@ -2503,7 +2555,9 @@ pub fn read<'a>(
                     evin_ui::prompt::PromptResult::Selected(selected_vals) => {
                         ctx.set_scoped_val(
                             &target_var,
-                            crate::runtime::context::ShellValue::Array(selected_vals),
+                            crate::runtime::context::ShellValue::Array(
+                                selected_vals.into_iter().enumerate().collect(),
+                            ),
                         );
                         return Ok(0);
                     }
@@ -2683,7 +2737,8 @@ pub fn read<'a>(
             ctx.write_stderr(p.as_bytes());
         }
 
-        let var_names = if positional_args.is_empty() {
+        let use_reply_default = positional_args.is_empty();
+        let var_names = if use_reply_default {
             vec!["REPLY".to_string()]
         } else {
             positional_args
@@ -2789,9 +2844,13 @@ pub fn read<'a>(
             return Ok(1);
         }
 
-        let ifs = ctx.get_var("IFS").unwrap_or_else(|| " \t\n".to_string());
-        for (var, value) in split_read_values(&line, &ifs, &var_names, raw) {
-            ctx.set_scoped_var(&var, value);
+        if use_reply_default {
+            ctx.set_read_var("REPLY", line);
+        } else {
+            let ifs = ctx.get_var("IFS").unwrap_or_else(|| " \t\n".to_string());
+            for (var, value) in split_read_values(&line, &ifs, &var_names, raw) {
+                ctx.set_read_var(&var, value);
+            }
         }
 
         Ok(if found_delimiter && !timed_out { 0 } else { 1 })
@@ -3225,6 +3284,28 @@ fn split_read_values(line: &str, ifs: &str, names: &[String], raw: bool) -> Vec<
     while end > position && is_ifs_whitespace(chars[end - 1]) && !escaped(end - 1) {
         end -= 1;
     }
+    let last_remainder_starts_with_delimiter = position < chars.len()
+        && is_ifs(chars[position])
+        && !is_ifs_whitespace(chars[position])
+        && !escaped(position);
+    if names.len() > 1 && !last_remainder_starts_with_delimiter {
+        let mut trailing_end = end;
+        let mut trailing_non_whitespace_delimiters = 0;
+        while trailing_end > position
+            && is_ifs(chars[trailing_end - 1])
+            && !is_ifs_whitespace(chars[trailing_end - 1])
+            && !escaped(trailing_end - 1)
+        {
+            trailing_non_whitespace_delimiters += 1;
+            trailing_end -= 1;
+        }
+        // Drop a single terminal delimiter when the last remainder starts
+        // with field data. If the remainder starts with a delimiter, its
+        // delimiters are still part of the unprocessed text and stay intact.
+        if trailing_non_whitespace_delimiters == 1 {
+            end = trailing_end;
+        }
+    }
     assignments.push((last_name.clone(), unescape(&chars[position..end])));
     assignments
 }
@@ -3372,7 +3453,9 @@ pub fn declare<'a>(
                 } else if is_indexed_array {
                     ctx.set_scoped_val(
                         k,
-                        crate::runtime::context::ShellValue::Array(vec![v.to_string()]),
+                        crate::runtime::context::ShellValue::Array(
+                            vec![v.to_string()].into_iter().enumerate().collect(),
+                        ),
                     );
                 } else {
                     if is_export {
@@ -3396,7 +3479,9 @@ pub fn declare<'a>(
                 } else if is_indexed_array {
                     ctx.set_scoped_val(
                         item,
-                        crate::runtime::context::ShellValue::Array(Vec::new()),
+                        crate::runtime::context::ShellValue::Array(
+                            std::collections::BTreeMap::new(),
+                        ),
                     );
                 } else {
                     if is_export {

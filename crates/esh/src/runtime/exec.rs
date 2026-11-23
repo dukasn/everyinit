@@ -15,6 +15,7 @@
 use crate::error::ExecError;
 use crate::parser::ast::RedirectionOp;
 use crate::planner::compiler::compile_script;
+use crate::planner::dispatch::resolve_builtin;
 use crate::planner::ir::{
     CommandTarget, ExecutionPlan, ExecutionStage, PlanNode, PlanRedirection, PlanWord, PlanWordPart,
 };
@@ -22,10 +23,11 @@ use crate::runtime::context::{ExecutionContext, TrapSignal};
 use crate::runtime::streams::StreamTarget;
 use crate::runtime::traits::{BoxFuture, Executable, ScopeManager};
 use evin_process::{
-    EnvironmentPolicy, OutputPolicy, ProcessHandle, ProcessMode, ProcessSpec, ProcessTermination,
-    StdinPolicy,
+    EnvironmentPolicy, OutputChunk, OutputPolicy, ProcessError, ProcessHandle, ProcessMode,
+    ProcessSpec, ProcessTermination, StdinPolicy,
 };
 use std::fs;
+use std::path::{Path, PathBuf};
 use tokio::task::JoinSet;
 
 async fn execute_interrupt_trap(ctx: &mut ExecutionContext) {
@@ -75,15 +77,95 @@ async fn execute_exit_trap(ctx: &mut ExecutionContext) {
 enum OutputDestination {
     ContextStdout,
     ContextStderr,
-    Target(StreamTarget),
+    Target(usize, StreamTarget),
 }
 
-fn destination_from_target(target: StreamTarget) -> OutputDestination {
+fn destination_from_target(target: StreamTarget, identity: usize) -> OutputDestination {
     match target {
         StreamTarget::Stdout => OutputDestination::ContextStdout,
         StreamTarget::Stderr => OutputDestination::ContextStderr,
-        other => OutputDestination::Target(other),
+        other => OutputDestination::Target(identity, other),
     }
+}
+
+fn output_destinations(
+    redirections: &[PlanRedirection],
+    targets: &[Option<StreamTarget>],
+) -> (OutputDestination, OutputDestination) {
+    let mut stdout = OutputDestination::ContextStdout;
+    let mut stderr = OutputDestination::ContextStderr;
+
+    for (index, redirection) in redirections.iter().enumerate() {
+        match redirection.op {
+            RedirectionOp::RedirectStderrToStdout => stderr = stdout.clone(),
+            RedirectionOp::RedirectStdoutToStderr => stdout = stderr.clone(),
+            RedirectionOp::RedirectOut
+            | RedirectionOp::RedirectClobber
+            | RedirectionOp::RedirectAppend => {
+                stdout = destination_from_target(
+                    targets[index]
+                        .clone()
+                        .expect("output target prepared before command execution"),
+                    index,
+                );
+            }
+            RedirectionOp::RedirectStderr | RedirectionOp::RedirectStderrAppend => {
+                stderr = destination_from_target(
+                    targets[index]
+                        .clone()
+                        .expect("output target prepared before command execution"),
+                    index,
+                );
+            }
+            RedirectionOp::RedirectAll | RedirectionOp::RedirectAllAppend => {
+                let destination = destination_from_target(
+                    targets[index]
+                        .clone()
+                        .expect("output target prepared before command execution"),
+                    index,
+                );
+                stdout = destination.clone();
+                stderr = destination;
+            }
+            RedirectionOp::RedirectIn
+            | RedirectionOp::RedirectHereString
+            | RedirectionOp::RedirectHereDoc
+            | RedirectionOp::RedirectHereDocStrip => {}
+        }
+    }
+    (stdout, stderr)
+}
+
+fn distinct_file_destinations(
+    stdout: &OutputDestination,
+    stderr: &OutputDestination,
+) -> Option<((std::path::PathBuf, bool), (std::path::PathBuf, bool))> {
+    let (
+        OutputDestination::Target(
+            stdout_identity,
+            StreamTarget::File {
+                path: stdout_path,
+                append: stdout_append,
+            },
+        ),
+        OutputDestination::Target(
+            stderr_identity,
+            StreamTarget::File {
+                path: stderr_path,
+                append: stderr_append,
+            },
+        ),
+    ) = (stdout, stderr)
+    else {
+        return None;
+    };
+    if stdout_identity == stderr_identity {
+        return None;
+    }
+    Some((
+        (stdout_path.clone(), *stdout_append),
+        (stderr_path.clone(), *stderr_append),
+    ))
 }
 
 fn write_to_destination(
@@ -94,9 +176,62 @@ fn write_to_destination(
     match destination {
         OutputDestination::ContextStdout => ctx.write_stdout(bytes),
         OutputDestination::ContextStderr => ctx.write_stderr(bytes),
-        OutputDestination::Target(target) => target.write_data(bytes)?,
+        OutputDestination::Target(_, target) => target.write_data(bytes)?,
     }
     Ok(())
+}
+
+async fn report_command_failure(
+    ctx: &mut ExecutionContext,
+    command_name: &str,
+    line: u32,
+    code: i32,
+    message: Option<String>,
+) {
+    ctx.record_failure(command_name, line, code, message);
+    if !ctx.is_in_trap()
+        && let Some(err_trap) = ctx.get_trap(TrapSignal::Err)
+    {
+        ctx.set_in_trap(true);
+        ctx.push_scope();
+        let _ = err_trap.execute(ctx).await;
+        let _ = ctx.pop_scope();
+        ctx.set_in_trap(false);
+    }
+}
+
+async fn redirection_failure(
+    error: ExecError,
+    command_name: &str,
+    line: u32,
+    stderr_destination: &OutputDestination,
+    ctx: &mut ExecutionContext,
+) -> Result<i32, ExecError> {
+    let message = error.to_string();
+    let diagnostic = format!("esh: {message}\n");
+    if write_to_destination(stderr_destination, diagnostic.as_bytes(), ctx).is_err() {
+        ctx.write_stderr(diagnostic.as_bytes());
+    }
+    let code = error.exit_code();
+    report_command_failure(ctx, command_name, line, code, Some(message)).await;
+    Ok(code)
+}
+
+fn external_process_exit_code(status: std::process::ExitStatus) -> i32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::ExitStatusExt;
+        if let Some(signal) = status.signal() {
+            return 128 + signal;
+        }
+    }
+
+    #[cfg(windows)]
+    if status.code() == Some(0xC000_013A_u32 as i32) {
+        return 130;
+    }
+
+    status.code().unwrap_or(1)
 }
 
 impl Executable for ExecutionPlan {
@@ -167,7 +302,7 @@ impl Executable for ExecutionPlan {
 
             execute_exit_trap(ctx).await;
 
-            Ok(last_status)
+            Ok(ctx.exit_code().unwrap_or(last_status))
         })
     }
 }
@@ -218,6 +353,9 @@ impl ExecutionStage {
                 let mut outputs = std::iter::repeat_with(|| None)
                     .take(branches.len())
                     .collect::<Vec<Option<(Vec<u8>, Vec<u8>)>>>();
+                let mut failure_contexts = std::iter::repeat_with(|| None)
+                    .take(branches.len())
+                    .collect::<Vec<Option<(String, u32, Option<String>)>>>();
 
                 for (index, branch) in branches.iter().enumerate() {
                     let mut branch_ctx = ctx.clone_isolated();
@@ -225,7 +363,7 @@ impl ExecutionStage {
                     let branch_stage = branch.clone();
 
                     join_set.spawn(async move {
-                        let res = branch_stage.execute(&mut branch_ctx).await;
+                        let res = execute_isolated_stage(&branch_stage, &mut branch_ctx).await;
                         (index, res, branch_ctx)
                     });
                 }
@@ -233,16 +371,32 @@ impl ExecutionStage {
                 while let Some(join_res) = join_set.join_next().await {
                     let (index, res, child_ctx) =
                         join_res.map_err(|e| ExecError::JoinError(e.to_string()))?;
-                    results[index] = Some(res);
+                    results[index] =
+                        Some(res.map(|status| child_ctx.exit_code().unwrap_or(status)));
                     outputs[index] = Some((
                         child_ctx.get_captured_stdout_bytes().unwrap_or_default(),
                         child_ctx.get_captured_stderr_bytes().unwrap_or_default(),
                     ));
+                    failure_contexts[index] = child_ctx.failure_context();
                 }
 
                 for (stdout, stderr) in outputs.into_iter().flatten() {
                     ctx.write_stdout(&stdout);
                     ctx.write_stderr(&stderr);
+                }
+
+                for (index, result) in results.iter().enumerate() {
+                    let failure_code = match result {
+                        Some(Ok(code)) if *code != 0 => Some(*code),
+                        Some(Err(error)) => Some(error.exit_code()),
+                        _ => None,
+                    };
+                    if let Some(code) = failure_code {
+                        if let Some((command, line, message)) = &failure_contexts[index] {
+                            ctx.record_failure(command, *line, code, message.clone());
+                        }
+                        break;
+                    }
                 }
 
                 let mut first_error_code = 0;
@@ -297,13 +451,11 @@ impl ExecutionStage {
                 try_stage,
                 fallback,
             } => {
-                ctx.push_scope();
                 let prev_fail_fast = ctx.fail_fast_enabled();
                 ctx.set_fail_fast(true);
 
                 let try_res = try_stage.execute(ctx).await;
                 ctx.set_fail_fast(prev_fail_fast);
-                let _ = ctx.pop_scope();
 
                 match try_res {
                     Ok(0) => {
@@ -311,16 +463,22 @@ impl ExecutionStage {
                         Ok(0)
                     }
                     Ok(code) => {
+                        if ctx.is_exiting()
+                            || ctx.is_returning()
+                            || ctx.break_requested().is_some()
+                            || ctx.continue_requested().is_some()
+                        {
+                            ctx.set_last_exit(code);
+                            return Ok(code);
+                        }
+
                         if ctx.get_var("ESH_FAILED_CMD").is_none() {
                             ctx.record_failure("block", 0, code, None);
                         } else {
                             ctx.set_last_exit(code);
                         }
                         if let Some(catch_stage) = fallback {
-                            ctx.push_scope();
-                            let catch_res = catch_stage.execute(ctx).await;
-                            let _ = ctx.pop_scope();
-                            catch_res
+                            catch_stage.execute(ctx).await
                         } else {
                             Ok(code)
                         }
@@ -333,10 +491,7 @@ impl ExecutionStage {
                             ctx.set_last_exit(code);
                         }
                         if let Some(catch_stage) = fallback {
-                            ctx.push_scope();
-                            let catch_res = catch_stage.execute(ctx).await;
-                            let _ = ctx.pop_scope();
-                            catch_res
+                            catch_stage.execute(ctx).await
                         } else {
                             Err(e)
                         }
@@ -377,6 +532,15 @@ impl ExecutionStage {
                 let mut last_code = 0;
                 let mut execution_error = None;
                 for stage in stages {
+                    if child_ctx.is_exiting()
+                        || child_ctx.is_returning()
+                        || child_ctx.break_requested().is_some()
+                        || child_ctx.continue_requested().is_some()
+                        || child_ctx.is_cancelled()
+                    {
+                        break;
+                    }
+
                     match stage.execute(&mut child_ctx).await {
                         Ok(status) => last_code = status,
                         Err(error) => {
@@ -389,6 +553,8 @@ impl ExecutionStage {
                         break;
                     }
                 }
+                child_ctx.set_last_exit(child_ctx.exit_code().unwrap_or(last_code));
+                execute_exit_trap(&mut child_ctx).await;
                 if let Some(stdout) = child_ctx.get_captured_stdout_bytes() {
                     ctx.write_stdout(&stdout);
                 }
@@ -399,8 +565,9 @@ impl ExecutionStage {
                 if let Some(error) = execution_error {
                     return Err(error);
                 }
-                ctx.set_last_exit(last_code);
-                Ok(last_code)
+                let subshell_status = child_ctx.exit_code().unwrap_or(last_code);
+                ctx.set_last_exit(subshell_status);
+                Ok(subshell_status)
             }
 
             ExecutionStage::Negation(inner) => {
@@ -436,6 +603,20 @@ impl ExecutionStage {
                 ctx.set_errexit_shielded(prev_shield);
                 let cond_status = condition_result?;
 
+                if ctx.is_cancelled() {
+                    ctx.set_last_exit(130);
+                    return Ok(130);
+                }
+
+                if ctx.is_exiting()
+                    || ctx.is_returning()
+                    || ctx.break_requested().is_some()
+                    || ctx.continue_requested().is_some()
+                {
+                    ctx.set_last_exit(cond_status);
+                    return Ok(cond_status);
+                }
+
                 if cond_status == 0 {
                     let res = then_branch.execute(ctx).await?;
                     ctx.set_last_exit(res);
@@ -448,6 +629,20 @@ impl ExecutionStage {
                     let elif_result = elif_cond.execute(ctx).await;
                     ctx.set_errexit_shielded(prev_s);
                     let elif_status = elif_result?;
+
+                    if ctx.is_cancelled() {
+                        ctx.set_last_exit(130);
+                        return Ok(130);
+                    }
+
+                    if ctx.is_exiting()
+                        || ctx.is_returning()
+                        || ctx.break_requested().is_some()
+                        || ctx.continue_requested().is_some()
+                    {
+                        ctx.set_last_exit(elif_status);
+                        return Ok(elif_status);
+                    }
 
                     if elif_status == 0 {
                         let res = elif_body.execute(ctx).await?;
@@ -470,32 +665,60 @@ impl ExecutionStage {
                 ctx.enter_loop();
                 let mut last_status = 0;
 
-                let items: Vec<String> = if let Some(w_list) = words {
-                    let mut expanded = Vec::new();
-                    for w in w_list {
-                        if let Some(items) = expand_word_as_items(w, ctx).await? {
-                            expanded.extend(items);
-                            continue;
+                let items_result: Result<Vec<String>, ExecError> = async {
+                    if let Some(w_list) = words {
+                        let mut expanded = Vec::new();
+                        for w in w_list {
+                            if let Some(items) = expand_word_as_items(w, ctx).await? {
+                                expanded.extend(items);
+                                continue;
+                            }
+                            let val = expand_word(w, ctx).await?;
+                            if matches!(w.parts.as_slice(), [PlanWordPart::CommandSub(_)]) {
+                                if !val.is_empty() {
+                                    expanded.extend(val.split('\n').map(str::to_owned));
+                                }
+                            } else {
+                                expanded.push(val);
+                            }
                         }
-                        let val = expand_word(w, ctx).await?;
-                        if matches!(w.parts.as_slice(), [PlanWordPart::CommandSub(_)]) {
-                            expanded.extend(val.lines().map(str::to_owned));
-                        } else {
-                            expanded.push(val);
-                        }
+                        Ok(expanded)
+                    } else {
+                        Ok(ctx.positional_args().to_vec())
                     }
-                    expanded
-                } else {
-                    ctx.positional_args().to_vec()
+                }
+                .await;
+                let items = match items_result {
+                    Ok(items) => items,
+                    Err(error) => {
+                        ctx.exit_loop();
+                        return Err(error);
+                    }
                 };
+                if ctx.is_cancelled() {
+                    ctx.exit_loop();
+                    ctx.set_last_exit(130);
+                    return Ok(130);
+                }
 
                 for item in items {
                     ctx.set_var(var, &item);
 
-                    last_status = body.execute(ctx).await?;
+                    last_status = match body.execute(ctx).await {
+                        Ok(status) => status,
+                        Err(error) => {
+                            ctx.exit_loop();
+                            return Err(error);
+                        }
+                    };
                     ctx.set_last_exit(last_status);
 
-                    if ctx.is_exiting() || ctx.is_returning() || ctx.is_cancelled() {
+                    if ctx.is_cancelled() {
+                        last_status = 130;
+                        break;
+                    }
+
+                    if ctx.is_exiting() || ctx.is_returning() {
                         break;
                     }
 
@@ -511,6 +734,122 @@ impl ExecutionStage {
                             break;
                         }
                         continue;
+                    }
+                }
+
+                ctx.exit_loop();
+                Ok(last_status)
+            }
+
+            ExecutionStage::SelectLoop { var, words, body } => {
+                ctx.enter_loop();
+                let items_result: Result<Vec<String>, ExecError> = async {
+                    if let Some(word_list) = words {
+                        let mut items = Vec::new();
+                        for word in word_list {
+                            if let Some(expanded_items) = expand_word_as_items(word, ctx).await? {
+                                items.extend(expanded_items);
+                            } else {
+                                let value = expand_word(word, ctx).await?;
+                                if matches!(word.parts.as_slice(), [PlanWordPart::CommandSub(_)]) {
+                                    if !value.is_empty() {
+                                        items.extend(value.split('\n').map(str::to_owned));
+                                    }
+                                } else {
+                                    items.push(value);
+                                }
+                            }
+                        }
+                        Ok(items)
+                    } else {
+                        Ok(ctx.positional_args().to_vec())
+                    }
+                }
+                .await;
+                let items = match items_result {
+                    Ok(items) => items,
+                    Err(error) => {
+                        ctx.exit_loop();
+                        return Err(error);
+                    }
+                };
+                if ctx.is_cancelled() {
+                    ctx.exit_loop();
+                    ctx.set_last_exit(130);
+                    return Ok(130);
+                }
+                if items.is_empty() {
+                    ctx.exit_loop();
+                    return Ok(0);
+                }
+                let mut last_status = 0;
+                let mut menu_displayed = false;
+
+                loop {
+                    if ctx.is_exiting() || ctx.is_returning() || ctx.is_cancelled() {
+                        if ctx.is_cancelled() {
+                            last_status = 130;
+                        }
+                        break;
+                    }
+                    if !menu_displayed {
+                        for (index, item) in items.iter().enumerate() {
+                            ctx.write_stderr(format!("{}) {}\n", index + 1, item).as_bytes());
+                        }
+                        menu_displayed = true;
+                    }
+                    let prompt = ctx.get_var("PS3").unwrap_or_else(|| "#? ".to_string());
+                    let read_args = vec!["-r".to_string(), "-p".to_string(), prompt.clone()];
+                    let read_status =
+                        match crate::runtime::builtins::flow::read(&read_args, ctx).await {
+                            Ok(status) => status,
+                            Err(error) => {
+                                ctx.exit_loop();
+                                return Err(error);
+                            }
+                        };
+                    if ctx.is_cancelled() {
+                        last_status = 130;
+                        break;
+                    }
+                    if read_status != 0 {
+                        last_status = read_status;
+                        ctx.write_stdout(b"\n");
+                        break;
+                    }
+                    let reply = ctx.get_var("REPLY").unwrap_or_default();
+                    let selected = reply
+                        .trim()
+                        .strip_prefix('+')
+                        .unwrap_or(reply.trim())
+                        .parse::<usize>()
+                        .ok()
+                        .filter(|index| *index > 0 && *index <= items.len())
+                        .map(|index| items[index - 1].clone())
+                        .unwrap_or_default();
+                    ctx.set_var(var, &selected);
+
+                    last_status = match body.execute(ctx).await {
+                        Ok(status) => status,
+                        Err(error) => {
+                            ctx.exit_loop();
+                            return Err(error);
+                        }
+                    };
+                    ctx.set_last_exit(last_status);
+                    if ctx.is_exiting() || ctx.is_returning() || ctx.is_cancelled() {
+                        break;
+                    }
+                    if ctx.break_requested().is_some() {
+                        ctx.decrement_break();
+                        break;
+                    }
+                    if ctx.continue_requested().is_some() {
+                        let depth = ctx.continue_requested().unwrap();
+                        ctx.decrement_continue();
+                        if depth > 1 {
+                            break;
+                        }
                     }
                 }
 
@@ -535,7 +874,36 @@ impl ExecutionStage {
                     ctx.set_errexit_shielded(true);
                     let condition_result = condition.execute(ctx).await;
                     ctx.set_errexit_shielded(prev_shield);
-                    let cond_status = condition_result?;
+                    let cond_status = match condition_result {
+                        Ok(status) => status,
+                        Err(error) => {
+                            ctx.exit_loop();
+                            return Err(error);
+                        }
+                    };
+
+                    if ctx.is_cancelled() {
+                        last_status = 130;
+                        break;
+                    }
+
+                    if ctx.is_exiting() || ctx.is_returning() {
+                        break;
+                    }
+
+                    if ctx.break_requested().is_some() {
+                        ctx.decrement_break();
+                        break;
+                    }
+
+                    if ctx.continue_requested().is_some() {
+                        let continue_depth = ctx.continue_requested().unwrap();
+                        ctx.decrement_continue();
+                        if continue_depth > 1 {
+                            break;
+                        }
+                        continue;
+                    }
 
                     let should_run = if *is_until {
                         cond_status != 0
@@ -547,7 +915,13 @@ impl ExecutionStage {
                         break;
                     }
 
-                    last_status = body.execute(ctx).await?;
+                    last_status = match body.execute(ctx).await {
+                        Ok(status) => status,
+                        Err(error) => {
+                            ctx.exit_loop();
+                            return Err(error);
+                        }
+                    };
                     ctx.set_last_exit(last_status);
 
                     if ctx.is_exiting() || ctx.is_returning() || ctx.is_cancelled() {
@@ -575,6 +949,10 @@ impl ExecutionStage {
 
             ExecutionStage::CaseBranch { target, arms } => {
                 let target_val = expand_word(target, ctx).await?;
+                if ctx.is_cancelled() {
+                    ctx.set_last_exit(130);
+                    return Ok(130);
+                }
                 let mut last_status = 0;
                 let mut fallthrough = false;
 
@@ -584,6 +962,10 @@ impl ExecutionStage {
                     if !matched {
                         for pat in &arm.patterns {
                             let pat_str = expand_case_pattern(pat, ctx).await?;
+                            if ctx.is_cancelled() {
+                                ctx.set_last_exit(130);
+                                return Ok(130);
+                            }
                             if shell_pattern_matches(&pat_str, &target_val) {
                                 matched = true;
                                 break;
@@ -597,7 +979,12 @@ impl ExecutionStage {
                             ctx.set_last_exit(last_status);
                         }
 
-                        if ctx.is_exiting() || ctx.is_returning() || ctx.is_cancelled() {
+                        if ctx.is_exiting()
+                            || ctx.is_returning()
+                            || ctx.break_requested().is_some()
+                            || ctx.continue_requested().is_some()
+                            || ctx.is_cancelled()
+                        {
                             break;
                         }
 
@@ -707,8 +1094,10 @@ async fn execute_redirected_compound_inner(
         }
     }
 
+    let (stdout_destination, stderr_destination) =
+        output_destinations(redirections, &output_targets);
     let (execution_result, captured_out, captured_err) = if has_output_redirections {
-        let previous_capture = ctx.begin_redirect_capture();
+        let previous_capture = ctx.begin_redirect_capture(stdout_destination == stderr_destination);
         let result = inner.execute(ctx).await;
         let (stdout, stderr) = ctx.finish_redirect_capture(previous_capture);
         (result, Some(stdout), Some(stderr))
@@ -719,53 +1108,8 @@ async fn execute_redirected_compound_inner(
     if has_output_redirections {
         let stdout_bytes = captured_out.unwrap_or_default();
         let stderr_bytes = captured_err.unwrap_or_default();
-        let mut stdout_destination = OutputDestination::ContextStdout;
-        let mut stderr_destination = OutputDestination::ContextStderr;
-
-        for (index, redirection) in redirections.iter().enumerate() {
-            match redirection.op {
-                RedirectionOp::RedirectIn
-                | RedirectionOp::RedirectHereString
-                | RedirectionOp::RedirectHereDoc
-                | RedirectionOp::RedirectHereDocStrip => {}
-                RedirectionOp::RedirectStderrToStdout => {
-                    stderr_destination = stdout_destination.clone();
-                }
-                RedirectionOp::RedirectStdoutToStderr => {
-                    stdout_destination = stderr_destination.clone();
-                }
-                RedirectionOp::RedirectOut
-                | RedirectionOp::RedirectClobber
-                | RedirectionOp::RedirectAppend => {
-                    stdout_destination = destination_from_target(
-                        output_targets[index]
-                            .clone()
-                            .expect("output target prepared before compound execution"),
-                    );
-                }
-                RedirectionOp::RedirectStderr | RedirectionOp::RedirectStderrAppend => {
-                    stderr_destination = destination_from_target(
-                        output_targets[index]
-                            .clone()
-                            .expect("output target prepared before compound execution"),
-                    );
-                }
-                RedirectionOp::RedirectAll | RedirectionOp::RedirectAllAppend => {
-                    let destination = destination_from_target(
-                        output_targets[index]
-                            .clone()
-                            .expect("output target prepared before compound execution"),
-                    );
-                    stdout_destination = destination.clone();
-                    stderr_destination = destination;
-                }
-            }
-        }
-
         if stdout_destination == stderr_destination {
-            let mut combined = stdout_bytes;
-            combined.extend_from_slice(&stderr_bytes);
-            write_to_destination(&stdout_destination, &combined, ctx)?;
+            write_to_destination(&stdout_destination, &stdout_bytes, ctx)?;
         } else {
             write_to_destination(&stdout_destination, &stdout_bytes, ctx)?;
             write_to_destination(&stderr_destination, &stderr_bytes, ctx)?;
@@ -789,6 +1133,14 @@ async fn execute_pipeline(
         return execute_plan_node(&nodes[0], ctx).await;
     }
 
+    if let Some(status) = execute_external_pipeline_to_builtin_consumer(nodes, ctx).await? {
+        return Ok(status);
+    }
+
+    if let Some(status) = execute_streaming_external_pipeline(nodes, ctx).await? {
+        return Ok(status);
+    }
+
     // Pipeline: node0 | node1 | ... | nodeN
     let mut current_input: Option<Vec<u8>> = ctx.take_stdin();
     let mut statuses = Vec::new();
@@ -803,11 +1155,14 @@ async fn execute_pipeline(
 
         step_ctx.enable_capture();
 
-        let status = execute_plan_node(node, &mut step_ctx).await?;
+        let status = execute_isolated_plan_node(node, &mut step_ctx).await?;
         statuses.push(status);
 
         if !is_last {
             current_input = step_ctx.get_captured_stdout_bytes();
+            if let Some(stderr) = step_ctx.get_captured_stderr_bytes() {
+                ctx.write_stderr(&stderr);
+            }
         } else {
             if let Some(out) = step_ctx.get_captured_stdout_bytes() {
                 ctx.write_stdout(&out);
@@ -831,6 +1186,524 @@ async fn execute_pipeline(
     Ok(0)
 }
 
+/// Stream external stages into ESH builtins that can stop after a prefix.
+/// These builtins take buffered stdin, so collect only the prefix they need and
+/// drop the upstream receiver as soon as they can finish.
+async fn execute_external_pipeline_to_builtin_consumer(
+    nodes: &[PlanNode],
+    ctx: &mut ExecutionContext,
+) -> Result<Option<i32>, ExecError> {
+    let Some(consumer_node) = nodes.last() else {
+        return Ok(None);
+    };
+    let head_index = nodes.len() - 1;
+    let consumer = if let Some(limit) = builtin_head_limit(consumer_node) {
+        BuiltinStreamConsumer::Head(limit)
+    } else if builtin_quiet_grep(consumer_node) {
+        BuiltinStreamConsumer::QuietGrep
+    } else {
+        return Ok(None);
+    };
+    let upstream = &nodes[..head_index];
+    if upstream.is_empty()
+        || ctx.get_function(&consumer_node.raw_name).is_some()
+        || ctx.external_file_outputs().is_some()
+        || ctx.is_in_trap()
+        || ctx.options().xtrace
+        || [TrapSignal::Exit, TrapSignal::Err, TrapSignal::Interrupt]
+            .iter()
+            .any(|signal| ctx.get_trap(*signal).is_some())
+    {
+        return Ok(None);
+    }
+
+    let mut external_nodes = Vec::with_capacity(upstream.len());
+    let mut external_node_indexes = Vec::with_capacity(upstream.len());
+    for (index, node) in upstream.iter().enumerate() {
+        if builtin_passthrough_cat(node, ctx) {
+            continue;
+        }
+        if !matches!(node.target, CommandTarget::External(_))
+            || !node.assignments.is_empty()
+            || !node.redirections.is_empty()
+            || ctx.get_function(&node.raw_name).is_some()
+            || node.args.iter().any(|word| {
+                word.parts.iter().any(|part| {
+                    !matches!(
+                        part,
+                        PlanWordPart::Literal(_) | PlanWordPart::SingleQuoted(_)
+                    )
+                })
+            })
+        {
+            return Ok(None);
+        }
+        external_nodes.push(node);
+        external_node_indexes.push(index);
+    }
+    if external_nodes.is_empty() {
+        return Ok(None);
+    }
+
+    let mut programs = Vec::with_capacity(external_nodes.len());
+    for node in &external_nodes {
+        let Some(program) = resolve_pipeline_program(&node.raw_name, ctx) else {
+            return Ok(None);
+        };
+        programs.push(program);
+    }
+    let arguments = external_nodes
+        .iter()
+        .map(|node| {
+            node.args
+                .iter()
+                .map(|word| {
+                    word.parts
+                        .iter()
+                        .map(|part| match part {
+                            PlanWordPart::Literal(value) | PlanWordPart::SingleQuoted(value) => {
+                                value.as_str()
+                            }
+                            _ => unreachable!("eligibility checked above"),
+                        })
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    let mut handles = Vec::with_capacity(external_nodes.len());
+    let mut previous_output = None;
+    let mut initial_input = ctx.take_stdin();
+    let mut final_receiver = None;
+    for (index, (program, args)) in programs.into_iter().zip(arguments).enumerate() {
+        let is_last_upstream = index + 1 == external_nodes.len();
+        let mut spec = ProcessSpec::new(program, ctx.cwd(), ProcessMode::SupervisedAutomation)
+            .args(args)
+            .environment(EnvironmentPolicy::InheritAndOverride, ctx.env_vars());
+        spec.stdin = if index == 0 {
+            initial_input
+                .take()
+                .map(StdinPolicy::Bytes)
+                .unwrap_or(StdinPolicy::Null)
+        } else {
+            StdinPolicy::Pipe
+        };
+        spec.stdout = OutputPolicy::Stream;
+        spec.stderr = OutputPolicy::Capture;
+        let (sender, receiver) = tokio::sync::mpsc::channel::<OutputChunk>(8);
+        let mut handle = ProcessHandle::spawn_streaming(spec, sender)
+            .map_err(|error| ExecError::IoError(error.to_string()))?;
+        if let Some(receiver) = previous_output.take() {
+            handle.connect_stdin_from(receiver);
+        }
+        if is_last_upstream {
+            final_receiver = Some(receiver);
+        } else {
+            previous_output = Some(receiver);
+        }
+        handles.push(handle);
+    }
+
+    let mut input = Vec::new();
+    let mut grep_probe_offset = 0;
+    let mut grep_match_found = false;
+    let mut receiver = final_receiver.expect("upstream pipeline has a final receiver");
+    while let Some(chunk) = receiver.recv().await {
+        if chunk.stream != evin_process::OutputStream::Stdout {
+            continue;
+        }
+        match consumer {
+            BuiltinStreamConsumer::Head(limit) => {
+                let remaining = match limit {
+                    HeadLimit::Bytes(count) => count.saturating_sub(input.len()),
+                    HeadLimit::Lines(0) => 0,
+                    HeadLimit::Lines(count) => {
+                        let seen = input.iter().filter(|byte| **byte == b'\n').count();
+                        if seen >= count { 0 } else { chunk.bytes.len() }
+                    }
+                };
+                if remaining == 0 {
+                    break;
+                }
+                match limit {
+                    HeadLimit::Bytes(_) => {
+                        input.extend_from_slice(&chunk.bytes[..chunk.bytes.len().min(remaining)])
+                    }
+                    HeadLimit::Lines(count) => {
+                        let mut take = chunk.bytes.len();
+                        let mut seen = input.iter().filter(|byte| **byte == b'\n').count();
+                        for (index, byte) in chunk.bytes.iter().enumerate() {
+                            if *byte == b'\n' {
+                                seen += 1;
+                                if seen == count {
+                                    take = index + 1;
+                                    break;
+                                }
+                            }
+                        }
+                        input.extend_from_slice(&chunk.bytes[..take]);
+                    }
+                }
+                if match limit {
+                    HeadLimit::Bytes(count) => input.len() >= count,
+                    HeadLimit::Lines(count) => {
+                        input.iter().filter(|byte| **byte == b'\n').count() >= count
+                    }
+                } {
+                    break;
+                }
+            }
+            BuiltinStreamConsumer::QuietGrep => {
+                input.extend_from_slice(&chunk.bytes);
+                while let Some(relative_end) = input[grep_probe_offset..]
+                    .iter()
+                    .position(|byte| *byte == b'\n')
+                {
+                    let line_end = grep_probe_offset + relative_end + 1;
+                    let mut probe_ctx = ctx.clone_isolated();
+                    probe_ctx.set_stdin(input[grep_probe_offset..line_end].to_vec());
+                    probe_ctx.enable_capture();
+                    grep_match_found =
+                        execute_isolated_plan_node(consumer_node, &mut probe_ctx).await? == 0;
+                    grep_probe_offset = line_end;
+                    if grep_match_found {
+                        break;
+                    }
+                }
+                if grep_match_found {
+                    break;
+                }
+            }
+        }
+    }
+    drop(receiver);
+
+    let mut consumer_ctx = ctx.clone_isolated();
+    consumer_ctx.set_stdin(input);
+    consumer_ctx.enable_capture();
+    let consumer_status = execute_isolated_plan_node(consumer_node, &mut consumer_ctx).await?;
+    if let Some(stdout) = consumer_ctx.get_captured_stdout_bytes() {
+        ctx.write_stdout(&stdout);
+    }
+    if let Some(stderr) = consumer_ctx.get_captured_stderr_bytes() {
+        ctx.write_stderr(&stderr);
+    }
+
+    let mut join_set = JoinSet::new();
+    for (index, handle) in handles.into_iter().enumerate() {
+        let token = ctx.token().clone();
+        join_set.spawn(async move { (index, handle.wait(token).await) });
+    }
+    let mut statuses = vec![0; upstream.len()];
+    while let Some(result) = join_set.join_next().await {
+        let (index, result) = result.map_err(|error| ExecError::JoinError(error.to_string()))?;
+        let result = result.map_err(|error| ExecError::IoError(error.to_string()))?;
+        statuses[external_node_indexes[index]] = match result.termination {
+            ProcessTermination::Exited(status) => external_process_exit_code(status),
+            ProcessTermination::Cancelled => 130,
+        };
+        if let Some(stderr) = result.stderr {
+            ctx.write_stderr(&stderr);
+        }
+    }
+    statuses.push(consumer_status);
+    let status = if ctx.options().pipefail {
+        statuses
+            .into_iter()
+            .rev()
+            .find(|status| *status != 0)
+            .unwrap_or(0)
+    } else {
+        consumer_status
+    };
+    ctx.set_last_exit(status);
+    Ok(Some(status))
+}
+
+#[derive(Clone, Copy)]
+enum BuiltinStreamConsumer {
+    Head(HeadLimit),
+    QuietGrep,
+}
+
+fn builtin_passthrough_cat(node: &PlanNode, ctx: &ExecutionContext) -> bool {
+    node.raw_name == "cat"
+        && matches!(node.target, CommandTarget::Builtin(_))
+        && node.args.is_empty()
+        && node.assignments.is_empty()
+        && node.redirections.is_empty()
+        && ctx.get_function(&node.raw_name).is_none()
+}
+
+#[derive(Clone, Copy)]
+enum HeadLimit {
+    Lines(usize),
+    Bytes(usize),
+}
+
+fn builtin_head_limit(node: &PlanNode) -> Option<HeadLimit> {
+    if node.raw_name != "head"
+        || !matches!(node.target, CommandTarget::Builtin(_))
+        || !node.assignments.is_empty()
+        || !node.redirections.is_empty()
+    {
+        return None;
+    }
+    let mut mode = HeadLimit::Lines(10);
+    let mut parsing_options = true;
+    let mut iter = node.args.iter();
+    while let Some(word) = iter.next() {
+        let value = match word.parts.as_slice() {
+            [PlanWordPart::Literal(value) | PlanWordPart::SingleQuoted(value)] => value,
+            _ => return None,
+        };
+        if parsing_options && value == "--" {
+            parsing_options = false;
+        } else if parsing_options && (value == "-n" || value == "--lines") {
+            let [PlanWordPart::Literal(count) | PlanWordPart::SingleQuoted(count)] =
+                iter.next()?.parts.as_slice()
+            else {
+                return None;
+            };
+            mode = HeadLimit::Lines(count.parse().ok()?);
+        } else if parsing_options && (value == "-c" || value == "--bytes") {
+            let [PlanWordPart::Literal(count) | PlanWordPart::SingleQuoted(count)] =
+                iter.next()?.parts.as_slice()
+            else {
+                return None;
+            };
+            mode = HeadLimit::Bytes(count.parse().ok()?);
+        } else if parsing_options && value.starts_with('-') && value != "-" {
+            return None;
+        } else {
+            // File operands do not consume stdin, so this optimization would
+            // need to drain the pipeline instead of stopping at the limit.
+            return None;
+        }
+    }
+    Some(mode)
+}
+
+fn builtin_quiet_grep(node: &PlanNode) -> bool {
+    if node.raw_name != "grep"
+        || !matches!(node.target, CommandTarget::Builtin(_))
+        || !node.assignments.is_empty()
+        || !node.redirections.is_empty()
+        || node.args.len() != 2
+    {
+        return false;
+    }
+    let is_static_word = |word: &PlanWord| {
+        matches!(
+            word.parts.as_slice(),
+            [PlanWordPart::Literal(_) | PlanWordPart::SingleQuoted(_)]
+        )
+    };
+    if !node.args.iter().all(is_static_word) {
+        return false;
+    }
+    matches!(
+        node.args[0].parts.as_slice(),
+        [PlanWordPart::Literal(option) | PlanWordPart::SingleQuoted(option)]
+            if matches!(option.as_str(), "-q" | "-Fq" | "-qF")
+    )
+}
+
+async fn execute_streaming_external_pipeline(
+    nodes: &[PlanNode],
+    ctx: &mut ExecutionContext,
+) -> Result<Option<i32>, ExecError> {
+    if ctx.external_file_outputs().is_some()
+        || ctx.is_in_trap()
+        || ctx.options().xtrace
+        || [TrapSignal::Exit, TrapSignal::Err, TrapSignal::Interrupt]
+            .iter()
+            .any(|signal| ctx.get_trap(*signal).is_some())
+        || nodes.iter().any(|node| {
+            !matches!(node.target, CommandTarget::External(_))
+                || !node.assignments.is_empty()
+                || !node.redirections.is_empty()
+                || ctx.get_function(&node.raw_name).is_some()
+                || node.args.iter().any(|word| {
+                    word.parts.iter().any(|part| {
+                        !matches!(
+                            part,
+                            PlanWordPart::Literal(_) | PlanWordPart::SingleQuoted(_)
+                        )
+                    })
+                })
+        })
+    {
+        return Ok(None);
+    }
+
+    let mut programs = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        let Some(program) = resolve_pipeline_program(&node.raw_name, ctx) else {
+            return Ok(None);
+        };
+        programs.push(program);
+    }
+
+    let mut arguments = Vec::with_capacity(nodes.len());
+    for node in nodes {
+        arguments.push(
+            node.args
+                .iter()
+                .map(|word| {
+                    word.parts
+                        .iter()
+                        .map(|part| match part {
+                            PlanWordPart::Literal(value) | PlanWordPart::SingleQuoted(value) => {
+                                value.as_str()
+                            }
+                            _ => unreachable!("eligibility checked above"),
+                        })
+                        .collect::<String>()
+                })
+                .collect::<Vec<_>>(),
+        );
+    }
+
+    let mut handles = Vec::with_capacity(nodes.len());
+    let mut previous_output = None;
+    let mut input = ctx.take_stdin();
+    for (index, (program, args)) in programs.into_iter().zip(arguments).enumerate() {
+        let is_last = index + 1 == nodes.len();
+        let mut spec = ProcessSpec::new(program, ctx.cwd(), ProcessMode::SupervisedAutomation)
+            .args(args)
+            .environment(EnvironmentPolicy::InheritAndOverride, ctx.env_vars());
+        spec.stdin = if index == 0 {
+            input
+                .take()
+                .map(StdinPolicy::Bytes)
+                .unwrap_or(StdinPolicy::Null)
+        } else {
+            StdinPolicy::Pipe
+        };
+        spec.stdout = if is_last {
+            OutputPolicy::Capture
+        } else {
+            OutputPolicy::Stream
+        };
+        spec.stderr = OutputPolicy::Capture;
+
+        let (sender, receiver) = if is_last {
+            (None, None)
+        } else {
+            let (sender, receiver) = tokio::sync::mpsc::channel::<OutputChunk>(8);
+            (Some(sender), Some(receiver))
+        };
+        let mut handle = if let Some(sender) = sender {
+            ProcessHandle::spawn_streaming(spec, sender)
+        } else {
+            ProcessHandle::spawn(spec, None)
+        }
+        .map_err(|error| ExecError::IoError(error.to_string()))?;
+        if let Some(receiver) = previous_output.take() {
+            handle.connect_stdin_from(receiver);
+        }
+        previous_output = receiver;
+        handles.push(handle);
+    }
+
+    let mut join_set = JoinSet::new();
+    for (index, handle) in handles.into_iter().enumerate() {
+        let token = ctx.token().clone();
+        join_set.spawn(async move { (index, handle.wait(token).await) });
+    }
+
+    let mut results = std::iter::repeat_with(|| None)
+        .take(nodes.len())
+        .collect::<Vec<Option<Result<evin_process::ProcessResult, ProcessError>>>>();
+    while let Some(result) = join_set.join_next().await {
+        let (index, result) = result.map_err(|error| ExecError::JoinError(error.to_string()))?;
+        results[index] = Some(result);
+    }
+
+    let mut statuses = Vec::with_capacity(nodes.len());
+    let mut final_stdout = Vec::new();
+    for (index, result) in results.into_iter().enumerate() {
+        let result = result
+            .expect("all pipeline process tasks joined")
+            .map_err(|error| ExecError::IoError(error.to_string()))?;
+        let status = match result.termination {
+            ProcessTermination::Exited(status) => external_process_exit_code(status),
+            ProcessTermination::Cancelled => 130,
+        };
+        statuses.push(status);
+        if let Some(stderr) = result.stderr {
+            ctx.write_stderr(&stderr);
+        }
+        if index + 1 == nodes.len()
+            && let Some(stdout) = result.stdout
+        {
+            final_stdout = stdout;
+        }
+    }
+
+    ctx.write_stdout(&final_stdout);
+    let status = if ctx.options().pipefail {
+        statuses
+            .into_iter()
+            .rev()
+            .find(|status| *status != 0)
+            .unwrap_or(0)
+    } else {
+        statuses.last().copied().unwrap_or(0)
+    };
+    ctx.set_last_exit(status);
+    Ok(Some(status))
+}
+
+fn resolve_pipeline_program(raw_name: &str, ctx: &ExecutionContext) -> Option<PathBuf> {
+    let requested = Path::new(raw_name);
+    if requested.is_absolute() {
+        return crate::runtime::builtins::command::is_executable_candidate(requested)
+            .then(|| requested.to_path_buf());
+    }
+    if raw_name.contains('/') || (cfg!(windows) && raw_name.contains('\\')) {
+        let path = ctx.cwd().join(requested);
+        return crate::runtime::builtins::command::is_executable_candidate(&path).then_some(path);
+    }
+    let Some(path_var) = ctx.get_var("PATH") else {
+        let path = ctx.cwd().join(requested);
+        return crate::runtime::builtins::command::is_executable_candidate(&path).then_some(path);
+    };
+    std::env::split_paths(&path_var)
+        .map(|directory| {
+            if directory.is_absolute() {
+                directory.join(raw_name)
+            } else {
+                ctx.cwd().join(directory).join(raw_name)
+            }
+        })
+        .find(|path| crate::runtime::builtins::command::is_executable_candidate(path))
+}
+
+async fn execute_isolated_plan_node(
+    node: &PlanNode,
+    ctx: &mut ExecutionContext,
+) -> Result<i32, ExecError> {
+    ctx.enter_exec();
+    let result = execute_plan_node(node, ctx).await;
+    ctx.leave_exec();
+    execute_exit_trap(ctx).await;
+    result
+}
+
+async fn execute_isolated_stage(
+    stage: &ExecutionStage,
+    ctx: &mut ExecutionContext,
+) -> Result<i32, ExecError> {
+    ctx.enter_exec();
+    let result = stage.execute(ctx).await;
+    ctx.leave_exec();
+    execute_exit_trap(ctx).await;
+    result
+}
+
 async fn execute_compound_pipeline(
     stages: &[ExecutionStage],
     ctx: &mut ExecutionContext,
@@ -842,6 +1715,12 @@ async fn execute_compound_pipeline(
         return stages[0].execute(ctx).await;
     }
 
+    if let Some(nodes) = simple_builtin_consumer_pipeline(stages)
+        && let Some(status) = execute_external_pipeline_to_builtin_consumer(&nodes, ctx).await?
+    {
+        return Ok(status);
+    }
+
     let mut current_input = ctx.take_stdin();
     let mut statuses = Vec::with_capacity(stages.len());
     for (index, stage) in stages.iter().enumerate() {
@@ -851,7 +1730,7 @@ async fn execute_compound_pipeline(
             step_ctx.set_stdin(input);
         }
         step_ctx.enable_capture();
-        let status = stage.execute(&mut step_ctx).await?;
+        let status = execute_isolated_stage(stage, &mut step_ctx).await?;
         statuses.push(status);
 
         if is_last {
@@ -876,8 +1755,42 @@ async fn execute_compound_pipeline(
         }
 
         current_input = step_ctx.get_captured_stdout_bytes();
+        if let Some(stderr) = step_ctx.get_captured_stderr_bytes() {
+            ctx.write_stderr(&stderr);
+        }
     }
     Ok(0)
+}
+
+fn simple_builtin_consumer_pipeline(stages: &[ExecutionStage]) -> Option<Vec<PlanNode>> {
+    let (consumer_stage, upstream_stages) = stages.split_last()?;
+    let consumer_node = single_simple_pipeline_node(consumer_stage)?;
+    if !matches!(consumer_node.target, CommandTarget::Builtin(_)) {
+        return None;
+    }
+
+    let mut nodes = Vec::new();
+    for stage in upstream_stages {
+        let ExecutionStage::Pipeline(stage_nodes) = stage else {
+            return None;
+        };
+        nodes.extend(stage_nodes.iter().cloned());
+    }
+    if nodes.is_empty() {
+        return None;
+    }
+    nodes.push(consumer_node.clone());
+    Some(nodes)
+}
+
+fn single_simple_pipeline_node(stage: &ExecutionStage) -> Option<&PlanNode> {
+    match stage {
+        ExecutionStage::Pipeline(nodes) if nodes.len() == 1 => nodes.first(),
+        ExecutionStage::Block(stages) if stages.len() == 1 => {
+            single_simple_pipeline_node(&stages[0])
+        }
+        _ => None,
+    }
 }
 
 fn expand_for_array(word: &PlanWord, ctx: &ExecutionContext) -> Option<Vec<String>> {
@@ -898,10 +1811,59 @@ fn expand_for_array(word: &PlanWord, ctx: &ExecutionContext) -> Option<Vec<Strin
         _ => return None,
     };
     let name = expression.strip_suffix("[@]")?;
-    ctx.get_shell_val(name).map(|value| match value {
-        crate::runtime::context::ShellValue::Array(items) => items.clone(),
-        _ => vec![value.get_subscript("@").unwrap_or_default()],
-    })
+    if let Some(name) = name.strip_prefix('!') {
+        if !is_valid_var_ident(name) {
+            return None;
+        }
+        return Some(
+            ctx.get_shell_val(name)
+                .map(|value| value.get_keys())
+                .unwrap_or_default(),
+        );
+    }
+    if !is_valid_var_ident(name) {
+        return None;
+    }
+    Some(
+        ctx.get_shell_val(name)
+            .map(|value| value.get_values())
+            .unwrap_or_default(),
+    )
+}
+
+#[derive(Clone, Copy)]
+enum ParameterPatternRemoval {
+    Prefix { longest: bool },
+    Suffix { longest: bool },
+}
+
+fn parse_parameter_pattern_removal(expression: &str) -> Option<(ParameterPatternRemoval, &str)> {
+    for (operator, removal) in [
+        ("##", ParameterPatternRemoval::Prefix { longest: true }),
+        ("#", ParameterPatternRemoval::Prefix { longest: false }),
+        ("%%", ParameterPatternRemoval::Suffix { longest: true }),
+        ("%", ParameterPatternRemoval::Suffix { longest: false }),
+    ] {
+        if let Some(pattern) = expression.strip_prefix(operator) {
+            return Some((removal, pattern));
+        }
+    }
+    None
+}
+
+fn apply_parameter_pattern_removal(
+    value: &str,
+    pattern: &str,
+    removal: ParameterPatternRemoval,
+) -> String {
+    match removal {
+        ParameterPatternRemoval::Prefix { longest } => {
+            strip_prefix_pattern(value, pattern, longest)
+        }
+        ParameterPatternRemoval::Suffix { longest } => {
+            strip_suffix_pattern(value, pattern, longest)
+        }
+    }
 }
 
 async fn expand_word_as_items(
@@ -926,6 +1888,42 @@ async fn expand_word_as_items(
         _ => return Ok(None),
     };
 
+    if let Some((name, subscript_and_modifier)) = expression.split_once('[')
+        && is_valid_var_ident(name)
+        && let Some((subscript, modifier)) = subscript_and_modifier.split_once(']')
+        && subscript == "@"
+        && let Some((removal, pattern_expression)) = parse_parameter_pattern_removal(modifier)
+    {
+        let Some(values) = ctx.get_shell_val(name).map(|value| value.get_values()) else {
+            if ctx.options().nounset {
+                return Err(ExecError::Custom(format!("{}: unbound variable", name)));
+            }
+            return Ok(Some(Vec::new()));
+        };
+        let pattern = expand_parameter_pattern(pattern_expression, ctx).await?;
+        return Ok(Some(
+            values
+                .iter()
+                .map(|element| apply_parameter_pattern_removal(element, &pattern, removal))
+                .collect(),
+        ));
+    }
+
+    if let Some((name, subscript_and_modifier)) = expression.split_once('[')
+        && is_valid_var_ident(name)
+        && let Some((subscript, modifier)) = subscript_and_modifier.split_once(']')
+        && subscript == "@"
+        && let Some(slice_spec) = modifier.strip_prefix(':')
+    {
+        let Some(value) = ctx.get_shell_val(name) else {
+            if ctx.options().nounset {
+                return Err(ExecError::Custom(format!("{}: unbound variable", name)));
+            }
+            return Ok(Some(Vec::new()));
+        };
+        return Ok(Some(slice_parameter_array_items(value, slice_spec)?));
+    }
+
     let (operator, operand) = if let Some(operand) = expression.strip_prefix("@:-") {
         (":-", operand)
     } else if let Some(operand) = expression.strip_prefix("@-") {
@@ -935,6 +1933,18 @@ async fn expand_word_as_items(
     } else if let Some(operand) = expression.strip_prefix("@+") {
         ("+", operand)
     } else {
+        if let Some(pattern_expression) = expression.strip_prefix('@')
+            && let Some((removal, pattern_expression)) =
+                parse_parameter_pattern_removal(pattern_expression)
+        {
+            let pattern = expand_parameter_pattern(pattern_expression, ctx).await?;
+            return Ok(Some(
+                ctx.positional_args()
+                    .iter()
+                    .map(|value| apply_parameter_pattern_removal(value, &pattern, removal))
+                    .collect(),
+            ));
+        }
         return Ok(None);
     };
 
@@ -997,7 +2007,7 @@ async fn execute_plan_node(node: &PlanNode, ctx: &mut ExecutionContext) -> Resul
     });
     let previous_cwd = scope_assignments.then(|| ctx.cwd().to_path_buf());
     if scope_assignments {
-        ctx.push_scope();
+        ctx.push_command_assignment_scope();
     }
     let previous_stdin = if scope_stdin { ctx.take_stdin() } else { None };
     let result = execute_plan_node_inner(node, ctx).await;
@@ -1028,6 +2038,19 @@ async fn execute_plan_node_inner(
     node: &PlanNode,
     ctx: &mut ExecutionContext,
 ) -> Result<i32, ExecError> {
+    let (command_name, target) = match &node.target {
+        CommandTarget::Dynamic(command_word) => {
+            // The command word expands before prefix assignments become visible.
+            let command_name = expand_word(command_word, ctx).await?;
+            let target = resolve_builtin(&command_name)
+                .map(CommandTarget::Builtin)
+                .unwrap_or_else(|| {
+                    CommandTarget::External(std::path::PathBuf::from(&command_name))
+                });
+            (command_name, target)
+        }
+        _ => (node.raw_name.clone(), node.target.clone()),
+    };
     let substitution_count_before_assignments =
         (node.raw_name == "=").then(|| ctx.command_substitution_count());
 
@@ -1041,7 +2064,8 @@ async fn execute_plan_node_inner(
             for v in array_vals {
                 items.push(expand_word(v, ctx).await?);
             }
-            let value = crate::runtime::context::ShellValue::Array(items);
+            let value =
+                crate::runtime::context::ShellValue::Array(items.into_iter().enumerate().collect());
             if node.raw_name == "=" {
                 ctx.set_scoped_val(&asgn.name, value);
             } else {
@@ -1054,15 +2078,19 @@ async fn execute_plan_node_inner(
             } else {
                 String::new()
             };
-            if let Ok(num_idx) = sub.parse::<usize>() {
+            let is_map = matches!(
+                ctx.get_shell_val(&asgn.name),
+                Some(crate::runtime::context::ShellValue::Map(_))
+            );
+            if !is_map && let Ok(num_idx) = sub.parse::<usize>() {
                 if node.raw_name == "=" {
                     ctx.set_array_elem(&asgn.name, num_idx, val);
                 } else {
-                    let mut items = vec![String::new(); num_idx.saturating_add(1)];
-                    items[num_idx] = val;
                     ctx.set_local_val(
                         &asgn.name,
-                        crate::runtime::context::ShellValue::Array(items),
+                        crate::runtime::context::ShellValue::Array(
+                            std::collections::BTreeMap::from([(num_idx, val)]),
+                        ),
                     );
                 }
             } else {
@@ -1110,17 +2138,48 @@ async fn execute_plan_node_inner(
     for (index, redir) in node.redirections.iter().enumerate() {
         if redir.op == RedirectionOp::RedirectIn {
             let target_path = expand_word(&redir.target, ctx).await?;
-            let target = StreamTarget::from_redirection(redir.op, &target_path, ctx.cwd())?;
+            let target = match StreamTarget::from_redirection(redir.op, &target_path, ctx.cwd()) {
+                Ok(target) => target,
+                Err(error) => {
+                    let (_, stderr_destination) = output_destinations(
+                        &node.redirections[..index],
+                        &expanded_output_targets[..index],
+                    );
+                    return redirection_failure(
+                        error,
+                        &command_name,
+                        node.span.line,
+                        &stderr_destination,
+                        ctx,
+                    )
+                    .await;
+                }
+            };
             match target {
                 StreamTarget::Null => ctx.set_stdin(Vec::new()),
                 StreamTarget::File { path, .. } => {
-                    let content = fs::read(&path).map_err(|e| {
-                        ExecError::NotFound(format!(
-                            "Cannot open input file '{}': {}",
-                            path.display(),
-                            e
-                        ))
-                    })?;
+                    let content = match fs::read(&path) {
+                        Ok(content) => content,
+                        Err(error) => {
+                            let error = ExecError::NotFound(format!(
+                                "Cannot open input file '{}': {}",
+                                path.display(),
+                                error
+                            ));
+                            let (_, stderr_destination) = output_destinations(
+                                &node.redirections[..index],
+                                &expanded_output_targets[..index],
+                            );
+                            return redirection_failure(
+                                error,
+                                &command_name,
+                                node.span.line,
+                                &stderr_destination,
+                                ctx,
+                            )
+                            .await;
+                        }
+                    };
                     ctx.set_stdin(content);
                 }
                 StreamTarget::Inherit | StreamTarget::Stderr | StreamTarget::Stdout => {}
@@ -1145,10 +2204,39 @@ async fn execute_plan_node_inner(
                 | RedirectionOp::RedirectAllAppend
         ) {
             let target_path = expand_word(&redir.target, ctx).await?;
-            let target = StreamTarget::from_redirection(redir.op, &target_path, ctx.cwd())?;
+            let target = match StreamTarget::from_redirection(redir.op, &target_path, ctx.cwd()) {
+                Ok(target) => target,
+                Err(error) => {
+                    let (_, stderr_destination) = output_destinations(
+                        &node.redirections[..index],
+                        &expanded_output_targets[..index],
+                    );
+                    return redirection_failure(
+                        error,
+                        &command_name,
+                        node.span.line,
+                        &stderr_destination,
+                        ctx,
+                    )
+                    .await;
+                }
+            };
             let noclobber = ctx.options().noclobber && redir.op == RedirectionOp::RedirectOut;
-            target.prepare_for_write(noclobber)?;
-            expanded_output_targets[index] = Some(target_path);
+            if let Err(error) = target.prepare_for_write(noclobber) {
+                let (_, stderr_destination) = output_destinations(
+                    &node.redirections[..index],
+                    &expanded_output_targets[..index],
+                );
+                return redirection_failure(
+                    error,
+                    &command_name,
+                    node.span.line,
+                    &stderr_destination,
+                    ctx,
+                )
+                .await;
+            }
+            expanded_output_targets[index] = Some(target);
         }
     }
 
@@ -1171,9 +2259,9 @@ async fn execute_plan_node_inner(
 
     if ctx.options().xtrace {
         let trace = if expanded_args.is_empty() {
-            format!("+ {}\n", node.raw_name)
+            format!("+ {}\n", command_name)
         } else {
-            format!("+ {} {}\n", node.raw_name, expanded_args.join(" "))
+            format!("+ {} {}\n", command_name, expanded_args.join(" "))
         };
         ctx.write_stderr(trace.as_bytes());
     }
@@ -1186,76 +2274,37 @@ async fn execute_plan_node_inner(
             && r.op != RedirectionOp::RedirectHereDocStrip
     });
 
+    let (stdout_destination, stderr_destination) =
+        output_destinations(&node.redirections, &expanded_output_targets);
+    let previous_external_outputs = if has_output_redirs {
+        Some(
+            ctx.replace_external_file_outputs(distinct_file_destinations(
+                &stdout_destination,
+                &stderr_destination,
+            )),
+        )
+    } else {
+        None
+    };
     let (result, captured_out, captured_err) = if has_output_redirs {
-        let previous_capture = ctx.begin_redirect_capture();
-        let res = dispatch_node_target(&node.target, &node.raw_name, &expanded_args, ctx).await;
+        let previous_capture = ctx.begin_redirect_capture(stdout_destination == stderr_destination);
+        let res = dispatch_node_target(&target, &command_name, &expanded_args, ctx).await;
         let (out, err) = ctx.finish_redirect_capture(previous_capture);
         (res, Some(out), Some(err))
     } else {
-        let res = dispatch_node_target(&node.target, &node.raw_name, &expanded_args, ctx).await;
+        let res = dispatch_node_target(&target, &command_name, &expanded_args, ctx).await;
         (res, None, None)
     };
+    if let Some(previous) = previous_external_outputs {
+        ctx.replace_external_file_outputs(previous);
+    }
 
     // 4. Apply output redirections
     if has_output_redirs {
         let out_bytes = captured_out.unwrap_or_default();
         let err_bytes = captured_err.unwrap_or_default();
-        let mut stdout_destination = OutputDestination::ContextStdout;
-        let mut stderr_destination = OutputDestination::ContextStderr;
-
-        for (index, redir) in node.redirections.iter().enumerate() {
-            if matches!(
-                redir.op,
-                RedirectionOp::RedirectIn
-                    | RedirectionOp::RedirectHereString
-                    | RedirectionOp::RedirectHereDoc
-                    | RedirectionOp::RedirectHereDocStrip
-            ) {
-                continue;
-            }
-            if matches!(
-                redir.op,
-                RedirectionOp::RedirectStderrToStdout | RedirectionOp::RedirectStdoutToStderr
-            ) {
-                match redir.op {
-                    RedirectionOp::RedirectStderrToStdout => {
-                        stderr_destination = stdout_destination.clone();
-                    }
-                    RedirectionOp::RedirectStdoutToStderr => {
-                        stdout_destination = stderr_destination.clone();
-                    }
-                    _ => unreachable!(),
-                }
-                continue;
-            }
-
-            let target_path = expanded_output_targets[index]
-                .as_deref()
-                .expect("output redirection target was expanded before dispatch");
-            let target = StreamTarget::from_redirection(redir.op, target_path, ctx.cwd())?;
-
-            match redir.op {
-                RedirectionOp::RedirectOut
-                | RedirectionOp::RedirectClobber
-                | RedirectionOp::RedirectAppend => {
-                    stdout_destination = destination_from_target(target);
-                }
-                RedirectionOp::RedirectStderr | RedirectionOp::RedirectStderrAppend => {
-                    stderr_destination = destination_from_target(target);
-                }
-                RedirectionOp::RedirectAll | RedirectionOp::RedirectAllAppend => {
-                    let destination = destination_from_target(target);
-                    stdout_destination = destination.clone();
-                    stderr_destination = destination;
-                }
-                _ => {}
-            }
-        }
-
         if stdout_destination == stderr_destination {
-            let mut combined = out_bytes;
-            combined.extend_from_slice(&err_bytes);
-            write_to_destination(&stdout_destination, &combined, ctx)?;
+            write_to_destination(&stdout_destination, &out_bytes, ctx)?;
         } else {
             write_to_destination(&stdout_destination, &out_bytes, ctx)?;
             write_to_destination(&stderr_destination, &err_bytes, ctx)?;
@@ -1266,31 +2315,20 @@ async fn execute_plan_node_inner(
         Ok(code) => {
             ctx.set_last_exit(code);
             if code != 0 {
-                ctx.record_failure(&node.raw_name, node.span.line, code, None);
-                if !ctx.is_in_trap()
-                    && let Some(err_trap) = ctx.get_trap(TrapSignal::Err)
-                {
-                    ctx.set_in_trap(true);
-                    ctx.push_scope();
-                    let _ = err_trap.execute(ctx).await;
-                    let _ = ctx.pop_scope();
-                    ctx.set_in_trap(false);
-                }
+                report_command_failure(ctx, &command_name, node.span.line, code, None).await;
             }
             Ok(code)
         }
         Err(e) => {
             let code = e.exit_code();
-            ctx.record_failure(&node.raw_name, node.span.line, code, Some(e.to_string()));
-            if !ctx.is_in_trap()
-                && let Some(err_trap) = ctx.get_trap(TrapSignal::Err)
-            {
-                ctx.set_in_trap(true);
-                ctx.push_scope();
-                let _ = err_trap.execute(ctx).await;
-                let _ = ctx.pop_scope();
-                ctx.set_in_trap(false);
-            }
+            report_command_failure(
+                ctx,
+                &command_name,
+                node.span.line,
+                code,
+                Some(e.to_string()),
+            )
+            .await;
             Err(e)
         }
     }
@@ -1344,6 +2382,8 @@ async fn dispatch_node_target(
         }
 
         CommandTarget::External(_) => execute_external_command(raw_name, args, ctx).await,
+
+        CommandTarget::Dynamic(_) => execute_external_command(raw_name, args, ctx).await,
     }
 }
 
@@ -1361,6 +2401,11 @@ pub(crate) async fn execute_external_command_with_path(
     ctx: &mut ExecutionContext,
     path_override: Option<&str>,
 ) -> Result<i32, ExecError> {
+    if raw_name.is_empty() {
+        ctx.write_stderr(b"esh: : command not found\n");
+        return Ok(127);
+    }
+
     let requested_path = std::path::PathBuf::from(raw_name);
     let bin_path = if requested_path.is_absolute() {
         requested_path
@@ -1374,6 +2419,7 @@ pub(crate) async fn execute_external_command_with_path(
         && !(cfg!(windows) && raw_name.contains('\\'))
         && let Some(path_var) = path_value.as_deref()
     {
+        let mut non_executable = None;
         std::env::split_paths(path_var)
             .map(|dir| {
                 if dir.is_absolute() {
@@ -1382,10 +2428,23 @@ pub(crate) async fn execute_external_command_with_path(
                     ctx.cwd().join(dir).join(raw_name)
                 }
             })
-            .find(|candidate| crate::runtime::builtins::command::is_executable_candidate(candidate))
-            .unwrap_or(bin_path)
+            .find(|candidate| {
+                if crate::runtime::builtins::command::is_executable_candidate(candidate) {
+                    true
+                } else {
+                    if non_executable.is_none() && candidate.exists() {
+                        non_executable = Some(candidate.clone());
+                    }
+                    false
+                }
+            })
+            .or(non_executable)
     } else {
-        bin_path
+        Some(bin_path)
+    };
+    let Some(resolved_bin) = resolved_bin else {
+        ctx.write_stderr(format!("esh: {raw_name}: command not found\n").as_bytes());
+        return Ok(127);
     };
     let input_data = ctx.take_stdin();
     let stdin_is_piped = input_data.is_some();
@@ -1395,6 +2454,7 @@ pub(crate) async fn execute_external_command_with_path(
     } else {
         ProcessMode::InteractiveForeground
     };
+    let resolved_bin_exists = resolved_bin.exists();
     let mut spec = ProcessSpec::new(resolved_bin, ctx.cwd(), mode)
         .args(args.iter().map(String::as_str))
         .environment(EnvironmentPolicy::InheritAndOverride, ctx.env_vars());
@@ -1403,22 +2463,58 @@ pub(crate) async fn execute_external_command_with_path(
         None if capture => StdinPolicy::Null,
         None => StdinPolicy::Inherit,
     };
-    spec.stdout = if capture {
-        OutputPolicy::Capture
+    if let Some(((stdout_path, stdout_append), (stderr_path, stderr_append))) =
+        ctx.external_file_outputs()
+    {
+        spec.stdout = OutputPolicy::File {
+            path: stdout_path,
+            append: stdout_append,
+        };
+        spec.stderr = OutputPolicy::File {
+            path: stderr_path,
+            append: stderr_append,
+        };
     } else {
-        OutputPolicy::Inherit
-    };
-    spec.stderr = if capture {
-        OutputPolicy::Capture
-    } else {
-        OutputPolicy::Inherit
-    };
+        spec.stdout = if capture {
+            OutputPolicy::Capture
+        } else {
+            OutputPolicy::Inherit
+        };
+        spec.stderr = if capture && ctx.redirect_capture_merges_streams() {
+            OutputPolicy::MergeToStdout
+        } else if capture {
+            OutputPolicy::Capture
+        } else {
+            OutputPolicy::Inherit
+        };
+    }
 
-    let result = ProcessHandle::spawn(spec, None)
-        .map_err(|error| ExecError::IoError(error.to_string()))?
+    let handle = match ProcessHandle::spawn(spec, None) {
+        Ok(handle) => handle,
+        Err(ProcessError::Spawn { source, .. }) => {
+            let status = match source.kind() {
+                std::io::ErrorKind::NotFound if !resolved_bin_exists => 127,
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => 126,
+                _ => return Err(ExecError::IoError(source.to_string())),
+            };
+            let diagnostic = if status == 127 {
+                format!("esh: {raw_name}: command not found\n")
+            } else {
+                format!("esh: {raw_name}: permission denied\n")
+            };
+            ctx.write_stderr(diagnostic.as_bytes());
+            return Ok(status);
+        }
+        Err(error) => return Err(ExecError::IoError(error.to_string())),
+    };
+    let result = handle
         .wait(ctx.token().clone())
         .await
         .map_err(|error| ExecError::IoError(error.to_string()))?;
+
+    if mode == ProcessMode::InteractiveForeground && result.was_interrupted {
+        ctx.cancel();
+    }
 
     if let Some(stdout) = result.stdout {
         ctx.write_stdout(&stdout);
@@ -1428,7 +2524,7 @@ pub(crate) async fn execute_external_command_with_path(
     }
 
     Ok(match result.termination {
-        ProcessTermination::Exited(status) => status.code().unwrap_or(1),
+        ProcessTermination::Exited(status) => external_process_exit_code(status),
         ProcessTermination::Cancelled => 130,
     })
 }
@@ -1900,32 +2996,163 @@ async fn expand_parameter_expr_mode(
         return Ok(val.chars().count().to_string());
     }
 
+    // Pattern removal on positional parameters is unspecified by POSIX. ESH
+    // follows the useful per-parameter behavior also used by Bash: `@` keeps
+    // a list when expanded as a standalone word, while `*` joins the removed
+    // values with ESH's literal-space separator.
+    for parameter in ["@", "*"] {
+        if let Some(pattern_expression) = expr.strip_prefix(parameter)
+            && let Some((removal, pattern_expression)) =
+                parse_parameter_pattern_removal(pattern_expression)
+        {
+            let pattern = expand_parameter_pattern(pattern_expression, ctx).await?;
+            let values = ctx
+                .positional_args()
+                .iter()
+                .map(|value| apply_parameter_pattern_removal(value, &pattern, removal))
+                .collect::<Vec<_>>();
+            return Ok(values.join(" "));
+        }
+    }
+
     // 1.5 Subscript Access: ${VAR[sub]} or ${VAR[sub]:-default} or ${VAR[sub]##pattern}
     if let Some((var_name, sub_part)) = expr.split_once('[')
         && is_valid_var_ident(var_name)
         && let Some((sub_spec, modifier)) = sub_part.split_once(']')
     {
-        let resolved_sub = if sub_spec.contains('$') {
-            Box::pin(expand_double_quoted(sub_spec, ctx)).await?
-        } else {
-            sub_spec.to_string()
-        };
+        let resolved_sub =
+            Box::pin(expand_parameter_operand(sub_spec, ctx, in_double_quotes)).await?;
         let sub_clean = resolved_sub.as_str();
-        let val_str = if let Some(val) = ctx.get_shell_val(var_name) {
-            val.get_subscript(sub_clean).unwrap_or_default()
+        let current_value = if let Some(val) = ctx.get_shell_val(var_name) {
+            val.get_subscript(sub_clean)
         } else {
-            String::new()
+            None
         };
+        let val_str = current_value.clone().unwrap_or_default();
 
         if modifier.is_empty() {
+            if matches!(sub_clean, "@" | "*") && ctx.get_shell_val(var_name).is_none() {
+                return Ok(String::new());
+            }
+            if current_value.is_none() && ctx.options().nounset {
+                return Err(ExecError::Custom(format!("{}: unbound variable", var_name)));
+            }
             return Ok(val_str);
         }
 
-        if let Some((_, default_val)) = modifier.split_once(":-") {
-            if !val_str.is_empty() {
+        if let Some(default_val) = modifier.strip_prefix(":-") {
+            if current_value
+                .as_ref()
+                .is_some_and(|value| !value.is_empty())
+            {
                 return Ok(val_str);
             }
             return Box::pin(expand_parameter_operand(default_val, ctx, in_double_quotes)).await;
+        }
+        if let Some(default_val) = modifier.strip_prefix('-') {
+            if let Some(value) = current_value {
+                return Ok(value);
+            }
+            return Box::pin(expand_parameter_operand(default_val, ctx, in_double_quotes)).await;
+        }
+        if let Some(default_val) = modifier.strip_prefix(":=") {
+            if current_value
+                .as_ref()
+                .is_some_and(|value| !value.is_empty())
+            {
+                return Ok(val_str);
+            }
+            let value =
+                Box::pin(expand_parameter_operand(default_val, ctx, in_double_quotes)).await?;
+            set_parameter_subscript(ctx, var_name, sub_clean, value.clone());
+            return Ok(value);
+        }
+        if let Some(default_val) = modifier.strip_prefix('=') {
+            if let Some(value) = current_value {
+                return Ok(value);
+            }
+            let value =
+                Box::pin(expand_parameter_operand(default_val, ctx, in_double_quotes)).await?;
+            set_parameter_subscript(ctx, var_name, sub_clean, value.clone());
+            return Ok(value);
+        }
+        if let Some(message) = modifier.strip_prefix(":?") {
+            if current_value
+                .as_ref()
+                .is_some_and(|value| !value.is_empty())
+            {
+                return Ok(val_str);
+            }
+            let parameter = format!("{}[{}]", var_name, sub_clean);
+            let message = if message.is_empty() {
+                format!("parameter '{}' is null or unset", parameter)
+            } else {
+                Box::pin(expand_parameter_operand(message, ctx, in_double_quotes)).await?
+            };
+            return Err(ExecError::Custom(message));
+        }
+        if let Some(message) = modifier.strip_prefix('?') {
+            if let Some(value) = current_value {
+                return Ok(value);
+            }
+            let parameter = format!("{}[{}]", var_name, sub_clean);
+            let message = if message.is_empty() {
+                format!("parameter '{}' is unset", parameter)
+            } else {
+                Box::pin(expand_parameter_operand(message, ctx, in_double_quotes)).await?
+            };
+            return Err(ExecError::Custom(message));
+        }
+        if let Some(alternate) = modifier.strip_prefix(":+") {
+            if current_value
+                .as_ref()
+                .is_some_and(|value| !value.is_empty())
+            {
+                return Box::pin(expand_parameter_operand(alternate, ctx, in_double_quotes)).await;
+            }
+            return Ok(String::new());
+        }
+        if let Some(alternate) = modifier.strip_prefix('+') {
+            if current_value.is_some() {
+                return Box::pin(expand_parameter_operand(alternate, ctx, in_double_quotes)).await;
+            }
+            return Ok(String::new());
+        }
+        if (modifier.starts_with('#') || modifier.starts_with('%') || modifier.starts_with(':'))
+            && current_value.is_none()
+            && ctx.options().nounset
+        {
+            return Err(ExecError::Custom(format!(
+                "{}[{}]: unbound variable",
+                var_name, sub_clean
+            )));
+        }
+        if matches!(sub_clean, "@" | "*")
+            && let Some((removal, pattern_expression)) = parse_parameter_pattern_removal(modifier)
+        {
+            let Some(values) = ctx.get_shell_val(var_name).map(|value| value.get_values()) else {
+                if ctx.options().nounset {
+                    return Err(ExecError::Custom(format!(
+                        "{}[{}]: unbound variable",
+                        var_name, sub_clean
+                    )));
+                }
+                return Ok(String::new());
+            };
+            let pattern = expand_parameter_pattern(pattern_expression, ctx).await?;
+            return Ok(values
+                .iter()
+                .map(|value| apply_parameter_pattern_removal(value, &pattern, removal))
+                .collect::<Vec<_>>()
+                .join(" "));
+        }
+        if matches!(sub_clean, "@" | "*")
+            && let Some(slice_spec) = modifier.strip_prefix(':')
+        {
+            let Some(value) = ctx.get_shell_val(var_name) else {
+                return Ok(String::new());
+            };
+            return Ok(slice_parameter_array_items(value, slice_spec)?.join(" "));
         }
         if let Some(pattern) = modifier.strip_prefix("##") {
             let pattern = expand_parameter_pattern(pattern, ctx).await?;
@@ -1944,23 +3171,31 @@ async fn expand_parameter_expr_mode(
             return Ok(strip_suffix_pattern(&val_str, &pattern, false));
         }
         if let Some(slice_spec) = modifier.strip_prefix(':') {
-            let parts: Vec<&str> = slice_spec.split(':').collect();
-            if let Ok(offset) = parts[0].parse::<usize>() {
-                let chars: Vec<char> = val_str.chars().collect();
-                if offset < chars.len() {
-                    if parts.len() > 1
-                        && let Ok(len) = parts[1].parse::<usize>()
-                    {
-                        let end = offset.saturating_add(len).min(chars.len());
-                        return Ok(chars[offset..end].iter().collect());
-                    }
-                    return Ok(chars[offset..].iter().collect());
-                } else {
-                    return Ok(String::new());
-                }
-            }
+            return slice_parameter_value(&val_str, slice_spec);
         }
         return Ok(val_str);
+    }
+
+    // Recognize replacement before default operators because its pattern and
+    // replacement operands may themselves contain nested parameter operators.
+    if let Some((var_name, rest, replace_all)) = parse_parameter_replacement_expression(expr) {
+        let val = get_parameter_for_modifier(ctx, var_name)?;
+        let (pattern, replacement) = split_parameter_replacement(rest);
+        let pattern = Box::pin(expand_parameter_operand(&pattern, ctx, in_double_quotes)).await?;
+        let replacement = Box::pin(expand_parameter_operand(
+            &replacement,
+            ctx,
+            in_double_quotes,
+        ))
+        .await?;
+        if pattern.is_empty() {
+            return Ok(val);
+        }
+        return Ok(if replace_all {
+            val.replace(&pattern, &replacement)
+        } else {
+            val.replacen(&pattern, &replacement, 1)
+        });
     }
 
     // Pattern-removal operators must be recognized before default operators:
@@ -1969,28 +3204,28 @@ async fn expand_parameter_expr_mode(
     if let Some((var_name, pattern)) = expr.split_once("##")
         && is_valid_var_ident(var_name)
     {
-        let val = ctx.get_var(var_name).unwrap_or_default();
+        let val = get_parameter_for_modifier(ctx, var_name)?;
         let pattern = expand_parameter_pattern(pattern, ctx).await?;
         return Ok(strip_prefix_pattern(&val, &pattern, true));
     }
     if let Some((var_name, pattern)) = expr.split_once('#')
         && is_valid_var_ident(var_name)
     {
-        let val = ctx.get_var(var_name).unwrap_or_default();
+        let val = get_parameter_for_modifier(ctx, var_name)?;
         let pattern = expand_parameter_pattern(pattern, ctx).await?;
         return Ok(strip_prefix_pattern(&val, &pattern, false));
     }
     if let Some((var_name, pattern)) = expr.split_once("%%")
         && is_valid_var_ident(var_name)
     {
-        let val = ctx.get_var(var_name).unwrap_or_default();
+        let val = get_parameter_for_modifier(ctx, var_name)?;
         let pattern = expand_parameter_pattern(pattern, ctx).await?;
         return Ok(strip_suffix_pattern(&val, &pattern, true));
     }
     if let Some((var_name, pattern)) = expr.split_once('%')
         && is_valid_var_ident(var_name)
     {
-        let val = ctx.get_var(var_name).unwrap_or_default();
+        let val = get_parameter_for_modifier(ctx, var_name)?;
         let pattern = expand_parameter_pattern(pattern, ctx).await?;
         return Ok(strip_suffix_pattern(&val, &pattern, false));
     }
@@ -2101,53 +3336,217 @@ async fn expand_parameter_expr_mode(
     if let Some((var_name, slice_spec)) = expr.split_once(':')
         && is_valid_var_ident(var_name)
     {
-        let val = ctx.get_var(var_name).unwrap_or_default();
-        let parts: Vec<&str> = slice_spec.split(':').collect();
-        if let Ok(offset) = parts[0].parse::<usize>() {
-            let chars: Vec<char> = val.chars().collect();
-            if offset < chars.len() {
-                if parts.len() > 1
-                    && let Ok(len) = parts[1].parse::<usize>()
-                {
-                    let end = offset.saturating_add(len).min(chars.len());
-                    return Ok(chars[offset..end].iter().collect());
-                }
-                return Ok(chars[offset..].iter().collect());
-            } else {
-                return Ok(String::new());
-            }
-        }
-    }
-
-    // 7. Search and replace: ${VAR//pat/rep} or ${VAR/pat/rep}
-    if let Some((var_name, rest)) = expr.split_once("//")
-        && is_valid_var_ident(var_name)
-    {
-        let (pattern, replacement) = rest.split_once('/').unwrap_or((rest, ""));
-        let val = ctx.get_var(var_name).unwrap_or_default();
-        return Ok(val.replace(pattern, replacement));
-    }
-    if let Some((var_name, rest)) = expr.split_once('/')
-        && is_valid_var_ident(var_name)
-    {
-        let (pattern, replacement) = rest.split_once('/').unwrap_or((rest, ""));
-        let val = ctx.get_var(var_name).unwrap_or_default();
-        return Ok(val.replacen(pattern, replacement, 1));
+        let val = get_parameter_for_modifier(ctx, var_name)?;
+        return slice_parameter_value(&val, slice_spec);
     }
 
     // 10. Simple variable lookup
     if let Some(val) = ctx.get_var(expr) {
         Ok(val)
-    } else if ctx.options().nounset
-        && !matches!(
-            expr,
-            "?" | "@" | "*" | "#" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
-        )
-    {
+    } else if ctx.options().nounset {
         Err(ExecError::Custom(format!("{}: unbound variable", expr)))
     } else {
         Ok(String::new())
     }
+}
+
+fn set_parameter_subscript(ctx: &mut ExecutionContext, name: &str, subscript: &str, value: String) {
+    let is_map = matches!(
+        ctx.get_shell_val(name),
+        Some(crate::runtime::context::ShellValue::Map(_))
+    );
+    if !is_map && let Ok(index) = subscript.parse::<usize>() {
+        ctx.set_array_elem(name, index, value);
+    } else {
+        ctx.set_map_elem(name, subscript.to_string(), value);
+    }
+}
+
+fn parse_parameter_replacement_expression(expr: &str) -> Option<(&str, &str, bool)> {
+    let name_end = expr
+        .char_indices()
+        .find_map(|(index, ch)| (!ch.is_ascii_alphanumeric() && ch != '_').then_some(index))
+        .unwrap_or(expr.len());
+    let name = &expr[..name_end];
+    if !is_valid_var_ident(name) {
+        return None;
+    }
+
+    let modifier = &expr[name_end..];
+    if let Some(rest) = modifier.strip_prefix("//") {
+        Some((name, rest, true))
+    } else {
+        modifier.strip_prefix('/').map(|rest| (name, rest, false))
+    }
+}
+
+fn split_parameter_replacement(rest: &str) -> (String, String) {
+    let mut pattern = String::new();
+    let mut replacement = String::new();
+    let mut in_replacement = false;
+    let mut chars = rest.chars().peekable();
+    let mut brace_depth = 0usize;
+    let mut paren_depth = 0usize;
+    let mut quote = None;
+    let mut in_backticks = false;
+
+    while let Some(ch) = chars.next() {
+        let output = if in_replacement {
+            &mut replacement
+        } else {
+            &mut pattern
+        };
+
+        if ch == '\\' {
+            if chars.peek() == Some(&'/') {
+                chars.next();
+                output.push('/');
+            } else {
+                output.push(ch);
+                if let Some(escaped) = chars.next() {
+                    output.push(escaped);
+                }
+            }
+            continue;
+        }
+
+        if in_backticks {
+            output.push(ch);
+            if ch == '`' {
+                in_backticks = false;
+            }
+            continue;
+        }
+
+        if let Some(active_quote) = quote {
+            output.push(ch);
+            if ch == active_quote {
+                quote = None;
+            } else if ch == '$' {
+                if chars.peek() == Some(&'{') {
+                    output.push(chars.next().expect("peeked opening brace"));
+                    brace_depth += 1;
+                } else if chars.peek() == Some(&'(') {
+                    output.push(chars.next().expect("peeked opening parenthesis"));
+                    paren_depth += 1;
+                }
+            } else if ch == '}' && brace_depth > 0 {
+                brace_depth -= 1;
+            }
+            continue;
+        }
+
+        if ch == '\'' || ch == '"' {
+            quote = Some(ch);
+            output.push(ch);
+        } else if ch == '`' {
+            in_backticks = true;
+            output.push(ch);
+        } else if ch == '$' && chars.peek() == Some(&'{') {
+            output.push(ch);
+            output.push(chars.next().expect("peeked opening brace"));
+            brace_depth += 1;
+        } else if ch == '$' && chars.peek() == Some(&'(') {
+            output.push(ch);
+            output.push(chars.next().expect("peeked opening parenthesis"));
+            paren_depth += 1;
+        } else if ch == '}' && brace_depth > 0 {
+            brace_depth -= 1;
+            output.push(ch);
+        } else if ch == '(' && paren_depth > 0 {
+            paren_depth += 1;
+            output.push(ch);
+        } else if ch == ')' && paren_depth > 0 {
+            paren_depth -= 1;
+            output.push(ch);
+        } else if ch == '/' && brace_depth == 0 && paren_depth == 0 {
+            if in_replacement {
+                output.push(ch);
+            } else {
+                in_replacement = true;
+            }
+        } else {
+            output.push(ch);
+        }
+    }
+
+    (pattern, replacement)
+}
+
+fn get_parameter_for_modifier(ctx: &ExecutionContext, name: &str) -> Result<String, ExecError> {
+    match ctx.get_var(name) {
+        Some(value) => Ok(value),
+        None if ctx.options().nounset => {
+            Err(ExecError::Custom(format!("{name}: unbound variable")))
+        }
+        None => Ok(String::new()),
+    }
+}
+
+fn slice_parameter_value(value: &str, slice_spec: &str) -> Result<String, ExecError> {
+    let (offset, length) = parse_slice_spec(slice_spec)?;
+    let chars = value.chars().collect::<Vec<_>>();
+    let start = offset.min(chars.len());
+    let end = length
+        .map(|length| start.saturating_add(length).min(chars.len()))
+        .unwrap_or(chars.len());
+    Ok(chars[start..end].iter().collect())
+}
+
+fn slice_parameter_array_items(
+    value: &crate::runtime::context::ShellValue,
+    slice_spec: &str,
+) -> Result<Vec<String>, ExecError> {
+    let (offset, length) = parse_slice_spec(slice_spec)?;
+    match value {
+        crate::runtime::context::ShellValue::String(value) => {
+            Ok(vec![slice_parameter_value(value, slice_spec)?])
+        }
+        crate::runtime::context::ShellValue::Array(array) => Ok(array
+            .range(offset..)
+            .map(|(_, value)| value.clone())
+            .take(length.unwrap_or(usize::MAX))
+            .collect()),
+        crate::runtime::context::ShellValue::Map(_) => Ok(value
+            .get_values()
+            .into_iter()
+            .skip(offset)
+            .take(length.unwrap_or(usize::MAX))
+            .collect()),
+    }
+}
+
+fn parse_slice_spec(slice_spec: &str) -> Result<(usize, Option<usize>), ExecError> {
+    let mut parts = slice_spec.split(':');
+    let offset = parts
+        .next()
+        .and_then(parse_saturating_decimal)
+        .ok_or_else(|| ExecError::Custom(format!("invalid slice offset: {slice_spec}")))?;
+    let length = parts
+        .next()
+        .map(|part| {
+            parse_saturating_decimal(part)
+                .ok_or_else(|| ExecError::Custom(format!("invalid slice length: {part}")))
+        })
+        .transpose()?;
+    if parts.next().is_some() {
+        return Err(ExecError::Custom(format!(
+            "invalid slice specification: {slice_spec}"
+        )));
+    }
+    Ok((offset, length))
+}
+
+fn parse_saturating_decimal(value: &str) -> Option<usize> {
+    if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+
+    Some(value.bytes().fold(0usize, |number, digit| {
+        number
+            .saturating_mul(10)
+            .saturating_add(usize::from(digit - b'0'))
+    }))
 }
 
 fn is_valid_var_ident(s: &str) -> bool {
@@ -2427,9 +3826,7 @@ async fn expand_double_quoted_mode(
             {
                 let name = &content[i..i + 1];
                 i += 1;
-                if let Some(val) = ctx.get_var(name) {
-                    res.push_str(&val);
-                }
+                res.push_str(&get_parameter_for_modifier(ctx, name)?);
                 continue;
             }
 
@@ -2444,28 +3841,7 @@ async fn expand_double_quoted_mode(
                 res.push('$');
             } else {
                 let name = &content[start..i];
-                if let Some(val) = ctx.get_var(name) {
-                    res.push_str(&val);
-                } else if ctx.options().nounset
-                    && !matches!(
-                        name,
-                        "?" | "@"
-                            | "*"
-                            | "#"
-                            | "0"
-                            | "1"
-                            | "2"
-                            | "3"
-                            | "4"
-                            | "5"
-                            | "6"
-                            | "7"
-                            | "8"
-                            | "9"
-                    )
-                {
-                    return Err(ExecError::Custom(format!("{}: unbound variable", name)));
-                }
+                res.push_str(&get_parameter_for_modifier(ctx, name)?);
             }
             continue;
         }
@@ -2586,7 +3962,7 @@ async fn expand_parameter_pattern(
                 || next.is_ascii_digit()
             {
                 chars.next();
-                ctx.get_var(&next.to_string()).unwrap_or_default()
+                get_parameter_for_modifier(ctx, &next.to_string())?
             } else if next == '_' || next.is_ascii_alphabetic() {
                 let mut name = String::new();
                 while chars
@@ -2595,7 +3971,7 @@ async fn expand_parameter_pattern(
                 {
                     name.push(chars.next().expect("peeked identifier character"));
                 }
-                ctx.get_var(&name).unwrap_or_default()
+                get_parameter_for_modifier(ctx, &name)?
             } else {
                 expanded.push('$');
                 continue;
@@ -2691,7 +4067,7 @@ impl ShellPatternToken {
                         "lower" => value.is_ascii_lowercase(),
                         "print" => value.is_ascii_graphic() || value == ' ',
                         "punct" => value.is_ascii_punctuation(),
-                        "space" => value.is_ascii_whitespace(),
+                        "space" => crate::runtime::char_class::is_posix_space(value),
                         "upper" => value.is_ascii_uppercase(),
                         "xdigit" => value.is_ascii_hexdigit(),
                         _ => false,

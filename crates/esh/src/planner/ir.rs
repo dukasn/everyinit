@@ -30,6 +30,7 @@ pub enum CommandTarget {
     Builtin(BuiltinFn),
     External(PathBuf),
     UserFunction { name: String, plan: ExecutionPlan },
+    Dynamic(PlanWord),
 }
 
 impl fmt::Debug for CommandTarget {
@@ -40,6 +41,7 @@ impl fmt::Debug for CommandTarget {
             CommandTarget::UserFunction { name, .. } => {
                 write!(f, "CommandTarget::UserFunction({})", name)
             }
+            CommandTarget::Dynamic(word) => write!(f, "CommandTarget::Dynamic({word:?})"),
         }
     }
 }
@@ -150,6 +152,12 @@ pub enum ExecutionStage {
 
     /// For loop: for var in words...; do ...; done
     ForLoop {
+        var: String,
+        words: Option<Vec<PlanWord>>,
+        body: Box<ExecutionStage>,
+    },
+
+    SelectLoop {
         var: String,
         words: Option<Vec<PlanWord>>,
         body: Box<ExecutionStage>,

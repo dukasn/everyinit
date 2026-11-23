@@ -1012,6 +1012,7 @@ dependencies = [
  "regex",
  "ring",
  "rustc-hash 2.1.3",
+ "same-file",
  "semver",
  "serde",
  "serde_json",

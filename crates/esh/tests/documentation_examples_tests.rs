@@ -66,6 +66,10 @@ fn public_esh_examples_compile() {
             "ESH Language Reference",
             include_str!("../../../docs/reference/esh/90.language-reference.3000.md"),
         ),
+        (
+            "ESH Runtime Reference",
+            include_str!("../../../docs/reference/esh/100.runtime-reference.3010.md"),
+        ),
     ];
 
     for (document, source) in documents {

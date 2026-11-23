@@ -17,9 +17,11 @@ use crate::planner::ir::ExecutionPlan;
 use crate::runtime::traits::ScopeManager;
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::collections::BTreeMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -43,7 +45,7 @@ impl TrapSignal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShellValue {
     String(String),
-    Array(Vec<String>),
+    Array(BTreeMap<usize, String>),
     Map(FxHashMap<String, String>),
 }
 
@@ -51,7 +53,9 @@ impl ShellValue {
     pub fn to_string_lossy(&self) -> String {
         match self {
             ShellValue::String(s) => s.clone(),
-            ShellValue::Array(arr) => arr.first().cloned().unwrap_or_default(),
+            ShellValue::Array(arr) => arr
+                .first_key_value()
+                .map_or_else(String::new, |(_, value)| value.clone()),
             ShellValue::Map(_) => String::new(),
         }
     }
@@ -59,15 +63,8 @@ impl ShellValue {
     pub fn to_unrolled_string(&self) -> String {
         match self {
             ShellValue::String(s) => s.clone(),
-            ShellValue::Array(arr) => arr.join(" "),
-            ShellValue::Map(m) => {
-                let mut vals: Vec<&String> = m.values().collect();
-                vals.sort();
-                vals.into_iter()
-                    .map(|s| s.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            }
+            ShellValue::Array(arr) => arr.values().cloned().collect::<Vec<_>>().join(" "),
+            ShellValue::Map(_) => self.get_values().join(" "),
         }
     }
 
@@ -98,18 +95,24 @@ impl ShellValue {
             }
             ShellValue::Array(arr) => {
                 if sub == "@" || sub == "*" {
-                    Some(arr.join(" "))
+                    Some(arr.values().cloned().collect::<Vec<_>>().join(" "))
                 } else if let Ok(idx) = sub.parse::<usize>() {
-                    arr.get(idx).cloned()
+                    arr.get(&idx).cloned()
                 } else {
                     None
                 }
             }
             ShellValue::Map(m) => {
                 if sub == "@" || sub == "*" {
-                    let mut vals: Vec<_> = m.values().cloned().collect();
-                    vals.sort();
-                    Some(vals.join(" "))
+                    let mut keys: Vec<_> = m.keys().collect();
+                    keys.sort();
+                    Some(
+                        keys.into_iter()
+                            .filter_map(|key| m.get(key))
+                            .cloned()
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                    )
                 } else {
                     m.get(sub).cloned()
                 }
@@ -120,11 +123,25 @@ impl ShellValue {
     pub fn get_keys(&self) -> Vec<String> {
         match self {
             ShellValue::String(_) => vec!["0".to_string()],
-            ShellValue::Array(arr) => (0..arr.len()).map(|i| i.to_string()).collect(),
+            ShellValue::Array(arr) => arr.keys().map(usize::to_string).collect(),
             ShellValue::Map(m) => {
                 let mut keys: Vec<String> = m.keys().cloned().collect();
                 keys.sort();
                 keys
+            }
+        }
+    }
+
+    pub fn get_values(&self) -> Vec<String> {
+        match self {
+            ShellValue::String(s) => vec![s.clone()],
+            ShellValue::Array(arr) => arr.values().cloned().collect(),
+            ShellValue::Map(m) => {
+                let mut keys: Vec<_> = m.keys().collect();
+                keys.sort();
+                keys.into_iter()
+                    .filter_map(|key| m.get(key).cloned())
+                    .collect()
             }
         }
     }
@@ -144,7 +161,7 @@ impl From<&str> for ShellValue {
 
 impl From<Vec<String>> for ShellValue {
     fn from(v: Vec<String>) -> Self {
-        ShellValue::Array(v)
+        ShellValue::Array(v.into_iter().enumerate().collect())
     }
 }
 
@@ -163,6 +180,9 @@ pub struct ScopeFrame {
     trap_actions: FxHashMap<TrapSignal, String>,
     /// Environment bindings shadowed by local values in this scope.
     exported_env_before: FxHashMap<String, (Option<String>, bool)>,
+    /// The getopts cluster cursor shadowed by an OPTIND binding in this scope.
+    getopts_position_before_optind: Option<Option<(usize, usize)>>,
+    command_assignment_scope: bool,
 }
 
 #[derive(Clone)]
@@ -181,10 +201,11 @@ pub struct ExecutionContext {
     failed_msg: Option<String>,
     captured_stdout: Option<Arc<Mutex<Vec<u8>>>>,
     captured_stderr: Option<Arc<Mutex<Vec<u8>>>>,
+    external_file_outputs: Option<((PathBuf, bool), (PathBuf, bool))>,
     stdin_buffer: Option<Vec<u8>>,
     functions: FxHashMap<String, ExecutionPlan>,
     in_trap: bool,
-    interrupt_trap_fired: bool,
+    interrupt_trap_fired: Arc<AtomicBool>,
     exec_depth: usize,
     function_depth: usize,
     source_depth: usize,
@@ -246,10 +267,11 @@ impl ExecutionContext {
             failed_msg: None,
             captured_stdout: None,
             captured_stderr: None,
+            external_file_outputs: None,
             stdin_buffer: None,
             functions: FxHashMap::default(),
             in_trap: false,
-            interrupt_trap_fired: false,
+            interrupt_trap_fired: Arc::new(AtomicBool::new(false)),
             exec_depth: 0,
             function_depth: 0,
             source_depth: 0,
@@ -302,8 +324,71 @@ impl ExecutionContext {
     }
 
     pub fn adopt_lastpipe_state(&mut self, source: ExecutionContext) {
+        let getopts_position = source.getopts_position;
+        let root_traps = self
+            .scopes
+            .first()
+            .map(|frame| (frame.traps.clone(), frame.trap_actions.clone()));
+        let directory_bindings = ["PWD", "OLDPWD"].map(|key| {
+            (
+                key,
+                self.scopes
+                    .iter()
+                    .map(|frame| {
+                        (
+                            frame.locals.get(key).cloned(),
+                            frame.unset_vars.contains(key),
+                            frame.exported_env_before.get(key).cloned(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                self.env_vars.get(key).cloned(),
+                self.exported_vars.contains(key),
+            )
+        });
         self.scopes = source.scopes;
+        for (key, frames, _, _) in &directory_bindings {
+            for (frame, (local, was_unset, exported_env_before)) in
+                self.scopes.iter_mut().zip(frames)
+            {
+                if let Some(local) = local {
+                    frame.locals.insert((*key).to_string(), local.clone());
+                } else {
+                    frame.locals.remove(*key);
+                }
+                if *was_unset {
+                    frame.unset_vars.insert((*key).to_string());
+                } else {
+                    frame.unset_vars.remove(*key);
+                }
+                if let Some(exported_env_before) = exported_env_before {
+                    frame
+                        .exported_env_before
+                        .insert((*key).to_string(), exported_env_before.clone());
+                } else {
+                    frame.exported_env_before.remove(*key);
+                }
+            }
+        }
+        if let (Some((traps, trap_actions)), Some(root)) = (root_traps, self.scopes.first_mut()) {
+            root.traps = traps;
+            root.trap_actions = trap_actions;
+        }
         self.env_vars = source.env_vars;
+        self.exported_vars = source.exported_vars;
+        for (key, _, env_value, was_exported) in directory_bindings {
+            if let Some(value) = env_value {
+                self.env_vars.insert(key.to_string(), value);
+            } else {
+                self.env_vars.remove(key);
+            }
+            if was_exported {
+                self.exported_vars.insert(key.to_string());
+            } else {
+                self.exported_vars.remove(key);
+            }
+        }
+        self.getopts_position = getopts_position;
         self.interactive_events = source.interactive_events;
     }
 
@@ -481,11 +566,9 @@ impl ExecutionContext {
     }
 
     pub(crate) fn take_interrupt_trap(&mut self) -> bool {
-        if self.interrupt_trap_fired {
-            return false;
-        }
-        self.interrupt_trap_fired = true;
-        true
+        self.interrupt_trap_fired
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
 
     pub(crate) fn replace_token(&mut self, token: CancellationToken) -> CancellationToken {
@@ -499,6 +582,12 @@ impl ExecutionContext {
 
     pub fn clone_isolated(&self) -> Self {
         let mut child = self.clone();
+        // A process-like execution environment does not inherit the caller's
+        // active loop stack. Nested loops created in the child still work.
+        child.loop_depth = 0;
+        child.break_requested = None;
+        child.continue_requested = None;
+        child.exec_depth = 0;
         if self.captured_stdout.is_some() {
             child.captured_stdout = Some(Arc::new(Mutex::new(Vec::new())));
         }
@@ -752,13 +841,24 @@ impl ExecutionContext {
         self.captured_stderr = Some(Arc::new(Mutex::new(Vec::new())));
     }
 
-    pub(crate) fn begin_redirect_capture(&mut self) -> RedirectCapture {
+    pub(crate) fn begin_redirect_capture(&mut self, merge_streams: bool) -> RedirectCapture {
         let previous = RedirectCapture {
             stdout: self.captured_stdout.take(),
             stderr: self.captured_stderr.take(),
         };
-        self.enable_capture();
+        let stdout = Arc::new(Mutex::new(Vec::new()));
+        let stderr = if merge_streams {
+            stdout.clone()
+        } else {
+            Arc::new(Mutex::new(Vec::new()))
+        };
+        self.captured_stdout = Some(stdout);
+        self.captured_stderr = Some(stderr);
         previous
+    }
+
+    pub(crate) fn redirect_capture_merges_streams(&self) -> bool {
+        matches!((&self.captured_stdout, &self.captured_stderr), (Some(stdout), Some(stderr)) if Arc::ptr_eq(stdout, stderr))
     }
 
     pub(crate) fn finish_redirect_capture(
@@ -836,6 +936,12 @@ impl ExecutionContext {
         }
     }
 
+    pub(crate) fn failure_context(&self) -> Option<(String, u32, Option<String>)> {
+        self.failed_cmd
+            .as_ref()
+            .map(|command| (command.clone(), self.failed_line, self.failed_msg.clone()))
+    }
+
     pub fn set_local_val(&mut self, key: &str, val: ShellValue) {
         self.snapshot_exported_env(key);
         if key == "OPTIND" {
@@ -868,6 +974,15 @@ impl ExecutionContext {
     }
 
     pub fn set_local_var(&mut self, key: &str, val: String) {
+        if key == "OPTIND" {
+            let getopts_position = self.getopts_position;
+            if let Some(frame) = self.scopes.last_mut()
+                && frame.getopts_position_before_optind.is_none()
+            {
+                frame.getopts_position_before_optind = Some(getopts_position);
+            }
+            self.getopts_position = None;
+        }
         if self.options.allexport {
             let target = self.scopes.len() - 1;
             self.snapshot_exported_env(key);
@@ -903,23 +1018,51 @@ impl ExecutionContext {
         }
     }
 
+    /// `read` assigns its target names in the caller's scope even when a
+    /// command-prefix assignment (such as `IFS=`) creates a temporary scope.
+    pub(crate) fn set_read_var(&mut self, key: &str, value: String) {
+        if self
+            .scopes
+            .last()
+            .is_some_and(|frame| frame.command_assignment_scope)
+        {
+            let command_scope = self.scopes.pop().expect("command scope was checked");
+            self.set_scoped_var(key, value);
+            self.scopes.push(command_scope);
+        } else {
+            self.set_scoped_var(key, value);
+        }
+    }
+
+    pub(crate) fn push_command_assignment_scope(&mut self) {
+        self.scopes.push(ScopeFrame {
+            command_assignment_scope: true,
+            ..ScopeFrame::default()
+        });
+    }
+
+    pub(crate) fn replace_external_file_outputs(
+        &mut self,
+        outputs: Option<((PathBuf, bool), (PathBuf, bool))>,
+    ) -> Option<((PathBuf, bool), (PathBuf, bool))> {
+        std::mem::replace(&mut self.external_file_outputs, outputs)
+    }
+
+    pub(crate) fn external_file_outputs(&self) -> Option<((PathBuf, bool), (PathBuf, bool))> {
+        self.external_file_outputs.clone()
+    }
+
     pub fn set_array_elem(&mut self, key: &str, index: usize, val: String) {
         for frame in self.scopes.iter_mut().rev() {
             if let Some(existing) = frame.locals.get_mut(key) {
                 match existing {
                     ShellValue::Array(arr) => {
-                        if index >= arr.len() {
-                            arr.resize(index + 1, String::new());
-                        }
-                        arr[index] = val;
+                        arr.insert(index, val);
                         return;
                     }
                     ShellValue::String(s) => {
-                        let mut arr = vec![s.clone()];
-                        if index >= arr.len() {
-                            arr.resize(index + 1, String::new());
-                        }
-                        arr[index] = val;
+                        let mut arr = BTreeMap::from([(0, s.clone())]);
+                        arr.insert(index, val);
                         *existing = ShellValue::Array(arr);
                         return;
                     }
@@ -927,11 +1070,7 @@ impl ExecutionContext {
                 }
             }
         }
-        let mut arr = Vec::new();
-        if index >= arr.len() {
-            arr.resize(index + 1, String::new());
-        }
-        arr[index] = val;
+        let arr = BTreeMap::from([(index, val)]);
         self.set_local_val(key, ShellValue::Array(arr));
     }
 
@@ -985,6 +1124,30 @@ impl ExecutionContext {
             self.getopts_position = None;
         }
     }
+
+    pub fn unset_array_elem(&mut self, key: &str, index: usize) {
+        for frame in self.scopes.iter_mut().rev() {
+            if let Some(ShellValue::Array(items)) = frame.locals.get_mut(key) {
+                items.remove(&index);
+                return;
+            }
+            if frame.unset_vars.contains(key) {
+                return;
+            }
+        }
+    }
+
+    pub fn unset_map_elem(&mut self, key: &str, subscript: &str) {
+        for frame in self.scopes.iter_mut().rev() {
+            if let Some(ShellValue::Map(items)) = frame.locals.get_mut(key) {
+                items.remove(subscript);
+                return;
+            }
+            if frame.unset_vars.contains(key) {
+                return;
+            }
+        }
+    }
 }
 
 impl ScopeManager for ExecutionContext {
@@ -1000,6 +1163,9 @@ impl ScopeManager for ExecutionContext {
         }
         let frame = self.scopes.pop().expect("scope depth checked above");
         self.restore_env_vars(frame.exported_env_before);
+        if let Some(getopts_position) = frame.getopts_position_before_optind {
+            self.getopts_position = getopts_position;
+        }
         Ok(())
     }
 

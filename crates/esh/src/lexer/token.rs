@@ -119,6 +119,7 @@ pub enum TokenKind<'a> {
     Done,                   // done
     Case,                   // case
     Esac,                   // esac
+    Select,                 // select
     DoubleSemi,             // ;;
     SemiAnd,                // ;&
     DoubleSemiAnd,          // ;;&
@@ -180,6 +181,7 @@ impl<'a> fmt::Display for TokenKind<'a> {
             TokenKind::Done => write!(f, "done"),
             TokenKind::Case => write!(f, "case"),
             TokenKind::Esac => write!(f, "esac"),
+            TokenKind::Select => write!(f, "select"),
             TokenKind::DoubleSemi => write!(f, ";;"),
             TokenKind::SemiAnd => write!(f, ";&"),
             TokenKind::DoubleSemiAnd => write!(f, ";;&"),

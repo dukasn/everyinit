@@ -46,6 +46,7 @@ semver = { workspace = true }
 chrono = { workspace = true }
 crossterm = { workspace = true }
 libc = { workspace = true }
+same-file = "1.0.6"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

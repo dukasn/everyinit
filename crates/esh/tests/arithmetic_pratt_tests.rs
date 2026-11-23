@@ -166,6 +166,104 @@ async fn test_arithmetic_assignments_and_mutations() {
     assert_eq!(ctx.get_var("FINAL_I").as_deref(), Some("2"));
 }
 
+#[tokio::test]
+async fn arithmetic_prefix_and_postfix_mutations_match_posix_shells() {
+    let script = r#"VALUE=2
+PRE_INC=$((++VALUE))
+POST_INC=$((VALUE++))
+PRE_DEC=$((--VALUE))
+POST_DEC=$((VALUE--))
+POST_UNSET=$((MISSING++))
+POST_UNSET_VALUE=$MISSING
+PRE_UNSET=$((++OTHER))
+PRE_UNSET_VALUE=$OTHER
+EMPTY=
+EMPTY_ASSIGN=$((EMPTY += 3))
+SHIFT=3
+SHIFT_LEFT=$((SHIFT <<= 2))
+SHIFT_RIGHT=$((SHIFT >>= 1))
+BIT_AND=$((SHIFT &= 3))
+BIT_XOR=$((SHIFT ^= 5))
+BIT_OR=$((SHIFT |= 8))
+OPS=24
+SUB_ASSIGN=$((OPS -= 6))
+MUL_ASSIGN=$((OPS *= 2))
+DIV_ASSIGN=$((OPS /= 4))
+MOD_ASSIGN=$((OPS %= 4))
+EXPRESSION='1 + 2'
+RECURSIVE=$((EXPRESSION * 2))
+CHAIN_LEFT=0
+CHAIN_RIGHT=2
+CHAIN_RESULT=$((CHAIN_LEFT += CHAIN_RIGHT += 3))
+printf '%s:%s:%s:%s:%s\n' "$PRE_INC" "$POST_INC" "$PRE_DEC" "$POST_DEC" "$VALUE"
+printf '%s:%s:%s:%s:%s:%s\n' "$POST_UNSET" "$POST_UNSET_VALUE" "$PRE_UNSET" "$PRE_UNSET_VALUE" "$EMPTY_ASSIGN" "$EMPTY"
+printf '%s:%s:%s:%s:%s:%s\n' "$SHIFT_LEFT" "$SHIFT_RIGHT" "$BIT_AND" "$BIT_XOR" "$BIT_OR" "$SHIFT"
+printf '%s:%s:%s:%s:%s\n' "$SUB_ASSIGN" "$MUL_ASSIGN" "$DIV_ASSIGN" "$MOD_ASSIGN" "$RECURSIVE"
+printf '%s:%s:%s\n' "$CHAIN_RESULT" "$CHAIN_LEFT" "$CHAIN_RIGHT"
+"#;
+    let plan = compile_script(script).expect("compile");
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    plan.execute(&mut ctx).await.expect("execute");
+
+    let expected = b"3:3:3:3:2\n0:1:1:1:3:3\n12:6:2:7:15:15\n18:36:9:1:6\n5:5:5\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(
+                reference.status.success(),
+                "{shell} failed to evaluate mutations"
+            );
+            assert_eq!(reference.stdout, expected, "{shell} mutation results");
+        }
+    }
+}
+
+#[tokio::test]
+async fn arithmetic_operator_precedence_matches_posix_shells() {
+    let script = r#"
+        printf '%s:%s\n' "$((1 + 2 * 3))" "$(((1 + 2) * 3))"
+        printf '%s:%s:%s\n' "$((1 << 2 + 1))" "$((1 | 2 & 4))" "$((1 < 2 == 1))"
+        printf '%s:%s:%s\n' "$((1 || 0 && 0))" "$((0 ? 1 : 1 ? 2 : 3))" "$((1, 4))"
+        printf '%s:%s:%s:%s:%s:%s\n' "$((10 - 3 * 2))" "$((20 / 3))" "$((20 % 3))" "$((-7 / 3))" "$((-7 % 3))" "$((~0))"
+        printf '%s:%s\n' "$((077))" "$((0x10))"
+        SKIPPED=0
+        SHORT_AND=$((0 && (SKIPPED=1)))
+        SHORT_OR=$((1 || (SKIPPED=2)))
+        SHORT_CONDITIONAL=$((1 ? 3 : (SKIPPED=4)))
+        printf '%s:%s:%s:%s:%s\n' "$SHORT_AND" "$SHORT_OR" "$SHORT_CONDITIONAL" "$SKIPPED" "$((0 ? 5 : 6))"
+        LEFT=0
+        RIGHT=1
+        RESULT=$((LEFT += RIGHT += 2))
+        printf '%s:%s:%s\n' "$RESULT" "$LEFT" "$RIGHT"
+    "#;
+    let expected = b"7:9\n8:1:1\n1:2:4\n4:6:2:-2:-1:-1\n63:16\n0:1:3:0:6\n3:3:3\n";
+    let engine = compile_script(script).expect("compile");
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    engine.execute(&mut ctx).await.expect("execute");
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(reference.status.success(), "{shell} arithmetic failed");
+            assert_eq!(reference.stdout, expected, "{shell} arithmetic output");
+            assert_eq!(reference.stderr, b"", "{shell} arithmetic diagnostics");
+        }
+    }
+}
+
 #[test]
 fn arithmetic_rejects_malformed_input_and_zero_division() {
     let mut ctx = ExecutionContext::new();
@@ -177,7 +275,15 @@ fn arithmetic_rejects_malformed_input_and_zero_division() {
 #[test]
 fn arithmetic_rejects_shift_counts_outside_signed_word_width() {
     let mut ctx = ExecutionContext::new();
-    for expr in ["1 << -1", "1 >> -1", "1 << 64", "1 >> 64", "X = 1 << 64"] {
+    for expr in [
+        "1 << -1",
+        "1 >> -1",
+        "1 << (2 - 3)",
+        "1 >> (1 - 2)",
+        "1 << 64",
+        "1 >> 64",
+        "X = 1 << 64",
+    ] {
         assert!(eval_arithmetic_expr(expr, &mut ctx).is_err(), "{expr}");
     }
     assert!(ctx.get_var("X").is_none());
@@ -283,6 +389,16 @@ fn arithmetic_nounset_errors_only_when_an_unset_variable_is_read() {
     }
     assert_eq!(eval_arithmetic_expr("0 && MISSING", &mut ctx).unwrap(), 0);
     assert_eq!(eval_arithmetic_expr("1 || MISSING", &mut ctx).unwrap(), 1);
+    assert_eq!(
+        eval_arithmetic_expr("1 ? 7 : MISSING", &mut ctx).unwrap(),
+        7
+    );
+    assert_eq!(
+        eval_arithmetic_expr("0 ? MISSING : 9", &mut ctx).unwrap(),
+        9
+    );
+    assert!(eval_arithmetic_expr("0 ? 7 : MISSING", &mut ctx).is_err());
+    assert!(eval_arithmetic_expr("1 ? MISSING : 9", &mut ctx).is_err());
 
     let mut assignment_ctx = ExecutionContext::new();
     assignment_ctx.options_mut().nounset = true;

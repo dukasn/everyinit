@@ -1500,6 +1500,7 @@ impl<'a> Lexer<'a> {
             "done" => TokenKind::Done,
             "case" => TokenKind::Case,
             "esac" => TokenKind::Esac,
+            "select" => TokenKind::Select,
             _ => TokenKind::Word(word),
         };
 
@@ -1535,6 +1536,7 @@ fn is_heredoc_delimiter_word(kind: TokenKind<'_>) -> bool {
             | TokenKind::Done
             | TokenKind::Case
             | TokenKind::Esac
+            | TokenKind::Select
     )
 }
 

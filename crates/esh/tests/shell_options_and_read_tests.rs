@@ -16,6 +16,10 @@ use esh::planner::compiler::compile_script;
 use esh::runtime::context::ExecutionContext;
 use esh::runtime::traits::{Executable, ScopeManager};
 use std::fs;
+#[cfg(unix)]
+use std::io::Write;
+#[cfg(unix)]
+use std::process::Stdio;
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -65,6 +69,50 @@ async fn test_set_errexit_shielded_in_conditions() {
 }
 
 #[tokio::test]
+async fn errexit_allows_fail_fast_fallback_then_applies_to_fallback_failure() {
+    let success_script = r#"set -e
+{
+    printf 'try-before\n'
+    false
+    printf 'wrong-try-tail\n'
+} || printf 'recovered\n'
+printf 'after-recovery\n'
+"#;
+    let success_plan = compile_script(success_script).expect("compile success case");
+    let mut success_ctx = ExecutionContext::new();
+    success_ctx.enable_capture();
+
+    assert_eq!(success_plan.execute(&mut success_ctx).await.unwrap(), 0);
+    assert!(!success_ctx.is_exiting());
+    assert_eq!(
+        success_ctx.get_captured_stdout().unwrap(),
+        "try-before\nrecovered\nafter-recovery\n"
+    );
+
+    let failure_script = r#"set -e
+{
+    false
+    printf 'wrong-try-tail\n'
+} || {
+    printf 'fallback-before\n'
+    false
+    printf 'wrong-fallback-tail\n'
+}
+printf 'wrong-after-fallback\n'
+"#;
+    let failure_plan = compile_script(failure_script).expect("compile failure case");
+    let mut failure_ctx = ExecutionContext::new();
+    failure_ctx.enable_capture();
+
+    assert_eq!(failure_plan.execute(&mut failure_ctx).await.unwrap(), 1);
+    assert!(failure_ctx.is_exiting());
+    assert_eq!(
+        failure_ctx.get_captured_stdout().unwrap(),
+        "fallback-before\n"
+    );
+}
+
+#[tokio::test]
 async fn errexit_stops_failed_function_body_and_enclosing_block() {
     let script = "set -e\nfail_inside() { echo before; false; echo unreachable-function; }\nfail_inside\necho unreachable-caller\n";
     let plan = compile_script(script).expect("compile");
@@ -76,6 +124,70 @@ async fn errexit_stops_failed_function_body_and_enclosing_block() {
     assert_eq!(status, 1);
     assert!(ctx.is_exiting());
     assert_eq!(ctx.get_captured_stdout().unwrap(), "before\n");
+}
+
+#[tokio::test]
+async fn errexit_stops_failures_in_for_while_until_and_case_bodies() {
+    let cases = [
+        (
+            "set -e\nfor item in first second; do printf 'for-before:%s\\n' \"$item\"; false; printf 'unreachable\\n'; done\nprintf 'unreachable-caller\\n'\n",
+            "for-before:first\n",
+        ),
+        (
+            "set -e\nwhile true; do printf 'while-before\\n'; false; printf 'unreachable\\n'; done\nprintf 'unreachable-caller\\n'\n",
+            "while-before\n",
+        ),
+        (
+            "set -e\nCOUNT=0\nuntil [ \"$COUNT\" -ge 2 ]; do COUNT=$((COUNT + 1)); printf 'until-before:%s\\n' \"$COUNT\"; false; printf 'unreachable\\n'; done\nprintf 'unreachable-caller\\n'\n",
+            "until-before:1\n",
+        ),
+        (
+            "set -e\ncase selected in selected) printf 'case-before\\n'; false; printf 'unreachable\\n' ;; esac\nprintf 'unreachable-caller\\n'\n",
+            "case-before\n",
+        ),
+    ];
+
+    for (script, expected_stdout) in cases {
+        let plan = compile_script(script).expect("compile");
+        let mut ctx = ExecutionContext::new();
+        ctx.enable_capture();
+
+        assert_eq!(plan.execute(&mut ctx).await.unwrap(), 1, "{script}");
+        assert!(ctx.is_exiting(), "{script}");
+        assert_eq!(
+            ctx.get_captured_stdout().unwrap(),
+            expected_stdout,
+            "{script}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn errexit_is_shielded_inside_case_commands_used_as_conditions() {
+    let script = r#"set -e
+if case selected in
+    selected) printf 'if-before\n'; false; printf 'if-after\n' ;;
+esac; then
+    printf 'if-then\n'
+fi
+COUNT=0
+while case "$COUNT" in
+    0) COUNT=1; printf 'while-condition\n'; false ;;
+esac; do
+    printf 'unreachable-body\n'
+done
+printf 'done:%s\n' "$COUNT"
+"#;
+    let plan = compile_script(script).expect("compile");
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(plan.execute(&mut ctx).await.unwrap(), 0);
+    assert!(!ctx.is_exiting());
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "if-before\nif-after\nif-then\nwhile-condition\ndone:1\n"
+    );
 }
 
 #[tokio::test]
@@ -256,15 +368,44 @@ async fn nounset_applies_to_length_expansion_of_unset_names() {
 }
 
 #[tokio::test]
+async fn nounset_rejects_unset_positional_parameters_but_allows_empty_positional_lists() {
+    for script in [
+        "set -u\nset --\nVALUE=$1\n",
+        "set -u\nset --\nVALUE=\"$1\"\n",
+        "set -u\nset --\nVALUE=${9}\n",
+        "set -u\nset -- first\nVALUE=${10}\n",
+        "set -u\nset --\ncase x in $1) VALUE=matched ;; esac\n",
+    ] {
+        let plan = compile_script(script).expect("compile");
+        let mut ctx = ExecutionContext::new();
+        assert!(
+            plan.execute(&mut ctx).await.is_err(),
+            "nounset should reject a missing positional parameter: {script}"
+        );
+        assert_eq!(ctx.get_var("VALUE"), None);
+    }
+
+    let plan = compile_script(
+        "set -u\nset --\nVALUE=\"$@\"\nSTAR=\"$*\"\nprintf '<%s><%s>\\n' \"$VALUE\" \"$STAR\"\n",
+    )
+    .expect("compile");
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(plan.execute(&mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "<><>\n");
+}
+
+#[tokio::test]
 async fn nounset_applies_to_arithmetic_reads_but_respects_short_circuit_and_assignment() {
     let plan = compile_script(
-        "set -u\nSAFE_AND=$((0 && MISSING))\nSAFE_OR=$((1 || MISSING))\nCREATED=$((MISSING=4))\nprintf '%s:%s:%s\\n' \"$SAFE_AND\" \"$SAFE_OR\" \"$CREATED\"\n",
+        "set -u\nSAFE_AND=$((0 && MISSING))\nSAFE_OR=$((1 || MISSING))\nSAFE_TRUE=$((1 ? 7 : MISSING))\nSAFE_FALSE=$((0 ? MISSING : 9))\nCREATED=$((MISSING=4))\nprintf '%s:%s:%s:%s:%s\\n' \"$SAFE_AND\" \"$SAFE_OR\" \"$SAFE_TRUE\" \"$SAFE_FALSE\" \"$CREATED\"\n",
     )
     .expect("compile script");
     let mut ctx = ExecutionContext::new();
     ctx.enable_capture();
     assert_eq!(plan.execute(&mut ctx).await.unwrap(), 0);
-    assert_eq!(ctx.get_captured_stdout().unwrap(), "0:1:4\n");
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "0:1:7:9:4\n");
 
     let plan = compile_script("set -u\nVALUE=$((MISSING + 1))\n").expect("compile script");
     let mut ctx = ExecutionContext::new();
@@ -297,6 +438,54 @@ async fn pipefail_returns_the_rightmost_nonzero_pipeline_status() {
     let mut ctx = ExecutionContext::new();
 
     assert_eq!(plan.execute(&mut ctx).await.unwrap(), 7);
+}
+
+#[tokio::test]
+async fn errexit_observes_pipeline_status_after_pipefail_and_negation() {
+    let cases = [
+        (
+            "set -e\nfalse | true\nprintf 'continued\\n'\n",
+            0,
+            "continued\n",
+            false,
+        ),
+        (
+            "set -e -o pipefail\nfalse | true\nprintf 'unreachable\\n'\n",
+            1,
+            "",
+            true,
+        ),
+        (
+            "set -e -o pipefail\n! false | true\nprintf 'continued\\n'\n",
+            0,
+            "continued\n",
+            false,
+        ),
+        (
+            "set -e -o pipefail\n! true | true\nprintf 'unreachable\\n'\n",
+            1,
+            "",
+            true,
+        ),
+    ];
+
+    for (script, expected_status, expected_stdout, expected_exiting) in cases {
+        let plan = compile_script(script).expect("compile");
+        let mut ctx = ExecutionContext::new();
+        ctx.enable_capture();
+
+        assert_eq!(
+            plan.execute(&mut ctx).await.unwrap(),
+            expected_status,
+            "{script}"
+        );
+        assert_eq!(
+            ctx.get_captured_stdout().unwrap(),
+            expected_stdout,
+            "{script}"
+        );
+        assert_eq!(ctx.is_exiting(), expected_exiting, "{script}");
+    }
 }
 
 #[tokio::test]
@@ -521,6 +710,36 @@ async fn set_rejects_posix_options_outside_the_esh_script_contract() {
 }
 
 #[tokio::test]
+async fn set_rejects_unsupported_posix_long_option_names_with_status_two() {
+    let engine = esh::Engine::new();
+    for option in [
+        "hashall",
+        "keyword",
+        "monitor",
+        "noexec",
+        "privileged",
+        "onecmd",
+        "verbose",
+    ] {
+        for prefix in ["-o", "+o"] {
+            let mut ctx = ExecutionContext::new();
+            ctx.enable_capture();
+            let status = engine
+                .eval_str(&format!("set {prefix} {option}\n"), &mut ctx)
+                .await
+                .unwrap();
+
+            assert_eq!(status, 2, "set {prefix} {option}");
+            assert_eq!(
+                ctx.get_captured_stderr().unwrap(),
+                format!("esh: set: unknown option '{option}'\n"),
+                "set {prefix} {option}"
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn dollar_dash_lists_enabled_short_options_in_esh_order() {
     let plan = compile_script("set -aeufxC\nprintf '%s\\n' \"$-\"\n").expect("compile");
     let mut ctx = ExecutionContext::new();
@@ -629,6 +848,31 @@ async fn read_uses_default_whitespace_without_setting_unset_ifs() {
 }
 
 #[tokio::test]
+async fn read_prefix_ifs_controls_splitting_then_restores_the_callers_value() {
+    let script = "IFS=:\nIFS=, read FIRST SECOND <<EOF\nleft,right\nEOF\nprintf '<%s>|<%s>|<%s>\\n' \"$FIRST\" \"$SECOND\" \"$IFS\"\n";
+    let engine = esh::Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"<left>|<right>|<:>\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(reference.status.success(), "{shell} failed to read input");
+            assert_eq!(reference.stdout, expected, "{shell} read prefix scope");
+        }
+    }
+}
+
+#[tokio::test]
 async fn read_assigns_partial_eof_data_and_returns_failure() {
     let engine = esh::Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -687,6 +931,22 @@ async fn read_custom_delimiter_consumes_one_byte_and_keeps_following_input() {
 }
 
 #[tokio::test]
+async fn read_multibyte_delimiter_uses_its_first_byte_and_preserves_the_rest() {
+    let plan = compile_script(
+        "read -r -d '§' FIRST; read -r SECOND; printf '<%s><%s>\\n' \"$FIRST\" \"$SECOND\"",
+    )
+    .expect("compile");
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_stdin("left§right\n".as_bytes().to_vec());
+
+    let status = plan.execute(&mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "<left><�right>\n");
+}
+
+#[tokio::test]
 async fn read_empty_delimiter_uses_nul_and_keeps_following_input() {
     let plan = compile_script(
         "read -r -d '' FIRST; read -r SECOND; printf '<%s><%s>\\n' \"$FIRST\" \"$SECOND\"",
@@ -700,6 +960,40 @@ async fn read_empty_delimiter_uses_nul_and_keeps_following_input() {
 
     assert_eq!(status, 0);
     assert_eq!(ctx.get_captured_stdout().unwrap(), "<alpha><beta>\n");
+}
+
+#[tokio::test]
+async fn read_empty_delimiter_assigns_partial_data_at_eof_and_returns_failure() {
+    let script =
+        "read -r -d '' VALUE\nSTATUS=$?\nprintf 'status=%s value=<%s>\\n' \"$STATUS\" \"$VALUE\"\n";
+    let engine = esh::Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_stdin(b"partial".to_vec());
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"status=1 value=<partial>\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+
+    #[cfg(unix)]
+    if let Ok(mut reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c"])
+        .arg(script)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        reference
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"partial")
+            .unwrap();
+        let reference = reference.wait_with_output().unwrap();
+        assert!(reference.status.success(), "Bash read script failed");
+        assert_eq!(reference.stdout, expected);
+    }
 }
 
 #[tokio::test]
@@ -731,6 +1025,22 @@ async fn read_without_variable_operand_assigns_to_reply() {
 
     assert_eq!(status, 0);
     assert_eq!(ctx.get_var("REPLY").as_deref(), Some("answer"));
+}
+
+#[tokio::test]
+async fn read_without_variable_preserves_ifs_whitespace_in_reply() {
+    let engine = esh::Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_stdin(b"  two  \n".to_vec());
+
+    let status = engine
+        .eval_str("read; printf '<%s>\\n' \"$REPLY\"\n", &mut ctx)
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "<  two  >\n");
 }
 
 #[tokio::test]
@@ -800,6 +1110,90 @@ async fn read_preserves_non_whitespace_ifs_delimiters_in_the_last_variable() {
     assert_eq!(status, 0);
     assert_eq!(ctx.get_var("FIRST").as_deref(), Some(""));
     assert_eq!(ctx.get_var("REST").as_deref(), Some("alpha::omega"));
+}
+
+#[tokio::test]
+async fn read_mixed_ifs_collapses_whitespace_but_keeps_adjacent_delimiter_fields() {
+    let engine = esh::Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "IFS=' :'; read FIRST SECOND REST <<'DATA'\n  alpha:: beta: omega  \nDATA\nprintf '<%s>|<%s>|<%s>\\n' \"$FIRST\" \"$SECOND\" \"$REST\"\nIFS=''; read WHOLE REST <<< 'one two'; printf '<%s>|<%s>\\n' \"$WHOLE\" \"$REST\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "<alpha>|<>|<beta: omega>\n<one two>|<>\n"
+    );
+}
+
+#[tokio::test]
+async fn read_ifs_empty_fields_match_available_posix_shells() {
+    let script = r#"
+IFS=' :'
+read FIRST SECOND REST <<'DATA'
+  alpha:: beta: omega
+DATA
+printf 'mixed=<%s>|<%s>|<%s>\n' "$FIRST" "$SECOND" "$REST"
+IFS=:
+read LEADING FIRST EMPTY LAST <<'DATA'
+:alpha::omega:
+DATA
+printf 'delimiters=<%s>|<%s>|<%s>|<%s>\n' "$LEADING" "$FIRST" "$EMPTY" "$LAST"
+read SINGLE_FIRST SINGLE_LAST <<'DATA'
+x:y:
+DATA
+printf 'single-trailer=<%s>|<%s>\n' "$SINGLE_FIRST" "$SINGLE_LAST"
+read REPEATED_FIRST REPEATED_LAST <<'DATA'
+x:y::
+DATA
+printf 'repeated-trailer=<%s>|<%s>\n' "$REPEATED_FIRST" "$REPEATED_LAST"
+IFS=:,
+read MULTI_LEADING MULTI_FIRST MULTI_EMPTY MULTI_LAST MULTI_TRAILING <<'DATA'
+:alpha,,omega:
+DATA
+printf 'multi-delimiter=<%s>|<%s>|<%s>|<%s>|<%s>\n' "$MULTI_LEADING" "$MULTI_FIRST" "$MULTI_EMPTY" "$MULTI_LAST" "$MULTI_TRAILING"
+    "#;
+    let engine = esh::Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = concat!(
+        "mixed=<alpha>|<>|<beta: omega>\n",
+        "delimiters=<>|<alpha>|<>|<omega>\n",
+        "single-trailer=<x>|<y>\n",
+        "repeated-trailer=<x>|<y::>\n",
+        "multi-delimiter=<>|<alpha>|<>|<omega>|<>\n"
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(
+                reference.status.success(),
+                "{shell} failed to read IFS input"
+            );
+            assert_eq!(
+                reference.stdout,
+                expected.as_bytes(),
+                "{shell} IFS field boundaries"
+            );
+            assert_eq!(reference.stderr, b"", "{shell} IFS diagnostics");
+        }
+    }
 }
 
 #[tokio::test]

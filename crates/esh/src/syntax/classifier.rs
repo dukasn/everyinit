@@ -116,7 +116,8 @@ impl<'a> SemanticClassifier<'a> {
                 | TokenKind::Do
                 | TokenKind::Done
                 | TokenKind::Case
-                | TokenKind::Esac => {
+                | TokenKind::Esac
+                | TokenKind::Select => {
                     expecting_command = true;
                     let text = tok.slice(self.source);
                     emitter.emit(SyntaxCategory::Keyword, text, span);

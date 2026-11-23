@@ -47,6 +47,16 @@ fn test_syntax_token_scanner() {
 }
 
 #[test]
+fn select_is_highlighted_as_an_esh_control_flow_keyword() {
+    let tokens = scan_tokens("select choice in alpha; do break; done", 0);
+    assert!(
+        tokens.iter().any(|token| {
+            token.text == "select" && token.kind == esh::syntax::TokenKind::Keyword
+        })
+    );
+}
+
+#[test]
 fn test_highlight_html_classed_with_syn_prefix() {
     let script = r#"
 # Deploy script

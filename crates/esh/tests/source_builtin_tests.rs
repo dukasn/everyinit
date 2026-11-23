@@ -80,6 +80,37 @@ async fn dot_sees_prefix_assignments_and_restores_them_after_sourcing() {
 }
 
 #[tokio::test]
+async fn sourced_file_can_declare_a_local_in_its_calling_function() {
+    let tmp = tempdir().unwrap();
+    fs::write(
+        tmp.path().join("declare-local.esh"),
+        "printf 'sourced-before=%s\\n' \"$ESH_SOURCED_LOCAL\"\nESH_SOURCED_LOCAL=updated\n",
+    )
+    .unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let status = engine
+        .eval_str(
+            "run() { local ESH_SOURCED_LOCAL=initial; . ./declare-local.esh; printf 'function-after=%s\\n' \"$ESH_SOURCED_LOCAL\"; }; run; printf 'outside=%s\\n' \"${ESH_SOURCED_LOCAL-unset}\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_var("ESH_SOURCED_LOCAL"), None);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "sourced-before=initial\nfunction-after=updated\noutside=unset\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
 async fn trap_registered_by_sourced_file_persists_in_caller_context() {
     let tmp = tempdir().unwrap();
     fs::write(
@@ -131,6 +162,90 @@ async fn return_from_sourced_file_does_not_return_from_enclosing_function() {
         ctx.get_captured_stdout().unwrap(),
         "caller-continued\nstatus=3\n"
     );
+}
+
+#[tokio::test]
+async fn nested_dot_restores_each_positional_frame_and_return_boundary() {
+    let tmp = tempdir().unwrap();
+    fs::write(
+        tmp.path().join("outer.esh"),
+        "OUTER_BEFORE=\"$#:$1:$2\"\n. ./inner.esh inner-arg\nOUTER_AFTER=\"$#:$1:$2\"\nreturn 7\nOUTER_TAIL=unreachable\n",
+    )
+    .unwrap();
+    fs::write(
+        tmp.path().join("inner.esh"),
+        "INNER_ARGS=\"$#:$1\"\nreturn 9\nINNER_TAIL=unreachable\n",
+    )
+    .unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let script = "set -- caller-arg\n. ./outer.esh outer-arg outer-second\nprintf '%s|%s|%s|%s|%s:%s|%s|%s\\n' \"$OUTER_BEFORE\" \"$INNER_ARGS\" \"$OUTER_AFTER\" \"$?\" \"$#\" \"$1\" \"${OUTER_TAIL-unset}\" \"${INNER_TAIL-unset}\"\n";
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.positional_args_with_zero(), ["esh", "caller-arg"]);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "2:outer-arg:outer-second|1:inner-arg|2:outer-arg:outer-second|7|1:caller-arg|unset|unset\n"
+    );
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c", script])
+        .current_dir(tmp.path())
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(
+            reference.stdout,
+            b"2:outer-arg:outer-second|1:inner-arg|2:outer-arg:outer-second|7|1:caller-arg|unset|unset\n"
+        );
+    }
+}
+
+#[tokio::test]
+async fn nonzero_return_from_sourced_file_triggers_errexit_and_exit_trap() {
+    let tmp = tempdir().unwrap();
+    fs::write(
+        tmp.path().join("fail.esh"),
+        "printf 'source-before-return\\n'\nreturn 7\nprintf 'wrong-source-tail\\n'\n",
+    )
+    .unwrap();
+
+    let script = r#"trap 'printf "exit:%s\n" "$?"' EXIT
+set -e
+. ./fail.esh
+printf 'wrong-caller-tail\n'
+"#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 7);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "source-before-return\nexit:7\n"
+    );
+
+    let reference = std::process::Command::new("bash")
+        .args(["--posix", "-c", script])
+        .current_dir(tmp.path())
+        .output();
+    if let Ok(reference) = reference {
+        assert_eq!(reference.status.code(), Some(status));
+        assert_eq!(
+            reference.stdout,
+            ctx.get_captured_stdout().unwrap().as_bytes()
+        );
+        assert_eq!(reference.stderr, b"");
+    }
 }
 
 #[tokio::test]

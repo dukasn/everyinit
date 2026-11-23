@@ -56,6 +56,84 @@ async fn test_export_builtin() {
 }
 
 #[tokio::test]
+async fn local_rejects_top_level_use_without_creating_a_variable() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str("local ESH_LOCAL_OUTSIDE_FUNCTION=value\n", &mut ctx)
+        .await
+        .unwrap();
+
+    assert_eq!(status, 2);
+    assert_eq!(ctx.get_var("ESH_LOCAL_OUTSIDE_FUNCTION"), None);
+    assert_eq!(
+        ctx.get_captured_stderr().unwrap(),
+        "esh: local: only valid in a function\n"
+    );
+}
+
+#[tokio::test]
+async fn local_without_assignment_starts_empty_and_is_visible_to_called_functions() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                ESH_LOCAL_INITIAL=outer
+                read_local() {
+                    printf 'called=<%s>|<%s>\n' "${ESH_LOCAL_INITIAL-unset}" "${ESH_LOCAL_INITIAL:-fallback}"
+                    ESH_LOCAL_INITIAL=changed
+                }
+                owner() {
+                    local ESH_LOCAL_INITIAL
+                    printf 'initial=<%s>\n' "${ESH_LOCAL_INITIAL-unset}"
+                    read_local
+                    printf 'updated=<%s>\n' "$ESH_LOCAL_INITIAL"
+                }
+                owner
+                printf 'outer=<%s>\n' "$ESH_LOCAL_INITIAL"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "initial=<>\ncalled=<>|<fallback>\nupdated=<changed>\nouter=<outer>\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn local_rejects_invalid_identifiers_without_binding_them() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "invalid_local() { local BAD-NAME=value; printf 'local-status=%s\\n' \"$?\"; }\ninvalid_local\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_var("BAD-NAME"), None);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "local-status=2\n");
+    assert_eq!(
+        ctx.get_captured_stderr().unwrap(),
+        "esh: local: invalid identifier: BAD-NAME\n"
+    );
+}
+
+#[tokio::test]
 async fn declare_exports_existing_values_and_rejects_unimplemented_attributes() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -93,6 +171,41 @@ async fn declare_exports_existing_values_and_rejects_unimplemented_attributes() 
         ctx.get_captured_stderr().unwrap(),
         "esh: declare: unsupported option '-r'\nesh: declare: unsupported option '-i'\nesh: declare: unsupported option '-z'\n"
     );
+}
+
+#[tokio::test]
+async fn typeset_alias_declares_scalars_arrays_maps_and_exports() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"typeset VALUE=scalar
+typeset -a ITEMS
+ITEMS=(first "second item")
+typeset -A SETTINGS
+SETTINGS[mode]=safe
+typeset -x ESH_TYPESET_EXPORT=visible
+typeset -- ESH_TYPESET_TERMINATED=literal
+printf '%s|%s|%s|%s|%s\n' "$VALUE" "${ITEMS[1]}" "${SETTINGS[mode]}" "$ESH_TYPESET_EXPORT" "$ESH_TYPESET_TERMINATED"
+"#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "scalar|second item|safe|visible|literal\n"
+    );
+    assert_eq!(
+        ctx.env_vars().get("ESH_TYPESET_EXPORT").map(String::as_str),
+        Some("visible")
+    );
+    assert!(!ctx.env_vars().contains_key("ESH_TYPESET_TERMINATED"));
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 }
 
 #[tokio::test]
@@ -264,6 +377,64 @@ async fn export_accepts_double_dash_before_names_and_assignments() {
 }
 
 #[tokio::test]
+async fn exported_name_created_in_temporary_command_scope_persists() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "ESH_EXPORT_PREFIX_SCOPE=temporary export ESH_EXPORT_CREATED_SCOPE=created\nprintf '%s:%s\\n' \"${ESH_EXPORT_PREFIX_SCOPE-unset}\" \"$ESH_EXPORT_CREATED_SCOPE\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_var("ESH_EXPORT_PREFIX_SCOPE"), None);
+    assert_eq!(
+        ctx.get_var("ESH_EXPORT_CREATED_SCOPE").as_deref(),
+        Some("created")
+    );
+    assert!(!ctx.env_vars().contains_key("ESH_EXPORT_PREFIX_SCOPE"));
+    assert_eq!(
+        ctx.env_vars()
+            .get("ESH_EXPORT_CREATED_SCOPE")
+            .map(String::as_str),
+        Some("created")
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "unset:created\n");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn function_created_export_persists_and_reaches_child_like_bash() {
+    let script = "unset ESH_EXPORT_FROM_FUNCTION\ncreate_export() { export ESH_EXPORT_FROM_FUNCTION=created; }\ncreate_export\nprintf 'parent=%s\\n' \"$ESH_EXPORT_FROM_FUNCTION\"\nsh -c 'printf \"child=%s\\n\" \"$ESH_EXPORT_FROM_FUNCTION\"'\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"parent=created\nchild=created\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(
+        ctx.env_vars()
+            .get("ESH_EXPORT_FROM_FUNCTION")
+            .map(String::as_str),
+        Some("created")
+    );
+
+    let reference = std::process::Command::new("bash")
+        .args(["--posix", "-c"])
+        .arg(script)
+        .output()
+        .expect("Bash should be available for the export-scope comparison");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, expected);
+    assert_eq!(reference.stderr, b"");
+}
+
+#[tokio::test]
 async fn builtin_usage_statuses_obey_errexit_as_ordinary_failures() {
     let engine = Engine::new();
     let mut continuing = ExecutionContext::new();
@@ -396,6 +567,70 @@ async fn function_scopes_restore_exported_values_and_attributes() {
             .map(String::as_str),
         Some("after")
     );
+}
+
+#[tokio::test]
+async fn local_optind_restores_the_callers_getopts_cluster_cursor() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let script = r#"set -- -abc
+OPTIND=1
+getopts abc OPTION
+FIRST=$OPTION
+consume_local_options() {
+    set -a
+    local OPTIND=1
+    set +a
+    getopts xyz OPTION
+    getopts xyz OPTION
+}
+consume_local_options -xyz
+getopts abc OPTION
+NEXT=$OPTION
+printf '%s:%s:%s\n' "$FIRST" "$NEXT" "$OPTIND"
+"#;
+
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "a:b:1\n");
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, b"a:b:1\n");
+    }
+}
+
+#[tokio::test]
+async fn prefix_optind_restores_the_callers_getopts_cluster_cursor() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let script = r#"set -- -abc
+OPTIND=1
+OPTIND=1 getopts xyz OPTION -xyz
+getopts abc OPTION
+printf '%s:%s\n' "$OPTION" "$OPTIND"
+"#;
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "a:1\n");
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, b"a:1\n");
+    }
 }
 
 #[tokio::test]
@@ -609,6 +844,79 @@ async fn getopts_unsets_optarg_on_end_and_non_silent_errors() {
         ctx.get_captured_stderr().unwrap(),
         "esh: getopts: illegal option -- z\n"
     );
+}
+
+#[tokio::test]
+async fn getopts_silent_unknown_cluster_option_sets_optarg_and_keeps_cluster_state() {
+    let script = r#"set -- -az
+OPTIND=1
+getopts :a option
+printf 'first=%s:<%s>:%s:%s\n' "$option" "${OPTARG-unset}" "$OPTIND" "$?"
+getopts :a option
+printf 'unknown=%s:<%s>:%s:%s\n' "$option" "${OPTARG-unset}" "$OPTIND" "$?"
+getopts :a option
+printf 'end=%s:<%s>:%s:%s\n' "$option" "${OPTARG-unset}" "$OPTIND" "$?"
+"#;
+    let expected = concat!(
+        "first=a:<unset>:1:0\n",
+        "unknown=?:<z>:2:0\n",
+        "end=?:<unset>:2:1\n"
+    );
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, expected.as_bytes());
+        assert_eq!(reference.stderr, b"");
+    }
+}
+
+#[tokio::test]
+async fn getopts_continues_after_silent_unknown_option_inside_cluster() {
+    let script = r#"set -- -azbVALUE
+OPTIND=1
+getopts :ab: option
+printf 'first=%s:<%s>:%s\n' "$option" "${OPTARG-unset}" "$OPTIND"
+getopts :ab: option
+printf 'unknown=%s:<%s>:%s\n' "$option" "${OPTARG-unset}" "$OPTIND"
+getopts :ab: option
+printf 'argument=%s:<%s>:%s\n' "$option" "$OPTARG" "$OPTIND"
+getopts :ab: option
+printf 'end=%s:<%s>:%s:%s\n' "$option" "${OPTARG-unset}" "$OPTIND" "$?"
+"#;
+    let expected = concat!(
+        "first=a:<unset>:1\n",
+        "unknown=?:<z>:1\n",
+        "argument=b:<VALUE>:2\n",
+        "end=?:<unset>:2:1\n"
+    );
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, expected.as_bytes());
+        assert_eq!(reference.stderr, b"");
+    }
 }
 
 #[tokio::test]

@@ -148,6 +148,12 @@ pub enum ASTNode<'a> {
         body: &'a ASTNode<'a>,
         span: Span,
     },
+    Select {
+        var: &'a str,
+        words: Option<BumpVec<'a, Word<'a>>>,
+        body: &'a ASTNode<'a>,
+        span: Span,
+    },
     While {
         condition: &'a ASTNode<'a>,
         body: &'a ASTNode<'a>,
@@ -180,6 +186,7 @@ impl<'a> ASTNode<'a> {
             ASTNode::FailFastBlock { span, .. } => *span,
             ASTNode::If { span, .. } => *span,
             ASTNode::For { span, .. } => *span,
+            ASTNode::Select { span, .. } => *span,
             ASTNode::While { span, .. } => *span,
             ASTNode::Case { span, .. } => *span,
             ASTNode::StatementList { span, .. } => *span,

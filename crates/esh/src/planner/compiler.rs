@@ -200,6 +200,19 @@ fn lower_ast_node(node: &ASTNode<'_>) -> Result<ExecutionStage, ParseError> {
                 body: Box::new(body_stage),
             })
         }
+        ASTNode::Select {
+            var, words, body, ..
+        } => {
+            let body_stage = lower_ast_node(body)?;
+            let plan_words = words
+                .as_ref()
+                .map(|w_list| w_list.iter().map(lower_word).collect());
+            Ok(ExecutionStage::SelectLoop {
+                var: (*var).to_string(),
+                words: plan_words,
+                body: Box::new(body_stage),
+            })
+        }
         ASTNode::While {
             condition,
             body,
@@ -252,8 +265,19 @@ fn lower_command(
     span: crate::lexer::Span,
 ) -> Result<PlanNode, ParseError> {
     let raw_name = word_to_raw_string(name);
+    let command_word = lower_word(name);
 
-    let target = if let Some(builtin_fn) = resolve_builtin(&raw_name) {
+    let target = if command_word.parts.iter().any(|part| {
+        matches!(
+            part,
+            PlanWordPart::HomeTilde
+                | PlanWordPart::DoubleQuoted(_)
+                | PlanWordPart::Variable(_)
+                | PlanWordPart::CommandSub(_)
+        )
+    }) {
+        CommandTarget::Dynamic(command_word)
+    } else if let Some(builtin_fn) = resolve_builtin(&raw_name) {
         CommandTarget::Builtin(builtin_fn)
     } else {
         CommandTarget::External(PathBuf::from(&raw_name))
@@ -402,8 +426,8 @@ fn word_to_raw_string(word: &Word<'_>) -> String {
     let mut s = String::new();
     for part in &word.parts {
         match part {
-            WordPart::Literal(p)
-            | WordPart::SingleQuoted(p)
+            WordPart::Literal(p) => s.push_str(&unescape_unquoted(p)),
+            WordPart::SingleQuoted(p)
             | WordPart::DoubleQuoted(p)
             | WordPart::Variable(p)
             | WordPart::CommandSub(p) => {
