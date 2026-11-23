@@ -3,6 +3,25 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.3.2]
+
+### Bug Fixes
+
+- **deps:** update url past stack overflow advisory (3b51a5c)
+- **esh:** align builtins with POSIX edge cases (f011320)
+
+### Features
+
+- **esh:** expand shell parsing and runtime semantics (c8b3fb5)
+- **process:** stream child output and terminate descendants (bbbd731)
+
+### Tests
+
+- **esh:** avoid closed stdin writes in exit checks (2e2df5d)
+- **esh:** isolate Dash test expression differences (2bb615f)
+- **esh:** account for shell portability differences (58c0c9c)
+- **esh:** keep dash arithmetic checks portable (37d4306)
+
 ## [v0.3.1]
 
 ### Bug Fixes
