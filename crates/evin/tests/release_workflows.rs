@@ -241,9 +241,16 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     assert!(yaml.contains("NODE_AUTH_TOKEN: ${{ github.token }}"));
     let npm_publisher = step("Publish the npm package to both registries");
     assert!(npm_publisher.contains(
-        "npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org"
+        "npm publish . --access public --provenance --registry=https://registry.npmjs.org"
     ));
+    assert!(npm_publisher.contains("cd \"$PACKAGE_DIR\""));
+    assert!(npm_publisher.contains("npm publish . --registry=https://npm.pkg.github.com"));
     assert!(!npm_publisher.contains("NPM_CONFIG_USERCONFIG"));
+    let npm_cli_step = &steps[pos("Use npm CLI with trusted publishing support")];
+    assert_eq!(
+        npm_cli_step["working-directory"].as_str(),
+        Some("${{ runner.temp }}")
+    );
     let npm_cli = workflow_step_run("Use npm CLI with trusted publishing support");
     assert!(npm_cli.contains("npm install --global npm@11.5.1"));
     assert!(npm_cli.contains("test \"$(npm --version)\" = \"11.5.1\""));

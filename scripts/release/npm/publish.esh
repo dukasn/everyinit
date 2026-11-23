@@ -20,25 +20,28 @@ VERSION="$1"
 assert "echo '$VERSION' | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?$'" -- "a valid release version is required"
 assert [ -f packages/everyinit/package.json ] "run this script from the repository root"
 
-if npm view "everyinit@$VERSION" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
-  echo "everyinit@$VERSION is already on npmjs; skipping publish"
-else
-  # Keep npm's default user config so the configured trusted publisher can use OIDC.
-  npm publish ./packages/everyinit --access public --provenance --registry=https://registry.npmjs.org
-fi
-
+# npm CLI 11 is required for npmjs trusted publishing. Run it from this isolated
+# package copy so the workspace's pinned npm 10 devEngines does not reject it.
 PACKAGE_DIR="${RUNNER_TEMP:-target}/everyinit-github-package"
 rm -rf "$PACKAGE_DIR"
 mkdir -p "$(dirname "$PACKAGE_DIR")"
 cp -R packages/everyinit "$PACKAGE_DIR"
 test -f "$PACKAGE_DIR/package.json"
-npm pkg set --prefix "$PACKAGE_DIR" name=@dukasn/everyinit
+cd "$PACKAGE_DIR"
+
+if npm view "everyinit@$VERSION" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
+  echo "everyinit@$VERSION is already on npmjs; skipping publish"
+else
+  npm publish . --access public --provenance --registry=https://registry.npmjs.org
+fi
+
+npm pkg set name=@dukasn/everyinit
 # `access: public` is an npmjs publish setting; GitHub Packages visibility is
 # managed by GitHub and new packages start private.
-npm pkg delete --prefix "$PACKAGE_DIR" publishConfig.access
+npm pkg delete publishConfig.access
 
 if npm view "@dukasn/everyinit@$VERSION" version --registry=https://npm.pkg.github.com >/dev/null 2>&1; then
   echo "@dukasn/everyinit@$VERSION is already on GitHub Packages; skipping publish"
 else
-  npm publish "$PACKAGE_DIR" --registry=https://npm.pkg.github.com
+  npm publish . --registry=https://npm.pkg.github.com
 fi
