@@ -47,8 +47,9 @@ fn step(name: &str) -> String {
     let run = workflow_step_run(name);
     let trimmed = run
         .trim()
-        .strip_prefix("mise exec -- ")
+        .strip_prefix("PATH=\"$RUNNER_TEMP/npm-publisher/node_modules/.bin:$PATH\" ")
         .unwrap_or(run.trim());
+    let trimmed = trimmed.strip_prefix("mise exec -- ").unwrap_or(trimmed);
     if let Some(task) = trimmed
         .strip_prefix("cargo evin-dev run --verbose release:")
         .or_else(|| trimmed.strip_prefix("cargo evin-dev run release:"))
@@ -131,8 +132,19 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     };
     assert!(pos("Require release bot token") < pos("Require exact successful main push CI"));
     assert!(pos("Require exact successful main push CI") < pos("Identify merged release proposal"));
+    assert!(pos("Identify merged release proposal") < pos("Determine release version"));
+    assert!(pos("Determine release version") < pos("Configure GitHub Packages authentication"));
     assert!(
-        pos("Identify merged release proposal") < pos("Extract merged release notes with Evin")
+        pos("Configure GitHub Packages authentication")
+            < pos("Install npm CLI with trusted publishing support")
+    );
+    assert!(
+        pos("Install npm CLI with trusted publishing support")
+            < pos("Verify npm trusted publishing credentials")
+    );
+    assert!(
+        pos("Verify npm trusted publishing credentials")
+            < pos("Extract merged release notes with Evin")
     );
     assert!(
         pos("Extract merged release notes with Evin")
@@ -143,14 +155,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
             < pos("Tag and publish the merged release")
     );
     assert!(
-        pos("Tag and publish the merged release") < pos("Configure GitHub Packages authentication")
-    );
-    assert!(
-        pos("Configure GitHub Packages authentication")
-            < pos("Use npm CLI with trusted publishing support")
-    );
-    assert!(
-        pos("Use npm CLI with trusted publishing support")
+        pos("Tag and publish the merged release")
             < pos("Publish the npm package to both registries")
     );
     assert!(
@@ -189,10 +194,14 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         ),
         ("Maintain the release pull request", "release:ci:reconcile"),
     ] {
-        let expected_run = if expected_task == "release:ci:reconcile" {
-            format!("mise exec -- cargo evin-dev run --verbose {expected_task}")
-        } else {
-            format!("cargo evin-dev run --verbose {expected_task}")
+        let expected_run = match expected_task {
+            "release:ci:reconcile" => {
+                format!("mise exec -- cargo evin-dev run --verbose {expected_task}")
+            }
+            "release:pub:registries" => format!(
+                "PATH=\"$RUNNER_TEMP/npm-publisher/node_modules/.bin:$PATH\" cargo evin-dev run --verbose {expected_task}"
+            ),
+            _ => format!("cargo evin-dev run --verbose {expected_task}"),
         };
         assert_eq!(workflow_step_run(step_name), expected_run);
     }
@@ -246,14 +255,23 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     assert!(npm_publisher.contains("cd \"$PACKAGE_DIR\""));
     assert!(npm_publisher.contains("npm publish . --registry=https://npm.pkg.github.com"));
     assert!(!npm_publisher.contains("NPM_CONFIG_USERCONFIG"));
-    let npm_cli_step = &steps[pos("Use npm CLI with trusted publishing support")];
+    let npm_cli_step = &steps[pos("Install npm CLI with trusted publishing support")];
     assert_eq!(
         npm_cli_step["working-directory"].as_str(),
         Some("${{ runner.temp }}")
     );
-    let npm_cli = workflow_step_run("Use npm CLI with trusted publishing support");
-    assert!(npm_cli.contains("npm install --global npm@11.5.1"));
-    assert!(npm_cli.contains("test \"$(npm --version)\" = \"11.5.1\""));
+    let npm_cli = workflow_step_run("Install npm CLI with trusted publishing support");
+    assert!(
+        npm_cli
+            .contains("npm install --prefix \"$RUNNER_TEMP/npm-publisher\" --no-save npm@11.21.3")
+    );
+    assert!(npm_cli.contains("--version)\" = \"11.21.3\""));
+    let preflight = workflow_step_run("Verify npm trusted publishing credentials");
+    assert!(
+        preflight.contains("--dry-run --registry=https://registry.npmjs.org --loglevel=verbose")
+    );
+    assert!(preflight.contains("oidc Successfully retrieved and set token"));
+    assert!(preflight.contains("already on npmjs; skipping trusted publishing check"));
     let publisher = flow(".evin/release/pub.flow");
     let npm_task_env = publisher["tasks"]["registries"]["env"]
         .as_sequence()

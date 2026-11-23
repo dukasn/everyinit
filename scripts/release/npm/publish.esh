@@ -28,11 +28,12 @@ mkdir -p "$(dirname "$PACKAGE_DIR")"
 cp -R packages/everyinit "$PACKAGE_DIR"
 test -f "$PACKAGE_DIR/package.json"
 cd "$PACKAGE_DIR"
+echo "Publishing with npm $(npm --version)"
 
 if npm view "everyinit@$VERSION" version --registry=https://registry.npmjs.org >/dev/null 2>&1; then
   echo "everyinit@$VERSION is already on npmjs; skipping publish"
 else
-  npm publish . --access public --provenance --registry=https://registry.npmjs.org
+  npm publish . --access public --provenance --registry=https://registry.npmjs.org --loglevel=verbose
 fi
 
 npm pkg set name=@dukasn/everyinit
