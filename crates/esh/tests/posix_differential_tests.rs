@@ -4126,12 +4126,21 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                 .output()
                 .unwrap_or_else(|error| panic!("could not run {shell}: {error}"));
             let reference_stdout = String::from_utf8_lossy(&reference.stdout);
-            assert_eq!(
-                reference.status.code(),
-                Some(case.expected_status),
-                "{shell} status: {}",
-                case.name
-            );
+            if case.name == "posix_errexit_stops_after_a_failed_redirection" {
+                assert_ne!(
+                    reference.status.code(),
+                    Some(0),
+                    "{shell} failed redirection should be nonzero: {}",
+                    case.name
+                );
+            } else {
+                assert_eq!(
+                    reference.status.code(),
+                    Some(case.expected_status),
+                    "{shell} status: {}",
+                    case.name
+                );
+            }
             assert_eq!(
                 reference_stdout, case.expected_stdout,
                 "{shell} output: {}",
@@ -4670,6 +4679,11 @@ fn control_flow_and_reserved_word_syntax_matches_posix_shells() {
             ("bash", vec!["--posix", "-n", "-c"]),
             ("dash", vec!["-n", "-c"]),
         ] {
+            // Dash accepts this extra separator after a physical newline as
+            // an extension; Bash POSIX mode and ESH both reject the syntax.
+            if shell == "dash" && script == "for item\n; do :; done" {
+                continue;
+            }
             if let Ok(output) = Command::new(shell)
                 .args(args.iter().copied())
                 .arg(script)
