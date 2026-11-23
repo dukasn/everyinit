@@ -167,7 +167,7 @@ async fn test_arithmetic_assignments_and_mutations() {
 }
 
 #[tokio::test]
-async fn arithmetic_prefix_and_postfix_mutations_match_posix_shells() {
+async fn arithmetic_prefix_postfix_and_compound_mutations_match_bash() {
     let script = r#"VALUE=2
 PRE_INC=$((++VALUE))
 POST_INC=$((VALUE++))
@@ -210,7 +210,9 @@ printf '%s:%s:%s\n' "$CHAIN_RESULT" "$CHAIN_LEFT" "$CHAIN_RIGHT"
     assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
 
     #[cfg(unix)]
-    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+    {
+        let shell = "bash";
+        let args = ["--posix", "-c"];
         if let Ok(reference) = std::process::Command::new(shell)
             .args(args)
             .arg(script)
@@ -226,7 +228,7 @@ printf '%s:%s:%s\n' "$CHAIN_RESULT" "$CHAIN_LEFT" "$CHAIN_RIGHT"
 }
 
 #[tokio::test]
-async fn arithmetic_operator_precedence_matches_posix_shells() {
+async fn arithmetic_operator_precedence_and_extensions_match_bash() {
     let script = r#"
         printf '%s:%s\n' "$((1 + 2 * 3))" "$(((1 + 2) * 3))"
         printf '%s:%s:%s\n' "$((1 << 2 + 1))" "$((1 | 2 & 4))" "$((1 < 2 == 1))"
@@ -251,13 +253,46 @@ async fn arithmetic_operator_precedence_matches_posix_shells() {
     assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
 
     #[cfg(unix)]
-    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+    {
+        let shell = "bash";
+        let args = ["--posix", "-c"];
         if let Ok(reference) = std::process::Command::new(shell)
             .args(args)
             .arg(script)
             .output()
         {
             assert!(reference.status.success(), "{shell} arithmetic failed");
+            assert_eq!(reference.stdout, expected, "{shell} arithmetic output");
+            assert_eq!(reference.stderr, b"", "{shell} arithmetic diagnostics");
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn posix_arithmetic_precedence_matches_available_posix_shells() {
+    let script = r#"
+        printf '%s:%s\n' "$((1 + 2 * 3))" "$(((1 + 2) * 3))"
+        printf '%s:%s:%s:%s\n' "$((1 << 2 + 1))" "$((1 | 2 & 4))" "$((1 < 2))" "$((1 == 1))"
+        printf '%s:%s:%s:%s:%s:%s\n' "$((1 || 0 && 0))" "$((10 - 3 * 2))" "$((20 / 3))" "$((20 % 3))" "$((-7 / 3))" "$((-7 % 3))"
+        printf '%s:%s\n' "$((077))" "$((0x10))"
+        LEFT=0
+        RIGHT=1
+        RESULT=$((LEFT = RIGHT + 2))
+        printf '%s:%s:%s\n' "$RESULT" "$LEFT" "$RIGHT"
+    "#;
+    let expected = b"7:9\n8:1:1:1\n1:4:6:2:-2:-1\n63:16\n3:3:1\n";
+
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(
+                reference.status.success(),
+                "{shell} portable arithmetic failed"
+            );
             assert_eq!(reference.stdout, expected, "{shell} arithmetic output");
             assert_eq!(reference.stderr, b"", "{shell} arithmetic diagnostics");
         }
