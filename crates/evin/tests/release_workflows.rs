@@ -114,6 +114,7 @@ fn automation_only_publishes_merged_proposals_after_ci() {
         ".evin/release/pub.flow",
         ".github/workflows/release.yml",
         "crates/evin/tests/release_workflows.rs",
+        "packages/everyinit/package.json",
         "scripts/release/mirror/publish.esh",
         "scripts/release/npm/publish.esh",
     ] {

@@ -1,17 +1,28 @@
 {
   "name": "everyinit",
   "version": "0.3.2",
-  "description": "Framework-neutral APIs and web framework integrations for Evin",
-  "homepage": "https://everyinit.dev/",
+  "description": "JavaScript APIs, syntax highlighting, and Vite integration for Evin documentation data",
+  "homepage": "https://everyinit.dev/docs/reference/everyinit-package",
   "bugs": {
     "url": "https://github.com/dukasn/everyinit/issues"
   },
+  "author": "Eduardo Marques Santos",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dukasn/everyinit.git",
+    "url": "git+https://github.com/dukasn/everyinit.git",
     "directory": "packages/everyinit"
   },
+  "keywords": [
+    "everyinit",
+    "evin",
+    "documentation",
+    "static-site",
+    "vite",
+    "syntax-highlighting",
+    "textmate",
+    "search"
+  ],
   "files": [
     "index.js",
     "index.d.ts",
