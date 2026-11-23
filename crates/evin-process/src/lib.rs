@@ -51,13 +51,27 @@ pub enum StdinPolicy {
     Inherit,
     Null,
     Bytes(Vec<u8>),
+    /// Create a pipe whose parent end is connected later with
+    /// `ProcessHandle::connect_stdin_from`.
+    Pipe,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OutputPolicy {
     Inherit,
     Capture,
+    /// Capture stdout as a stream without retaining a second copy in memory.
+    Stream,
+    /// Route stderr to the same captured pipe as stdout, preserving write order.
+    MergeToStdout,
+    /// Write to an already prepared output path without truncating it again.
+    File {
+        path: PathBuf,
+        append: bool,
+    },
 }
+
+pub(crate) type CapturedOutput = Box<dyn AsyncRead + Unpin + Send>;
 
 #[derive(Debug, Clone)]
 pub struct ProcessSpec {
@@ -137,6 +151,16 @@ impl ProcessSpec {
                     .to_string(),
             ));
         }
+        if self.stderr == OutputPolicy::MergeToStdout && self.stdout != OutputPolicy::Capture {
+            return Err(ProcessError::InvalidSpec(
+                "stderr can merge into stdout only when stdout is captured".to_string(),
+            ));
+        }
+        if self.stderr == OutputPolicy::Stream {
+            return Err(ProcessError::InvalidSpec(
+                "streaming output is supported only for stdout".to_string(),
+            ));
+        }
         Ok(())
     }
 }
@@ -162,6 +186,8 @@ pub enum ProcessTermination {
 #[derive(Debug)]
 pub struct ProcessResult {
     pub termination: ProcessTermination,
+    /// The process was terminated by SIGINT or the platform's interrupt signal.
+    pub was_interrupted: bool,
     pub stdout: Option<Vec<u8>>,
     pub stderr: Option<Vec<u8>>,
 }
@@ -195,6 +221,7 @@ type ReaderResult = Result<Vec<u8>, std::io::Error>;
 pub struct ProcessHandle {
     child: Option<sys::Child>,
     tree: sys::ProcessTree,
+    stdin: Option<sys::ChildStdin>,
     stdin_writer: Option<JoinHandle<()>>,
     stdout_reader: Option<JoinHandle<ReaderResult>>,
     stderr_reader: Option<JoinHandle<ReaderResult>>,
@@ -207,7 +234,36 @@ impl ProcessHandle {
         spec: ProcessSpec,
         output: Option<mpsc::UnboundedSender<OutputChunk>>,
     ) -> Result<Self, ProcessError> {
+        Self::spawn_with_output(spec, output, None)
+    }
+
+    /// Spawn a process whose stdout is relayed through a bounded channel.
+    /// This is intended for pipeline connections where downstream backpressure
+    /// must limit queued output.
+    pub fn spawn_streaming(
+        spec: ProcessSpec,
+        output: mpsc::Sender<OutputChunk>,
+    ) -> Result<Self, ProcessError> {
+        if spec.stdout != OutputPolicy::Stream {
+            return Err(ProcessError::InvalidSpec(
+                "streaming process output requires the Stream stdout policy".to_string(),
+            ));
+        }
+        Self::spawn_with_output(spec, None, Some(output))
+    }
+
+    fn spawn_with_output(
+        spec: ProcessSpec,
+        output: Option<mpsc::UnboundedSender<OutputChunk>>,
+        streaming_output: Option<mpsc::Sender<OutputChunk>>,
+    ) -> Result<Self, ProcessError> {
         spec.validate()?;
+        let streaming_stdout = spec.stdout == OutputPolicy::Stream;
+        if streaming_stdout && output.is_none() && streaming_output.is_none() {
+            return Err(ProcessError::InvalidSpec(
+                "streaming stdout requires an output receiver".to_string(),
+            ));
+        }
         let sys::SpawnedProcess {
             child,
             tree,
@@ -216,22 +272,42 @@ impl ProcessHandle {
             stderr,
         } = sys::spawn(&spec)?;
 
-        let stdin_writer = match spec.stdin {
-            StdinPolicy::Bytes(bytes) => stdin.map(|mut stdin| {
-                tokio::spawn(async move {
-                    let _ = stdin.write_all(&bytes).await;
-                    let _ = stdin.shutdown().await;
-                })
-            }),
-            StdinPolicy::Inherit | StdinPolicy::Null => None,
+        let (stdin, stdin_writer) = match spec.stdin {
+            StdinPolicy::Bytes(bytes) => (
+                None,
+                stdin.map(|mut stdin| {
+                    tokio::spawn(async move {
+                        let _ = stdin.write_all(&bytes).await;
+                        let _ = stdin.shutdown().await;
+                    })
+                }),
+            ),
+            StdinPolicy::Pipe => (stdin, None),
+            StdinPolicy::Inherit | StdinPolicy::Null => (None, None),
         };
-        let stdout_reader =
-            stdout.map(|reader| spawn_reader(reader, OutputStream::Stdout, output.clone()));
-        let stderr_reader = stderr.map(|reader| spawn_reader(reader, OutputStream::Stderr, output));
+        let stdout_reader = stdout.map(|reader| {
+            spawn_reader(
+                reader,
+                OutputStream::Stdout,
+                output.clone(),
+                streaming_output.clone(),
+                !streaming_stdout,
+            )
+        });
+        let stderr_reader = stderr.map(|reader| {
+            spawn_reader(
+                reader,
+                OutputStream::Stderr,
+                if streaming_stdout { None } else { output },
+                None,
+                true,
+            )
+        });
 
         Ok(Self {
             child: Some(child),
             tree,
+            stdin,
             stdin_writer,
             stdout_reader,
             stderr_reader,
@@ -244,11 +320,30 @@ impl ProcessHandle {
         self.child.as_ref().and_then(sys::Child::id)
     }
 
+    /// Connect this process's stdin to another process's captured stdout.
+    /// When this process stops reading, the sender is dropped so the upstream
+    /// process receives a closed pipe instead of accumulating output forever.
+    pub fn connect_stdin_from(&mut self, mut receiver: mpsc::Receiver<OutputChunk>) {
+        let Some(mut stdin) = self.stdin.take() else {
+            return;
+        };
+        self.stdin_writer = Some(tokio::spawn(async move {
+            while let Some(chunk) = receiver.recv().await {
+                if chunk.stream == OutputStream::Stdout
+                    && stdin.write_all(&chunk.bytes).await.is_err()
+                {
+                    break;
+                }
+            }
+            let _ = stdin.shutdown().await;
+        }));
+    }
+
     pub async fn wait(
         mut self,
         cancellation: CancellationToken,
     ) -> Result<ProcessResult, ProcessError> {
-        let (termination, cancelled) = {
+        let (termination, cancelled, interrupted, was_interrupted) = {
             let child = self
                 .child
                 .as_mut()
@@ -265,15 +360,27 @@ impl ProcessHandle {
                         self.tree.kill();
                         let _ = child.wait().await;
                     }
-                    (ProcessTermination::Cancelled, true)
+                    (ProcessTermination::Cancelled, true, false, false)
                 }
                 result = child.wait() => {
                     let status = result.map_err(ProcessError::Wait)?;
-                    (ProcessTermination::Exited(status), false)
+                    let interrupted = process_was_interrupted(&status);
+                    let was_interrupted = process_was_interrupted_by_signal(&status);
+                    (ProcessTermination::Exited(status), false, interrupted, was_interrupted)
                 }
             }
         };
         let _reaped_child = self.child.take();
+
+        // Interactive commands receive Ctrl+C directly because they own the
+        // terminal's foreground process group. The shell may exit on SIGINT
+        // while a child it launched (for example, npm's server process) stays
+        // alive. The process group is still ours to clean up in that case.
+        if interrupted {
+            self.tree.terminate();
+            tokio::time::sleep(self.termination_grace).await;
+            self.tree.kill();
+        }
 
         if let Some(writer) = self.stdin_writer.take() {
             let _ = writer.await;
@@ -302,10 +409,33 @@ impl ProcessHandle {
         }
         Ok(ProcessResult {
             termination,
+            was_interrupted,
             stdout,
             stderr,
         })
     }
+}
+
+#[cfg(unix)]
+fn process_was_interrupted(status: &ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt;
+    status.signal() == Some(libc::SIGINT) || status.code() == Some(130)
+}
+
+#[cfg(unix)]
+fn process_was_interrupted_by_signal(status: &ExitStatus) -> bool {
+    use std::os::unix::process::ExitStatusExt;
+    status.signal() == Some(libc::SIGINT)
+}
+
+#[cfg(windows)]
+fn process_was_interrupted(status: &ExitStatus) -> bool {
+    status.code() == Some(130) || status.code() == Some(0xC000_013A_u32 as i32)
+}
+
+#[cfg(windows)]
+fn process_was_interrupted_by_signal(status: &ExitStatus) -> bool {
+    status.code() == Some(0xC000_013A_u32 as i32)
 }
 
 impl Drop for ProcessHandle {
@@ -327,6 +457,8 @@ fn spawn_reader<R>(
     mut reader: R,
     stream: OutputStream,
     output: Option<mpsc::UnboundedSender<OutputChunk>>,
+    streaming_output: Option<mpsc::Sender<OutputChunk>>,
+    collect_output: bool,
 ) -> JoinHandle<ReaderResult>
 where
     R: AsyncRead + Unpin + Send + 'static,
@@ -340,9 +472,17 @@ where
                 break;
             }
             let bytes = chunk[..read].to_vec();
-            collected.extend_from_slice(&bytes);
+            if collect_output {
+                collected.extend_from_slice(&bytes);
+            }
             if let Some(sender) = &output {
-                let _ = sender.send(OutputChunk { stream, bytes });
+                if sender.send(OutputChunk { stream, bytes }).is_err() {
+                    break;
+                }
+            } else if let Some(sender) = &streaming_output
+                && sender.send(OutputChunk { stream, bytes }).await.is_err()
+            {
+                break;
             }
         }
         Ok(collected)

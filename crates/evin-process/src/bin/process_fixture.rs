@@ -13,7 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::fs::OpenOptions;
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
@@ -30,6 +30,14 @@ fn main() {
             print!("fixture-stdout");
             eprint!("fixture-stderr");
         }
+        Some("emit-reversed") => {
+            std::io::stderr().write_all(b"err").unwrap();
+            std::io::stdout().write_all(b"out").unwrap();
+        }
+        Some("emit-overwrite") => {
+            std::io::stderr().write_all(b"e").unwrap();
+            std::io::stdout().write_all(b"123456").unwrap();
+        }
         Some("burst") => {
             let count = parse_usize(&args, 1);
             for index in 0..count {
@@ -40,6 +48,22 @@ fn main() {
             let mut input = Vec::new();
             std::io::stdin().read_to_end(&mut input).unwrap();
             std::io::stdout().write_all(&input).unwrap();
+        }
+        Some("emit-until-disconnected") => {
+            let mut stdout = std::io::stdout().lock();
+            loop {
+                if stdout.write_all(b"line\n").is_err() || stdout.flush().is_err() {
+                    break;
+                }
+            }
+        }
+        Some("read-one-line") => {
+            let mut line = Vec::new();
+            std::io::stdin()
+                .lock()
+                .read_until(b'\n', &mut line)
+                .unwrap();
+            std::io::stdout().write_all(&line).unwrap();
         }
         Some("print-env") => {
             if let Some(name) = args.get(1) {
@@ -73,6 +97,32 @@ fn main() {
                 let _ = child.wait();
             } else {
                 std::thread::sleep(Duration::from_millis(duration as u64));
+            }
+        }
+        #[cfg(unix)]
+        Some("interrupt-tree") => {
+            let pid_file = args.get(1).expect("pid file");
+            append_pid(Path::new(pid_file));
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args(["ignore-int-child", pid_file])
+                .spawn()
+                .unwrap();
+            // Waiting leaves the parent blocked until the test sends SIGINT.
+            // The parent keeps the default action and exits; the child ignores
+            // SIGINT so the supervisor must clean up the remaining group.
+            let _ = child.wait();
+        }
+        #[cfg(unix)]
+        Some("ignore-int-child") => {
+            let pid_file = args.get(1).expect("pid file");
+            append_pid(Path::new(pid_file));
+            // SAFETY: this fixture deliberately ignores SIGINT to model a
+            // server process left behind by its npm parent.
+            unsafe {
+                libc::signal(libc::SIGINT, libc::SIG_IGN);
+            }
+            loop {
+                std::thread::sleep(Duration::from_secs(30));
             }
         }
         #[cfg(unix)]

@@ -57,6 +57,51 @@ async fn captures_exact_output_and_streams_chunks() {
 }
 
 #[tokio::test]
+async fn merged_output_preserves_write_order_across_stdout_and_stderr() {
+    let mut spec = fixture_spec("emit-reversed", &[]);
+    spec.stderr = OutputPolicy::MergeToStdout;
+    let result = ProcessHandle::spawn(spec, None)
+        .unwrap()
+        .wait(CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert!(matches!(result.termination, ProcessTermination::Exited(status) if status.success()));
+    assert_eq!(result.stdout.as_deref(), Some(b"errout".as_slice()));
+    assert_eq!(result.stderr, None);
+}
+
+#[tokio::test]
+async fn separate_file_outputs_keep_independent_offsets_and_do_not_retruncate() {
+    let temp = tempfile::tempdir().unwrap();
+    let output_path = temp.path().join("shared-output.txt");
+    std::fs::write(&output_path, b"prepared-before-spawn").unwrap();
+
+    let mut spec = fixture_spec("emit-overwrite", &[]);
+    spec.stdout = OutputPolicy::File {
+        path: output_path.clone(),
+        append: false,
+    };
+    spec.stderr = OutputPolicy::File {
+        path: output_path.clone(),
+        append: false,
+    };
+    let result = ProcessHandle::spawn(spec, None)
+        .unwrap()
+        .wait(CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert!(matches!(result.termination, ProcessTermination::Exited(status) if status.success()));
+    assert_eq!(result.stdout, None);
+    assert_eq!(result.stderr, None);
+    assert_eq!(
+        std::fs::read(output_path).unwrap(),
+        b"123456ed-before-spawn"
+    );
+}
+
+#[tokio::test]
 async fn writes_buffered_stdin_and_replaces_environment() {
     let mut spec = fixture_spec("echo-stdin", &[]);
     spec.stdin = StdinPolicy::Bytes(b"buffered input".to_vec());
@@ -77,6 +122,38 @@ async fn writes_buffered_stdin_and_replaces_environment() {
         .await
         .unwrap();
     assert_eq!(result.stdout.as_deref(), Some(b"isolated".as_slice()));
+}
+
+#[tokio::test]
+async fn streamed_process_pipes_close_upstream_when_consumer_stops_early() {
+    let (sender, receiver) = mpsc::channel::<OutputChunk>(8);
+    let mut producer_spec = fixture_spec("emit-until-disconnected", &[]);
+    producer_spec.stdout = OutputPolicy::Stream;
+    let producer = ProcessHandle::spawn_streaming(producer_spec, sender).unwrap();
+
+    let mut consumer_spec = fixture_spec("read-one-line", &[]);
+    consumer_spec.stdin = StdinPolicy::Pipe;
+    let mut consumer = ProcessHandle::spawn(consumer_spec, None).unwrap();
+    consumer.connect_stdin_from(receiver);
+
+    let token = CancellationToken::new();
+    let (producer_result, consumer_result) =
+        tokio::join!(producer.wait(token.clone()), consumer.wait(token));
+    let producer_result = producer_result.unwrap();
+    let consumer_result = consumer_result.unwrap();
+
+    assert!(matches!(
+        producer_result.termination,
+        ProcessTermination::Exited(status) if status.success()
+    ));
+    assert!(matches!(
+        consumer_result.termination,
+        ProcessTermination::Exited(status) if status.success()
+    ));
+    assert_eq!(
+        consumer_result.stdout.as_deref(),
+        Some(b"line\n".as_slice())
+    );
 }
 
 #[tokio::test]
@@ -106,6 +183,20 @@ async fn preserves_nonzero_exit_status() {
     assert!(
         matches!(result.termination, ProcessTermination::Exited(status) if status.code() == Some(23))
     );
+}
+
+#[tokio::test]
+async fn explicit_status_130_is_not_reported_as_signal_interruption() {
+    let result = ProcessHandle::spawn(fixture_spec("exit", &["130"]), None)
+        .unwrap()
+        .wait(CancellationToken::new())
+        .await
+        .unwrap();
+
+    assert!(
+        matches!(result.termination, ProcessTermination::Exited(status) if status.code() == Some(130))
+    );
+    assert!(!result.was_interrupted);
 }
 
 #[tokio::test]
@@ -197,6 +288,65 @@ async fn cancellation_reaches_a_depth_four_process_tree() {
         }
         assert!(!process_exists(pid), "process {pid} survived");
     }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn interrupt_exit_cleans_up_descendants_that_ignore_sigint() {
+    use std::os::unix::process::ExitStatusExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let pid_file = temp.path().join("interrupt-tree.pids");
+    let mut spec = fixture_spec("interrupt-tree", &[pid_file.to_str().unwrap()]);
+    spec.termination_grace = Duration::from_millis(100);
+    let handle = ProcessHandle::spawn(spec, None).unwrap();
+    let parent_pid = handle.id().unwrap();
+    let waiter = tokio::spawn(handle.wait(CancellationToken::new()));
+
+    let pids = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let pids = std::fs::read_to_string(&pid_file)
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|line| line.parse::<u32>().ok())
+                .collect::<Vec<_>>();
+            if pids.len() == 2 {
+                break pids;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("fixture descendant was not created");
+
+    // SAFETY: the process supervisor created a dedicated process group whose
+    // id is the root process id; this simulates the terminal's Ctrl+C signal.
+    assert_eq!(
+        unsafe { libc::kill(-(parent_pid as libc::pid_t), libc::SIGINT) },
+        0
+    );
+
+    let result = tokio::time::timeout(Duration::from_secs(3), waiter)
+        .await
+        .expect("interrupt cleanup timed out")
+        .unwrap()
+        .unwrap();
+    assert!(
+        matches!(result.termination, ProcessTermination::Exited(status) if status.signal() == Some(libc::SIGINT))
+    );
+    assert!(result.was_interrupted);
+
+    let descendant_pid = pids[1];
+    for _ in 0..100 {
+        if !process_exists(descendant_pid) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(
+        !process_exists(descendant_pid),
+        "descendant {descendant_pid} survived its parent's SIGINT exit"
+    );
 }
 
 #[cfg(unix)]

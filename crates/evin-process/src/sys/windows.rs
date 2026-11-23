@@ -17,7 +17,7 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::mem::size_of;
 use std::os::windows::ffi::OsStrExt;
-use std::os::windows::io::RawHandle;
+use std::os::windows::io::{AsRawHandle, RawHandle};
 use std::os::windows::process::ExitStatusExt;
 use std::process::ExitStatus;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -53,18 +53,19 @@ use windows_sys::Win32::System::Threading::{
     STARTUPINFOEXW, TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 
-use crate::{EnvironmentPolicy, OutputPolicy, ProcessError, ProcessMode, ProcessSpec, StdinPolicy};
+use crate::{
+    CapturedOutput, EnvironmentPolicy, OutputPolicy, ProcessError, ProcessMode, ProcessSpec,
+    StdinPolicy,
+};
 
 pub(crate) type ChildStdin = NamedPipeServer;
-pub(crate) type ChildStdout = NamedPipeServer;
-pub(crate) type ChildStderr = NamedPipeServer;
 
 pub(crate) struct SpawnedProcess {
     pub(crate) child: Child,
     pub(crate) tree: ProcessTree,
     pub(crate) stdin: Option<ChildStdin>,
-    pub(crate) stdout: Option<ChildStdout>,
-    pub(crate) stderr: Option<ChildStderr>,
+    pub(crate) stdout: Option<CapturedOutput>,
+    pub(crate) stderr: Option<CapturedOutput>,
 }
 
 pub(crate) fn spawn(spec: &ProcessSpec) -> Result<SpawnedProcess, ProcessError> {
@@ -148,8 +149,14 @@ fn spawn_inner(spec: &ProcessSpec) -> io::Result<SpawnedProcess> {
         child,
         tree,
         stdin: stdio.stdin_parent.take(),
-        stdout: stdio.stdout_parent.take(),
-        stderr: stdio.stderr_parent.take(),
+        stdout: stdio
+            .stdout_parent
+            .take()
+            .map(|reader| Box::new(reader) as CapturedOutput),
+        stderr: stdio
+            .stderr_parent
+            .take()
+            .map(|reader| Box::new(reader) as CapturedOutput),
     })
 }
 
@@ -289,29 +296,50 @@ impl PreparedStdio {
         let (stdin_child, stdin_parent) = match spec.stdin {
             StdinPolicy::Inherit => (inherited_stdio(STD_INPUT_HANDLE, true)?, None),
             StdinPolicy::Null => (null_handle(true)?, None),
-            StdinPolicy::Bytes(_) => {
+            StdinPolicy::Bytes(_) | StdinPolicy::Pipe => {
                 let pair = pipe_pair(false)?;
                 (pair.child, Some(pair.parent))
             }
         };
-        let (stdout_child, stdout_parent) = match spec.stdout {
-            OutputPolicy::Inherit => (inherited_stdio(STD_OUTPUT_HANDLE, false)?, None),
-            OutputPolicy::Capture => {
+        let (stdout_child, stdout_parent) = match &spec.stdout {
+            OutputPolicy::Inherit => (Some(inherited_stdio(STD_OUTPUT_HANDLE, false)?), None),
+            OutputPolicy::Capture | OutputPolicy::Stream => {
                 let pair = pipe_pair(true)?;
-                (pair.child, Some(pair.parent))
+                (Some(pair.child), Some(pair.parent))
+            }
+            OutputPolicy::MergeToStdout => unreachable!("stdout cannot merge into itself"),
+            OutputPolicy::File { path, append } => {
+                let file = open_output_file(path, *append)?;
+                let handle = duplicate_inheritable(file.as_raw_handle() as HANDLE)?;
+                (Some(handle), None)
             }
         };
-        let (stderr_child, stderr_parent) = match spec.stderr {
-            OutputPolicy::Inherit => (inherited_stdio(STD_ERROR_HANDLE, false)?, None),
+        let (stderr_child, stderr_parent) = match &spec.stderr {
+            OutputPolicy::Inherit => (Some(inherited_stdio(STD_ERROR_HANDLE, false)?), None),
             OutputPolicy::Capture => {
                 let pair = pipe_pair(true)?;
-                (pair.child, Some(pair.parent))
+                (Some(pair.child), Some(pair.parent))
+            }
+            OutputPolicy::Stream => unreachable!("stderr streaming is unsupported"),
+            OutputPolicy::MergeToStdout => (
+                Some(duplicate_inheritable(
+                    stdout_child
+                        .as_ref()
+                        .expect("merged stderr requires captured stdout")
+                        .raw(),
+                )?),
+                None,
+            ),
+            OutputPolicy::File { path, append } => {
+                let file = open_output_file(path, *append)?;
+                let handle = duplicate_inheritable(file.as_raw_handle() as HANDLE)?;
+                (Some(handle), None)
             }
         };
         Ok(Self {
             stdin_child: Some(stdin_child),
-            stdout_child: Some(stdout_child),
-            stderr_child: Some(stderr_child),
+            stdout_child,
+            stderr_child,
             stdin_parent,
             stdout_parent,
             stderr_parent,
@@ -331,6 +359,35 @@ impl PreparedStdio {
         self.stdout_child.take();
         self.stderr_child.take();
     }
+}
+
+fn open_output_file(path: &std::path::Path, append: bool) -> io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true);
+    if append {
+        options.append(true);
+    }
+    options.open(path)
+}
+
+fn duplicate_inheritable(handle: HANDLE) -> io::Result<OwnedHandle> {
+    let current = unsafe { GetCurrentProcess() };
+    let mut duplicate = std::ptr::null_mut();
+    let duplicated = unsafe {
+        DuplicateHandle(
+            current,
+            handle,
+            current,
+            &mut duplicate,
+            0,
+            1,
+            DUPLICATE_SAME_ACCESS,
+        )
+    };
+    if duplicated == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    OwnedHandle::new(duplicate)
 }
 
 struct PipePair {

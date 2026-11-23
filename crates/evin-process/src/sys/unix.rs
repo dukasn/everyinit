@@ -13,22 +13,24 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::io;
+use std::os::fd::{FromRawFd, OwnedFd};
 use std::process::Stdio;
 use tokio::process::Command;
 
-use crate::{EnvironmentPolicy, OutputPolicy, ProcessError, ProcessMode, ProcessSpec, StdinPolicy};
+use crate::{
+    CapturedOutput, EnvironmentPolicy, OutputPolicy, ProcessError, ProcessMode, ProcessSpec,
+    StdinPolicy,
+};
 
 pub(crate) type Child = tokio::process::Child;
 pub(crate) type ChildStdin = tokio::process::ChildStdin;
-pub(crate) type ChildStdout = tokio::process::ChildStdout;
-pub(crate) type ChildStderr = tokio::process::ChildStderr;
 
 pub(crate) struct SpawnedProcess {
     pub(crate) child: Child,
     pub(crate) tree: ProcessTree,
     pub(crate) stdin: Option<ChildStdin>,
-    pub(crate) stdout: Option<ChildStdout>,
-    pub(crate) stderr: Option<ChildStderr>,
+    pub(crate) stdout: Option<CapturedOutput>,
+    pub(crate) stderr: Option<CapturedOutput>,
 }
 
 pub(crate) fn spawn(spec: &ProcessSpec) -> Result<SpawnedProcess, ProcessError> {
@@ -43,15 +45,42 @@ pub(crate) fn spawn(spec: &ProcessSpec) -> Result<SpawnedProcess, ProcessError> 
     match &spec.stdin {
         StdinPolicy::Inherit => command.stdin(Stdio::inherit()),
         StdinPolicy::Null => command.stdin(Stdio::null()),
-        StdinPolicy::Bytes(_) => command.stdin(Stdio::piped()),
+        StdinPolicy::Bytes(_) | StdinPolicy::Pipe => command.stdin(Stdio::piped()),
     };
-    match spec.stdout {
+    match &spec.stdout {
         OutputPolicy::Inherit => command.stdout(Stdio::inherit()),
-        OutputPolicy::Capture => command.stdout(Stdio::piped()),
+        OutputPolicy::Capture | OutputPolicy::Stream => command.stdout(Stdio::piped()),
+        OutputPolicy::MergeToStdout => unreachable!("stdout cannot merge into itself"),
+        OutputPolicy::File { path, append } => {
+            let file = open_output_file(path, *append).map_err(|source| ProcessError::Spawn {
+                program: spec.program.to_string_lossy().into_owned(),
+                source,
+            })?;
+            command.stdout(Stdio::from(file))
+        }
     };
-    match spec.stderr {
-        OutputPolicy::Inherit => command.stderr(Stdio::inherit()),
-        OutputPolicy::Capture => command.stderr(Stdio::piped()),
+    let merged_reader = if spec.stderr == OutputPolicy::MergeToStdout {
+        let (reader, writer) = create_output_pipe().map_err(ProcessError::Supervision)?;
+        let stderr_writer = writer.try_clone().map_err(ProcessError::Supervision)?;
+        command.stdout(Stdio::from(writer));
+        command.stderr(Stdio::from(stderr_writer));
+        Some(Box::new(tokio::fs::File::from_std(reader)) as CapturedOutput)
+    } else {
+        match &spec.stderr {
+            OutputPolicy::Inherit => command.stderr(Stdio::inherit()),
+            OutputPolicy::Capture => command.stderr(Stdio::piped()),
+            OutputPolicy::Stream => unreachable!("stderr streaming is unsupported"),
+            OutputPolicy::MergeToStdout => unreachable!(),
+            OutputPolicy::File { path, append } => {
+                let file =
+                    open_output_file(path, *append).map_err(|source| ProcessError::Spawn {
+                        program: spec.program.to_string_lossy().into_owned(),
+                        source,
+                    })?;
+                command.stderr(Stdio::from(file))
+            }
+        };
+        None
     };
 
     let spawn_context =
@@ -68,8 +97,8 @@ pub(crate) fn spawn(spec: &ProcessSpec) -> Result<SpawnedProcess, ProcessError> 
         }
     };
     let stdin = child.stdin.take();
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
+    let stdout = merged_reader.or_else(|| child.stdout.take().map(|reader| Box::new(reader) as _));
+    let stderr = child.stderr.take().map(|reader| Box::new(reader) as _);
     Ok(SpawnedProcess {
         child,
         tree,
@@ -77,6 +106,46 @@ pub(crate) fn spawn(spec: &ProcessSpec) -> Result<SpawnedProcess, ProcessError> 
         stdout,
         stderr,
     })
+}
+
+fn open_output_file(path: &std::path::Path, append: bool) -> io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true);
+    if append {
+        options.append(true);
+    }
+    options.open(path)
+}
+
+fn create_output_pipe() -> io::Result<(std::fs::File, std::fs::File)> {
+    let mut descriptors = [-1; 2];
+    if unsafe { libc::pipe(descriptors.as_mut_ptr()) } == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: pipe initialized both descriptors and ownership transfers into
+    // OwnedFd, including on the subsequent CLOEXEC setup error path.
+    let read_end = unsafe { OwnedFd::from_raw_fd(descriptors[0]) };
+    // SAFETY: as above, the second descriptor is a distinct owned pipe end.
+    let write_end = unsafe { OwnedFd::from_raw_fd(descriptors[1]) };
+    for descriptor in [&read_end, &write_end] {
+        let flags =
+            unsafe { libc::fcntl(std::os::fd::AsRawFd::as_raw_fd(descriptor), libc::F_GETFD) };
+        if flags == -1
+            || unsafe {
+                libc::fcntl(
+                    std::os::fd::AsRawFd::as_raw_fd(descriptor),
+                    libc::F_SETFD,
+                    flags | libc::FD_CLOEXEC,
+                )
+            } == -1
+        {
+            return Err(io::Error::last_os_error());
+        }
+    }
+    Ok((
+        std::fs::File::from(read_end),
+        std::fs::File::from(write_end),
+    ))
 }
 
 fn spawn_command(command: &mut Command) -> io::Result<Child> {

@@ -18,6 +18,6 @@ mod unix;
 mod windows;
 
 #[cfg(unix)]
-pub(crate) use unix::{Child, ProcessTree, SpawnedProcess, spawn};
+pub(crate) use unix::{Child, ChildStdin, ProcessTree, SpawnedProcess, spawn};
 #[cfg(windows)]
-pub(crate) use windows::{Child, ProcessTree, SpawnedProcess, spawn};
+pub(crate) use windows::{Child, ChildStdin, ProcessTree, SpawnedProcess, spawn};
