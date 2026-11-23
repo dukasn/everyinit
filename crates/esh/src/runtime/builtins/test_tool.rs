@@ -89,6 +89,9 @@ fn has_file_type(_path: &Path, _predicate: impl FnOnce(&std::fs::FileType) -> bo
 }
 
 fn resolve_path(ctx: &ExecutionContext, path: &str) -> PathBuf {
+    if path.is_empty() {
+        return PathBuf::new();
+    }
     let path = Path::new(path);
     if path.is_absolute() {
         path.to_path_buf()
@@ -246,21 +249,8 @@ fn binary(ctx: &ExecutionContext, left: &str, op: &str, right: &str) -> Result<b
     })
 }
 
-#[cfg(unix)]
 fn same_file(left: &Path, right: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    match (std::fs::metadata(left), std::fs::metadata(right)) {
-        (Ok(left), Ok(right)) => left.dev() == right.dev() && left.ino() == right.ino(),
-        _ => false,
-    }
-}
-
-#[cfg(not(unix))]
-fn same_file(left: &Path, right: &Path) -> bool {
-    match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
-        (Ok(left), Ok(right)) => left == right,
-        _ => false,
-    }
+    same_file::is_same_file(left, right).unwrap_or(false)
 }
 
 struct TestParser<'a, 'ctx> {
@@ -306,6 +296,32 @@ impl TestParser<'_, '_> {
 
     fn parse_primary(&mut self) -> Result<bool, String> {
         let remaining = self.tokens.len().saturating_sub(self.position);
+        // POSIX resolves the three-argument binary form before interpreting
+        // parentheses, since either parenthesis may be an ordinary operand.
+        if remaining == 3 {
+            let left = self.tokens[self.position];
+            let op = self.tokens[self.position + 1];
+            let right = self.tokens[self.position + 2];
+            if is_binary_operator(op) || matches!(op, "-a" | "-o") {
+                self.position += 3;
+                if op == "-a" {
+                    return Ok(!left.is_empty() && !right.is_empty());
+                }
+                if op == "-o" {
+                    return Ok(!left.is_empty() || !right.is_empty());
+                }
+                return binary(self.ctx, left, op, right);
+            }
+
+            // In the XSI three-argument form, parentheses surround one
+            // operand. Resolve that arity before interpreting a leading
+            // unary-looking token as an operator with a missing operand.
+            if left == "(" && right == ")" {
+                self.position += 3;
+                return Ok(!op.is_empty());
+            }
+        }
+
         if remaining == 1 && self.peek() == Some("(") {
             self.position += 1;
             return Ok(true);
@@ -326,7 +342,14 @@ impl TestParser<'_, '_> {
         }
 
         if remaining >= 2 && self.peek() == Some("-t") {
-            return Err("terminal predicate '-t' is unsupported".to_string());
+            let binary_expression = remaining >= 3
+                && self.tokens.get(self.position + 1).is_some_and(|operator| {
+                    is_binary_operator(operator)
+                        || (remaining == 3 && matches!(*operator, "-a" | "-o"))
+                });
+            if !binary_expression {
+                return Err("terminal predicate '-t' is unsupported".to_string());
+            }
         }
 
         if remaining >= 3 {

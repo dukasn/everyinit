@@ -678,6 +678,20 @@ async fn grep_preserves_posix_first_closing_bracket_and_named_character_classes(
         0
     );
     assert_eq!(ctx.get_captured_stdout().unwrap(), "1\n");
+
+    ctx.enable_capture();
+    ctx.set_stdin(b"left\x0bright\nordinary\n".to_vec());
+    assert_eq!(
+        engine
+            .eval_str("grep '[[:space:]]'", &mut ctx)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap().as_bytes(),
+        b"left\x0bright\n"
+    );
 }
 
 #[tokio::test]
@@ -977,6 +991,64 @@ async fn glob_requires_a_literal_leading_dot_for_hidden_paths() {
         ctx.get_captured_stdout().unwrap(),
         "visible-dir\nvisible.txt\n.hidden.txt\nbracket-skipped\nvisible-dir/child.txt\ninner-skipped\n.hidden-dir/.child.txt\n"
     );
+}
+
+#[tokio::test]
+async fn glob_merges_multiple_patterns_in_sorted_order_and_rejects_invalid_patterns() {
+    let tmp = tempdir().unwrap();
+    for name in ["alpha.txt", "beta.txt", "gamma.txt"] {
+        fs::write(tmp.path().join(name), name).unwrap();
+    }
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let status = engine
+        .eval_str(
+            "glob 'gamma.txt' 'alpha.txt' 'beta.txt' 'alpha.txt'\nglob 'alpha*' '['\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 2);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "alpha.txt\nbeta.txt\ngamma.txt\n"
+    );
+    assert!(
+        ctx.get_captured_stderr()
+            .unwrap()
+            .starts_with("esh: glob: invalid pattern '[':")
+    );
+}
+
+#[tokio::test]
+async fn glob_reports_no_matches_but_succeeds_when_any_pattern_matches() {
+    let tmp = tempdir().unwrap();
+    fs::write(tmp.path().join("present.txt"), "present").unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let status = engine
+        .eval_str(
+            "glob 'missing*'\nNO_MATCH=$?\nglob 'missing*' 'present.txt'\nPARTIAL_MATCH=$?\nprintf 'no-match=%s partial-match=%s\\n' \"$NO_MATCH\" \"$PARTIAL_MATCH\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "present.txt\nno-match=1 partial-match=0\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 }
 
 #[tokio::test]

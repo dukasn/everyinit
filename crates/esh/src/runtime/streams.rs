@@ -14,8 +14,8 @@
 
 use crate::error::ExecError;
 use crate::parser::ast::RedirectionOp;
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs::OpenOptions;
+use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,28 +33,17 @@ impl StreamTarget {
         raw_path: &str,
         cwd: &Path,
     ) -> Result<Self, ExecError> {
-        let trimmed = raw_path.trim();
-        if trimmed == "&2"
-            || trimmed == "2"
-            || (trimmed.is_empty()
-                && (op == RedirectionOp::RedirectStderr
-                    || op == RedirectionOp::RedirectStderrAppend))
-        {
-            return Ok(Self::Stderr);
-        }
-        if trimmed == "&1"
-            || trimmed == "1"
-            || (trimmed.is_empty()
-                && (op == RedirectionOp::RedirectAll || op == RedirectionOp::RedirectAllAppend))
-        {
-            return Ok(Self::Stdout);
-        }
-        if trimmed == "/dev/null" || trimmed.eq_ignore_ascii_case("nul") {
+        if raw_path == "/dev/null" || raw_path.eq_ignore_ascii_case("nul") {
             return Ok(Self::Null);
         }
 
-        let p = Path::new(trimmed);
-        let path = if p.is_absolute() {
+        let p = Path::new(raw_path);
+        let path = if raw_path.is_empty() {
+            // Joining an empty relative path to the working directory would
+            // turn an empty filename into the directory itself. Keep the
+            // empty path so the OS reports it as a missing target.
+            PathBuf::new()
+        } else if p.is_absolute() {
             p.to_path_buf()
         } else {
             cwd.join(p)
@@ -83,20 +72,19 @@ impl StreamTarget {
             }
             StreamTarget::File { path, append } => {
                 let mut options = OpenOptions::new();
-                options.create(true).write(true);
+                options.write(true);
                 if *append {
                     options.append(true);
-                } else {
-                    options.truncate(true);
-                }
-
-                if let Some(parent) = path.parent() {
-                    let _ = fs::create_dir_all(parent);
                 }
 
                 let mut file = options.open(path).map_err(|e| {
                     ExecError::IoError(format!("Cannot open '{}': {}", path.display(), e))
                 })?;
+                if !append {
+                    file.seek(SeekFrom::Start(0)).map_err(|e| {
+                        ExecError::IoError(format!("Cannot seek '{}': {}", path.display(), e))
+                    })?;
+                }
                 file.write_all(data).map_err(|e| {
                     ExecError::IoError(format!("Cannot write to '{}': {}", path.display(), e))
                 })?;
@@ -109,16 +97,6 @@ impl StreamTarget {
         let Self::File { path, append } = self else {
             return Ok(());
         };
-
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| {
-                ExecError::IoError(format!(
-                    "Cannot create parent directory for '{}': {}",
-                    path.display(),
-                    e
-                ))
-            })?;
-        }
 
         let mut options = OpenOptions::new();
         options.write(true);

@@ -87,6 +87,146 @@ async fn nested_functions_resolve_and_update_the_nearest_dynamic_local() {
         ctx.get_captured_stdout().unwrap(),
         "inner-before=caller-local\nouter-after=changed\nroot-after=root\n"
     );
+
+    #[cfg(unix)]
+    {
+        let reference = std::process::Command::new("bash")
+            .args(["--posix", "-c"])
+            .arg(script)
+            .output()
+            .expect("Bash should be available for the dynamic-local comparison");
+        assert!(reference.status.success());
+        assert_eq!(
+            reference.stdout,
+            b"inner-before=caller-local\nouter-after=changed\nroot-after=root\n"
+        );
+    }
+}
+
+#[tokio::test]
+async fn recursive_local_bindings_restore_each_dynamic_frame() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let script = r#"
+        VALUE=root
+        walk() {
+            local VALUE=$1
+            if [ "$1" -gt 0 ]; then
+                walk "$(( $1 - 1 ))" nested
+            fi
+            printf 'frame=%s arg1=%s arg2=%s count=%s\n' "$VALUE" "$1" "$2" "$#"
+        }
+        walk 3 original
+        printf 'root=%s\n' "$VALUE"
+    "#;
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "frame=0 arg1=0 arg2=nested count=2\nframe=1 arg1=1 arg2=nested count=2\nframe=2 arg1=2 arg2=nested count=2\nframe=3 arg1=3 arg2=original count=2\nroot=root\n"
+    );
+
+    #[cfg(unix)]
+    {
+        let reference = std::process::Command::new("bash")
+            .args(["--posix", "-c"])
+            .arg(script)
+            .output()
+            .expect("Bash should be available for the recursive-local comparison");
+        assert!(reference.status.success());
+        assert_eq!(
+            reference.stdout,
+            b"frame=0 arg1=0 arg2=nested count=2\nframe=1 arg1=1 arg2=nested count=2\nframe=2 arg1=2 arg2=nested count=2\nframe=3 arg1=3 arg2=original count=2\nroot=root\n"
+        );
+    }
+}
+
+#[tokio::test]
+async fn function_keyword_extension_and_compound_body_scope_match_the_contract() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                VALUE=root
+                function keyword_body { VALUE=keyword; }
+                keyword_body
+                printf 'keyword=%s\n' "$VALUE"
+
+                function parenthesized_body() { VALUE=parenthesized; }
+                parenthesized_body
+                printf 'parenthesized=%s\n' "$VALUE"
+
+                brace_body() { VALUE=brace; }
+                brace_body
+                printf 'brace=%s\n' "$VALUE"
+
+                subshell_body() ( VALUE=subshell; printf 'inside=%s\n' "$VALUE" )
+                subshell_body
+                printf 'after-subshell=%s\n' "$VALUE"
+
+                conditional_body() if true; then VALUE=conditional; fi
+                conditional_body
+                printf 'conditional=%s\n' "$VALUE"
+
+                case_body() case selected in selected) VALUE=case;; esac
+                case_body
+                printf 'case=%s\n' "$VALUE"
+
+                loop_body() for ITEM in first last; do VALUE=$ITEM; done
+                loop_body
+                printf 'loop=%s\n' "$VALUE"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "keyword=keyword\nparenthesized=parenthesized\nbrace=brace\ninside=subshell\nafter-subshell=brace\nconditional=conditional\ncase=case\nloop=last\n"
+    );
+}
+
+#[tokio::test]
+async fn function_keyword_extension_accepts_reserved_word_identifiers() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let keywords = [
+        "if", "then", "elif", "else", "fi", "for", "in", "while", "until", "do", "done", "case",
+        "esac",
+    ];
+    let mut script = String::new();
+    let mut expected = String::new();
+    for keyword in keywords {
+        script.push_str(&format!(
+            "function {keyword} {{ printf '{keyword}\\n'; }}\n\\{keyword}\n"
+        ));
+        expected.push_str(&format!("{keyword}\n"));
+    }
+
+    let status = engine.eval_str(&script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), expected);
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c"])
+        .arg(&script)
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, expected.as_bytes());
+    }
 }
 
 #[tokio::test]
@@ -186,6 +326,33 @@ async fn scalar_expansion_preserves_one_argument_without_splitting_or_globbing()
 }
 
 #[tokio::test]
+async fn tilde_expansion_respects_user_prefixes_quoting_and_unset_home() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                HOME='/esh home'
+                printf '<%s>|<%s>|<%s>|<%s>|<%s>|<%s>|<%s>\n' ~ ~/release "~" \~/literal prefix~/literal ~esh_audit_missing_user ~esh_audit_missing_user/path
+                printf 'other-prefixes=<%s>|<%s>\n' ~+ ~-
+                unset HOME
+                printf 'unset=<%s>|<%s>\n' ~ ~/release
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "</esh home>|</esh home/release>|<~>|<~/literal>|<prefix~/literal>|<~esh_audit_missing_user>|<~esh_audit_missing_user/path>\nother-prefixes=<~+>|<~->\nunset=<~>|<~/release>\n"
+    );
+}
+
+#[tokio::test]
 async fn command_substitution_preserves_nul_bytes_in_shell_values() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -193,14 +360,20 @@ async fn command_substitution_preserves_nul_bytes_in_shell_values() {
 
     let status = engine
         .eval_str(
-            "VALUE=$(printf 'left\\000right'); printf '<%s>\\n' \"$VALUE\"\n",
+            r#"VALUE=$(printf 'left\000right\n\n')
+LEGACY=`printf 'back\000tick\n\n'`
+printf '<%s>|<%s>\n' "$VALUE" "$LEGACY"
+"#,
             &mut ctx,
         )
         .await
         .unwrap();
 
     assert_eq!(status, 0);
-    assert_eq!(ctx.get_captured_stdout_bytes().unwrap(), b"<left\0right>\n");
+    assert_eq!(
+        ctx.get_captured_stdout_bytes().unwrap(),
+        b"<left\0right>|<back\0tick>\n"
+    );
 }
 
 #[tokio::test]
@@ -216,6 +389,41 @@ async fn backslash_quoting_preserves_escaped_characters_and_removes_line_continu
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
         "one two\nliteral*\ndouble\\q\nleftright\n"
+    );
+}
+
+#[tokio::test]
+async fn quote_contexts_preserve_literals_and_join_adjacent_word_segments() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            r#"
+                VALUE='literal $HOME * `tick` \\ end'
+                capture() { printf 'argc=%s:<%s>\n' "$#" "$1"; }
+                capture '$HOME * `tick` \\ end'
+                capture "$VALUE"
+                capture pre" two "'three '"$VALUE"post
+                capture ''
+                capture ""
+                capture pre""post
+                EMPTY=
+                capture "$EMPTY"
+                capture pre"$EMPTY"post
+                capture "dollar=\$HOME slash=\\ quote=\" tick=\` other=\q"
+                capture "$(printf 'first\nsecond\n\n')"
+            "#,
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "argc=1:<$HOME * `tick` \\\\ end>\nargc=1:<literal $HOME * `tick` \\\\ end>\nargc=1:<pre two three literal $HOME * `tick` \\\\ endpost>\nargc=1:<>\nargc=1:<>\nargc=1:<prepost>\nargc=1:<>\nargc=1:<prepost>\nargc=1:<dollar=$HOME slash=\\ quote=\" tick=` other=\\q>\nargc=1:<first\nsecond>\n"
     );
 }
 
@@ -266,7 +474,7 @@ async fn embedded_positional_at_remains_one_space_joined_scalar() {
 
     let status = engine
         .eval_str(
-            "capture_args() { echo \"$#:<$1>\"; }\ncapture_args \"pre$@post\"\ncapture_args prefix$@suffix\n",
+            "capture_args() { echo \"$#:<$1>\"; }\ncapture_args \"pre$@post\"\ncapture_args prefix$@suffix\nIFS=:\nset -- '' ''\ncapture_args \"pre$@post\"\ncapture_args prefix$@suffix\nset -- ''\ncapture_args \"pre$@post\"\nset -- '' value ''\ncapture_args \"pre$@post\"\n",
             &mut ctx,
         )
         .await
@@ -275,7 +483,7 @@ async fn embedded_positional_at_remains_one_space_joined_scalar() {
     assert_eq!(status, 0);
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        "1:<prefirst value secondpost>\n1:<prefixfirst value secondsuffix>\n"
+        "1:<prefirst value secondpost>\n1:<prefixfirst value secondsuffix>\n1:<pre post>\n1:<prefix suffix>\n1:<prepost>\n1:<pre value post>\n"
     );
 }
 
@@ -607,10 +815,9 @@ async fn array_prefix_assignments_are_scoped_across_builtins_and_redirections() 
     );
     assert_eq!(
         ctx.get_shell_val("ESH_PREFIX_ARRAY"),
-        Some(&esh::runtime::context::ShellValue::Array(vec![
-            "original".to_string(),
-            "values".to_string()
-        ]))
+        Some(&esh::runtime::context::ShellValue::Array(
+            [(0, "original".to_string()), (1, "values".to_string()),].into(),
+        ))
     );
     assert!(!ctx.env_vars().contains_key("ESH_PREFIX_ARRAY"));
 }
@@ -625,6 +832,8 @@ async fn subshell_state_is_isolated_and_pipeline_adopts_last_stage_state() {
         VALUE=outer
         ( echo child; VALUE=subshell )
         echo "$VALUE"
+        VALUE=first | cat
+        echo "$VALUE"
         echo pipeline | VALUE=last
         echo "$VALUE"
     "#;
@@ -632,5 +841,8 @@ async fn subshell_state_is_isolated_and_pipeline_adopts_last_stage_state() {
     let status = engine.eval_str(script, &mut ctx).await.unwrap();
 
     assert_eq!(status, 0);
-    assert_eq!(ctx.get_captured_stdout().unwrap(), "child\nouter\nlast\n");
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "child\nouter\nouter\nlast\n"
+    );
 }

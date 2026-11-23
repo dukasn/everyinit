@@ -35,6 +35,84 @@ async fn command_runs_builtin_without_invoking_shadowing_function() {
     );
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn true_and_false_builtins_take_precedence_over_same_named_path_executables() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let engine = Engine::new();
+    let temp = tempfile::tempdir().unwrap();
+    for (name, marker) in [("true", "external-true"), ("false", "external-false")] {
+        let executable = temp.path().join(name);
+        std::fs::write(
+            &executable,
+            format!("#!/bin/sh\nprintf '%s\\n' '{marker}'\nexit 19\n"),
+        )
+        .unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let mut ctx = ExecutionContext::new();
+    ctx.set_env("PATH", temp.path().to_string_lossy().into_owned());
+    ctx.enable_capture();
+    let status = engine
+        .eval_str(
+            "true ignored operands\nTRUE_STATUS=$?\nfalse ignored operands\nFALSE_STATUS=$?\ntype true false\nprintf 'statuses=%s:%s\\n' \"$TRUE_STATUS\" \"$FALSE_STATUS\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "true is an ESH builtin\nfalse is an ESH builtin\nstatuses=0:1\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn alias_and_unalias_do_not_rewrite_later_command_words() {
+    let engine = Engine::new();
+    let temp = tempfile::tempdir().unwrap();
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_env("PATH", temp.path().to_string_lossy().into_owned());
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "alias ll='printf alias-output'\nll\nunalias ll\nll\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 127);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(
+        ctx.get_captured_stderr().unwrap(),
+        concat!(
+            "esh: alias: command not found\n",
+            "esh: ll: command not found\n",
+            "esh: unalias: command not found\n",
+            "esh: ll: command not found\n",
+        )
+    );
+
+    #[cfg(unix)]
+    {
+        let reference = std::process::Command::new("bash")
+            .args(["--posix", "-c"])
+            .arg("shopt -s expand_aliases\nalias ll='printf alias-output'\nll\n")
+            .output()
+            .expect("Bash should be available for the alias comparison");
+        assert!(reference.status.success(), "Bash did not expand the alias");
+        assert_eq!(reference.stdout, b"alias-output");
+        assert_eq!(reference.stderr, b"");
+    }
+}
+
 #[tokio::test]
 async fn command_v_and_big_v_report_builtin_resolution() {
     let engine = Engine::new();
@@ -51,6 +129,48 @@ async fn command_v_and_big_v_report_builtin_resolution() {
         ctx.get_captured_stdout().unwrap(),
         "printf\nprintf is an ESH builtin\n"
     );
+}
+
+#[tokio::test]
+async fn command_queries_recognize_reserved_words_like_posix_shells() {
+    let script = "command -v if\ncommand -V if\ncommand -v '!'\ncommand -V '!'\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "if\nif is a reserved word\n!\n! is a reserved word\n"
+    );
+
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c", "command -v if; command -v '!'"])
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, b"if\n!\n");
+        assert_eq!(reference.stderr, b"");
+    }
+}
+
+#[tokio::test]
+async fn command_and_type_without_operands_succeed_without_output() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "command\nCOMMAND_STATUS=$?\ncommand -v\nBRIEF_STATUS=$?\ncommand -V\nVERBOSE_STATUS=$?\ntype\nTYPE_STATUS=$?\nprintf '%s:%s:%s:%s\\n' \"$COMMAND_STATUS\" \"$BRIEF_STATUS\" \"$VERBOSE_STATUS\" \"$TYPE_STATUS\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "0:0:0:0\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 }
 
 #[tokio::test]
@@ -143,6 +263,46 @@ async fn command_reports_not_found_as_127() {
     assert_eq!(
         ctx.get_captured_stderr().unwrap(),
         "esh: command: esh_missing_command_12345: not found\n"
+    );
+}
+
+#[tokio::test]
+async fn missing_commands_return_127_for_fallbacks_and_errexit() {
+    let engine = Engine::new();
+    let mut fallback_ctx = ExecutionContext::new();
+    fallback_ctx.enable_capture();
+
+    let fallback_status = engine
+        .eval_str(
+            "esh_missing_command_12345 || printf 'fallback\\n'\n",
+            &mut fallback_ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(fallback_status, 0);
+    assert_eq!(fallback_ctx.get_captured_stdout().unwrap(), "fallback\n");
+    assert_eq!(
+        fallback_ctx.get_captured_stderr().unwrap(),
+        "esh: esh_missing_command_12345: command not found\n"
+    );
+
+    let mut errexit_ctx = ExecutionContext::new();
+    errexit_ctx.enable_capture();
+    let errexit_status = engine
+        .eval_str(
+            "set -e\nesh_missing_command_12345\nprintf 'unreachable\\n'\n",
+            &mut errexit_ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(errexit_status, 127);
+    assert!(errexit_ctx.is_exiting());
+    assert_eq!(errexit_ctx.get_captured_stdout().unwrap(), "");
+    assert_eq!(
+        errexit_ctx.get_captured_stderr().unwrap(),
+        "esh: esh_missing_command_12345: command not found\n"
     );
 }
 
@@ -254,6 +414,53 @@ async fn command_search_uses_unexported_shell_path_assignments() {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, b"ran\n");
         assert_eq!(reference.stderr, b"");
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn hash_does_not_cache_command_locations_after_path_changes() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let engine = Engine::new();
+    let temp = tempfile::tempdir().unwrap();
+    let first_bin = temp.path().join("first");
+    let second_bin = temp.path().join("second");
+    std::fs::create_dir(&first_bin).unwrap();
+    std::fs::create_dir(&second_bin).unwrap();
+
+    for (directory, marker) in [(&first_bin, "first-path"), (&second_bin, "second-path")] {
+        let tool = directory.join("path-tool");
+        std::fs::write(&tool, format!("#!/bin/sh\nprintf '%s\\n' '{marker}'\n")).unwrap();
+        std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    let first_path = first_bin.display();
+    let second_path = second_bin.display();
+    let script = format!("PATH='{first_path}'\nhash path-tool\nPATH='{second_path}'\npath-tool\n");
+    let mut ctx = ExecutionContext::new();
+    ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_env("PATH", first_bin.to_string_lossy().into_owned());
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(&script, &mut ctx).await.unwrap(), 0);
+    let expected = b"second-path\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(&script)
+            .current_dir(temp.path())
+            .output()
+        {
+            assert!(
+                reference.status.success(),
+                "{shell} failed to resolve path-tool"
+            );
+            assert_eq!(reference.stdout, expected, "{shell} command cache result");
+        }
     }
 }
 

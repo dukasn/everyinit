@@ -31,6 +31,61 @@ async fn printf_requires_a_format_operand() {
 }
 
 #[tokio::test]
+async fn printf_missing_unsigned_operand_defaults_to_zero() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let script = "printf '<%u>\\n'\n";
+    let expected = b"<0>\n";
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = std::process::Command::new(shell)
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(
+                reference.status.success(),
+                "{shell} failed with missing operands"
+            );
+            assert_eq!(reference.stdout, expected, "{shell} missing operands");
+        }
+    }
+}
+
+#[tokio::test]
+async fn printf_missing_character_operand_emits_nul_and_continues_conversions() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let script = "printf '<%s:%c:%d>\\n' alpha\n";
+    let expected = b"<alpha:\0:0>\n";
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    if let Ok(reference) = std::process::Command::new("bash")
+        .args(["--posix", "-c"])
+        .arg(script)
+        .output()
+    {
+        assert!(
+            reference.status.success(),
+            "Bash failed with missing %c operand"
+        );
+        assert_eq!(reference.stdout, expected);
+        assert_eq!(reference.stderr, b"");
+    }
+}
+
+#[tokio::test]
 async fn printf_numeric_formatting_is_independent_of_lc_numeric() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
@@ -425,6 +480,28 @@ async fn string_printf_conversions_count_and_select_unicode_scalars() {
 
     assert_eq!(status, 0);
     assert_eq!(ctx.get_captured_stdout().unwrap(), "[雪][雪][雪]\n<\0>");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
+async fn printf_string_and_character_widths_count_unicode_scalars() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "printf '[%3s][%-3s][%3c][%-3c]\\n' '🌍x' '🌍x' '🌍x' '🌍x'\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "[ 🌍x][🌍x ][  🌍][🌍  ]\n"
+    );
     assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 }
 

@@ -33,10 +33,38 @@ struct Case {
 async fn adopted_shell_subset_matches_available_posix_shells() {
     let cases = [
         Case {
+            name: "posix_prefix_assignments_do_not_change_command_word_expansion",
+            script: "CMD=echo\nCMD=missing $CMD expanded-before-command-assignments\nprintf 'cmd=%s\\n' \"$CMD\"\n",
+            expected_status: 0,
+            expected_stdout: "expanded-before-command-assignments\ncmd=echo\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_assignment_only_status_uses_last_value_substitution",
+            script: "PLAIN=value\nPLAIN_STATUS=$?\nFAILED=$(false)\nFAILED_STATUS=$?\nFIRST=$(false) LAST=$(true)\nMULTI_STATUS=$?\nFIRST=$(true) LAST=$(false)\nREVERSE_STATUS=$?\nX=1 <\"$(printf /dev/null; false)\"\nREDIRECTION_STATUS=$?\nprintf '%s:%s:%s:%s:%s\\n' \"$PLAIN_STATUS\" \"$FAILED_STATUS\" \"$MULTI_STATUS\" \"$REVERSE_STATUS\" \"$REDIRECTION_STATUS\"\n",
+            expected_status: 0,
+            expected_stdout: "0:1:0:1:0\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_echo_appends_newline_after_operand_newline",
             script: "echo 'line\n'\n",
             expected_status: 0,
             expected_stdout: "line\n\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_single_and_double_quotes_span_physical_lines",
+            script: "SINGLE='first\nsecond'\nDOUBLE=\"third\nfourth\"\nprintf '<%s>|<%s>\\n' \"$SINGLE\" \"$DOUBLE\"\n",
+            expected_status: 0,
+            expected_stdout: "<first\nsecond>|<third\nfourth>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_unquoted_utf8_words_and_assignments_preserve_text",
+            script: "VALUE=雪🌍\nprintf '<%s><%s>\\n' 雪🌍 \"$VALUE\"\n",
+            expected_status: 0,
+            expected_stdout: "<雪🌍><雪🌍>\n",
             expected_file: None,
         },
         Case {
@@ -76,11 +104,39 @@ printf 'done\n'
             expected_file: None,
         },
         Case {
-            name: "posix_reserved_words_are_literals_in_word_positions",
-            script: "printf '<%s>\\n' if then elif else fi for in while until do done case esac\nprintf payload >if\ncat if >result.txt\ncat if\n",
+            name: "posix_case_without_arms_returns_success",
+            script: "case value in esac\nprintf 'status=%s\\n' \"$?\"\n",
             expected_status: 0,
-            expected_stdout: "<if>\n<then>\n<elif>\n<else>\n<fi>\n<for>\n<in>\n<while>\n<until>\n<do>\n<done>\n<case>\n<esac>\npayload",
+            expected_stdout: "status=0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_reserved_words_are_literals_in_word_positions",
+            script: "printf '<%s>\\n' if then elif else fi for in while until do done case esac select\nprintf payload >if\ncat if >result.txt\ncat if\nprintf payload >select\ncat <select\n",
+            expected_status: 0,
+            expected_stdout: "<if>\n<then>\n<elif>\n<else>\n<fi>\n<for>\n<in>\n<while>\n<until>\n<do>\n<done>\n<case>\n<esac>\n<select>\npayloadpayload",
             expected_file: Some("payload"),
+        },
+        Case {
+            name: "posix_reserved_words_are_assignment_names_outside_grammar_positions",
+            script: r#"if=IF
+then=THEN
+elif=ELIF
+else=ELSE
+fi=FI
+for=FOR
+in=IN
+while=WHILE
+until=UNTIL
+do=DO
+done=DONE
+case=CASE
+esac=ESAC
+printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$if" "$then" "$elif" "$else" "$fi" "$for" "$in" "$while" "$until" "$do" "$done" "$case" "$esac"
+"#,
+            expected_status: 0,
+            expected_stdout: "IF|THEN|ELIF|ELSE|FI|FOR|IN|WHILE|UNTIL|DO|DONE|CASE|ESAC\n",
+            expected_file: None,
         },
         Case {
             name: "posix_if_elif_else_branch_selection",
@@ -112,6 +168,160 @@ printf '%s:%s:%s\n' "$NO_BRANCH" "$FAILED_BRANCH" "$ELSE_BRANCH"
             expected_file: None,
         },
         Case {
+            name: "posix_test_operand_count_resolves_unary_looking_single_strings",
+            script: r#"test; ZERO=$?
+test ''; EMPTY=$?
+test -n; LONE_N=$?
+test -z; LONE_Z=$?
+test -n ''; N_EMPTY=$?
+test -z ''; Z_EMPTY=$?
+test ! x; NEGATED_STRING=$?
+test ! = !; BANG_EQUAL=$?
+test ! != !; BANG_NOT_EQUAL=$?
+[ -n ]; BRACKET_N=$?
+[ -z ]; BRACKET_Z=$?
+printf '%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s\n' "$ZERO" "$EMPTY" "$LONE_N" "$LONE_Z" "$N_EMPTY" "$Z_EMPTY" "$NEGATED_STRING" "$BANG_EQUAL" "$BANG_NOT_EQUAL" "$BRACKET_N" "$BRACKET_Z"
+"#,
+            expected_status: 0,
+            expected_stdout: "1:1:0:0:1:0:1:0:1:0:0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_test_file_identity_compares_the_referenced_file",
+            script: "test . -ef ./.; SAME=$?\ntest . -ef /; DIFFERENT=$?\nprintf '%s:%s\\n' \"$SAME\" \"$DIFFERENT\"\n",
+            expected_status: 0,
+            expected_stdout: "0:1\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_negated_exit_preserves_the_requested_exit_status",
+            script: "! exit 7\nprintf 'unexpected-after-exit\\n'\n",
+            expected_status: 7,
+            expected_stdout: "",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_and_return_in_compound_conditions_stop_their_scope",
+            script: r#"(if exit 19; then printf 'wrong-then\n'; else printf 'wrong-else\n'; fi; printf 'wrong-after-if\n')
+printf 'subshell-status=%s\n' "$?"
+finish() {
+    while return 23; do
+        printf 'wrong-loop-body\n'
+    done
+    printf 'wrong-after-loop\n'
+}
+finish
+printf 'function-status=%s\n' "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "subshell-status=19\nfunction-status=23\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_in_until_condition_preserves_the_requested_status",
+            script: "until exit 19; do printf 'wrong-until-body\\n'; done\nprintf 'wrong-after-until\\n'\n",
+            expected_status: 19,
+            expected_stdout: "",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_return_in_until_condition_returns_from_the_function",
+            script: r#"finish() {
+    until return 23; do
+        printf 'wrong-until-body\n'
+    done
+    printf 'wrong-after-until\n'
+}
+finish
+printf 'function-status=%s\n' "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "function-status=23\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_in_command_substitution_stops_only_the_substitution",
+            script: r#"VALUE=$(printf 'assignment-before'; exit 9; printf 'wrong-assignment-tail')
+printf 'assignment=%s:<%s>\n' "$?" "$VALUE"
+printf 'argument=<%s>\n' "$(printf 'argument-before'; exit 11; printf 'wrong-argument-tail')"
+finish() { printf 'function-before'; exit 13; printf 'wrong-function-tail'; }
+VALUE=$(finish)
+printf 'function-exit=%s:<%s>\n' "$?" "$VALUE"
+returning() { printf 'return-before'; return 17; printf 'wrong-return-tail'; }
+VALUE=$(returning; RETURN_STATUS=$?; printf ':substitution-after-%s' "$RETURN_STATUS")
+printf 'function-return=<%s>\n' "$VALUE"
+printf 'parent-continued\n'
+"#,
+            expected_status: 0,
+            expected_stdout: "assignment=9:<assignment-before>\nargument=<argument-before>\nfunction-exit=13:<function-before>\nfunction-return=<return-before:substitution-after-17>\nparent-continued\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_trap_is_not_inherited_by_command_substitution",
+            script: "trap 'echo trap' EXIT\nVALUE=$(printf 'substitution\\n'; exit 7)\nprintf 'parent-status=%s value=%s\\n' \"$?\" \"$VALUE\"\n",
+            expected_status: 0,
+            expected_stdout: "parent-status=7 value=substitution\ntrap\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_traps_run_in_isolated_subshells_without_inheriting_parent_trap",
+            script: r#"trap 'echo parent-trap' EXIT
+VALUE=$(trap 'echo substitution-trap' EXIT; echo substitution-body)
+printf 'value=<%s>\n' "$VALUE"
+(
+    trap 'echo subshell-trap' EXIT
+    echo subshell-body
+)
+"#,
+            expected_status: 0,
+            expected_stdout: "value=<substitution-body\nsubstitution-trap>\nsubshell-body\nsubshell-trap\nparent-trap\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_trap_survives_pipeline_stage_state_adoption",
+            script: r#"trap 'printf "exit-trap\n"' EXIT
+printf 'pipeline\n' | cat >/dev/null
+printf 'pipeline\n' | trap 'printf "stage-trap\n"' EXIT
+printf 'pipeline\n' | trap - EXIT
+{ trap 'printf "first-stage-trap\n"' EXIT; printf 'first-stage-body\n'; } | cat | cat
+printf payload | { trap 'printf "middle-stage-trap\n"' EXIT; cat; } | cat
+{ trap 'printf "failed-stage-trap\n"' EXIT; false; } | cat
+printf 'failed-pipeline-status=%s\n' "$?"
+printf 'after-pipeline\n'
+"#,
+            expected_status: 0,
+            expected_stdout: "stage-trap\nfirst-stage-body\nfirst-stage-trap\npayloadmiddle-stage-trap\nfailed-stage-trap\nfailed-pipeline-status=0\nafter-pipeline\nexit-trap\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_explicit_exit_in_exit_trap_overrides_pending_status_without_recursing",
+            script: "trap 'printf \"cleanup:%s\\n\" \"$?\"; exit 42' 0\nexit 7\n",
+            expected_status: 42,
+            expected_stdout: "cleanup:7\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_function_return_does_not_run_the_root_exit_trap",
+            script: "trap 'printf \"exit-status=%s\\n\" \"$?\"' EXIT\nfinish() { return 7; }\nfinish\nprintf 'function-status=%s\\n' \"$?\"\n",
+            expected_status: 0,
+            expected_stdout: "function-status=7\nexit-status=0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_for_accepts_reserved_words_as_loop_variable_names",
+            script: "for if in first; do printf 'if=<%s>\\n' \"${if}\"; done\nfor in in second; do printf 'in=<%s>\\n' \"${in}\"; done\nfor do in third; do printf 'do=<%s>\\n' \"${do}\"; done\n",
+            expected_status: 0,
+            expected_stdout: "if=<first>\nin=<second>\ndo=<third>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_reserved_words_remain_words_as_arguments_and_redirections",
+            script: "printf '%s ' if then elif else fi for in while until do done case esac > if\nprintf '\\n' >> if\ncat < if\ncase if in if) printf 'case-keyword-pattern\\n';; esac\n",
+            expected_status: 0,
+            expected_stdout: "if then elif else fi for in while until do done case esac \ncase-keyword-pattern\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_for_without_in_uses_script_positionals_and_handles_empty_list",
             script: r#"set -- first second
 for ITEM; do printf '<%s>' "$ITEM"; done
@@ -123,6 +333,45 @@ printf '<done>\n'
             expected_status: 0,
             expected_stdout: "<first><second>\n<done>\n",
             expected_file: None,
+        },
+        Case {
+            name: "posix_for_lists_snapshot_positionals_before_body_shifts_them",
+            script: r#"set -- first second third
+for ITEM; do
+    printf '<%s>' "$ITEM"
+    shift
+done
+printf ' remaining=%s\n' "$#"
+set -- alpha beta gamma
+for ITEM in "$@"; do
+    printf '[%s]' "$ITEM"
+    shift
+done
+printf ' remaining=%s\n' "$#"
+"#,
+            expected_status: 0,
+            expected_stdout: "<first><second><third> remaining=0\n[alpha][beta][gamma] remaining=0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_for_expands_all_words_once_before_running_the_body",
+            script: r#"VALUE=before
+for ITEM in "$(printf A >> result.txt; printf first)" "$VALUE" "$(printf B >> result.txt; printf second)" "$VALUE"; do
+    printf '<%s>' "$ITEM"
+    VALUE=after
+    printf x >> result.txt
+done
+printf '\n'
+COUNT=0
+for ITEM in "$((COUNT += 1))" "$((COUNT += 1))" "$COUNT"; do
+    printf '<%s>' "$ITEM"
+    COUNT=$((COUNT + 10))
+done
+printf ' count=%s\n' "$COUNT"
+"#,
+            expected_status: 0,
+            expected_stdout: "<first><before><second><before>\n<1><2><2> count=32\n",
+            expected_file: Some("ABxxxx"),
         },
         Case {
             name: "posix_for_with_empty_in_list_does_not_use_positionals",
@@ -138,9 +387,9 @@ printf '\n'
         },
         Case {
             name: "posix_for_loop_variable_retains_value_for_empty_list",
-            script: "ITEM=before\nfor ITEM in; do printf 'unexpected\\n'; done\nprintf 'empty=<%s>\\n' \"$ITEM\"\nfor ITEM in first last; do :; done\nprintf 'nonempty=<%s>\\n' \"$ITEM\"\n",
+            script: "ITEM=before\nfor ITEM in; do printf 'unexpected\\n'; done\nprintf 'empty=<%s>\\n' \"$ITEM\"\nfor ITEM in first last; do :; done\nprintf 'nonempty=<%s>\\n' \"$ITEM\"\nunset ITEM\nfor ITEM in; do printf 'unexpected\\n'; done\nprintf 'unset-in=<%s>\\n' \"${ITEM+x}\"\nset --\nfor ITEM; do printf 'unexpected=<%s>\\n' \"$ITEM\"; done\nprintf 'unset-positionals=<%s>\\n' \"${ITEM+x}\"\n",
             expected_status: 0,
-            expected_stdout: "empty=<before>\nnonempty=<last>\n",
+            expected_stdout: "empty=<before>\nnonempty=<last>\nunset-in=<>\nunset-positionals=<>\n",
             expected_file: None,
         },
         Case {
@@ -148,6 +397,16 @@ printf '\n'
             script: "for ITEM\nin first second\ndo\nprintf '<%s>' \"$ITEM\"\ndone\nprintf '\\n'\n",
             expected_status: 0,
             expected_stdout: "<first><second>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_for_line_list_preserves_carriage_returns_before_newlines",
+            script: r#"for ITEM in $(printf 'left\r\nright\r\n'); do
+    printf '%s\n' "$ITEM"
+done
+"#,
+            expected_status: 0,
+            expected_stdout: "left\r\nright\r\n",
             expected_file: None,
         },
         Case {
@@ -172,10 +431,88 @@ printf 'after-tests\n'
             expected_file: None,
         },
         Case {
+            name: "posix_errexit_applies_to_selected_if_body_commands",
+            script: "set -e\nif true; then printf 'before-if-failure\\n'; false; printf 'wrong-if-tail\\n'; fi\nprintf 'wrong-after-if\\n'\n",
+            expected_status: 1,
+            expected_stdout: "before-if-failure\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_applies_to_loop_body_commands",
+            script: "set -e\nfor ITEM in first; do printf 'before-loop-failure\\n'; false; printf 'wrong-loop-tail\\n'; done\nprintf 'wrong-after-loop\\n'\n",
+            expected_status: 1,
+            expected_stdout: "before-loop-failure\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_applies_to_while_body_commands",
+            script: "set -e\nwhile true; do printf 'before-while-failure\\n'; false; printf 'wrong-while-tail\\n'; done\nprintf 'wrong-after-while\\n'\n",
+            expected_status: 1,
+            expected_stdout: "before-while-failure\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_applies_to_until_body_commands",
+            script: "set -e\nCOUNT=0\nuntil [ \"$COUNT\" -eq 1 ]; do COUNT=1; printf 'before-until-failure\\n'; false; printf 'wrong-until-tail\\n'; done\nprintf 'wrong-after-until\\n'\n",
+            expected_status: 1,
+            expected_stdout: "before-until-failure\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_applies_to_selected_case_arm_commands",
+            script: "set -e\ncase selected in selected) printf 'before-case-failure\\n'; false; printf 'wrong-case-tail\\n' ;; esac\nprintf 'wrong-after-case\\n'\n",
+            expected_status: 1,
+            expected_stdout: "before-case-failure\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_is_suppressed_in_case_commands_used_as_conditions",
+            script: r#"set -e
+if case selected in
+    selected) printf 'if-before\n'; false; printf 'if-after\n' ;;
+esac; then
+    printf 'if-then\n'
+fi
+COUNT=0
+while case "$COUNT" in
+    0) COUNT=1; printf 'while-condition\n'; false ;;
+esac; do
+    printf 'unreachable-body\n'
+done
+printf 'done:%s\n' "$COUNT"
+"#,
+            expected_status: 0,
+            expected_stdout: "if-before\nif-after\nif-then\nwhile-condition\ndone:1\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_stops_after_a_failed_redirection",
+            script: "set -e\n{ >missing/child; } 2>/dev/null\nprintf 'unreachable\\n'\n",
+            expected_status: 1,
+            expected_stdout: "",
+            expected_file: None,
+        },
+        Case {
             name: "posix_errexit_is_suppressed_inside_tested_function_bodies",
             script: "set -e\nchecked() { printf 'checked-before\\n'; false; printf 'checked-after\\n'; }\nif checked; then printf 'if-then\\n'; fi\nchained() { printf 'chained-before\\n'; false; printf 'chained-after\\n'; }\nchained || printf 'fallback\\n'\ngated() { printf 'gated-before\\n'; false; printf 'gated-after\\n'; }\ngated && printf 'and-rhs\\n'\nprintf 'done\\n'\n",
             expected_status: 0,
             expected_stdout: "checked-before\nchecked-after\nif-then\nchained-before\nchained-after\ngated-before\ngated-after\nand-rhs\ndone\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_is_suppressed_inside_tested_subshells_and_brace_groups",
+            script: r#"set -e
+if (printf 'subshell-before\n'; false; printf 'subshell-after\n'); then
+    printf 'subshell-then\n'
+fi
+if { printf 'group-before\n'; false; printf 'group-after\n'; }; then
+    printf 'group-then\n'
+fi
+(printf 'or-before\n'; false; printf 'or-after\n'; false) || printf 'or-fallback\n'
+printf 'parent-after\n'
+"#,
+            expected_status: 0,
+            expected_stdout: "subshell-before\nsubshell-after\nsubshell-then\ngroup-before\ngroup-after\ngroup-then\nor-before\nor-after\nor-fallback\nparent-after\n",
             expected_file: None,
         },
         Case {
@@ -197,6 +534,23 @@ printf 'after-tests\n'
             script: "set -e\nprintf 'argument=<%s>\\n' \"$(false; printf sub-after)\"\nprintf 'parent\\n'\n",
             expected_status: 0,
             expected_stdout: "argument=<>\nparent\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_errexit_is_suppressed_in_substitutions_inside_tested_commands",
+            script: r#"set -e
+if printf 'if=<%s>\n' "$(false; printf if-after)"; then
+    printf 'if-then\n'
+fi
+COUNT=0
+while printf 'while=<%s>\n' "$(false; printf while-after)" && [ "$COUNT" -eq 0 ]; do
+    COUNT=1
+    printf 'while-body\n'
+done
+printf 'parent-after\n'
+"#,
+            expected_status: 0,
+            expected_stdout: "if=<if-after>\nif-then\nwhile=<while-after>\nwhile-body\nwhile=<while-after>\nparent-after\n",
             expected_file: None,
         },
         Case {
@@ -249,10 +603,69 @@ printf 'done\n'
             expected_file: None,
         },
         Case {
+            name: "posix_loop_control_propagates_through_executed_and_or_branches",
+            script: r#"TRACE=
+for ITEM in first second third fourth; do
+    if [ "$ITEM" = first ]; then
+        true || break
+        TRACE="${TRACE}1"
+    elif [ "$ITEM" = second ]; then
+        false && break
+        TRACE="${TRACE}2"
+    elif [ "$ITEM" = third ]; then
+        false || continue
+        TRACE=wrong-after-continue
+    else
+        true && break
+        TRACE=wrong-after-break
+    fi
+    TRACE="${TRACE},"
+done
+printf 'trace=%s\n' "$TRACE"
+"#,
+            expected_status: 0,
+            expected_stdout: "trace=1,2,\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_negation_preserves_break_and_continue_control_signals",
+            script: r#"TRACE=
+for ITEM in first second; do
+    if [ "$ITEM" = first ]; then
+        ! continue
+        TRACE=wrong-after-continue
+    else
+        ! break
+        TRACE=wrong-after-break
+    fi
+    TRACE="${TRACE}${ITEM}"
+done
+printf 'trace=<%s> loop-status=%s\n' "$TRACE" "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "trace=<> loop-status=1\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_newlines_continue_after_pipeline_and_list_operators",
             script: "printf 'pipeline\\n' |\ncat |\ncat\ntrue &&\nprintf 'and-list\\n'\nfalse ||\nprintf 'or-list\\n'\n! false\nprintf 'negation-status=%s\\n' \"$?\"\n",
             expected_status: 0,
             expected_stdout: "pipeline\nand-list\nor-list\nnegation-status=0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_and_or_operators_have_equal_precedence_and_associate_left",
+            script: r#"TRACE=
+true || TRACE=unreachable && TRACE=and-after-or
+FIRST_STATUS=$?
+true || false && false
+SECOND_STATUS=$?
+true && true || false && false
+THIRD_STATUS=$?
+printf '%s:%s:%s:%s\n' "$TRACE" "$FIRST_STATUS" "$SECOND_STATUS" "$THIRD_STATUS"
+"#,
+            expected_status: 0,
+            expected_stdout: "and-after-or:0:1:1\n",
             expected_file: None,
         },
         Case {
@@ -269,6 +682,36 @@ printf 'pipeline=%s\n' "$?"
             expected_file: None,
         },
         Case {
+            name: "posix_negated_pipelines_compose_with_left_associative_and_or_lists",
+            script: r#"TRACE=
+! false && TRACE="${TRACE}A" || TRACE="${TRACE}wrong-one"
+! true && TRACE="${TRACE}wrong-two" || TRACE="${TRACE}B"
+false || ! false && TRACE="${TRACE}C"
+true && ! true || TRACE="${TRACE}D"
+printf 'trace=%s status=%s\n' "$TRACE" "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "trace=ABCD status=0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_pipeline_negation_binds_around_the_entire_pipeline",
+            script: r#"! false | true
+DEFAULT_FALSE_TRUE=$?
+! true | false
+DEFAULT_TRUE_FALSE=$?
+set -o pipefail
+! false | true
+PIPEFAIL_FALSE_TRUE=$?
+! true | false
+PIPEFAIL_TRUE_FALSE=$?
+printf '%s:%s:%s:%s\n' "$DEFAULT_FALSE_TRUE" "$DEFAULT_TRUE_FALSE" "$PIPEFAIL_FALSE_TRUE" "$PIPEFAIL_TRUE_FALSE"
+"#,
+            expected_status: 0,
+            expected_stdout: "1:0:0:0\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_pipeline_status_comes_from_the_last_stage_by_default",
             script: r#"false | true
 FIRST_FAILED_STATUS=$?
@@ -278,6 +721,54 @@ printf '%s:%s\n' "$FIRST_FAILED_STATUS" "$LAST_FAILED_STATUS"
 "#,
             expected_status: 0,
             expected_stdout: "0:1\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_pipeline_cd_keeps_parent_pwd_and_oldpwd_consistent",
+            script: r#"INITIAL_PWD=$PWD
+INITIAL_OLDPWD=${OLDPWD-unset}
+INITIAL_DIR=$(pwd)
+printf payload | cd /tmp
+if test "$PWD" = "$INITIAL_PWD" && test "${OLDPWD-unset}" = "$INITIAL_OLDPWD" && test "$INITIAL_DIR" = "$(pwd)"; then
+    printf 'working-directory-state-retained\n'
+else
+    printf 'working-directory-state-mismatch\n'
+fi
+"#,
+            expected_status: 0,
+            expected_stdout: "working-directory-state-retained\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_pipeline_keeps_positional_parameters_and_options_isolated",
+            script: r#"set -- caller one
+INITIAL_FLAGS=$-
+printf payload | { set -- stage two; set -f; }
+if test "$#" -eq 2 && test "$1" = caller && test "$2" = one && test "$-" = "$INITIAL_FLAGS"; then
+    printf 'pipeline-parameters-and-options-retained\n'
+else
+    printf 'pipeline-state-leaked\n'
+fi
+"#,
+            expected_status: 0,
+            expected_stdout: "pipeline-parameters-and-options-retained\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_and_return_in_pipeline_stages_are_isolated",
+            script: r#"exit 7 | cat
+printf 'first-exit=%s\n' "$?"
+printf input | exit 8
+printf 'last-exit=%s\n' "$?"
+returning() {
+    return 6 | cat
+    printf 'return-pipeline-parent=%s\n' "$?"
+}
+returning
+printf 'shell-alive\n'
+"#,
+            expected_status: 0,
+            expected_stdout: "first-exit=0\nlast-exit=8\nreturn-pipeline-parent=0\nshell-alive\n",
             expected_file: None,
         },
         Case {
@@ -416,10 +907,60 @@ printf 'no-match-status=%s\n' "$?"
             expected_file: None,
         },
         Case {
+            name: "case_fallthrough_skips_patterns_and_resume_next_expands_them_in_order",
+            script: r#"TRACE=
+case alpha in
+    alpha)
+        TRACE=A
+        ;;&
+    $(printf 1 >> result.txt; printf beta))
+        TRACE=wrong-first-match
+        ;;
+    $(printf 2 >> result.txt; printf alpha))
+        TRACE="${TRACE}B"
+        ;;&
+    $(printf 3 >> result.txt; printf unmatched))
+        TRACE="${TRACE}C"
+        ;;
+esac
+printf 'resume=%s\n' "$TRACE"
+
+TRACE=
+case alpha in
+    alpha)
+        TRACE=A
+        ;&
+    $(printf x >> result.txt; printf no-match))
+        TRACE=wrong-fallthrough
+        ;;
+    *)
+        TRACE="${TRACE}B"
+        ;;
+esac
+printf 'fallthrough=%s\n' "$TRACE"
+
+case alpha in
+    $(printf a >> result.txt; printf alpha)|$(printf b >> result.txt; printf alpha))
+        printf 'first-alternative\n'
+        ;;
+esac
+"#,
+            expected_status: 0,
+            expected_stdout: "resume=AB\nfallthrough=wrong-fallthrough\nfirst-alternative\n",
+            expected_file: Some("123a"),
+        },
+        Case {
             name: "posix_case_accepts_empty_arm_body_and_empty_arm_list",
             script: "case value in\n  value)\n    ;;\nesac\ncase other in\nesac\nprintf 'accepted\\n'\n",
             expected_status: 0,
             expected_stdout: "accepted\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_case_accepts_optional_leading_parentheses_on_arms",
+            script: "case value in (other) printf 'wrong-first\\n' ;; (value|alternate) printf 'selected\\n' ;; esac\n",
+            expected_status: 0,
+            expected_stdout: "selected\n",
             expected_file: None,
         },
         Case {
@@ -557,10 +1098,21 @@ case "$VALUE" in
     line1*tail) printf 'case-star-spans-newline\n' ;;
     *) printf 'case-star-stopped-at-newline\n' ;;
 esac
+case "$VALUE" in
+    line1?line2-tail) printf 'case-question-matches-newline\n' ;;
+    *) printf 'case-question-missed-newline\n' ;;
+esac
+case "$(printf '\nstart')" in
+    [[:space:]]start) printf 'case-space-class-matches-newline\n' ;;
+    *) printf 'case-space-class-missed-newline\n' ;;
+esac
+SPACE_VALUE="$(printf '\nline2-tail')"
+printf 'removed-question=<%s>\n' "${SPACE_VALUE#?}"
+printf 'removed-space-class=<%s>\n' "${SPACE_VALUE#[[:space:]]}"
 printf 'removed=<%s>\n' "${VALUE#*2-}"
 "#,
             expected_status: 0,
-            expected_stdout: "case-star-spans-newline\nremoved=<tail>\n",
+            expected_stdout: "case-star-spans-newline\ncase-question-matches-newline\ncase-space-class-matches-newline\nremoved-question=<line2-tail>\nremoved-space-class=<line2-tail>\nremoved=<tail>\n",
             expected_file: None,
         },
         Case {
@@ -583,6 +1135,30 @@ case F in [[:xdigit:]]) printf 'xdigit\n'; ;; esac
 "#,
             expected_status: 0,
             expected_stdout: "alnum\nalpha\nblank-space\nblank-tab\ncntrl\ndigit\ngraph\nlower\nprint\npunct\nspace\nupper\nxdigit\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_parameter_removal_all_ascii_named_character_classes",
+            script: r#"LC_ALL=C
+export LC_ALL
+VALUE=A; printf 'alnum=<%s>\n' "${VALUE#[[:alnum:]]}"
+VALUE=A; printf 'alpha=<%s>\n' "${VALUE#[[:alpha:]]}"
+VALUE=' '; printf 'blank-space=<%s>\n' "${VALUE#[[:blank:]]}"
+VALUE="$(printf '\t')"; printf 'blank-tab=<%s>\n' "${VALUE#[[:blank:]]}"
+VALUE="$(printf '\001')"; printf 'cntrl=<%s>\n' "${VALUE#[[:cntrl:]]}"
+VALUE=7; printf 'digit=<%s>\n' "${VALUE#[[:digit:]]}"
+VALUE='!'; printf 'graph=<%s>\n' "${VALUE#[[:graph:]]}"
+VALUE=a; printf 'lower=<%s>\n' "${VALUE#[[:lower:]]}"
+VALUE=' '; printf 'print=<%s>\n' "${VALUE#[[:print:]]}"
+VALUE='!'; printf 'punct=<%s>\n' "${VALUE#[[:punct:]]}"
+VALUE="$(printf '\nX')"; printf 'space=<%s>\n' "${VALUE#[[:space:]]}"
+VALUE=Z; printf 'upper=<%s>\n' "${VALUE#[[:upper:]]}"
+VALUE=F; printf 'xdigit=<%s>\n' "${VALUE#[[:xdigit:]]}"
+VALUE=é; printf 'ascii-alpha=<%s>\n' "${VALUE#[[:alpha:]]}"
+VALUE=G; printf 'xdigit-boundary=<%s>\n' "${VALUE#[[:xdigit:]]}"
+"#,
+            expected_status: 0,
+            expected_stdout: "alnum=<>\nalpha=<>\nblank-space=<>\nblank-tab=<>\ncntrl=<>\ndigit=<>\ngraph=<>\nlower=<>\nprint=<>\npunct=<>\nspace=<X>\nupper=<>\nxdigit=<>\nascii-alpha=<é>\nxdigit-boundary=<G>\n",
             expected_file: None,
         },
         Case {
@@ -713,6 +1289,13 @@ if test -n -a -n; then printf 'logical=true\n'; else printf 'logical=false\n'; f
             expected_file: None,
         },
         Case {
+            name: "posix_test_t_looking_operand_uses_three_argument_binary_form",
+            script: "test -t = -t; EQUAL=$?\ntest -t = x; UNEQUAL=$?\ntest -t -a x; AND=$?\ntest -t -o ''; OR=$?\nprintf '%s:%s:%s:%s\\n' \"$EQUAL\" \"$UNEQUAL\" \"$AND\" \"$OR\"\n",
+            expected_status: 0,
+            expected_stdout: "0:1:0:0\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_printf_dynamic_width_precision_and_missing_operands",
             script: "printf '[%*.*s][%#x]\\n' -5 2 abc 16\nprintf '<%s><%d><%b>\\n'\nprintf '<%s:%s>\\n' one two three\n",
             expected_status: 0,
@@ -738,6 +1321,20 @@ echo ordinary
             expected_file: None,
         },
         Case {
+            name: "posix_command_p_uses_default_path_without_changing_shell_path",
+            script: "PATH=/esh-audit-empty-path\ncommand -p sh -c 'printf command-p-found'\nprintf '\\npath=%s\\n' \"$PATH\"\n",
+            expected_status: 0,
+            expected_stdout: "command-p-found\npath=/esh-audit-empty-path\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_command_v_reports_reserved_words",
+            script: "command -v if\ncommand -v '!'\n",
+            expected_status: 0,
+            expected_stdout: "if\n!\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_command_search_uses_unexported_path_variable",
             script: r#"mkdir bin
 printf '#!/bin/sh
@@ -751,6 +1348,116 @@ path-tool
 "#,
             expected_status: 0,
             expected_stdout: "tool-ran\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_command_search_treats_empty_path_components_as_current_directory",
+            script: r#"printf '#!/bin/sh
+printf "current-directory-tool-ran\\n"
+' >path-tool
+chmod +x path-tool
+PATH=/missing
+command -v path-tool >/dev/null 2>&1
+printf 'lookup-without-current-directory=%s\n' "$?"
+path-tool 2>/dev/null
+printf 'without-current-directory=%s\n' "$?"
+PATH=
+command -v path-tool >/dev/null 2>&1
+printf 'empty-path-lookup=%s\n' "$?"
+path-tool
+printf 'empty-path=%s\n' "$?"
+PATH=:
+command -v path-tool >/dev/null 2>&1
+printf 'empty-component-lookup=%s\n' "$?"
+path-tool
+printf 'empty-component=%s\n' "$?"
+unset PATH
+command -v path-tool >/dev/null 2>&1
+printf 'unset-path-lookup=%s\n' "$?"
+path-tool
+printf 'unset-path=%s\n' "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "lookup-without-current-directory=1\nwithout-current-directory=127\nempty-path-lookup=0\ncurrent-directory-tool-ran\nempty-path=0\nempty-component-lookup=0\ncurrent-directory-tool-ran\nempty-component=0\nunset-path-lookup=0\ncurrent-directory-tool-ran\nunset-path=0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_command_names_expand_variables_and_substitutions",
+            script: r#"COMMAND=printf
+"$COMMAND" 'variable=<%s>\n' ok
+COMMAND=sh
+"$COMMAND" -c 'printf external'
+COMMAND=printf "$COMMAND" -c 'printf "prefix-order=%s\\n" "$COMMAND"'
+emit() { printf 'function:%s\n' "$1"; }
+COMMAND=emit
+"$COMMAND" value
+$(printf printf) 'substitution\n'
+"#,
+            expected_status: 0,
+            expected_stdout: "variable=<ok>\nexternalprefix-order=printf\nfunction:value\nsubstitution\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_command_failures_return_statuses_that_control_flow_can_handle",
+            script: r#"missing-esh-command 2>/dev/null || printf 'missing-fallback\n'
+missing-esh-command 2>/dev/null
+printf 'missing-status=%s\n' "$?"
+EMPTY_COMMAND=
+"$EMPTY_COMMAND" 2>/dev/null
+printf 'empty-command-status=%s\n' "$?"
+if missing-esh-command 2>/dev/null; then
+    printf 'unexpected-command-success\n'
+else
+    printf 'missing-else\n'
+fi
+mkdir bin
+printf '#!/bin/sh\nprintf blocked\\n\n' >bin/not-executable
+chmod 644 bin/not-executable
+./bin/not-executable 2>/dev/null
+printf 'explicit-permission-status=%s\n' "$?"
+SAVED_PATH=$PATH
+PATH=bin
+not-executable 2>/dev/null || printf 'permission-fallback\n'
+not-executable 2>/dev/null
+printf 'permission-status=%s\n' "$?"
+PATH=$SAVED_PATH
+mkdir command-directory
+./command-directory 2>/dev/null
+printf 'directory-command-status=%s\n' "$?"
+missing-esh-command 2>/dev/null | cat >/dev/null
+printf 'pipeline-default=%s\n' "$?"
+set -o pipefail
+missing-esh-command 2>/dev/null | cat >/dev/null
+printf 'pipeline-pipefail=%s\n' "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "missing-fallback\nmissing-status=127\nempty-command-status=127\nmissing-else\nexplicit-permission-status=126\npermission-fallback\npermission-status=126\ndirectory-command-status=126\npipeline-default=0\npipeline-pipefail=127\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_signal_terminated_external_commands_use_shell_status_encoding",
+            script: "sh -c 'kill -TERM $$' 2>/dev/null\nTERM_STATUS=$?\nsh -c 'kill -INT $$' 2>/dev/null\nINT_STATUS=$?\nprintf '%s:%s\\n' \"$TERM_STATUS\" \"$INT_STATUS\"\n",
+            expected_status: 0,
+            expected_stdout: "143:130\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_explicit_external_status_130_is_an_ordinary_command_status",
+            script: "sh -c 'exit 130'\nSTATUS=$?\nprintf '%s\\n' \"$STATUS\"\n",
+            expected_status: 0,
+            expected_stdout: "130\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_command_interprets_executable_text_without_a_shebang",
+            script: r#"cat >no-shebang <<'SCRIPT'
+printf 'script-args=%s first=%s\n' "$#" "$1"
+SCRIPT
+chmod +x no-shebang
+./no-shebang argument
+"#,
+            expected_status: 0,
+            expected_stdout: "script-args=1 first=argument\n",
             expected_file: None,
         },
         Case {
@@ -922,6 +1629,19 @@ printf 'end:%s:%s\n' "$OPTIND" "${OPTARG-unset}"
             expected_file: None,
         },
         Case {
+            name: "posix_getopts_stops_at_a_lone_dash_operand",
+            script: r#"set -- -a - tail
+OPTIND=1
+getopts a option
+printf 'option=%s index=%s\n' "$option" "$OPTIND"
+getopts a option
+printf 'stopped=%s index=%s operand=%s\n' "$option" "$OPTIND" "$2"
+"#,
+            expected_status: 0,
+            expected_stdout: "option=a index=2\nstopped=? index=2 operand=-\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_getopts_option_argument_attached_to_cluster_or_separate",
             script: r#"set -- -abVALUE tail
 OPTIND=1
@@ -1011,6 +1731,24 @@ printf '\n'
             expected_file: Some("data"),
         },
         Case {
+            name: "posix_test_file_time_predicates_compare_existing_timestamps",
+            script: r#"printf old >older
+printf new >newer
+touch -t 200001010000 older
+touch -t 200101010000 newer
+if test older -nt newer; then printf T; else printf F; fi
+if test newer -nt older; then printf T; else printf F; fi
+if test older -ot newer; then printf T; else printf F; fi
+if test newer -ot older; then printf T; else printf F; fi
+if test older -nt older; then printf T; else printf F; fi
+if test older -ot older; then printf T; else printf F; fi
+printf '\n'
+"#,
+            expected_status: 0,
+            expected_stdout: "FTTFFF\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_test_dangling_symbolic_link_predicates",
             script: "printf payload >result.txt\nln -s missing.txt link.txt\nif test -L link.txt; then echo link; fi\nif test -h link.txt; then echo alias; fi\nif test -e link.txt; then echo target-exists; else echo dangling; fi\n",
             expected_status: 0,
@@ -1091,6 +1829,42 @@ printf 'n=%s\n' "$N"
             expected_file: None,
         },
         Case {
+            name: "posix_while_until_condition_lists_run_left_to_right_each_iteration",
+            script: r#"TRACE=
+COUNT=0
+while TRACE="${TRACE}w"; COUNT=$((COUNT + 1)); [ "$COUNT" -lt 3 ]; do
+    printf 'w%s ' "$COUNT"
+done
+printf 'while-trace=%s count=%s status=%s\n' "$TRACE" "$COUNT" "$?"
+
+TRACE=
+COUNT=0
+until TRACE="${TRACE}u"; COUNT=$((COUNT + 1)); [ "$COUNT" -ge 3 ]; do
+    printf 'u%s ' "$COUNT"
+done
+printf 'until-trace=%s count=%s status=%s\n' "$TRACE" "$COUNT" "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "w1 w2 while-trace=www count=3 status=0\nu1 u2 until-trace=uuu count=3 status=0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_while_read_consumes_compound_command_input_redirection",
+            script: r#"printf 'first line\nsecond line\n' > input.txt
+IFS= read -r DIRECT < input.txt
+printf 'direct=<%s> status=%s\n' "$DIRECT" "$?"
+COUNT=0
+while IFS= read -r LINE; do
+    COUNT=$((COUNT + 1))
+    printf '%s:<%s>\n' "$COUNT" "$LINE"
+done < input.txt
+printf 'count=%s status=%s\n' "$COUNT" "$?"
+"#,
+            expected_status: 0,
+            expected_stdout: "direct=<first line> status=0\n1:<first line>\n2:<second line>\ncount=2 status=0\n",
+            expected_file: None,
+        },
+        Case {
             name: "function_positionals_and_status",
             script: r#"
                 describe() { printf '%s:%s\n' "$1" "$#"; return 7; }
@@ -1103,6 +1877,37 @@ printf 'n=%s\n' "$N"
             "#,
             expected_status: 0,
             expected_stdout: "alpha:2\nstatus=7\n<first><second><third>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_recursive_functions_restore_caller_positionals",
+            script: r#"walk() {
+    printf 'enter:%s:%s\n' "$1" "$#"
+    if [ "$1" -gt 0 ]; then
+        walk "$(( $1 - 1 ))" nested
+    fi
+    printf 'leave:%s:%s:%s\n' "$1" "$2" "$#"
+}
+walk 2 original
+"#,
+            expected_status: 0,
+            expected_stdout: "enter:2:2\nenter:1:2\nenter:0:2\nleave:0:nested:2\nleave:1:nested:2\nleave:2:original:2\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_function_status_is_last_command_without_explicit_return",
+            script: r#"simple_fail() { false; }
+conditional_fail() { if true; then false; fi; }
+loop_fail() { for ITEM in one; do false; done; }
+subshell_fail() ( false )
+simple_fail; SIMPLE=$?
+conditional_fail; CONDITIONAL=$?
+loop_fail; LOOP=$?
+subshell_fail; SUBSHELL=$?
+printf '%s:%s:%s:%s\n' "$SIMPLE" "$CONDITIONAL" "$LOOP" "$SUBSHELL"
+"#,
+            expected_status: 0,
+            expected_stdout: "1:1:1:1\n",
             expected_file: None,
         },
         Case {
@@ -1141,6 +1946,62 @@ printf 'result=%s\n' "$RESULT"
 "#,
             expected_status: 0,
             expected_stdout: "zero=kept args=1:argument\nresult=outer\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_function_body_accepts_each_compound_command_form",
+            script: r#"branch() if [ "$1" = yes ]; then
+    printf 'if:yes\n'
+else
+    printf 'if:no\n'
+fi
+iterate() for ITEM in "$@"; do
+    printf 'for:%s\n' "$ITEM"
+done
+count_while() while [ "$COUNT" -lt 2 ]; do
+    COUNT=$((COUNT + 1))
+    printf 'while:%s\n' "$COUNT"
+done
+count_until() until [ "$COUNT" -ge 4 ]; do
+    COUNT=$((COUNT + 1))
+    printf 'until:%s\n' "$COUNT"
+done
+classify() case "$1" in
+    y*) printf 'case:yes\n' ;;
+    *) printf 'case:no\n' ;;
+esac
+branch yes
+branch no
+iterate first second
+COUNT=0
+count_while
+count_until
+classify yellow
+classify black
+"#,
+            expected_status: 0,
+            expected_stdout: "if:yes\nif:no\nfor:first\nfor:second\nwhile:1\nwhile:2\nuntil:3\nuntil:4\ncase:yes\ncase:no\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_function_definitions_follow_compound_execution_scope",
+            script: r#"{ from_brace() { printf 'brace\n'; }; }
+from_brace
+( from_subshell() { printf 'subshell\n'; }; from_subshell )
+if command -v from_subshell >/dev/null; then
+    printf 'subshell-leaked\n'
+else
+    printf 'subshell-isolated\n'
+fi
+printf payload | { from_pipeline() { printf 'pipeline\n'; }; from_pipeline; }
+if command -v from_pipeline >/dev/null; then
+    printf 'pipeline-leaked\n'
+else
+    printf 'pipeline-isolated\n'
+fi
+"#,
+            expected_status: 0,
+            expected_stdout: "brace\nsubshell\nsubshell-isolated\npipeline\npipeline-isolated\n",
             expected_file: None,
         },
         Case {
@@ -1238,6 +2099,48 @@ printf 'caller:%s:%s:%s\n' "$#" "$1" "$2"
             expected_file: Some(""),
         },
         Case {
+            name: "posix_stderr_append_redirection_preserves_and_appends",
+            script: "printf 'existing\\n' >result.txt\nsh -c 'printf first >&2' 2>>result.txt\nsh -c 'printf second >&2' 2>>result.txt\ncat result.txt\n",
+            expected_status: 0,
+            expected_stdout: "existing\nfirstsecond",
+            expected_file: Some("existing\nfirstsecond"),
+        },
+        Case {
+            name: "posix_failed_redirection_is_a_status_and_does_not_create_parent",
+            script: "{ >missing/child || { STATUS=$?; printf 'output-fallback=%s\\n' \"$STATUS\"; }; } 2>/dev/null\n{ cat <missing-input || { STATUS=$?; printf 'input-fallback=%s\\n' \"$STATUS\"; }; } 2>/dev/null\nif test -e missing; then printf 'parent-created\\n'; else printf 'parent-absent\\n'; fi\n",
+            expected_status: 0,
+            expected_stdout: "output-fallback=1\ninput-fallback=1\nparent-absent\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_redirections_open_left_to_right_before_command_dispatch",
+            script: "{ printf payload >result.txt >missing/child || STATUS=$?; } 2>/dev/null\nprintf 'status=%s\\n' \"$STATUS\"\n",
+            expected_status: 0,
+            expected_stdout: "status=1\n",
+            expected_file: Some(""),
+        },
+        Case {
+            name: "posix_redirection_failure_diagnostic_uses_prior_stderr_redirect",
+            script: "{ printf payload 2>error.txt >missing/child || STATUS=$?; } 2>/dev/null\nif test \"$STATUS\" -eq 1 && test -s error.txt && test ! -e missing; then printf 'diagnostic-routed\\n'; else printf 'diagnostic-misrouted\\n'; fi\n",
+            expected_status: 0,
+            expected_stdout: "diagnostic-routed\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_redirection_failure_diagnostic_follows_stderr_duplication",
+            script: "{ printf payload >diagnostic.txt 2>&1 >missing/child || STATUS=$?; } 2>/dev/null\nif test \"$STATUS\" -eq 1 && test -s diagnostic.txt && test ! -e missing; then printf 'duplicated-diagnostic-routed\\n'; else printf 'duplicated-diagnostic-misrouted\\n'; fi\n",
+            expected_status: 0,
+            expected_stdout: "duplicated-diagnostic-routed\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_input_redirection_failure_uses_prior_stderr_redirect",
+            script: "{ cat 2>error.txt <missing-input || STATUS=$?; } 2>/dev/null\nif test \"$STATUS\" -eq 1 && test -s error.txt; then printf 'input-diagnostic-routed\\n'; else printf 'input-diagnostic-misrouted\\n'; fi\n",
+            expected_status: 0,
+            expected_stdout: "input-diagnostic-routed\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_compound_command_redirections_scope_output_and_state",
             script: r#"VALUE=before
 { VALUE=group; printf group-output; } >result.txt
@@ -1260,6 +2163,13 @@ printf 'brace=<%s> subshell=<%s>\n' "$(cat result.txt)" "$(cat subshell.txt)"
             expected_status: 0,
             expected_stdout: "brace=<brace-pipeline> subshell=<subshell-pipeline>\n",
             expected_file: Some("brace-pipeline\n"),
+        },
+        Case {
+            name: "posix_simple_pipeline_stage_redirection_overrides_pipe_output",
+            script: "printf 'stage-output\\n' >result.txt | cat\nprintf 'pipeline-status=%s file=%s\\n' \"$?\" \"$(cat result.txt)\"\n",
+            expected_status: 0,
+            expected_stdout: "pipeline-status=0 file=stage-output\n",
+            expected_file: Some("stage-output\n"),
         },
         Case {
             name: "posix_unset_removes_a_shell_variable",
@@ -1300,6 +2210,75 @@ fi
             expected_file: Some(
                 "SOURCE_VALUE=loaded\nSOURCE_ARGS=\"$#:$1\"\nreturn 7\nSOURCE_AFTER=unreachable\n",
             ),
+        },
+        Case {
+            name: "posix_dot_loop_control_targets_the_callers_active_loop",
+            script: r#"cat >break.esh <<'EOF'
+TRACE="${TRACE}S"
+break 2
+TRACE="${TRACE}x"
+EOF
+TRACE=
+for outer in a b; do
+    for inner in 1 2; do
+        . ./break.esh
+        TRACE="${TRACE}Y"
+    done
+done
+printf 'break=<%s>\n' "$TRACE"
+
+cat >continue.esh <<'EOF'
+TRACE="${TRACE}S"
+continue 2
+TRACE="${TRACE}x"
+EOF
+TRACE=
+for outer in a b; do
+    for inner in 1 2; do
+        . ./continue.esh
+        TRACE="${TRACE}Y"
+    done
+    TRACE="${TRACE}X"
+done
+printf 'continue=<%s>\n' "$TRACE"
+"#,
+            expected_status: 0,
+            expected_stdout: "break=<S>\ncontinue=<SS>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_exit_in_sourced_file_exits_the_caller",
+            script: r#"cat >exit.esh <<'EOF'
+printf 'source-before-exit\n'
+exit 23
+printf 'wrong-source-tail\n'
+EOF
+. ./exit.esh
+printf 'wrong-after-source\n'
+"#,
+            expected_status: 23,
+            expected_stdout: "source-before-exit\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_return_in_sourced_file_returns_only_from_dot",
+            script: r#"cat >return.esh <<'EOF'
+SOURCE_VALUE=loaded
+return 12
+SOURCE_AFTER=unreachable
+EOF
+caller() {
+    . ./return.esh
+    printf 'dot-status=%s source=%s\n' "$?" "$SOURCE_VALUE"
+    return 3
+    printf 'wrong-function-tail\n'
+}
+caller
+printf 'caller-status=%s source-after=%s\n' "$?" "${SOURCE_AFTER-unset}"
+"#,
+            expected_status: 0,
+            expected_stdout: "dot-status=12 source=loaded\ncaller-status=3 source-after=unset\n",
+            expected_file: None,
         },
         Case {
             name: "posix_dot_without_operands_preserves_positionals",
@@ -1360,6 +2339,27 @@ count_args "$*"
             expected_file: None,
         },
         Case {
+            name: "posix_quoted_at_and_star_preserve_empty_positional_fields",
+            script: r#"capture() {
+    printf 'argc=%s' "$#"
+    for value in "$@"; do printf ' <%s>' "$value"; done
+    printf '\n'
+}
+set --
+capture "$@"
+capture "$*"
+set -- ''
+capture "$@"
+capture "$*"
+set -- '' ''
+capture "$@"
+capture "$*"
+"#,
+            expected_status: 0,
+            expected_stdout: "argc=0\nargc=1 <>\nargc=1 <>\nargc=1 <>\nargc=2 <> <>\nargc=1 < >\n",
+            expected_file: None,
+        },
+        Case {
             name: "posix_embedded_at_with_no_positional_parameters",
             script: r#"capture() { printf '%s:<%s>\n' "$#" "$1"; }
 set --
@@ -1411,6 +2411,34 @@ VALUE=late
             expected_status: 0,
             expected_stdout: "payload\n",
             expected_file: Some("payload\n"),
+        },
+        Case {
+            name: "posix_redirections_can_precede_or_interleave_command_words",
+            script: " >before printf one\nprintf >between two\nprintf three >after\nprintf '%s:%s:%s\\n' \"$(cat before)\" \"$(cat between)\" \"$(cat after)\"\n",
+            expected_status: 0,
+            expected_stdout: "one:two:three\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_distinct_stream_redirections_to_one_path_keep_shared_file_offsets",
+            script: "sh -c 'printf 123456; printf e >&2' >result.txt 2>result.txt\ncat result.txt\n",
+            expected_status: 0,
+            expected_stdout: "e23456",
+            expected_file: Some("e23456"),
+        },
+        Case {
+            name: "posix_distinct_stream_redirections_preserve_write_order",
+            script: "sh -c 'printf e >&2; printf 123456' >result.txt 2>result.txt\ncat result.txt\n",
+            expected_status: 0,
+            expected_stdout: "123456",
+            expected_file: Some("123456"),
+        },
+        Case {
+            name: "posix_distinct_stream_redirections_preserve_write_order_through_path_aliases",
+            script: "sh -c 'printf e >&2; printf 123456' >result.txt 2>./result.txt\ncat result.txt\n",
+            expected_status: 0,
+            expected_stdout: "123456",
+            expected_file: Some("123456"),
         },
         Case {
             name: "ordered_standard_stream_duplication",
@@ -1487,6 +2515,20 @@ VALUE=late
             script: "printf '%s:%s\\n' \"$((1 ? 0 : 1 ? 2 : 3))\" \"$((0 ? 1 : 1 ? 2 : 3))\"",
             expected_status: 0,
             expected_stdout: "0:2\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_arithmetic_conditional_and_comma_operators_apply_selected_side_effects",
+            script: "VALUE=0; TRUE_RESULT=$((1 ? (VALUE=4) : (VALUE=5))); FALSE_RESULT=$((0 ? (VALUE=6) : (VALUE=7))); COMMA_RESULT=$((VALUE=1, VALUE+=2, VALUE)); printf '%s:%s:%s:%s\\n' \"$TRUE_RESULT\" \"$FALSE_RESULT\" \"$COMMA_RESULT\" \"$VALUE\"",
+            expected_status: 0,
+            expected_stdout: "4:7:3:3\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_arithmetic_conditional_does_not_read_unselected_unset_variables",
+            script: "set -u\nTRUE_RESULT=$((1 ? 7 : MISSING))\nFALSE_RESULT=$((0 ? MISSING : 9))\nprintf '%s:%s\\n' \"$TRUE_RESULT\" \"$FALSE_RESULT\"\n",
+            expected_status: 0,
+            expected_stdout: "7:9\n",
             expected_file: None,
         },
         Case {
@@ -1658,6 +2700,21 @@ printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
 "#,
             expected_status: 0,
             expected_stdout: "word|fallback||fallback||alt|||0\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_parameter_assignment_operators_distinguish_unset_and_empty",
+            script: r#"unset COLON_UNSET PLAIN_UNSET
+COLON_VALUE=${COLON_UNSET:=colon-set}
+PLAIN_VALUE=${PLAIN_UNSET=plain-set}
+COLON_EMPTY=
+COLON_EMPTY_VALUE=${COLON_EMPTY:=colon-filled}
+PLAIN_EMPTY=
+PLAIN_EMPTY_VALUE=${PLAIN_EMPTY=plain-filled}
+printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$COLON_VALUE" "$COLON_UNSET" "$PLAIN_VALUE" "$PLAIN_UNSET" "$COLON_EMPTY_VALUE" "$COLON_EMPTY" "$PLAIN_EMPTY_VALUE" "$PLAIN_EMPTY"
+"#,
+            expected_status: 0,
+            expected_stdout: "colon-set|colon-set|plain-set|plain-set|colon-filled|colon-filled||\n",
             expected_file: None,
         },
         Case {
@@ -1844,6 +2901,15 @@ printf '<%s>\n' "$RESULT"
             script: "SINGLE=$(printf '%s' '(')\nDOUBLE=$(printf '%s' \"(\")\nCLOSE=$(printf '%s' ')')\nARITH=$(printf '%s' \"$((1+1))\")\nSHIFT=$(printf '%s' $((8<<1)))\nCOMMENT=$(printf value # )\nprintf continued\n)\nprintf '<%s><%s><%s><%s><%s><%s>\\n' \"$SINGLE\" \"$DOUBLE\" \"$CLOSE\" \"$ARITH\" \"$SHIFT\" \"$COMMENT\"\n",
             expected_status: 0,
             expected_stdout: "<(><(><)><2><16><valuecontinued>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_command_substitution_ignores_escaped_parentheses",
+            script: r#"VALUE=$(printf '<%s><%s>' left\)right left\(right)
+printf '%s\n' "$VALUE"
+"#,
+            expected_status: 0,
+            expected_stdout: "<left)right><left(right>\n",
             expected_file: None,
         },
         Case {
@@ -2185,11 +3251,11 @@ EOF
             name: "posix_unquoted_heredoc_keeps_unmatched_quotes_and_syntax_bytes",
             script: r#"VALUE=expanded
 cat <<EOF
-unmatched " and ' quotes; # if then $VALUE
+unmatched " and ' quotes; # if then $VALUE &
 EOF
 "#,
             expected_status: 0,
-            expected_stdout: "unmatched \" and ' quotes; # if then expanded\n",
+            expected_stdout: "unmatched \" and ' quotes; # if then expanded &\n",
             expected_file: None,
         },
         Case {
@@ -2368,6 +3434,20 @@ printf 'three=<%s><%s>\n' "$FIRST" "$REST"
             script: "read FIRST SECOND THIRD <<EOF\n  one \t two   three  \nEOF\nprintf '<%s><%s><%s>\\n' \"$FIRST\" \"$SECOND\" \"$THIRD\"\n",
             expected_status: 0,
             expected_stdout: "<one><two><three>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_read_empty_line_assigns_empty_values",
+            script: "FIRST=stale; SECOND=stale\nread FIRST SECOND <<EOF\n\nEOF\nSTATUS=$?\nprintf '%s:<%s>:<%s>\\n' \"$STATUS\" \"$FIRST\" \"$SECOND\"\n",
+            expected_status: 0,
+            expected_stdout: "0:<>:<>\n",
+            expected_file: None,
+        },
+        Case {
+            name: "posix_read_without_names_preserves_the_raw_reply_line",
+            script: "read <<EOF\n  two  \nEOF\nprintf '<%s>\\n' \"$REPLY\"\n",
+            expected_status: 0,
+            expected_stdout: "<  two  >\n",
             expected_file: None,
         },
         Case {
@@ -2906,7 +3986,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         },
     ];
 
-    let reference_shells = [("bash", vec!["--posix", "-c"])]
+    let reference_shells = [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])]
         .into_iter()
         .filter(|(shell, args)| {
             Command::new(shell)
@@ -2933,9 +4013,11 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         let esh_stdout = ctx.get_captured_stdout().unwrap();
 
         assert_eq!(
-            esh_status, case.expected_status,
-            "ESH status: {}",
-            case.name
+            esh_status,
+            case.expected_status,
+            "ESH status: {} stderr={}",
+            case.name,
+            String::from_utf8_lossy(&ctx.get_captured_stderr_bytes().unwrap_or_default())
         );
         assert_eq!(
             esh_stdout, case.expected_stdout,
@@ -2958,6 +4040,64 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
         }
 
         for (shell, args) in &reference_shells {
+            // The full adopted-syntax matrix includes behavior from ESH's
+            // non-POSIX extensions and builtin implementations. Keep the
+            // second independent shell focused on syntax and control flow
+            // whose observable behavior is portable across POSIX shells.
+            if *shell == "dash"
+                && !matches!(
+                    case.name,
+                    "if_case_and_for"
+                        | "posix_case_without_arms_returns_success"
+                        | "posix_read_empty_line_assigns_empty_values"
+                        | "posix_command_p_uses_default_path_without_changing_shell_path"
+                        | "posix_prefix_assignments_do_not_change_command_word_expansion"
+                        | "posix_single_and_double_quotes_span_physical_lines"
+                        | "posix_reserved_words_are_assignment_names_outside_grammar_positions"
+                        | "posix_if_elif_else_branch_selection"
+                        | "posix_if_status_uses_selected_branch_or_zero_without_branch"
+                        | "posix_exit_and_return_in_compound_conditions_stop_their_scope"
+                        | "posix_exit_in_until_condition_preserves_the_requested_status"
+                        | "posix_return_in_until_condition_returns_from_the_function"
+                        | "posix_exit_in_command_substitution_stops_only_the_substitution"
+                        | "posix_exit_trap_is_not_inherited_by_command_substitution"
+                        | "posix_for_accepts_reserved_words_as_loop_variable_names"
+                        | "posix_for_without_in_uses_script_positionals_and_handles_empty_list"
+                        | "posix_for_lists_snapshot_positionals_before_body_shifts_them"
+                        | "posix_for_expands_all_words_once_before_running_the_body"
+                        | "posix_for_with_empty_in_list_does_not_use_positionals"
+                        | "posix_errexit_exempts_negated_test_condition"
+                        | "posix_errexit_exempts_elif_and_until_tests"
+                        | "posix_errexit_is_suppressed_in_case_commands_used_as_conditions"
+                        | "posix_errexit_stops_after_a_failed_redirection"
+                        | "posix_errexit_is_suppressed_inside_tested_function_bodies"
+                        | "posix_errexit_is_suppressed_inside_tested_subshells_and_brace_groups"
+                        | "posix_errexit_is_suppressed_inside_functions_used_as_loop_tests"
+                        | "posix_errexit_is_inherited_by_assignment_command_substitution"
+                        | "posix_errexit_stops_only_the_substitution_inside_a_successful_command"
+                        | "posix_errexit_is_suppressed_in_substitutions_inside_tested_commands"
+                        | "posix_loop_status_distinguishes_empty_and_executed_bodies"
+                        | "posix_break_and_continue_levels_target_outer_loop"
+                        | "posix_loop_control_propagates_through_executed_and_or_branches"
+                        | "posix_newlines_continue_after_pipeline_and_list_operators"
+                        | "posix_function_definitions_follow_compound_execution_scope"
+                        | "posix_pipeline_negation_inverts_status_without_suppressing_output"
+                        | "posix_pipeline_keeps_positional_parameters_and_options_isolated"
+                        | "posix_negated_pipelines_compose_with_left_associative_and_or_lists"
+                        | "posix_pipeline_status_comes_from_the_last_stage_by_default"
+                        | "posix_exit_and_return_in_pipeline_stages_are_isolated"
+                        | "posix_case_pattern_alternatives_and_no_match_status"
+                        | "posix_case_status_is_last_selected_arm_command"
+                        | "posix_case_accepts_empty_arm_body_and_empty_arm_list"
+                        | "posix_case_accepts_optional_leading_parentheses_on_arms"
+                        | "posix_signal_terminated_external_commands_use_shell_status_encoding"
+                        | "posix_explicit_external_status_130_is_an_ordinary_command_status"
+                        | "posix_command_v_reports_reserved_words"
+                )
+            {
+                continue;
+            }
+
             // macOS ships Bash 3.2 and BSD grep, which differ from the behavior
             // these ESH cases test for CDPATH, here-documents, assignment-only
             // status, NaN formatting flags, special-parameter defaults, and
@@ -3220,6 +4360,98 @@ async fn explicit_glob_hidden_path_behavior_matches_posix_pathname_expansion() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn explicit_glob_omits_unmatched_patterns_unlike_posix_expansion() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let esh_dir = tempdir().unwrap();
+    ctx.set_cwd(esh_dir.path()).unwrap();
+
+    assert_eq!(
+        engine
+            .eval_str(
+                "glob '*.missing'\nSTATUS=$?\nprintf 'status=%s\\n' \"$STATUS\"\n",
+                &mut ctx
+            )
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "status=1\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        let shell_dir = tempdir().unwrap();
+        let output = match Command::new(shell)
+            .args(&args)
+            .arg("printf '<%s>\\n' *.missing")
+            .current_dir(shell_dir.path())
+            .env("LC_ALL", "C")
+            .output()
+        {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => panic!("could not run {shell}: {error}"),
+        };
+        assert_eq!(output.status.code(), Some(0), "{shell} status");
+        assert_eq!(output.stdout, b"<*.missing>\n", "{shell} unmatched pattern");
+        assert_eq!(output.stderr, b"", "{shell} stderr");
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn scalar_expansion_does_not_split_or_glob_unlike_posix_shells() {
+    let esh_dir = tempdir().unwrap();
+    std::fs::write(esh_dir.path().join("alpha-a.txt"), "").unwrap();
+    std::fs::write(esh_dir.path().join("alpha-b.txt"), "").unwrap();
+    let script = r#"
+capture_args() {
+    printf 'argc=%s' "$#"
+    for ARG in "$@"; do printf '<%s>' "$ARG"; done
+    printf '\n'
+}
+VALUE='two words alpha*.txt'
+capture_args $VALUE
+capture_args "$VALUE"
+capture_args $(printf 'two words alpha*.txt')
+"#;
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(esh_dir.path()).unwrap();
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "argc=1<two words alpha*.txt>\nargc=1<two words alpha*.txt>\nargc=1<two words alpha*.txt>\n"
+    );
+
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        let shell_dir = tempdir().unwrap();
+        std::fs::write(shell_dir.path().join("alpha-a.txt"), "").unwrap();
+        std::fs::write(shell_dir.path().join("alpha-b.txt"), "").unwrap();
+        let output = match Command::new(shell)
+            .args(args)
+            .arg(script)
+            .current_dir(shell_dir.path())
+            .output()
+        {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => panic!("could not run {shell}: {error}"),
+        };
+        assert!(output.status.success(), "{shell}");
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "argc=4<two><words><alpha-a.txt><alpha-b.txt>\nargc=1<two words alpha*.txt>\nargc=4<two><words><alpha-a.txt><alpha-b.txt>\n",
+            "{shell}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn read_escaped_trailing_ifs_whitespace_matches_dash_when_available() {
     let script = "IFS=' '\nread VALUE <<'DATA'\n  leading\\ and trailing\\  \nDATA\nprintf '<%s>\\n' \"$VALUE\"\n";
     let reference = match Command::new("dash").arg("-c").arg(script).output() {
@@ -3290,8 +4522,66 @@ async fn printf_numeric_whitespace_conversion_uses_the_numeric_prefix() {
 }
 
 #[cfg(unix)]
+#[tokio::test]
+async fn posix_nounset_rejects_missing_positional_parameters_like_bash() {
+    if Command::new("bash")
+        .args(["--posix", "-c", ":"])
+        .output()
+        .is_err()
+    {
+        eprintln!("bash is unavailable; checking ESH nounset expectations only");
+    }
+
+    let scripts = [
+        "set -u\nprintf '%s' \"$1\"\n",
+        "set -u\nprintf '%s' \"${9}\"\n",
+        "set -u\nset -- first\nprintf '%s' \"${10}\"\n",
+    ];
+    let engine = Engine::new();
+
+    for script in scripts {
+        let mut ctx = ExecutionContext::new();
+        assert!(
+            engine.eval_str(script, &mut ctx).await.is_err(),
+            "ESH should reject missing positional parameters: {script}"
+        );
+
+        if let Ok(reference) = Command::new("bash")
+            .args(["--posix", "-c", script])
+            .output()
+        {
+            assert!(
+                !reference.status.success(),
+                "bash accepted missing positional parameter: {script}"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn posix_set_dash_disables_xtrace_without_changing_positionals_like_bash() {
+    let script = "set -- first second\nset -x\nset -\nprintf '%s:%s\\n' \"$1\" \"$2\"\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "first:second\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "+ set -\n");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX differential test");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, b"first:second\n");
+    assert_eq!(reference.stderr, b"+ set -\n");
+}
+
+#[cfg(unix)]
 #[test]
-fn reserved_words_at_command_start_require_their_grammar_context() {
+fn control_flow_and_reserved_word_syntax_matches_posix_shells() {
     let invalid_for_header = "for\nITEM; do :; done";
     assert!(
         esh::planner::compiler::compile_script(invalid_for_header).is_err(),
@@ -3310,6 +4600,87 @@ fn reserved_words_at_command_start_require_their_grammar_context() {
                 !output.status.success(),
                 "{shell} accepted a newline between 'for' and its variable name"
             );
+        }
+    }
+
+    for (script, expected_valid) in [
+        ("; :", false),
+        (":; ; :", false),
+        ("if; true; then :; fi", false),
+        ("if true; ; then :; fi", false),
+        ("if true; then; fi", false),
+        ("if true; then :; else; fi", false),
+        ("if true; then :; elif false; then; fi", false),
+        ("while true; ; do break; done", false),
+        ("while false; do; done", false),
+        ("until true; do; done", false),
+        ("for item in value; ; do :; done", false),
+        ("for item in; do; done", false),
+        ("for item in value; do; :; done", false),
+        ("for item in value do :; done", false),
+        ("for item in do :; done", false),
+        ("for item\n; do :; done", false),
+        ("if true; then :; else :; else :; fi", false),
+        ("if true; then :", false),
+        ("while true; do :", false),
+        ("until true; do :", false),
+        ("until true; ; do break; done", false),
+        ("()", false),
+        ("{ :}", false),
+        ("case value value) : ;; esac", false),
+        ("case value in value : ;; esac", false),
+        ("case value in |other) : ;; esac", false),
+        ("case value in value) : esac", false),
+        ("case value in value) :; ; esac", false),
+        ("case value in value) : ;;", false),
+        ("echo >\nresult.txt", false),
+        ("for item in value; do :; done", true),
+        ("for item in; do :; done", true),
+        ("for item in value\ndo :; done", true),
+        ("for item do :; done", true),
+        ("for item\ndo :; done", true),
+        ("for item\nin value; do :; done", true),
+        ("if\n\ntrue; then\n\n:; fi", true),
+        (
+            "if true; then :; elif false; then :; elif true; then :; else :; fi",
+            true,
+        ),
+        ("while\n\ntrue; do\n\nbreak; done", true),
+        ("until\n\nfalse; do\n\nbreak; done", true),
+        ("for item in value;\n\ndo :; done", true),
+        ("worker() { :; }", true),
+        ("{}", true),
+        ("{ :; }", true),
+        ("( :; )", true),
+        ("case value in esac", true),
+        ("case value in value) :; esac", true),
+        ("case value in value) : ;; esac", true),
+        (
+            "case value in\nvalue | other) if true; then :; fi ;;\nother) : ;;\nesac",
+            true,
+        ),
+    ] {
+        assert_eq!(
+            esh::planner::compiler::compile_script(script).is_ok(),
+            expected_valid,
+            "ESH syntax acceptance for {script:?}"
+        );
+
+        for (shell, args) in [
+            ("bash", vec!["--posix", "-n", "-c"]),
+            ("dash", vec!["-n", "-c"]),
+        ] {
+            if let Ok(output) = Command::new(shell)
+                .args(args.iter().copied())
+                .arg(script)
+                .output()
+            {
+                assert_eq!(
+                    output.status.success(),
+                    expected_valid,
+                    "{shell} syntax acceptance for {script:?}"
+                );
+            }
         }
     }
 
@@ -3351,6 +4722,602 @@ fn reserved_words_at_command_start_require_their_grammar_context() {
                     "{shell} rejected command word after prefix: {source:?}"
                 );
             }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn unterminated_expansion_syntax_is_rejected_by_posix_shells() {
+    for script in ["echo $(printf value", "echo ${VALUE", "echo `printf value"] {
+        assert!(
+            esh::planner::compiler::compile_script(script).is_err(),
+            "ESH accepted unterminated expansion syntax {script:?}"
+        );
+
+        for (shell, args) in [
+            ("bash", vec!["--posix", "-n", "-c"]),
+            ("dash", vec!["-n", "-c"]),
+        ] {
+            if let Ok(output) = Command::new(shell).args(args).arg(script).output() {
+                assert!(
+                    !output.status.success(),
+                    "{shell} accepted unterminated expansion syntax {script:?}"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn function_keyword_extension_syntax_matches_bash_posix_mode() {
+    for (script, expected_valid) in [
+        ("function worker { :; }", true),
+        ("function worker() { :; }", true),
+        ("function worker ( ) { :; }", true),
+        ("function worker\n{ :; }", true),
+        ("function worker()\n{ :; }", true),
+        ("function\nworker { :; }", false),
+        ("function worker", false),
+        ("function worker()", false),
+    ] {
+        assert_eq!(
+            esh::planner::compiler::compile_script(script).is_ok(),
+            expected_valid,
+            "ESH syntax for {script:?}"
+        );
+
+        let reference = Command::new("bash")
+            .args(["--posix", "-n", "-c", script])
+            .output()
+            .expect("Bash should be available for function syntax comparison");
+        assert_eq!(
+            reference.status.success(),
+            expected_valid,
+            "Bash POSIX mode syntax for {script:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn empty_compound_body_syntax_is_an_esh_extension_to_bash_posix() {
+    let engine = Engine::new();
+    for (script, expected_stdout) in [
+        ("{\n}\n", ""),
+        (
+            "noop() {}\nnoop\nprintf 'status=%s\\n' \"$?\"\n",
+            "status=0\n",
+        ),
+    ] {
+        let mut ctx = ExecutionContext::new();
+        ctx.enable_capture();
+
+        assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+        assert_eq!(ctx.get_captured_stdout().unwrap(), expected_stdout);
+
+        let reference = Command::new("bash")
+            .args(["--posix", "-n", "-c", script])
+            .output()
+            .expect("Bash should be available for the POSIX syntax comparison");
+        assert!(!reference.status.success(), "Bash accepted {script:?}");
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn errexit_for_a_negated_command_documents_esh_divergence_from_posix_shells() {
+    // The language reference intentionally specifies that ESH checks the
+    // inverted status against errexit. POSIX shells exempt the `!` command
+    // itself, so this behavior is recorded separately from equal-result cases.
+    let script = "set -e\nwork() { printf 'before\\n'; false; printf 'after\\n'; }\n! work\nprintf 'unreachable\\n'\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 1);
+    assert!(ctx.is_exiting());
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "before\nafter\n");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, b"before\nafter\nunreachable\n");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn export_prefix_scope_documents_esh_divergence_from_posix_shells() {
+    // ESH restores prefix assignments uniformly for builtins, while POSIX
+    // special-builtin assignment persistence keeps the prefix to `export`.
+    let script = "ESH_EXPORT_PREFIX_SCOPE=temporary export ESH_EXPORT_CREATED_SCOPE=created\nprintf '%s:%s\\n' \"${ESH_EXPORT_PREFIX_SCOPE-unset}\" \"$ESH_EXPORT_CREATED_SCOPE\"\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "unset:created\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, b"temporary:created\n");
+    assert_eq!(reference.stderr, b"");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn parameter_replacement_uses_esh_literal_matches_unlike_bash_posix_patterns() {
+    let script = "VALUE='a*a'\nSEARCH='*'\nEMPTY_SEARCH=\nprintf '%s|%s\\n' \"${VALUE/$SEARCH/X}\" \"${VALUE//${EMPTY_SEARCH}/X}\"\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "aXa|a*a\n");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX-mode comparison");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, b"X|a*a\n");
+    assert_eq!(reference.stderr, b"");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn parameter_replacement_delimiters_track_nested_expansions_like_bash_posix() {
+    let script = r#"
+        VALUE=a/b/c
+        SEARCH=alpha
+        WORDS=alpha-alpha
+        PATH=path/to/file
+        PATH_WITH_PAREN='path/to)path/to/file'
+        printf '%s|%s|%s|%s|%s\n' \
+            "${VALUE/${MISSING:-a/b}/X}" \
+            "${VALUE//${MISSING:-a/b}/X}" \
+            "${WORDS/${SEARCH//x/y}/X}" \
+            "${PATH/$(printf path/to)/X}" \
+            "${PATH_WITH_PAREN/$(printf ')path/to')/X}"
+    "#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "X/c|X/c|X-alpha|X/file|path/toX/file\n"
+    );
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the nested-operand comparison");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, b"X/c|X/c|X-alpha|X/file|path/toX/file\n");
+    assert_eq!(reference.stderr, b"");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn and_or_statuses_match_left_associative_posix_combinations() {
+    let engine = Engine::new();
+
+    for operand_count in 2..=4 {
+        for operand_bits in 0..(1_usize << operand_count) {
+            let operands = (0..operand_count)
+                .map(|index| operand_bits & (1 << index) != 0)
+                .collect::<Vec<_>>();
+
+            for operator_bits in 0..(1_usize << (operand_count - 1)) {
+                let mut script = if operands[0] { "true" } else { "false" }.to_string();
+                let mut expected = operands[0];
+
+                for index in 0..operand_count - 1 {
+                    let is_and = operator_bits & (1 << index) != 0;
+                    script.push_str(if is_and { " && " } else { " || " });
+                    script.push_str(if operands[index + 1] { "true" } else { "false" });
+                    expected = if is_and {
+                        expected && operands[index + 1]
+                    } else {
+                        expected || operands[index + 1]
+                    };
+                }
+
+                let mut ctx = ExecutionContext::new();
+                let status = engine
+                    .eval_str(&script, &mut ctx)
+                    .await
+                    .unwrap_or_else(|error| panic!("ESH rejected {script:?}: {error}"));
+                let expected_status = if expected { 0 } else { 1 };
+                assert_eq!(status, expected_status, "ESH status for {script}");
+
+                let reference = Command::new("bash")
+                    .args(["--posix", "-c", &script])
+                    .output()
+                    .expect("Bash should be available for the POSIX comparison");
+                assert_eq!(
+                    reference.status.code(),
+                    Some(expected_status),
+                    "Bash POSIX status for {script}"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn function_loop_control_documents_esh_divergence_from_bash_posix_mode() {
+    // ESH lets loop-control commands in a function target the caller's active
+    // loop. Bash POSIX mode treats them as outside a loop in the function.
+    let script = r#"
+stop() { break; printf 'wrong-function-tail\n'; }
+for ITEM in first second; do
+    stop
+    printf 'wrong-loop-tail\n'
+done
+printf 'after-break-loop\n'
+
+skip() { continue; printf 'wrong-function-tail\n'; }
+for ITEM in first second; do
+    skip
+    printf 'wrong-loop-tail\n'
+done
+printf 'after-continue-loop\n'
+"#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "after-break-loop\nafter-continue-loop\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(
+        reference.stdout,
+        b"wrong-function-tail\nwrong-loop-tail\nwrong-function-tail\nwrong-loop-tail\nafter-break-loop\nwrong-function-tail\nwrong-loop-tail\nwrong-function-tail\nwrong-loop-tail\nafter-continue-loop\n"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn for_command_substitution_documents_esh_line_list_divergence() {
+    // ESH splits an unquoted standalone command substitution at newline
+    // boundaries and preserves blank lines; POSIX shells use IFS splitting.
+    let script = r#"
+for ITEM in $(printf 'alpha beta\n\nlast\n'); do
+    printf '<%s>\n' "$ITEM"
+done
+for ITEM in "$(printf 'alpha\nbeta\n')"; do
+    printf 'quoted=<%s>\n' "$ITEM"
+done
+"#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "<alpha beta>\n<>\n<last>\nquoted=<alpha\nbeta>\n"
+    );
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(
+        reference.stdout,
+        b"<alpha>\n<beta>\n<last>\nquoted=<alpha\nbeta>\n"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn process_parameters_document_esh_divergence_from_posix_shells() {
+    // ESH has no shell PID or unsupervised background job, so these spellings
+    // remain literal; POSIX shells expand them to process state.
+    let script = "printf 'pid=<%s> last-background=<%s>\\n' \"$$\" \"$!\"\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "pid=<$$> last-background=<$!>\n"
+    );
+
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        let reference = match Command::new(shell).args(&args).arg(script).output() {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => panic!("could not run {shell}: {error}"),
+        };
+        assert!(reference.status.success(), "{shell} status");
+        let output = String::from_utf8(reference.stdout).expect("parameter output should be UTF-8");
+        assert_ne!(output, "pid=<$$> last-background=<$!>\n", "{shell} output");
+        let pid = output
+            .strip_prefix("pid=<")
+            .and_then(|output| output.split_once("> last-background=<"))
+            .expect("reference shell should expand the process parameters");
+        assert!(
+            pid.0.parse::<u32>().is_ok(),
+            "{shell} PID output: {output:?}"
+        );
+        assert!(
+            pid.1.ends_with(">\n"),
+            "{shell} last-background output: {output:?}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn terminal_test_predicate_documents_esh_exclusion_from_posix() {
+    let script = "test -t 999\nSTATUS=$?\nprintf 'status=%s\\n' \"$STATUS\"\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "status=2\n");
+    assert_eq!(
+        ctx.get_captured_stderr().unwrap(),
+        "esh: test: terminal predicate '-t' is unsupported\n"
+    );
+
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        let reference = match Command::new(shell).args(&args).arg(script).output() {
+            Ok(output) => output,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => panic!("could not run {shell}: {error}"),
+        };
+        assert!(reference.status.success(), "{shell} status");
+        assert_eq!(reference.stdout, b"status=1\n", "{shell} output");
+        assert_eq!(reference.stderr, b"", "{shell} stderr");
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn brace_group_or_fallback_documents_esh_fail_fast_extension() {
+    // ESH treats a brace group directly before `||` as a fail-fast try block;
+    // POSIX shells run the whole group and test only its final status.
+    let script = r#"
+{
+    printf 'try-before\n'
+    false
+    printf 'try-after\n'
+} || printf 'fallback\n'
+"#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "try-before\nfallback\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, b"try-before\ntry-after\n");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn err_trap_conditions_document_esh_divergence_from_bash_posix_mode() {
+    // ESH reports each command failure, including failures in tested and
+    // non-final logical-list positions. Bash POSIX mode suppresses those.
+    let script = r#"
+trap 'printf "err\n"' ERR
+if false; then :; fi
+false || :
+true && false
+"#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 1);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "err\nerr\nerr\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert_eq!(reference.status.code(), Some(1));
+    assert_eq!(reference.stdout, b"err\n");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn err_trap_reports_failed_pipeline_stage_even_when_pipeline_succeeds() {
+    let script = r#"
+trap 'printf "err:%s\\n" "$ESH_FAILED_CMD" >&2' ERR
+false | true
+printf 'pipeline-status=%s\n' "$?"
+"#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "pipeline-status=0\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "err:false\n");
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(reference.stdout, b"pipeline-status=0\n");
+    assert_eq!(reference.stderr, b"");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn quoted_star_join_documents_esh_divergence_from_posix_ifs_join() {
+    // ESH deliberately joins "$*" with a literal space; POSIX joins with
+    // the first character of IFS. "$@" remains a separate-argument expansion
+    // in both shells.
+    let script = "show_args() { printf 'at argc=%s' \"$#\"; for item; do printf ' <%s>' \"$item\"; done; printf '\\n'; }\nIFS=:\nset -- 'left side' '' right\nprintf 'star=<%s>\\n' \"$*\"\nshow_args \"$@\"\nset --\nshow_args \"$@\"\nprintf 'star-zero=<%s>\\n' \"$*\"\nset -- ''\nshow_args \"$@\"\nprintf 'star-empty=<%s>\\n' \"$*\"\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "star=<left side  right>\nat argc=3 <left side> <> <right>\nat argc=0\nstar-zero=<>\nat argc=1 <>\nstar-empty=<>\n"
+    );
+
+    let reference = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(
+        reference.stdout,
+        b"star=<left side::right>\nat argc=3 <left side> <> <right>\nat argc=0\nstar-zero=<>\nat argc=1 <>\nstar-empty=<>\n"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn tilde_plus_and_minus_document_esh_divergence_from_posix() {
+    let tmp = tempdir().unwrap();
+    let script = "OLDPWD=/posix/audit-previous\nprintf '<%s>|<%s>\\n' ~+ ~-\n";
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "<~+>|<~->\n");
+
+    let reference = Command::new("bash")
+        .current_dir(tmp.path())
+        .args(["--posix", "-c", script])
+        .output()
+        .expect("Bash should be available for the POSIX comparison");
+    assert!(reference.status.success());
+    assert_eq!(
+        reference.stdout,
+        format!("<{}>|</posix/audit-previous>\n", tmp.path().display()).as_bytes()
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn ascii_named_character_classes_match_every_ascii_byte_in_the_c_locale() {
+    let classes = [
+        "alnum", "alpha", "blank", "cntrl", "digit", "graph", "lower", "print", "punct", "space",
+        "upper", "xdigit",
+    ];
+    let mut script = String::from("LC_ALL=C\nexport LC_ALL\nset --");
+    for class in classes {
+        script.push_str(&format!(" '[[:{class}:]]*'"));
+    }
+    script.push_str(
+        "\nVALUE=$(printf '\\013X')\nprintf 'removed=<%s>\\n' \"${VALUE#[[:space:]]}\"\n",
+    );
+
+    let mut expected = String::from("removed=<X>\n");
+    for byte in 1u8..=127 {
+        script.push_str(&format!("VALUE=$(printf '\\{:03o}X')\n", byte));
+        script.push_str(
+            "for pattern; do\n    case \"$VALUE\" in $pattern) printf 1 ;; *) printf 0 ;; esac\ndone\nprintf '\\n'\n",
+        );
+
+        for class in classes {
+            let character = byte as char;
+            let member = match class {
+                "alnum" => character.is_ascii_alphanumeric(),
+                "alpha" => character.is_ascii_alphabetic(),
+                "blank" => matches!(character, ' ' | '\t'),
+                "cntrl" => character.is_ascii_control(),
+                "digit" => character.is_ascii_digit(),
+                "graph" => character.is_ascii_graphic(),
+                "lower" => character.is_ascii_lowercase(),
+                "print" => character.is_ascii_graphic() || character == ' ',
+                "punct" => character.is_ascii_punctuation(),
+                "space" => matches!(
+                    character,
+                    ' ' | '\t' | '\n' | '\u{000b}' | '\u{000c}' | '\r'
+                ),
+                "upper" => character.is_ascii_uppercase(),
+                "xdigit" => character.is_ascii_hexdigit(),
+                _ => unreachable!(),
+            };
+            expected.push(if member { '1' } else { '0' });
+        }
+        expected.push('\n');
+    }
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    let status = engine.eval_str(&script, &mut ctx).await.unwrap();
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell)
+            .args(args)
+            .arg(&script)
+            .env("LC_ALL", "C")
+            .output()
+        {
+            assert!(
+                reference.status.success(),
+                "{shell} ASCII class check failed"
+            );
+            if reference.stdout != expected.as_bytes() {
+                let actual_rows = String::from_utf8_lossy(&reference.stdout);
+                for (row, (actual, wanted)) in actual_rows.lines().zip(expected.lines()).enumerate()
+                {
+                    if actual != wanted {
+                        let differing_class = actual
+                            .bytes()
+                            .zip(wanted.bytes())
+                            .position(|(actual, wanted)| actual != wanted)
+                            .unwrap_or(actual.len().min(wanted.len()));
+                        panic!(
+                            "{shell} differs for ASCII byte {} class {}: expected {}, got {}",
+                            row + 1,
+                            classes[differing_class],
+                            wanted,
+                            actual
+                        );
+                    }
+                }
+                panic!("{shell} returned a different number of ASCII class rows");
+            }
+            assert_eq!(reference.stderr, b"", "{shell} ASCII class diagnostics");
         }
     }
 }

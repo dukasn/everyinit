@@ -222,23 +222,32 @@ pub fn hash<'a>(
         }
 
         let mut algo = String::new();
+        let mut conflicting_algorithms = false;
         let mut operands = Vec::new();
 
         let mut iter = args.iter().peekable();
         while let Some(arg) = iter.next() {
             if arg == "-a" || arg == "--algo" || arg == "--algorithm" {
                 if let Some(a) = iter.next() {
-                    algo = a.to_lowercase();
+                    let selected = a.to_lowercase();
+                    conflicting_algorithms |= !algo.is_empty() && algo != selected;
+                    algo = selected;
                 }
             } else if let Some(a) = arg.strip_prefix("--algo=") {
-                algo = a.to_lowercase();
+                let selected = a.to_lowercase();
+                conflicting_algorithms |= !algo.is_empty() && algo != selected;
+                algo = selected;
             } else if arg == "--sha256" || arg == "--256" {
+                conflicting_algorithms |= !algo.is_empty() && algo != "sha256";
                 algo = "sha256".to_string();
             } else if arg == "--sha512" || arg == "--512" {
+                conflicting_algorithms |= !algo.is_empty() && algo != "sha512";
                 algo = "sha512".to_string();
             } else if arg == "--md5" {
+                conflicting_algorithms |= !algo.is_empty() && algo != "md5";
                 algo = "md5".to_string();
             } else if arg == "--crc32" {
+                conflicting_algorithms |= !algo.is_empty() && algo != "crc32";
                 algo = "crc32".to_string();
             } else if !arg.starts_with('-') || arg == "-" {
                 operands.push(arg.as_str());
@@ -248,9 +257,19 @@ pub fn hash<'a>(
             }
         }
 
+        if conflicting_algorithms {
+            ctx.write_stderr(b"esh: hash: conflicting algorithm options\n");
+            return Ok(2);
+        }
+
         if algo.is_empty() {
             ctx.write_stderr(b"esh: hash: missing algorithm option (-a sha256|sha512|md5|crc32)\n");
             return Ok(1);
+        }
+
+        if operands.len() > 1 {
+            ctx.write_stderr(b"esh: hash: expected at most one input operand\n");
+            return Ok(2);
         }
 
         let data: Vec<u8> = if !operands.is_empty() {

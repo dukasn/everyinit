@@ -110,6 +110,41 @@ async fn test_hash_and_base64() {
     assert!(output.contains("bXktc2VjcmV0LXRva2Vu"));
 }
 
+#[tokio::test]
+async fn hash_rejects_conflicting_algorithms_and_extra_input_operands() {
+    let engine = Engine::new();
+
+    let mut conflicting = ExecutionContext::new();
+    conflicting.enable_capture();
+    assert_eq!(
+        engine
+            .eval_str("hash --sha256 --md5 payload\n", &mut conflicting)
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(conflicting.get_captured_stdout().unwrap(), "");
+    assert_eq!(
+        conflicting.get_captured_stderr().unwrap(),
+        "esh: hash: conflicting algorithm options\n"
+    );
+
+    let mut extra_operands = ExecutionContext::new();
+    extra_operands.enable_capture();
+    assert_eq!(
+        engine
+            .eval_str("hash -a sha256 first second\n", &mut extra_operands)
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(extra_operands.get_captured_stdout().unwrap(), "");
+    assert_eq!(
+        extra_operands.get_captured_stderr().unwrap(),
+        "esh: hash: expected at most one input operand\n"
+    );
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn hash_supports_posix_command_location_forms_alongside_digest_options() {

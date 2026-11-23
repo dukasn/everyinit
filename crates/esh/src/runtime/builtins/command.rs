@@ -83,6 +83,7 @@ pub fn command<'a>(
                         }
                         QueryMode::Verbose => {
                             let description = match kind {
+                                ResolvedKind::Reserved => format!("{name} is a reserved word"),
                                 ResolvedKind::Function => format!("{name} is a shell function"),
                                 ResolvedKind::Builtin => format!("{name} is an ESH builtin"),
                                 ResolvedKind::External => {
@@ -144,6 +145,7 @@ pub fn type_builtin<'a>(
                 Some(format!("{name} is a reserved word"))
             } else {
                 resolve_name(name, None, ctx).map(|(kind, path)| match kind {
+                    ResolvedKind::Reserved => format!("{name} is a reserved word"),
                     ResolvedKind::Function => format!("{name} is a shell function"),
                     ResolvedKind::Builtin => format!("{name} is an ESH builtin"),
                     ResolvedKind::External => format!("{name} is {}", path.unwrap()),
@@ -166,6 +168,7 @@ fn is_reserved_word(name: &str) -> bool {
 
 #[derive(Clone, Copy)]
 enum ResolvedKind {
+    Reserved,
     Function,
     Builtin,
     External,
@@ -176,6 +179,9 @@ fn resolve_name(
     path_override: Option<&str>,
     ctx: &ExecutionContext,
 ) -> Option<(ResolvedKind, Option<String>)> {
+    if is_reserved_word(name) {
+        return Some((ResolvedKind::Reserved, None));
+    }
     if ctx.get_function(name).is_some() {
         return Some((ResolvedKind::Function, None));
     }
@@ -222,8 +228,12 @@ fn find_path_match(
         return predicate(&path).then_some(path);
     }
 
-    path.into_iter()
-        .flat_map(env::split_paths)
+    let directories = path
+        .map(|path| env::split_paths(path).collect::<Vec<_>>())
+        .unwrap_or_else(|| vec![PathBuf::new()]);
+
+    directories
+        .into_iter()
         .map(|directory| {
             if directory.is_absolute() {
                 directory.join(name)

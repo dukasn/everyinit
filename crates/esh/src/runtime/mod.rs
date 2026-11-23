@@ -14,6 +14,7 @@
 
 pub mod arith;
 pub mod builtins;
+pub(crate) mod char_class;
 pub mod context;
 pub mod exec;
 #[path = "path.rs"]

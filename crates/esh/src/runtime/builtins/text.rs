@@ -13,6 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::error::ExecError;
+use crate::runtime::char_class::is_posix_space;
 use crate::runtime::context::ExecutionContext;
 use crate::runtime::traits::BoxFuture;
 use regex::RegexBuilder;
@@ -2266,7 +2267,7 @@ fn posix_char_class(name: &str) -> Option<Vec<char>> {
         "lower" => |ch| ch.is_ascii_lowercase(),
         "print" => |ch| ch.is_ascii_graphic() || ch == ' ',
         "punct" => |ch| ch.is_ascii_punctuation(),
-        "space" => |ch| ch.is_ascii_whitespace(),
+        "space" => is_posix_space,
         "upper" => |ch| ch.is_ascii_uppercase(),
         "xdigit" => |ch| ch.is_ascii_hexdigit(),
         _ => return None,

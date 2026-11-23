@@ -137,6 +137,25 @@ async fn test_cut_tr_wc() {
 }
 
 #[tokio::test]
+async fn tr_space_class_includes_vertical_tab_and_form_feed() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "printf 'A\\vB\\fC\\nD\\rE\\tF G' | tr '[:space:]' _\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "A_B_C_D_E_F_G");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
+#[tokio::test]
 async fn cut_supports_character_ranges_field_order_stdin_and_validation() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();

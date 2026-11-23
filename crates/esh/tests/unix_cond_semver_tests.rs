@@ -14,6 +14,7 @@
 
 use esh::{Engine, ExecutionContext};
 use std::fs;
+use std::process::Command;
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -80,6 +81,133 @@ async fn test_supports_boolean_precedence_parentheses_and_permission_predicates(
     );
 }
 
+#[tokio::test]
+async fn test_and_bracket_apply_posix_boolean_precedence() {
+    let script = r#"
+        test alpha -o '' -a ''
+        TEST_AND_OR=$?
+        test ! '' -o alpha -a beta
+        TEST_NOT_OR=$?
+        test ! alpha -o alpha
+        TEST_FOUR_OPERANDS=$?
+        [ alpha -o '' -a '' ]
+        BRACKET_AND_OR=$?
+        [ ! '' -o alpha -a beta ]
+        BRACKET_NOT_OR=$?
+        [ ! alpha -o alpha ]
+        BRACKET_FOUR_OPERANDS=$?
+        printf '%s:%s:%s:%s:%s:%s\n' "$TEST_AND_OR" "$TEST_NOT_OR" "$TEST_FOUR_OPERANDS" "$BRACKET_AND_OR" "$BRACKET_NOT_OR" "$BRACKET_FOUR_OPERANDS"
+    "#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"0:0:1:0:0:1\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell).args(args).arg(script).output() {
+            assert!(
+                reference.status.success(),
+                "{shell} failed to evaluate test expression"
+            );
+            assert_eq!(reference.stdout, expected, "{shell} test precedence");
+            assert_eq!(reference.stderr, b"", "{shell} test precedence diagnostic");
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_and_bracket_match_posix_operand_count_forms() {
+    let script = r#"
+        test
+        EMPTY_TEST=$?
+        [ ]
+        EMPTY_BRACKET=$?
+        test !
+        SINGLE_NOT=$?
+        test ! alpha
+        UNARY_NOT_TRUE=$?
+        test ! ''
+        UNARY_NOT_EMPTY=$?
+        test ! alpha = alpha
+        NEGATED_BINARY_EQUAL=$?
+        [ ! alpha = beta ]
+        NEGATED_BINARY_UNEQUAL=$?
+        printf '%s:%s:%s:%s:%s:%s:%s\n' "$EMPTY_TEST" "$EMPTY_BRACKET" "$SINGLE_NOT" "$UNARY_NOT_TRUE" "$UNARY_NOT_EMPTY" "$NEGATED_BINARY_EQUAL" "$NEGATED_BINARY_UNEQUAL"
+    "#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"1:1:0:1:0:1:0\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell).args(args).arg(script).output() {
+            assert!(
+                reference.status.success(),
+                "{shell} failed to evaluate test operand-count forms"
+            );
+            assert_eq!(reference.stdout, expected, "{shell} operand-count forms");
+            assert_eq!(
+                reference.stderr, b"",
+                "{shell} operand-count forms diagnostic"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_and_bracket_accept_double_equals_as_string_equality_extension() {
+    let script = r#"
+        if test alpha == alpha; then TEST_EQUAL=true; else TEST_EQUAL=false; fi
+        if [ alpha == beta ]; then BRACKET_EQUAL=true; else BRACKET_EQUAL=false; fi
+        printf '%s:%s\n' "$TEST_EQUAL" "$BRACKET_EQUAL"
+    "#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let stdout = ctx.get_captured_stdout().unwrap();
+    assert_eq!(stdout, "true:false\n");
+
+    if let Ok(reference) = Command::new("bash")
+        .args(["--posix", "-c", script])
+        .output()
+    {
+        assert!(reference.status.success());
+        assert_eq!(reference.stdout, stdout.as_bytes());
+        assert_eq!(reference.stderr, b"");
+    }
+}
+
+#[tokio::test]
+async fn test_t_is_an_operand_when_three_argument_form_selects_a_binary_expression() {
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+
+    let status = engine
+        .eval_str(
+            "test -t = -t; EQUAL=$?\ntest -t = x; UNEQUAL=$?\ntest -t -a x; AND=$?\ntest -t -o ''; OR=$?\nprintf '%s:%s:%s:%s\\n' \"$EQUAL\" \"$UNEQUAL\" \"$AND\" \"$OR\"\n",
+            &mut ctx,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "0:1:0:0\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn test_supports_special_file_and_set_id_predicates() {
@@ -131,9 +259,7 @@ async fn test_file_time_predicates_handle_missing_paths_explicitly() {
     let mut ctx = ExecutionContext::new();
     ctx.enable_capture();
     ctx.set_cwd(tmp.path()).unwrap();
-    let status = engine
-        .eval_str(
-            r#"
+    let script = r#"
             if test missing -nt present; then printf T; else printf F; fi
             if test present -nt missing; then printf T; else printf F; fi
             if test missing -ot present; then printf T; else printf F; fi
@@ -141,14 +267,153 @@ async fn test_file_time_predicates_handle_missing_paths_explicitly() {
             if test missing -nt missing; then printf T; else printf F; fi
             if test missing -ot missing; then printf T; else printf F; fi
             printf '\n'
-            "#,
-            &mut ctx,
-        )
-        .await
-        .unwrap();
+            "#;
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
 
     assert_eq!(status, 0);
     assert_eq!(ctx.get_captured_stdout().unwrap(), "FTTFFF\n");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell)
+            .current_dir(tmp.path())
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(reference.status.success(), "{shell} file-time predicates");
+            assert_eq!(reference.stdout, b"FTTFFF\n", "{shell} file-time results");
+        }
+    }
+}
+
+#[tokio::test]
+async fn file_predicates_treat_empty_path_operands_as_missing() {
+    let tmp = tempdir().unwrap();
+    fs::write(tmp.path().join("present"), b"content").unwrap();
+
+    let script = r#"
+        for OP in -e -a -f -d -x -r -w -g -u -b -c -p -S -s -L -h; do
+            test "$OP" ""
+            printf '%s' "$?"
+        done
+        test "" -nt present; printf ':%s' "$?"
+        test present -nt ""; printf ':%s' "$?"
+        test "" -ot present; printf ':%s' "$?"
+        test present -ot ""; printf ':%s' "$?"
+        test "" -ef ""; printf ':%s\n' "$?"
+    "#;
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"1111111111111111:1:0:0:1:1\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell)
+            .current_dir(tmp.path())
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(reference.status.success(), "{shell} empty path predicates");
+            assert_eq!(reference.stdout, expected, "{shell} empty path results");
+            assert_eq!(reference.stderr, b"", "{shell} empty path diagnostics");
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_file_time_predicates_compare_existing_timestamps_and_ties() {
+    use std::time::{Duration, SystemTime};
+
+    let tmp = tempdir().unwrap();
+    for name in ["older", "newer", "same"] {
+        fs::write(tmp.path().join(name), b"content").unwrap();
+    }
+    for (name, seconds) in [("older", 1_600_000_000), ("newer", 1_700_000_000)] {
+        fs::File::options()
+            .write(true)
+            .open(tmp.path().join(name))
+            .unwrap()
+            .set_times(
+                fs::FileTimes::new()
+                    .set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(seconds)),
+            )
+            .unwrap();
+    }
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let script = "test older -nt newer; OLD_NEWER=$?\ntest newer -nt older; NEW_NEWER=$?\ntest older -ot newer; OLD_OLDER=$?\ntest newer -ot older; NEW_OLDER=$?\ntest same -nt same; SAME_NEWER=$?\ntest same -ot same; SAME_OLDER=$?\nprintf '%s:%s:%s:%s:%s:%s\\n' \"$OLD_NEWER\" \"$NEW_NEWER\" \"$OLD_OLDER\" \"$NEW_OLDER\" \"$SAME_NEWER\" \"$SAME_OLDER\"\n";
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(ctx.get_captured_stdout().unwrap(), "1:0:0:1:1:1\n");
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell)
+            .current_dir(tmp.path())
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(reference.status.success(), "{shell} file-time predicates");
+            assert_eq!(
+                reference.stdout, b"1:0:0:1:1:1\n",
+                "{shell} file-time results"
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_file_identity_predicate_matches_path_aliases_and_hard_links_only() {
+    let tmp = tempdir().unwrap();
+    fs::write(tmp.path().join("original"), b"same contents").unwrap();
+    fs::hard_link(tmp.path().join("original"), tmp.path().join("hard-link")).unwrap();
+    fs::write(tmp.path().join("copy"), b"same contents").unwrap();
+
+    let engine = Engine::new();
+    let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
+    ctx.set_cwd(tmp.path()).unwrap();
+
+    let script = "test original -ef ./original && printf alias; test original -ef hard-link && printf hard-link; test original -ef copy || printf separate\nprintf '\\n'\n";
+    let status = engine.eval_str(script, &mut ctx).await.unwrap();
+
+    assert_eq!(status, 0);
+    assert_eq!(
+        ctx.get_captured_stdout().unwrap(),
+        "aliashard-linkseparate\n"
+    );
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell)
+            .current_dir(tmp.path())
+            .args(args)
+            .arg(script)
+            .output()
+        {
+            assert!(
+                reference.status.success(),
+                "{shell} file-identity predicate"
+            );
+            assert_eq!(reference.stdout, b"aliashard-linkseparate\n");
+        }
+    }
 }
 
 #[tokio::test]
@@ -220,12 +485,43 @@ async fn bracket_requires_closing_token_without_changing_test_arguments() {
 }
 
 #[tokio::test]
-async fn test_single_parenthesis_is_a_nonempty_operand() {
+async fn test_parenthesis_operand_respects_three_argument_binary_precedence() {
     let engine = Engine::new();
     let mut ctx = ExecutionContext::new();
+    ctx.enable_capture();
 
-    assert_eq!(engine.eval_str("test '('", &mut ctx).await.unwrap(), 0);
-    assert_eq!(engine.eval_str("[ '(' ]", &mut ctx).await.unwrap(), 0);
+    let script = r#"
+        test '('
+        SINGLE=$?
+        test '(' '!=' '!='
+        BINARY_NOT_EQUAL=$?
+        test '(' '=' '('
+        BINARY_EQUAL=$?
+        test '(' -a x
+        BINARY_AND=$?
+        test '(' -n ')'
+        PARENTHESIZED_UNARY_LOOKING_WORD=$?
+        test '(' '' ')'
+        PARENTHESIZED_EMPTY_WORD=$?
+        test ! '(' -n ')'
+        NEGATED_PARENTHESIZED_WORD=$?
+        [ '(' != x ]
+        BRACKET_NOT_EQUAL=$?
+        printf '%s:%s:%s:%s:%s:%s:%s:%s\n' "$SINGLE" "$BINARY_NOT_EQUAL" "$BINARY_EQUAL" "$BINARY_AND" "$PARENTHESIZED_UNARY_LOOKING_WORD" "$PARENTHESIZED_EMPTY_WORD" "$NEGATED_PARENTHESIZED_WORD" "$BRACKET_NOT_EQUAL"
+    "#;
+    assert_eq!(engine.eval_str(script, &mut ctx).await.unwrap(), 0);
+    let expected = b"0:0:0:0:0:1:1:0\n";
+    assert_eq!(ctx.get_captured_stdout().unwrap().as_bytes(), expected);
+    assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    #[cfg(unix)]
+    for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if let Ok(reference) = Command::new(shell).args(args).arg(script).output() {
+            assert!(reference.status.success(), "{shell} parenthesis operands");
+            assert_eq!(reference.stdout, expected, "{shell} parenthesis results");
+            assert_eq!(reference.stderr, b"", "{shell} parenthesis diagnostics");
+        }
+    }
 }
 
 #[tokio::test]
