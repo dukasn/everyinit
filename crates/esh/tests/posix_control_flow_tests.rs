@@ -2336,12 +2336,18 @@ async fn exit_propagates_through_every_compound_control_flow_body() {
         if let Ok(mut reference) = Command::new("bash")
             .args(["--posix", "-c"])
             .arg(script)
-            .stdin(Stdio::piped())
+            .stdin(if construct == "select" {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
         {
-            reference.stdin.take().unwrap().write_all(b"1\n").unwrap();
+            if construct == "select" {
+                reference.stdin.take().unwrap().write_all(b"1\n").unwrap();
+            }
             let reference = reference.wait_with_output().unwrap();
             assert_eq!(
                 reference.status.code(),
