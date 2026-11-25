@@ -1,3 +1,5 @@
+import { documentationRoutePaths } from "../../../dist/docs-data/legacy-root-paths.js";
+
 type PagesContext = {
   request: Request;
   next(request?: Request | string, init?: RequestInit): Promise<Response>;
@@ -6,6 +8,20 @@ type PagesContext = {
 const legacyDocsHosts = new Set(["learn.everyinit.dev", "docs.everyinit.dev"]);
 const isAssetPath = (pathname: string) =>
   pathname.startsWith("/_astro/") || /\.[a-z0-9]+$/i.test(pathname);
+const withRobotsHeader = (response: Response, hostname: string) => {
+  if (hostname === "everyinit.dev") return response;
+  const headers = new Headers(response.headers);
+  headers.set("X-Robots-Tag", "noindex, nofollow");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+const withTrailingSlash = (pathname: string) => {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  return normalized === "/" ? "/" : `${normalized}/`;
+};
 
 const canonicalDocsPath = (pathname: string) => {
   const normalized = pathname.replace(/\/+$/, "") || "/";
@@ -13,8 +29,15 @@ const canonicalDocsPath = (pathname: string) => {
   if (normalized === "/install" || normalized === "/docs/install") {
     return "/docs/book/installation/";
   }
-  return normalized.startsWith("/docs/") ? normalized : `/docs${normalized}`;
+  return withTrailingSlash(normalized.startsWith("/docs/") ? normalized : `/docs${normalized}`);
 };
+const docsRoutePath = (pathname: string) => {
+  const normalized = pathname.replace(/\/+$/, "") || "/";
+  if (normalized === "/docs") return "/";
+  return normalized.startsWith("/docs/") ? normalized.slice("/docs".length) : normalized;
+};
+const notFound = (hostname: string) =>
+  withRobotsHeader(new Response("Not Found\n", { status: 404 }), hostname);
 
 export const onRequest = async ({ request, next }: PagesContext): Promise<Response> => {
   const url = new URL(request.url);
@@ -27,22 +50,37 @@ export const onRequest = async ({ request, next }: PagesContext): Promise<Respon
     canonicalUrl.hostname = "everyinit.dev";
     canonicalUrl.port = "";
     canonicalUrl.pathname = isAssetPath(pathname) ? pathname : canonicalDocsPath(pathname);
-    return Response.redirect(canonicalUrl, 308);
+    return withRobotsHeader(Response.redirect(canonicalUrl, 308), url.hostname);
   }
 
-  if (isAssetPath(pathname)) return next();
+  if (isAssetPath(pathname)) return withRobotsHeader(await next(), url.hostname);
 
   if (normalizedPath === "/install" || normalizedPath === "/docs/install") {
     url.pathname = "/docs/book/installation/";
-    return Response.redirect(url, 308);
+    return withRobotsHeader(Response.redirect(url, 308), url.hostname);
   }
 
-  if (pathname === "/" || normalizedPath === "/docs" || pathname.startsWith("/docs/")) {
-    return next();
+  if (normalizedPath === "/docs" && pathname !== "/docs/") {
+    url.pathname = "/docs/";
+    return withRobotsHeader(Response.redirect(url, 308), url.hostname);
   }
 
-  // Preserve old root-level documentation links while serving the canonical
-  // pages from the single /docs route tree.
-  url.pathname = `/docs${pathname}`;
-  return next(new Request(url, request));
+  if (pathname.startsWith("/docs/")) {
+    if (!documentationRoutePaths.has(docsRoutePath(pathname))) return notFound(url.hostname);
+    const canonicalPath = withTrailingSlash(pathname);
+    if (canonicalPath !== pathname) {
+      url.pathname = canonicalPath;
+      return withRobotsHeader(Response.redirect(url, 308), url.hostname);
+    }
+    return withRobotsHeader(await next(), url.hostname);
+  }
+
+  if (pathname === "/") return withRobotsHeader(await next(), url.hostname);
+
+  const canonicalPath = canonicalDocsPath(pathname);
+  if (!documentationRoutePaths.has(docsRoutePath(canonicalPath))) return notFound(url.hostname);
+  url.pathname = canonicalPath;
+  const redirectUrl = new URL(request.url);
+  redirectUrl.pathname = canonicalPath;
+  return withRobotsHeader(Response.redirect(redirectUrl, 308), url.hostname);
 };

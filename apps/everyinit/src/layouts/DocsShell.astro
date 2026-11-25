@@ -2,7 +2,7 @@
 import type { EvinDocsRouteData } from "everyinit";
 import docs from "virtual:evin/docs";
 import { renderDocument } from "../lib/render-doc";
-import { createTranslator, resolveLocale } from "../i18n";
+import { createTranslator } from "../i18n";
 import SiteLayout from "./SiteLayout.astro";
 
 interface Props {
@@ -10,12 +10,59 @@ interface Props {
 }
 
 const { route } = Astro.props;
-const locale = resolveLocale(route.locale);
+const locale = route.content_locale;
 const homeHref = locale === "en" ? "/" : `/${locale}/`;
-const docsPath = (path: string) => path === "/" ? "/docs/" : `/docs${path}`;
+const docsPath = (path: string) => path === "/" ? "/docs/" : `/docs${path.replace(/\/+$/, "")}/`;
 const t = createTranslator(route.locale);
 const title = String(route.page.page.metadata.title ?? route.page.page.slug ?? t("docs-generic-title"));
 const description = String(route.page.page.metadata.description ?? t("docs-generic-description"));
+const layoutTitle = route.path === "/" ? "Evin Docs overview · Everyinit" : `${title} · Evin Docs`;
+const latestVersion = docs.manifest.latest_version;
+const noindex = route.version !== latestVersion || route.is_fallback;
+const canonicalLocale = route.is_fallback ? route.content_locale : route.locale;
+const canonicalPage = docs.counterpart(route, latestVersion, canonicalLocale);
+const canonicalRoute = docs.routeForPage(canonicalPage);
+const canonical = `https://everyinit.dev${docsPath(canonicalRoute?.path ?? route.path)}`;
+const alternates = docs.manifest.locales.flatMap((language) => {
+  const page = docs.counterpart(route, route.version, language);
+  const counterpart = docs.routeForPage(page);
+  return counterpart && !counterpart.is_fallback
+    ? [{ locale: language, href: `https://everyinit.dev${docsPath(counterpart.path)}` }]
+    : [];
+});
+const defaultAlternate = alternates.find((alternate) => alternate.locale === docs.manifest.default_locale);
+const breadcrumbSegments = route.path.split("/").filter(Boolean);
+if (breadcrumbSegments[0] === route.locale) breadcrumbSegments.shift();
+const breadcrumbItems = [
+  { name: "Everyinit", item: "https://everyinit.dev/" },
+  { name: "Documentation", item: "https://everyinit.dev/docs/" },
+  ...breadcrumbSegments.map((segment, index) => ({
+    name: index === breadcrumbSegments.length - 1
+      ? title
+      : segment.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    item: `https://everyinit.dev${docsPath(`/${breadcrumbSegments.slice(0, index + 1).join("/")}`)}`,
+  })),
+];
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: title,
+    description,
+    url: canonical,
+    inLanguage: route.content_locale,
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: breadcrumbItems.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: item.item,
+    })),
+  },
+];
 const toc = route.page.page.toc ?? [];
 const groups = new Map<string, Map<string, typeof docs.routes>>();
 const navLabelIds: Record<string, string> = {
@@ -31,7 +78,7 @@ const navLabelIds: Record<string, string> = {
   Pages: "docs-nav-pages",
 };
 const navLabel = (label: string) => navLabelIds[label] ? t(navLabelIds[label]) : label;
-for (const item of docs.routes) {
+for (const item of docs.routes.filter((item) => item.version === route.version && item.locale === route.locale)) {
   if (item.path === "/") continue;
   const [key = "guides", subsection = ""] = item.path.split("/").filter(Boolean);
   const section = key === "book"
@@ -67,10 +114,9 @@ const content = renderDocument(
   docs.assets[route.page.id] ?? {},
   docs.diagrams[route.page.id] ?? {},
 );
-const canonical = `https://everyinit.dev${docsPath(route.path)}`;
 ---
 
-<SiteLayout title={`${title} · Evin Docs`} description={description} canonical={canonical} locale={locale}>
+<SiteLayout title={layoutTitle} description={description} canonical={canonical} locale={locale} noindex={noindex} alternates={alternates} xDefault={defaultAlternate?.href ?? canonical} structuredData={structuredData}>
   <div class="min-h-screen bg-paper">
     <header id="docs-site-header" class="docs-site-header sticky top-0 z-30 border-b border-line/80 bg-paper/90 backdrop-blur-xl">
       <div class="mx-auto flex h-[4.5rem] max-w-[96rem] items-center gap-1.5 px-3 sm:gap-4 sm:px-6 lg:px-8">
@@ -162,7 +208,7 @@ const canonical = `https://everyinit.dev${docsPath(route.path)}`;
       <div class="docs-mobile-nav-drawer">
         <nav aria-label={t("docs-mobile-browse")}>
           <div class="docs-mobile-quick">
-            <a href="/docs/book/installation">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
+            <a href="/docs/book/installation/">{t("docs-mobile-install")} <span aria-hidden="true">↗</span></a>
             <a href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>{t("docs-mobile-overview")}</a>
             <button id="docs-mobile-search" type="button" class="docs-mobile-search-btn">
               <span class="inline-flex items-center gap-2">
@@ -196,12 +242,12 @@ const canonical = `https://everyinit.dev${docsPath(route.path)}`;
       <aside class="docs-sidebar hidden lg:block">
         <section class="docs-sidebar-quick" aria-label={t("docs-quick-get-started")}>
           <h2>{t("docs-quick-get-started")}</h2>
-          <a class="docs-quick-primary group" href="/docs/book/installation">
+          <a class="docs-quick-primary group" href="/docs/book/installation/">
             <span>{t("docs-mobile-install")}</span>
             <span class="transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden="true">↗</span>
           </a>
           <div class="docs-quick-list">
-            <a class="docs-quick-secondary" href="/docs/book/first-workflow" aria-current={route.path === "/book/first-workflow" ? "page" : undefined}>
+            <a class="docs-quick-secondary" href="/docs/book/first-workflow/" aria-current={route.path === "/book/first-workflow" ? "page" : undefined}>
               <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
               <span class="min-w-0 flex-1 truncate">{t("docs-quick-first-workflow")}</span>
             </a>
@@ -248,8 +294,8 @@ const canonical = `https://everyinit.dev${docsPath(route.path)}`;
             <span class="docs-page-link-title">{String(nextPage.page.page.metadata.title ?? nextPage.path)}</span>
           </a> : <span></span>}
         </nav> : route.path === "/" ? <div class="docs-index-links">
-          <a href="/docs/book/installation">{t("docs-index-start")} <span aria-hidden="true">→</span></a>
-          <a href="/docs/book/first-workflow">{t("docs-quick-first-workflow")} <span aria-hidden="true">→</span></a>
+          <a href="/docs/book/installation/">{t("docs-index-start")} <span aria-hidden="true">→</span></a>
+          <a href="/docs/book/first-workflow/">{t("docs-quick-first-workflow")} <span aria-hidden="true">→</span></a>
         </div> : null}
         <div class="docs-page-source mt-12 border-t border-line pt-5 text-sm">
           {t("docs-source")} <code class="font-mono text-xs">{route.page.source_path}</code>

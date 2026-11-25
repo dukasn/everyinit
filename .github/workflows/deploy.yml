@@ -46,6 +46,10 @@ jobs:
           echo "CLOUDFLARE_API_TOKEN=$token" >> "$GITHUB_ENV"
       - name: Build and deploy the site
         run: cargo evin-dev run infra:deploy:site
+      - name: Notify IndexNow of canonical production URLs
+        if: github.event.workflow_run.head_branch == 'main'
+        continue-on-error: true
+        run: node apps/everyinit/scripts/indexnow-ping.mjs
       - name: Deploy production Workers
         if: github.event.workflow_run.head_branch == 'main'
         run: cargo evin-dev run infra:deploy:workers

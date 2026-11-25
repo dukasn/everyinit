@@ -12,9 +12,16 @@ tasks:
   build:
     stage: Build
     description: "Build the Everyinit home page and Evin-powered docs routes"
-    needs: [docs:build]
+    needs: [site:generate-middleware-routes]
     steps:
       - run: EVIN_DOCS_PREBUILT=1 npm run build --workspace @everyinit/site
+
+  generate-middleware-routes:
+    stage: Build
+    description: "Generate the Cloudflare middleware route set from the Evin docs manifest"
+    needs: [docs:build]
+    steps:
+      - run: node scripts/generate-middleware-routes.mjs
 
   preview:
     stage: Preview
@@ -26,6 +33,7 @@ tasks:
   check:
     stage: Check
     description: "Type-check the Everyinit Astro site"
+    needs: [site:generate-middleware-routes]
     steps:
       - run: npm run check --workspace @everyinit/site
 
@@ -39,9 +47,10 @@ tasks:
   verify:
     stage: Test
     description: "Type-check and build the Everyinit site"
-    needs: [docs:build]
+    needs: [site:generate-middleware-routes]
     steps:
       - run: npm run check:locales --workspace @everyinit/site
-      - run: npm exec -- oxfmt --check src scripts/check-locales.mjs astro.config.mjs functions/_middleware.ts package.json tests/site.spec.mjs README.md tsconfig.json
+      - run: npm exec -- oxfmt --check src scripts/check-locales.mjs scripts/generate-middleware-routes.mjs scripts/indexnow-ping.mjs astro.config.mjs functions/_middleware.ts package.json tests/indexnow-ping.test.mjs tests/site.spec.mjs README.md tsconfig.json
+      - run: node --test tests/indexnow-ping.test.mjs
       - run: npm run check --workspace @everyinit/site
       - run: EVIN_DOCS_PREBUILT=1 npm run build --workspace @everyinit/site

@@ -4,7 +4,7 @@ site-mobile-navigation = Mobile navigation
 site-menu = Menu
 site-home = Everyinit home
 site-canonical-title = Everyinit — development, orchestrated
-site-canonical-description = A calmer way to run the work around your code.
+site-canonical-description = Run repository workflows, task orchestration, Git hooks, and CI from one workspace with Evin and ESH.
 
 home-nav-tools = Tools
 home-nav-resources = Resources

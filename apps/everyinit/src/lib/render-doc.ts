@@ -22,10 +22,13 @@ const safeUrl = (value: unknown): string => {
 
 const docsLink = (value: unknown): string => {
   const url = safeUrl(value);
-  if (url === "/") return "/docs/";
-  if (url === "/docs") return "/docs/";
-  if (url.startsWith("/") && !url.startsWith("//") && !url.startsWith("/docs/")) {
-    return `/docs${url}`;
+  const match = url.match(/^([^?#]*)([?#].*)?$/);
+  const pathname = match?.[1] ?? url;
+  const suffix = match?.[2] ?? "";
+  if (pathname === "/" || pathname === "/docs") return `/docs/${suffix}`;
+  if (pathname.startsWith("/") && !pathname.startsWith("//")) {
+    const docsPath = pathname.startsWith("/docs/") ? pathname : `/docs${pathname}`;
+    return `${docsPath.replace(/\/+$/, "")}/${suffix}`;
   }
   return url;
 };

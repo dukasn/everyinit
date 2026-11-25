@@ -7,6 +7,10 @@ interface Props {
   description?: string;
   canonical?: string;
   locale?: string;
+  noindex?: boolean;
+  alternates?: Array<{ locale: string; href: string }>;
+  xDefault?: string;
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
 const {
@@ -14,8 +18,17 @@ const {
   description = "A calmer way to run the work around your code.",
   canonical = "https://everyinit.dev/",
   locale = "en",
+  noindex = false,
+  alternates = [],
+  xDefault,
+  structuredData,
 } = Astro.props;
 const accentBoot = JSON.stringify(ACCENT_PRESETS);
+const socialImage = "https://everyinit.dev/social-card.png";
+const ogLocale = locale.replaceAll("-", "_");
+const jsonLd = structuredData
+  ? JSON.stringify(structuredData).replaceAll("<", "\\u003c").replaceAll(">", "\\u003e").replaceAll("&", "\\u0026")
+  : undefined;
 ---
 
 <!doctype html>
@@ -26,12 +39,28 @@ const accentBoot = JSON.stringify(ACCENT_PRESETS);
     <meta name="theme-color" content="#faf9f5" />
     <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex, follow" />}
+    {alternates.map((alternate) => <link rel="alternate" hreflang={alternate.locale} href={alternate.href} />)}
+    {xDefault && <link rel="alternate" hreflang="x-default" href={xDefault} />}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Everyinit" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={ogLocale} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Everyinit — development, orchestrated." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
     <title>{title}</title>
+    {jsonLd && <script type="application/ld+json" set:html={jsonLd}></script>}
     <script is:inline define:vars={{ accentBoot }}>
       (() => {
         try {

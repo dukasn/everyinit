@@ -13,6 +13,7 @@ const docsCommand = process.env.EVIN_BIN
 
 export default defineConfig({
   site: "https://everyinit.dev",
+  trailingSlash: "always",
   output: "static",
   vite: {
     server: { allowedHosts: ["learn.everyinit.dev", "docs.everyinit.dev", "everyinit.dev"] },

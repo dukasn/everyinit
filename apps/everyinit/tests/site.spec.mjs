@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
+import { indexNowKey } from "../scripts/indexnow-ping.mjs";
 
 const widths = [320, 390, 640, 700, 768, 820, 1023, 1024, 1366];
 
@@ -137,6 +138,105 @@ test("the home navigation menus work with pointer, keyboard, and touch layouts",
   }
 });
 
+test("discovery endpoints expose only canonical latest documentation routes", async ({ page }) => {
+  const robots = await page.request.get("/robots.txt");
+  expect(robots.status()).toBe(200);
+  expect(await robots.text()).toContain("Sitemap: https://everyinit.dev/sitemap.xml");
+
+  const sitemap = await page.request.get("/sitemap.xml");
+  expect(sitemap.status()).toBe(200);
+  const sitemapBody = await sitemap.text();
+  expect(sitemapBody).toContain("https://everyinit.dev/");
+  expect(sitemapBody).toContain("https://everyinit.dev/docs/book/installation/");
+  expect(sitemapBody).not.toContain("/docs/v0.2.4/");
+  expect(sitemapBody).toMatch(/<loc>https:\/\/everyinit\.dev\/docs\/[\w/-]+<\/loc>/);
+
+  const llms = await page.request.get("/llms.txt");
+  expect(llms.status()).toBe(200);
+  const llmsBody = await llms.text();
+  expect(llmsBody).toContain("# Everyinit documentation");
+  expect(llmsBody).toContain("https://everyinit.dev/docs/book/installation/");
+  expect(llmsBody).not.toContain("/docs/v0.2.4/");
+
+  const indexNowKeyFile = await page.request.get(`/${indexNowKey}.txt`);
+  expect(indexNowKeyFile.status()).toBe(200);
+  expect((await indexNowKeyFile.text()).trim()).toBe(indexNowKey);
+});
+
+test("home and documentation pages publish canonical crawler metadata", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    "href",
+    "https://everyinit.dev/",
+  );
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+    "content",
+    "https://everyinit.dev/",
+  );
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
+    "content",
+    "https://everyinit.dev/social-card.png",
+  );
+  await expect(page.locator('meta[name="description"]')).toHaveAttribute(
+    "content",
+    /repository workflows/,
+  );
+  await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
+    "content",
+    "summary_large_image",
+  );
+  await expect(page.locator('link[rel="alternate"][hreflang="x-default"]')).toHaveAttribute(
+    "href",
+    "https://everyinit.dev/",
+  );
+  const homeSchemas = JSON.parse(
+    await page.locator('script[type="application/ld+json"]').textContent(),
+  );
+  expect(homeSchemas.map((schema) => schema["@type"])).toEqual(["WebSite", "SoftwareApplication"]);
+  expect(homeSchemas[1].license).toBe("https://spdx.org/licenses/GPL-3.0-only.html");
+
+  const socialCard = await page.request.get("/social-card.png");
+  expect(socialCard.status()).toBe(200);
+  const socialBytes = Buffer.from(await socialCard.body());
+  expect(socialBytes.readUInt32BE(16)).toBe(1200);
+  expect(socialBytes.readUInt32BE(20)).toBe(630);
+  const favicon = await page.request.get("/favicon-192.png");
+  expect(favicon.status()).toBe(200);
+  const faviconBytes = Buffer.from(await favicon.body());
+  expect(faviconBytes.readUInt32BE(16)).toBe(192);
+  expect(faviconBytes.readUInt32BE(20)).toBe(192);
+  const manifest = await page.request.get("/site.webmanifest");
+  expect(manifest.status()).toBe(200);
+  expect((await manifest.json()).icons[0].src).toBe("/favicon-192.png");
+
+  await page.goto("/docs/book/installation/");
+  await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    "href",
+    "https://everyinit.dev/docs/book/installation/",
+  );
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+    "content",
+    "https://everyinit.dev/docs/book/installation/",
+  );
+  await expect(page.locator('link[rel="alternate"][hreflang="en"]')).toHaveAttribute(
+    "href",
+    "https://everyinit.dev/docs/book/installation/",
+  );
+  await expect(page.locator(".docs-sidebar a[href*='/docs/v0.2.4/']")).toHaveCount(0);
+  const docsSchemas = JSON.parse(
+    await page.locator('script[type="application/ld+json"]').textContent(),
+  );
+  expect(docsSchemas.map((schema) => schema["@type"])).toEqual(["TechArticle", "BreadcrumbList"]);
+
+  await page.goto("/docs/v0.2.4/book/installation/");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex, follow");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    "href",
+    "https://everyinit.dev/docs/book/installation/",
+  );
+});
+
 test("the docs site renders generated routes and manifest selectors", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/docs/");
@@ -258,7 +358,7 @@ test("documentation navigation and search work at desktop and mobile widths", as
   await page.locator("#docs-search-input").fill("Rustup");
   const bodyResult = page.locator("[data-search-option]:visible").first();
   await expect(bodyResult).toContainText("Rustup");
-  await expect(bodyResult).toHaveAttribute("href", "/docs/book/installation#build-from-source");
+  await expect(bodyResult).toHaveAttribute("href", "/docs/book/installation/#build-from-source");
   await page.keyboard.press("Escape");
   await page.locator(".docs-mobile-nav > summary").click();
   await expect(page.locator(".docs-mobile-nav")).toContainText("Workflows");
@@ -429,7 +529,7 @@ test("Pages serves docs on everyinit.dev and redirects retired docs hosts", () =
       { encoding: "utf8" },
     );
 
-  expect(fetchForHost("everyinit.dev", "/docs/")).toContain("Everyinit · Evin Docs");
+  expect(fetchForHost("everyinit.dev", "/docs/")).toContain("Evin Docs overview · Everyinit");
   expect(fetchForHost("everyinit.dev", "/docs/book/installation")).toContain(
     "Installation &amp; Quickstart · Evin Docs",
   );
@@ -456,10 +556,45 @@ test("Pages serves docs on everyinit.dev and redirects retired docs hosts", () =
       { encoding: "utf8" },
     );
   expect(redirectForHost("learn.everyinit.dev", "/book/installation")).toBe(
-    "308 https://everyinit.dev/docs/book/installation",
+    "308 https://everyinit.dev/docs/book/installation/",
   );
   expect(redirectForHost("docs.everyinit.dev", "/")).toBe("308 https://everyinit.dev/docs/");
+  expect(redirectForHost("everyinit.dev", "/book/installation")).toBe(
+    "308 http://everyinit.dev:8788/docs/book/installation/",
+  );
+  expect(redirectForHost("everyinit.dev", "/docs/not-a-documentation-route")).toMatch(/^404\b/);
   expect(fetchForHost("everyinit.dev", "/")).toContain("Everyinit — development, orchestrated");
+
+  const unknownRootStatus = execFileSync(
+    "curl",
+    [
+      "--silent",
+      "--show-error",
+      "--output",
+      "/dev/null",
+      "--write-out",
+      "%{http_code}",
+      "--resolve",
+      "everyinit.dev:8788:127.0.0.1",
+      "http://everyinit.dev:8788/not-a-documentation-route/",
+    ],
+    { encoding: "utf8" },
+  );
+  expect(unknownRootStatus).toBe("404");
+
+  const previewHeaders = execFileSync(
+    "curl",
+    [
+      "--silent",
+      "--show-error",
+      "--head",
+      "--resolve",
+      "pr-123.everyinit-site.pages.dev:8788:127.0.0.1",
+      "http://pr-123.everyinit-site.pages.dev:8788/",
+    ],
+    { encoding: "utf8" },
+  );
+  expect(previewHeaders).toMatch(/x-robots-tag: noindex, nofollow/i);
 });
 
 test("docs navbar links separate project home from docs home", async ({ page }) => {

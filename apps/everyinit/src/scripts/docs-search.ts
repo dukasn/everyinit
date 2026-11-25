@@ -18,7 +18,12 @@ const status = document.querySelector<HTMLParagraphElement>("#docs-search-status
 const results = document.querySelector<HTMLDivElement>("#docs-search-results");
 const emptyMessage = t("docs-search-empty-copy");
 const docsBase = dialog?.dataset.docsBase ?? "/docs";
-const docsHref = (path: string) => (path === "/" ? `${docsBase}/` : `${docsBase}${path}`);
+const docsHref = (path: string) => {
+  const [pathname, suffix = ""] = path.split(/(?=[?#])/s, 2);
+  return pathname === "/"
+    ? `${docsBase}/${suffix}`
+    : `${docsBase}${pathname.replace(/\/+$/, "")}/${suffix}`;
+};
 let visibleOptions: HTMLAnchorElement[] = [];
 let activeIndex = -1;
 let searchIndexPromise: ReturnType<typeof loadSearchIndex> | undefined;

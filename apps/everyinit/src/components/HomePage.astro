@@ -1,6 +1,6 @@
 ---
 import SiteLayout from "../layouts/SiteLayout.astro";
-import { createTranslator } from "../i18n";
+import { availableLocales, createTranslator } from "../i18n";
 import HomeNavigation from "./HomeNavigation.astro";
 import HomeHero from "./HomeHero.astro";
 
@@ -11,6 +11,32 @@ interface Props {
 const { locale = "en" } = Astro.props;
 const t = createTranslator(locale);
 const canonical = `https://everyinit.dev${locale === "en" ? "/" : `/${locale}/`}`;
+const alternates = availableLocales.map((language) => ({
+  locale: language,
+  href: `https://everyinit.dev${language === "en" ? "/" : `/${language}/`}`,
+}));
+const structuredData = [
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Everyinit",
+    url: "https://everyinit.dev/",
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Everyinit",
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Linux",
+    license: "https://spdx.org/licenses/GPL-3.0-only.html",
+    codeRepository: "https://github.com/dukasn/everyinit",
+    sameAs: [
+      "https://github.com/dukasn/everyinit",
+      "https://www.npmjs.com/package/everyinit",
+      "https://marketplace.visualstudio.com/items?itemName=everyinit.everyinit",
+    ],
+  },
+];
 
 const principles = [
   { number: "01", title: t("home-principle-one-title"), text: t("home-principle-one-description") },
@@ -32,7 +58,7 @@ const projects = [
     name: "ESH",
     label: t("home-project-esh-label"),
     description: t("home-project-esh-description"),
-    href: "/docs/book/esh",
+    href: "/docs/book/esh/",
     link: t("home-project-esh-link"),
   },
   {
@@ -40,7 +66,7 @@ const projects = [
     name: t("home-project-ide-name"),
     label: t("home-project-ide-label"),
     description: t("home-project-ide-description"),
-    href: "/docs/book/esh/editor-integration",
+    href: "/docs/book/esh/editor-integration/",
     link: t("home-project-ide-link"),
   },
   {
@@ -54,7 +80,7 @@ const projects = [
 ];
 ---
 
-<SiteLayout locale={locale} title={t("site-canonical-title")} description={t("site-canonical-description")} canonical={canonical}>
+<SiteLayout locale={locale} title={t("site-canonical-title")} description={t("site-canonical-description")} canonical={canonical} alternates={alternates} xDefault="https://everyinit.dev/" structuredData={structuredData}>
   <HomeNavigation locale={locale} />
 
   <main>
@@ -75,7 +101,7 @@ const projects = [
           <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">{t("home-workflow-eyebrow")}</p>
           <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">{t("home-workflow-title")}</h2>
           <p class="mt-6 text-base leading-7 text-moss">{t("home-workflow-description")}</p>
-          <a href="/docs/book" class="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-[color-mix(in_srgb,var(--accent-strong)_45%,transparent)] underline-offset-4 transition hover:text-[var(--accent-strong)]">{t("home-workflow-link")} <span aria-hidden="true">↗</span></a>
+          <a href="/docs/book/" class="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-ink underline decoration-[color-mix(in_srgb,var(--accent-strong)_45%,transparent)] underline-offset-4 transition hover:text-[var(--accent-strong)]">{t("home-workflow-link")} <span aria-hidden="true">↗</span></a>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           {principles.map((item) => <article class="rounded-2xl border border-line bg-surface p-6 sm:p-7">
@@ -83,7 +109,7 @@ const projects = [
             <h3 class="mt-8 text-xl font-semibold tracking-tight">{item.title}</h3>
             <p class="mt-3 text-sm leading-6 text-moss">{item.text}</p>
           </article>)}
-          <a href="/docs/book/first-workflow" class="group flex flex-col justify-between rounded-2xl border border-[color-mix(in_srgb,var(--accent-strong)_22%,var(--color-line))] bg-[color-mix(in_srgb,var(--color-lime)_24%,var(--color-surface))] p-6 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--accent-strong)_45%,var(--color-line))] hover:shadow-[0_16px_36px_-28px_rgba(23,33,26,.5)] sm:p-7">
+          <a href="/docs/book/first-workflow/" class="group flex flex-col justify-between rounded-2xl border border-[color-mix(in_srgb,var(--accent-strong)_22%,var(--color-line))] bg-[color-mix(in_srgb,var(--color-lime)_24%,var(--color-surface))] p-6 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--accent-strong)_45%,var(--color-line))] hover:shadow-[0_16px_36px_-28px_rgba(23,33,26,.5)] sm:p-7">
             <p class="font-mono text-xs text-moss">{t("home-workflow-repository-label")}</p>
             <div class="mt-8 flex items-end justify-between gap-4">
               <p class="max-w-[15rem] text-xl font-semibold leading-snug tracking-tight text-ink">{t("home-workflow-repository-copy")}</p>
@@ -111,7 +137,7 @@ const projects = [
               <h3 class="mt-8 text-4xl font-semibold tracking-[-.05em] sm:text-5xl">Evin</h3>
               <p class="mt-4 max-w-sm text-sm leading-6 text-[#c0c9bc]">{t("home-ecosystem-evin-description")}</p>
             </div>
-            <a href="/docs/book/first-workflow" class="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-lime underline decoration-lime/45 underline-offset-4 hover:text-white">
+            <a href="/docs/book/first-workflow/" class="group inline-flex w-fit items-center gap-2 text-sm font-semibold text-lime underline decoration-lime/45 underline-offset-4 hover:text-white">
               {t("home-ecosystem-first-workflow")} <span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span>
             </a>
             <span aria-hidden="true" class="pointer-events-none absolute -right-5 top-1/2 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full border-[6px] border-[color-mix(in_srgb,var(--color-lime)_5%,var(--color-paper))] bg-lime text-lg text-ink lg:flex">›</span>
@@ -209,7 +235,7 @@ const projects = [
         <h2 class="text-[10px] font-semibold uppercase tracking-[.16em] text-moss">{t("home-footer-explore")}</h2>
         <div class="mt-4 grid justify-start gap-3 text-xs text-moss">
           <a href="/docs/">{t("home-footer-documentation")}</a>
-          <a href="/docs/contributing/development">{t("home-footer-development-guide")}</a>
+          <a href="/docs/contributing/development/">{t("home-footer-development-guide")}</a>
           <a href="https://github.com/dukasn/everyinit">{t("home-footer-source")}</a>
           <a href="https://github.com/dukasn/everyinit/issues">{t("home-footer-issues")}</a>
         </div>

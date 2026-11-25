@@ -5,9 +5,9 @@ data. Install once, then import the core API or a supported integration by
 subpath:
 
 For a step-by-step walkthrough, see the
-[guide to writing project documentation](https://everyinit.dev/docs/book/write-project-documentation)
-and [building a documentation site](https://everyinit.dev/docs/book/delivery/build-a-documentation-site).
-The [hosted API reference](https://everyinit.dev/docs/reference/everyinit-package)
+[guide to writing project documentation](https://everyinit.dev/docs/book/write-project-documentation/)
+and [building a documentation site](https://everyinit.dev/docs/book/delivery/build-a-documentation-site/).
+The [hosted API reference](https://everyinit.dev/docs/reference/everyinit-package/)
 covers the exported helpers, Vite modules, search, and highlighting APIs.
 
 ```sh
