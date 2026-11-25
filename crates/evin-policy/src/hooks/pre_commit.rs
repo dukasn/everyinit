@@ -186,12 +186,21 @@ mod tests {
     use std::{fs, process::Command};
     use tempfile::tempdir;
 
-    fn git(repo: &std::path::Path, args: &[&str]) {
-        let output = Command::new("git")
+    fn git_output(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
+        Command::new("git")
             .args(args)
             .current_dir(repo)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_PREFIX")
             .output()
-            .expect("git should run");
+            .expect("git should run")
+    }
+
+    fn git(repo: &std::path::Path, args: &[&str]) {
+        let output = git_output(repo, args);
         assert!(
             output.status.success(),
             "git {args:?} failed: {}",
@@ -269,11 +278,7 @@ mod tests {
             child.path(),
             &["commit", "--quiet", "-m", "submodule baseline"],
         );
-        let output = Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(child.path())
-            .output()
-            .expect("read submodule commit");
+        let output = git_output(child.path(), &["rev-parse", "HEAD"]);
         assert!(output.status.success());
         let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let cache_info = format!("160000,{commit},vendor/module");

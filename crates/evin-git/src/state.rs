@@ -98,6 +98,31 @@ pub async fn short_sha(workspace_root: &Path) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+pub async fn is_merge_in_progress(workspace_root: &Path) -> Result<bool, String> {
+    let output = crate::cmd::git_cmd()
+        .args(["rev-parse", "--git-path", "MERGE_HEAD"])
+        .current_dir(workspace_root)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to locate Git merge state: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git rev-parse failed while locating merge state: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let merge_head_path = String::from_utf8_lossy(&output.stdout);
+    let merge_head = Path::new(merge_head_path.trim());
+    let merge_head = if merge_head.is_absolute() {
+        merge_head.to_path_buf()
+    } else {
+        workspace_root.join(merge_head)
+    };
+    Ok(merge_head.exists())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StagedChangeKind {
     Added,
@@ -485,12 +510,21 @@ mod tests {
     use std::{fs, process::Command};
     use tempfile::tempdir;
 
-    fn git(repo: &std::path::Path, args: &[&str]) {
-        let output = Command::new("git")
+    fn git_output(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
+        Command::new("git")
             .args(args)
             .current_dir(repo)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_PREFIX")
             .output()
-            .expect("git should run");
+            .expect("git should run")
+    }
+
+    fn git(repo: &std::path::Path, args: &[&str]) {
+        let output = git_output(repo, args);
         assert!(
             output.status.success(),
             "git {args:?} failed: {}",
@@ -630,11 +664,7 @@ mod tests {
 
         assert!(result.is_ok_and(|is_force_push| !is_force_push));
 
-        let head = Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(repo.path())
-            .output()
-            .expect("read head sha");
+        let head = git_output(repo.path(), &["rev-parse", "HEAD"]);
         let head = String::from_utf8_lossy(&head.stdout).trim().to_string();
         let result = super::is_force_push(repo.path(), "not-an-object-id", &head).await;
 
@@ -655,11 +685,7 @@ mod tests {
             child.path(),
             &["commit", "--quiet", "-m", "submodule baseline"],
         );
-        let output = Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(child.path())
-            .output()
-            .expect("read submodule commit");
+        let output = git_output(child.path(), &["rev-parse", "HEAD"]);
         assert!(output.status.success());
         let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
         let cache_info = format!("160000,{commit},vendor/module");
@@ -698,5 +724,32 @@ mod tests {
             .expect("read staged submodule URLs");
 
         assert_eq!(urls, ["https://allowed.example/module"]);
+    }
+
+    #[tokio::test]
+    async fn merge_state_lookup_finds_merge_marker() {
+        let repo = committed_repository();
+        assert!(
+            !super::is_merge_in_progress(repo.path())
+                .await
+                .expect("inspect repository state")
+        );
+
+        let output = git_output(repo.path(), &["rev-parse", "--git-path", "MERGE_HEAD"]);
+        assert!(output.status.success());
+        let marker_path = String::from_utf8_lossy(&output.stdout);
+        let marker = std::path::Path::new(marker_path.trim());
+        let marker = if marker.is_absolute() {
+            marker.to_path_buf()
+        } else {
+            repo.path().join(marker)
+        };
+        fs::write(marker, "merge-head\n").expect("write merge marker");
+
+        assert!(
+            super::is_merge_in_progress(repo.path())
+                .await
+                .expect("inspect repository merge state")
+        );
     }
 }

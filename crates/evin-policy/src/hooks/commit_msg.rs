@@ -34,7 +34,16 @@ impl GitHook for CommitMsgHook {
         let validator = RepositoryPolicyValidator::new(rules);
         let mut violations = Vec::new();
 
-        if let Err(errors) = validator.validate_history_integrity(repo_root) {
+        let merge_in_progress = match evin_git::state::is_merge_in_progress(repo_root).await {
+            Ok(merge_in_progress) => merge_in_progress,
+            Err(error) => {
+                return Err(vec![PolicyError::GitState(format!(
+                    "Failed to inspect repository history state: {error}"
+                ))]);
+            }
+        };
+
+        if let Err(errors) = validator.validate_history_integrity(merge_in_progress) {
             violations.extend(errors.into_iter().map(|e| PolicyError::Violation {
                 error: e,
                 issue_code: IssueCode::new("issue-commit-rejected"),
@@ -116,6 +125,11 @@ mod tests {
         let output = Command::new("git")
             .args(args)
             .current_dir(repo)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_PREFIX")
             .output()
             .expect("git should run");
         assert!(

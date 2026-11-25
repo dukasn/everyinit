@@ -536,18 +536,15 @@ impl<'a> RepositoryPolicyValidator<'a> {
 
     pub fn validate_history_integrity(
         &self,
-        repo_root: &std::path::Path,
+        merge_in_progress: bool,
     ) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
         if let Some(history) = &self.rules.history
             && let Some(policies) = &history.policies
             && policies.require_linear_history.unwrap_or(false)
+            && merge_in_progress
         {
-            let merge_head = repo_root.join(".git").join("MERGE_HEAD");
-            if merge_head.exists() {
-                // For now, reuse an existing error or define a new one! Wait, I didn't define a LinearHistoryValidationError!
-                errors.push(ValidationError::MergeCommitBlocked);
-            }
+            errors.push(ValidationError::MergeCommitBlocked);
         }
         if errors.is_empty() {
             Ok(())
@@ -1059,5 +1056,22 @@ mod tests {
                 .validate_submodules(&[], &["vendor/module".to_string()])
                 .is_err()
         );
+    }
+
+    #[test]
+    fn linear_history_policy_rejects_an_active_merge() {
+        let mut rules = RepositoryPolicy::default();
+        rules
+            .history
+            .as_mut()
+            .unwrap()
+            .policies
+            .as_mut()
+            .unwrap()
+            .require_linear_history = Some(true);
+        let validator = RepositoryPolicyValidator::new(&rules);
+
+        assert!(validator.validate_history_integrity(false).is_ok());
+        assert!(validator.validate_history_integrity(true).is_err());
     }
 }

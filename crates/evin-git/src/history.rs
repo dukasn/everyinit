@@ -88,6 +88,19 @@ pub async fn fetch_all_commits(workspace_root: &Path) -> Result<Vec<GitCommit>, 
 mod tests {
     use super::*;
 
+    fn git(repo: &std::path::Path, args: &[&str]) -> std::process::Output {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .env_remove("GIT_COMMON_DIR")
+            .env_remove("GIT_PREFIX")
+            .output()
+            .expect("git should run")
+    }
+
     #[tokio::test]
     async fn retains_commit_body_and_files_separately() {
         let temp = tempfile::TempDir::new().unwrap();
@@ -97,37 +110,23 @@ mod tests {
             &["config", "user.email", "test@example.test"][..],
             &["config", "commit.gpgSign", "false"][..],
         ] {
-            assert!(
-                std::process::Command::new("git")
-                    .args(args)
-                    .current_dir(temp.path())
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            assert!(git(temp.path(), args).status.success());
         }
         std::fs::write(temp.path().join("file.txt"), "content").unwrap();
+        assert!(git(temp.path(), &["add", "file.txt"]).status.success());
         assert!(
-            std::process::Command::new("git")
-                .args(["add", "file.txt"])
-                .current_dir(temp.path())
-                .status()
-                .unwrap()
-                .success()
-        );
-        assert!(
-            std::process::Command::new("git")
-                .args([
+            git(
+                temp.path(),
+                &[
                     "commit",
                     "-m",
                     "chore(release): refresh package revisions",
                     "-m",
                     "Evin-Release-Kind: package"
-                ])
-                .current_dir(temp.path())
-                .status()
-                .unwrap()
-                .success()
+                ]
+            )
+            .status
+            .success()
         );
         let commits = fetch_all_commits(temp.path()).await.unwrap();
         assert_eq!(
