@@ -11,6 +11,7 @@
 !/.node-version
 # Public repository entry point; the root deny-all rule otherwise excludes it.
 !/README.md
+!/WEBSITE_DISCOVERABILITY.md
 !/SECURITY.md
 !/CI.md
 !/release-comment-examples.md
