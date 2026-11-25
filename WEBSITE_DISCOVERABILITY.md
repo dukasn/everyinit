@@ -25,7 +25,8 @@ uses `application/xml`, and `/llms.txt` uses `text/plain`. The first automatic
 IndexNow request reached the site before the sitemap was available and got
 HTTP 500; retrying after deployment returned HTTP 202. The IndexNow script now
 retries transient sitemap and API failures, with regression coverage in its
-Node test suite.
+Node test suite. The deployment of retry commit `af245b3` then submitted all 50
+canonical URLs automatically with HTTP 200 on its first attempt.
 
 Search-console verification, Cloudflare Crawler Hints, the remaining GitHub
 topics, and Visual Studio Marketplace domain verification remain account-level
@@ -109,9 +110,10 @@ and webmaster tools drive initial discovery and crawl frequency:
 - **IndexNow:** `.github/workflows/deploy.yml` submits the canonical production
   URLs from `/sitemap.xml` after successful `main` deployments, retrying
   transient sitemap and API failures. The public verification key is served
-  from `apps/everyinit/public/`. A live submission was accepted with HTTP 202
-  on 2026-11-25 after the initial post-deployment sitemap request returned
-  HTTP 500; automatic retry behavior will be exercised by the next deployment.
+  from `apps/everyinit/public/`. On 2026-11-25, the first rollout got HTTP 500
+  while the sitemap was propagating; a manual retry was accepted with HTTP 202.
+  The next rollout, with retry support, submitted 50 URLs automatically with
+  HTTP 200 on its first attempt.
 - **Cloudflare Crawler Hints:** This remains an optional account-level
   alternative. Cloudflare account access is not configured in this workspace.
 - **GitHub repository metadata:** The repository homepage is already set to
