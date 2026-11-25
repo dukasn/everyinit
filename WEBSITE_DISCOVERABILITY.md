@@ -103,10 +103,16 @@ synchronized with `virtual:evin/docs`:
 On-page metadata helps crawlers classify `everyinit.dev`, while external links
 and webmaster tools drive initial discovery and crawl frequency:
 
-- **Search consoles:** Verify `everyinit.dev` as a DNS domain property in Google
-  Search Console and Bing Webmaster Tools, then submit
-  `https://everyinit.dev/sitemap.xml`. These account-level settings have not
-  been verified from the repository.
+- **Search consoles:** Add `everyinit.dev` as a Google Search Console Domain
+  property and complete its DNS verification; Domain properties require DNS
+  verification. Then submit `https://everyinit.dev/sitemap.xml`. Add the same
+  domain to Bing Webmaster Tools and submit the sitemap there, or import the
+  verified Google property. These account-level settings have not been
+  verified. See Google's [property setup](https://support.google.com/webmasters/answer/34592)
+  and [ownership verification](https://support.google.com/webmasters/answer/9008080),
+  and Bing's [add and verify](https://www2.bing.com/webmasters/help/add-and-verify-site-12184f8b)
+  and [sitemap submission](https://www2.bing.com/webmasters/help/sitemaps-3b5cf6ed)
+  guides.
 - **IndexNow:** `.github/workflows/deploy.yml` submits the canonical production
   URLs from `/sitemap.xml` after successful `main` deployments, retrying
   transient sitemap and API failures. The public verification key is served
@@ -115,17 +121,26 @@ and webmaster tools drive initial discovery and crawl frequency:
   The next rollout, with retry support, submitted 50 URLs automatically with
   HTTP 200 on its first attempt.
 - **Cloudflare Crawler Hints:** This remains an optional account-level
-  alternative. Cloudflare account access is not configured in this workspace.
+  alternative. The [Cloudflare guide](https://developers.cloudflare.com/cache/advanced-configuration/crawler-hints/)
+  says to enable it under Dashboard → Configuration. `wrangler whoami` reports
+  that the local auth token has expired, so the account setting could not be
+  inspected or changed from this workspace.
 - **GitHub repository metadata:** The repository homepage is already set to
-  `https://everyinit.dev/`. Existing topics include `task-runner`, `git-hooks`,
-  and `lsp`; the remaining suggested topics are `workflow-orchestration`,
-  `build-tool`, `shell`, `rust`, and `vscode-extension`.
+  `https://everyinit.dev/`. Current topics are `cli`, `dag`, `developer-tools`,
+  `esh`, `evin`, `git-hooks`, `lsp`, `monorepo`, `orchestration`, `task-runner`,
+  `workflow-automation`, `everyinit`, `canary`, and `canary-release`. The
+  proposed additions are `workflow-orchestration`, `build-tool`, `shell`,
+  `rust`, and `vscode-extension`; they have not been applied pending approval.
 - **Published package READMEs:** `packages/everyinit/README.md` and
   `editors/vscode/README.md` link directly to canonical `/docs/book/.../` and
   `/docs/reference/.../` pages with trailing slashes.
-- **Publisher verification:** Complete Visual Studio Marketplace domain
-  verification for `https://everyinit.dev` when the publisher account meets the
-  Marketplace's current eligibility requirements.
+- **Publisher verification:** The official [VS Code publisher verification
+  guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#verify-a-publisher)
+  requires at least six months with an extension in the Marketplace and a
+  domain registration that is also at least six months old. Once eligible,
+  verify `https://everyinit.dev` from the publisher Details page and add the
+  supplied DNS TXT record. The account's current eligibility has not been
+  checked.
 
 ## Verification coverage
 
