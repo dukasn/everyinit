@@ -98,24 +98,55 @@ pub async fn short_sha(workspace_root: &Path) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StagedChangeKind {
+    Added,
+    Modified,
+    Deleted,
+    TypeChanged,
+}
+
+impl StagedChangeKind {
+    fn from_status(status: &str) -> Option<Self> {
+        match status.chars().next()? {
+            'A' => Some(Self::Added),
+            'M' => Some(Self::Modified),
+            'D' => Some(Self::Deleted),
+            'T' => Some(Self::TypeChanged),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StagedPathChange {
+    pub path: String,
+    pub kind: StagedChangeKind,
+    pub is_submodule: bool,
+    pub creates_submodule: bool,
+}
+
 #[derive(Debug, Clone)]
 pub struct StagedFileRaw {
     pub path: String,
-    pub content: String,
+    pub content: Option<String>,
     pub is_binary: bool,
     pub size_bytes: usize,
     pub is_lfs_tracked: bool,
-    pub status: String,
+    pub kind: StagedChangeKind,
 }
 
-pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw>, String> {
+pub async fn get_staged_path_changes(
+    workspace_root: &Path,
+) -> Result<Vec<StagedPathChange>, String> {
     let output = crate::cmd::git_cmd()
         .args([
             "diff",
             "--cached",
-            "--name-status",
+            "--raw",
             "-z",
-            "--diff-filter=ACM",
+            "--no-renames",
+            "--diff-filter=ACMDT",
         ])
         .current_dir(workspace_root)
         .output()
@@ -126,19 +157,52 @@ pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw
         return Err("git diff failed".to_string());
     }
 
-    let mut files_info = Vec::new();
-    let names_output = String::from_utf8_lossy(&output.stdout);
-    let mut iter = names_output.split('\0');
+    let mut changes = Vec::new();
+    let raw_output = String::from_utf8_lossy(&output.stdout);
+    let mut iter = raw_output.split('\0');
     while let Some(status) = iter.next() {
         if status.is_empty() {
             break;
         }
-        if let Some(path) = iter.next() {
-            files_info.push((status.to_string(), path.to_string()));
-        }
+        let path = iter
+            .next()
+            .ok_or_else(|| "git diff returned a staged status without a path".to_string())?;
+        let metadata = status
+            .strip_prefix(':')
+            .ok_or_else(|| "git diff returned an invalid raw staged entry".to_string())?;
+        let mut metadata = metadata.split_whitespace();
+        let old_mode = metadata
+            .next()
+            .ok_or_else(|| "git diff returned a staged entry without an old mode".to_string())?;
+        let new_mode = metadata
+            .next()
+            .ok_or_else(|| "git diff returned a staged entry without a new mode".to_string())?;
+        let _old_oid = metadata.next().ok_or_else(|| {
+            "git diff returned a staged entry without an old object id".to_string()
+        })?;
+        let _new_oid = metadata.next().ok_or_else(|| {
+            "git diff returned a staged entry without a new object id".to_string()
+        })?;
+        let status = metadata
+            .next()
+            .ok_or_else(|| "git diff returned a staged entry without a status".to_string())?;
+        let kind = StagedChangeKind::from_status(status)
+            .ok_or_else(|| format!("git diff returned an unsupported staged status: {status}"))?;
+        changes.push(StagedPathChange {
+            path: path.to_string(),
+            kind,
+            is_submodule: old_mode == "160000" || new_mode == "160000",
+            creates_submodule: new_mode == "160000" && old_mode != "160000",
+        });
     }
 
-    if files_info.is_empty() {
+    Ok(changes)
+}
+
+pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw>, String> {
+    let changes = get_staged_path_changes(workspace_root).await?;
+
+    if changes.is_empty() {
         return Ok(vec![]);
     }
 
@@ -153,8 +217,11 @@ pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw
     {
         if let Some(mut stdin) = child.stdin.take() {
             use tokio::io::AsyncWriteExt;
-            for (_, path) in &files_info {
-                let _ = stdin.write_all(path.as_bytes()).await;
+            for change in &changes {
+                if change.kind == StagedChangeKind::Deleted || change.is_submodule {
+                    continue;
+                }
+                let _ = stdin.write_all(change.path.as_bytes()).await;
                 let _ = stdin.write_all(&[0]).await;
             }
         }
@@ -174,7 +241,37 @@ pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw
     }
 
     let mut staged = Vec::new();
-    for (status, path) in files_info {
+    for StagedPathChange {
+        kind,
+        path,
+        is_submodule,
+        ..
+    } in changes
+    {
+        if matches!(kind, StagedChangeKind::Deleted) {
+            staged.push(StagedFileRaw {
+                path,
+                content: None,
+                is_binary: false,
+                size_bytes: 0,
+                is_lfs_tracked: false,
+                kind,
+            });
+            continue;
+        }
+
+        if is_submodule {
+            staged.push(StagedFileRaw {
+                path,
+                content: None,
+                is_binary: false,
+                size_bytes: 0,
+                is_lfs_tracked: false,
+                kind,
+            });
+            continue;
+        }
+
         // 1. Get exact staged file size
         let size_output = crate::cmd::git_cmd()
             .args(["cat-file", "-s", &format!(":{}", path)])
@@ -184,7 +281,18 @@ pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw
             .map_err(|e| format!("git cat-file failed: {}", e))?;
 
         if !size_output.status.success() {
-            continue; // Could not stat, maybe deleted concurrently
+            if kind == StagedChangeKind::TypeChanged {
+                staged.push(StagedFileRaw {
+                    path,
+                    content: None,
+                    is_binary: false,
+                    size_bytes: 0,
+                    is_lfs_tracked: false,
+                    kind,
+                });
+                continue;
+            }
+            return Err(format!("git cat-file failed for staged path: {path}"));
         }
 
         let size_str = String::from_utf8_lossy(&size_output.stdout)
@@ -204,7 +312,10 @@ pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw
                 .await
                 .map_err(|e| format!("git show failed: {}", e))?;
 
-            if show_output.status.success() {
+            if !show_output.status.success() {
+                return Err(format!("git show failed for staged path: {path}"));
+            }
+            {
                 let bytes = &show_output.stdout;
 
                 // 3. Null-byte Heuristic (Binary Bypass)
@@ -226,15 +337,24 @@ pub async fn get_staged_files(workspace_root: &Path) -> Result<Vec<StagedFileRaw
 
         staged.push(StagedFileRaw {
             path,
-            content,
+            content: Some(content),
             is_binary,
             size_bytes,
             is_lfs_tracked,
-            status,
+            kind,
         });
     }
 
     Ok(staged)
+}
+
+pub async fn get_staged_submodule_additions(workspace_root: &Path) -> Result<Vec<String>, String> {
+    Ok(get_staged_path_changes(workspace_root)
+        .await?
+        .into_iter()
+        .filter(|change| change.creates_submodule)
+        .map(|change| change.path)
+        .collect())
 }
 
 pub async fn is_lfs_installed() -> bool {
@@ -247,15 +367,37 @@ pub async fn is_lfs_installed() -> bool {
 }
 
 pub async fn get_submodule_urls(repo_root: &Path) -> Result<Vec<String>, String> {
-    let output = crate::cmd::git_cmd()
-        .args(["config", "--file", ".gitmodules", "--get-regexp", "url"])
+    let index_output = crate::cmd::git_cmd()
+        .args(["ls-files", "--stage", "--", ".gitmodules"])
         .current_dir(repo_root)
         .output()
         .await
-        .map_err(|e| format!("Failed to execute git config: {}", e))?;
+        .map_err(|e| format!("Failed to inspect staged .gitmodules: {e}"))?;
 
-    if !output.status.success() {
+    if !index_output.status.success() {
+        return Err(format!(
+            "git ls-files failed while inspecting staged .gitmodules: {}",
+            String::from_utf8_lossy(&index_output.stderr).trim()
+        ));
+    }
+    if index_output.stdout.is_empty() {
         return Ok(vec![]);
+    }
+
+    let output = crate::cmd::git_cmd()
+        .args(["config", "--blob", ":.gitmodules", "--get-regexp", "url"])
+        .current_dir(repo_root)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to read staged .gitmodules: {e}"))?;
+    if !output.status.success() {
+        if output.status.code() == Some(1) && output.stderr.is_empty() {
+            return Ok(vec![]);
+        }
+        return Err(format!(
+            "git config failed while reading staged .gitmodules: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
     }
 
     let mut urls = Vec::new();
@@ -279,14 +421,25 @@ pub async fn is_force_push(
         return Ok(false);
     }
 
-    let status = crate::cmd::git_cmd()
+    let output = crate::cmd::git_cmd()
         .args(["merge-base", "--is-ancestor", remote_sha, local_sha])
         .current_dir(repo_root)
-        .status()
+        .output()
         .await
         .map_err(|e| format!("Failed to run merge-base: {}", e))?;
 
-    Ok(!status.success())
+    match output.status.code() {
+        Some(0) => Ok(false),
+        Some(1) => Ok(true),
+        code => Err(format!(
+            "git merge-base failed with exit status {}: {}",
+            code.map_or_else(
+                || "terminated by signal".to_string(),
+                |code| code.to_string()
+            ),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -304,17 +457,246 @@ pub fn get_push_refs<R: std::io::Read>(reader: &mut R) -> Result<Vec<PushRef>, S
         .map_err(|e| format!("Failed to read stdin: {}", e))?;
 
     let mut refs = Vec::new();
-    for line in stdin_str.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() == 4 {
-            refs.push(PushRef {
-                local_ref: parts[0].to_string(),
-                local_sha: parts[1].to_string(),
-                remote_ref: parts[2].to_string(),
-                remote_sha: parts[3].to_string(),
-            });
+    for (line_number, line) in stdin_str.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
         }
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() != 4 {
+            return Err(format!(
+                "invalid pre-push ref record on line {}: expected 4 fields",
+                line_number + 1
+            ));
+        }
+        refs.push(PushRef {
+            local_ref: parts[0].to_string(),
+            local_sha: parts[1].to_string(),
+            remote_ref: parts[2].to_string(),
+            remote_sha: parts[3].to_string(),
+        });
     }
 
     Ok(refs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StagedChangeKind, get_staged_files, get_staged_path_changes};
+    use std::{fs, process::Command};
+    use tempfile::tempdir;
+
+    fn git(repo: &std::path::Path, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .output()
+            .expect("git should run");
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn committed_repository() -> tempfile::TempDir {
+        let repo = tempdir().expect("temporary repository");
+        git(repo.path(), &["init", "--quiet"]);
+        git(repo.path(), &["config", "user.name", "Test User"]);
+        git(repo.path(), &["config", "user.email", "test@example.com"]);
+        fs::write(repo.path().join("removed.txt"), "tracked content").expect("write tracked file");
+        git(repo.path(), &["add", "removed.txt"]);
+        git(repo.path(), &["commit", "--quiet", "-m", "test baseline"]);
+        repo
+    }
+
+    #[tokio::test]
+    async fn staged_deletion_is_returned_without_blob_content() {
+        let repo = committed_repository();
+        fs::remove_file(repo.path().join("removed.txt")).expect("remove tracked file");
+        git(repo.path(), &["add", "-u"]);
+
+        let files = get_staged_files(repo.path())
+            .await
+            .expect("read staged files");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, "removed.txt");
+        assert_eq!(files[0].kind, StagedChangeKind::Deleted);
+        assert!(files[0].content.is_none());
+        assert_eq!(files[0].size_bytes, 0);
+    }
+
+    #[tokio::test]
+    async fn staged_modification_retains_kind_and_blob_content() {
+        let repo = committed_repository();
+        fs::write(repo.path().join("removed.txt"), "updated content").expect("update tracked file");
+        git(repo.path(), &["add", "removed.txt"]);
+
+        let files = get_staged_files(repo.path())
+            .await
+            .expect("read staged files");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].kind, StagedChangeKind::Modified);
+        assert_eq!(files[0].content.as_deref(), Some("updated content"));
+    }
+
+    #[tokio::test]
+    async fn staged_rename_is_reported_as_both_path_changes() {
+        let repo = committed_repository();
+        git(repo.path(), &["mv", "removed.txt", "renamed.txt"]);
+
+        let changes = get_staged_path_changes(repo.path())
+            .await
+            .expect("read staged path changes");
+        let files = get_staged_files(repo.path())
+            .await
+            .expect("read staged files");
+
+        assert!(changes.iter().any(|change| {
+            change.path == "removed.txt" && change.kind == StagedChangeKind::Deleted
+        }));
+        assert!(changes.iter().any(|change| {
+            change.path == "renamed.txt" && change.kind == StagedChangeKind::Added
+        }));
+        assert_eq!(files.len(), 2);
+        assert!(
+            files
+                .iter()
+                .any(|file| { file.path == "removed.txt" && file.content.is_none() })
+        );
+        assert!(files.iter().any(|file| {
+            file.path == "renamed.txt" && file.content.as_deref() == Some("tracked content")
+        }));
+    }
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn staged_file_type_change_is_not_dropped() {
+        let repo = committed_repository();
+        fs::remove_file(repo.path().join("removed.txt")).expect("remove tracked file");
+        std::os::unix::fs::symlink("target", repo.path().join("removed.txt"))
+            .expect("replace file with symlink");
+        git(repo.path(), &["add", "removed.txt"]);
+
+        let files = get_staged_files(repo.path())
+            .await
+            .expect("read staged files");
+
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].kind, StagedChangeKind::TypeChanged);
+        assert_eq!(files[0].content.as_deref(), Some("target"));
+    }
+
+    #[tokio::test]
+    async fn empty_index_returns_no_staged_files() {
+        let repo = committed_repository();
+
+        let files = get_staged_files(repo.path())
+            .await
+            .expect("read staged files");
+
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn push_ref_parser_rejects_malformed_records() {
+        let mut input = "refs/heads/main abc refs/heads/main".as_bytes();
+
+        assert!(super::get_push_refs(&mut input).is_err());
+    }
+
+    #[test]
+    fn push_ref_parser_preserves_each_ref_update() {
+        let mut input =
+            b"refs/heads/main a refs/heads/main b\nrefs/tags/v1 c refs/tags/v1 d\n".as_slice();
+
+        let refs = super::get_push_refs(&mut input).expect("parse push refs");
+
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].local_ref, "refs/heads/main");
+        assert_eq!(refs[1].local_ref, "refs/tags/v1");
+    }
+
+    #[tokio::test]
+    async fn force_push_check_reports_git_errors_instead_of_treating_them_as_force_pushes() {
+        let repo = committed_repository();
+        let result = super::is_force_push(
+            repo.path(),
+            "not-an-object-id",
+            "0000000000000000000000000000000000000000",
+        )
+        .await;
+
+        assert!(result.is_ok_and(|is_force_push| !is_force_push));
+
+        let head = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(repo.path())
+            .output()
+            .expect("read head sha");
+        let head = String::from_utf8_lossy(&head.stdout).trim().to_string();
+        let result = super::is_force_push(repo.path(), "not-an-object-id", &head).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn staged_submodule_additions_are_detected_from_gitlink_modes() {
+        let repo = committed_repository();
+        let child = tempdir().expect("temporary submodule repository");
+        git(child.path(), &["init", "--quiet"]);
+        git(child.path(), &["config", "user.name", "Test User"]);
+        git(child.path(), &["config", "user.email", "test@example.com"]);
+        fs::write(child.path().join("file.txt"), "submodule content")
+            .expect("write submodule file");
+        git(child.path(), &["add", "file.txt"]);
+        git(
+            child.path(),
+            &["commit", "--quiet", "-m", "submodule baseline"],
+        );
+        let output = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(child.path())
+            .output()
+            .expect("read submodule commit");
+        assert!(output.status.success());
+        let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let cache_info = format!("160000,{commit},vendor/module");
+        git(
+            repo.path(),
+            &["update-index", "--add", "--cacheinfo", &cache_info],
+        );
+
+        let additions = super::get_staged_submodule_additions(repo.path())
+            .await
+            .expect("inspect staged submodule additions");
+        let files = get_staged_files(repo.path())
+            .await
+            .expect("read staged files");
+
+        assert_eq!(additions, ["vendor/module"]);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].kind, StagedChangeKind::Added);
+        assert!(files[0].content.is_none());
+    }
+
+    #[tokio::test]
+    async fn submodule_urls_come_from_the_index_not_the_working_tree() {
+        let repo = committed_repository();
+        let staged = "[submodule \"module\"]\n\turl = https://allowed.example/module\n";
+        fs::write(repo.path().join(".gitmodules"), staged).expect("write staged config");
+        git(repo.path(), &["add", ".gitmodules"]);
+        fs::write(
+            repo.path().join(".gitmodules"),
+            "[submodule \"module\"]\n\turl = https://forbidden.example/module\n",
+        )
+        .expect("change worktree config");
+
+        let urls = super::get_submodule_urls(repo.path())
+            .await
+            .expect("read staged submodule URLs");
+
+        assert_eq!(urls, ["https://allowed.example/module"]);
+    }
 }

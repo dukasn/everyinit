@@ -15,7 +15,7 @@
 use crate::{GitHook, PolicyError};
 use evin_diagnostic::IssueCode;
 use evin_repository_policy::models::RepositoryPolicy;
-use evin_repository_policy::validator::RepositoryPolicyValidator;
+use evin_repository_policy::validator::{RepositoryPolicyValidator, ValidationError};
 use std::io::IsTerminal;
 use std::path::Path;
 
@@ -35,23 +35,30 @@ impl GitHook for PrePushHook {
         let validator = RepositoryPolicyValidator::new(rules);
         let mut violations = Vec::new();
         let remote_name = payload.first().map(|s| s.as_str()).unwrap_or("");
-        let mut is_force_push = false;
 
         // If run manually in a terminal, git won't be piping STDIN refs, so skip reading to avoid blocking forever.
         let push_refs = if !std::io::stdin().is_terminal() {
-            evin_git::state::get_push_refs(&mut std::io::stdin()).unwrap_or_default()
+            match evin_git::state::get_push_refs(&mut std::io::stdin()) {
+                Ok(refs) if !refs.is_empty() => refs,
+                Ok(_) => {
+                    return Err(vec![PolicyError::GitState(
+                        "pre-push hook received no ref updates".to_string(),
+                    )]);
+                }
+                Err(error) => {
+                    return Err(vec![PolicyError::GitState(format!(
+                        "Failed to read pre-push refs: {error}"
+                    ))]);
+                }
+            }
         } else {
             // Ideally we'd emit a remark here, but for now we skip stdin ref validation.
             Vec::new()
         };
 
+        let mut branch_push_seen = false;
+        let mut remote_error_reported = false;
         for pref in push_refs {
-            if let Ok(true) =
-                evin_git::state::is_force_push(repo_root, &pref.local_sha, &pref.remote_sha).await
-            {
-                is_force_push = true;
-            }
-
             // Validate Branch & Tag Names & Deletions
             if pref.local_sha == "0000000000000000000000000000000000000000"
                 && pref.remote_ref.starts_with("refs/tags/")
@@ -63,12 +70,60 @@ impl GitHook for PrePushHook {
                     });
                 }
             } else if pref.local_ref.starts_with("refs/heads/") {
-                let branch_name = pref.local_ref.strip_prefix("refs/heads/").unwrap();
+                branch_push_seen = true;
+                let Some(branch_name) = pref.local_ref.strip_prefix("refs/heads/") else {
+                    continue;
+                };
                 if let Err(e) = validator.validate_branch_name(branch_name) {
                     violations.push(PolicyError::Violation {
                         error: e,
                         issue_code: IssueCode::new("issue-push-rejected"),
                     });
+                }
+
+                let is_force_push = if pref.local_sha == "0000000000000000000000000000000000000000"
+                {
+                    false
+                } else {
+                    match evin_git::state::is_force_push(
+                        repo_root,
+                        &pref.local_sha,
+                        &pref.remote_sha,
+                    )
+                    .await
+                    {
+                        Ok(is_force_push) => is_force_push,
+                        Err(error) => {
+                            violations.push(PolicyError::GitState(format!(
+                                "Failed to determine whether branch '{branch_name}' is up to date: {error}"
+                            )));
+                            continue;
+                        }
+                    }
+                };
+
+                if let Err(errors) = validator.validate_remotes(
+                    remote_name,
+                    branch_name,
+                    is_force_push,
+                    !is_force_push,
+                ) {
+                    for error in errors {
+                        if matches!(error, ValidationError::RemoteNotAllowed { .. }) {
+                            if !remote_error_reported {
+                                violations.push(PolicyError::Violation {
+                                    error,
+                                    issue_code: IssueCode::new("issue-push-restricted"),
+                                });
+                                remote_error_reported = true;
+                            }
+                        } else {
+                            violations.push(PolicyError::Violation {
+                                error,
+                                issue_code: IssueCode::new("issue-push-restricted"),
+                            });
+                        }
+                    }
                 }
             } else if pref.local_ref.starts_with("refs/tags/") {
                 let tag_name = pref.local_ref.strip_prefix("refs/tags/").unwrap();
@@ -79,7 +134,17 @@ impl GitHook for PrePushHook {
                     let mut cmd = tokio::process::Command::new("git");
                     cmd.current_dir(repo_root);
                     cmd.args(["cat-file", "-t", &pref.local_sha]);
-                    let out = cmd.output().await.unwrap();
+                    let out = cmd.output().await.map_err(|error| {
+                        vec![PolicyError::GitState(format!(
+                            "Failed to inspect pushed tag '{tag_name}': {error}"
+                        ))]
+                    })?;
+                    if !out.status.success() {
+                        return Err(vec![PolicyError::GitState(format!(
+                            "Failed to inspect pushed tag '{tag_name}': {}",
+                            String::from_utf8_lossy(&out.stderr).trim()
+                        ))]);
+                    }
                     let obj_type = String::from_utf8_lossy(&out.stdout).trim().to_string();
                     obj_type == "tag"
                 };
@@ -93,12 +158,8 @@ impl GitHook for PrePushHook {
             }
         }
 
-        let branch = evin_git::state::current_branch(repo_root)
-            .await
-            .unwrap_or_default();
-
-        if let Err(errors) =
-            validator.validate_remotes(remote_name, &branch, is_force_push, !is_force_push)
+        if !branch_push_seen
+            && let Err(errors) = validator.validate_remotes(remote_name, "", false, true)
         {
             violations.extend(errors.into_iter().map(|e| PolicyError::Violation {
                 error: e,

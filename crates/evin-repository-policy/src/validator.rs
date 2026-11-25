@@ -18,14 +18,22 @@ use regex::Regex;
 use std::sync::Arc;
 use thiserror::Error;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StagedChangeKind {
+    Added,
+    Modified,
+    Deleted,
+    TypeChanged,
+}
+
 #[derive(Debug, Clone)]
 pub struct StagedFile {
     pub path: String,
-    pub content: String,
+    pub content: Option<String>,
     pub is_binary: bool,
     pub size_bytes: usize,
     pub is_lfs_tracked: bool,
-    pub status: String,
+    pub kind: StagedChangeKind,
 }
 
 #[derive(Debug, Error)]
@@ -236,7 +244,7 @@ impl<'a> RepositoryPolicyValidator<'a> {
             && let Some(max_size_str) = &policies.max_staged_file_size
             && let Ok(limit_bytes) = parse_size_limit(max_size_str)
         {
-            for file in files {
+            for file in files.iter().filter(|file| file.content.is_some()) {
                 if file.size_bytes > limit_bytes {
                     global_errors.push(ValidationError::FileSizeExceeded {
                         file: file.path.clone(),
@@ -313,44 +321,64 @@ impl<'a> RepositoryPolicyValidator<'a> {
             .as_ref()
             .and_then(|f| f.naming_convention.clone());
 
-        // 2. Parallel Processing for Regex Rules
-        // Filter out megafiles (e.g. > 1MB) and binaries. The user bypass rule says > 1MB skip regex.
+        // Path policies also apply to deletions, which have no content to inspect.
+        let mut path_errors = Vec::new();
+        for file in files {
+            if file.kind != StagedChangeKind::Deleted
+                && (file.is_binary || file.size_bytes > 1_000_000)
+            {
+                continue;
+            }
+
+            if ignore_patterns.iter().any(|p| p.matches(&file.path))
+                || file.path.ends_with(".evin/policy.json")
+            {
+                continue;
+            }
+
+            if block_paths.iter().any(|p| p.matches(&file.path)) {
+                path_errors.push(ValidationError::PathBlocked {
+                    file: file.path.clone(),
+                });
+            }
+
+            if let Some(convention) = &naming_convention {
+                let file_name = std::path::Path::new(&file.path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+
+                if !check_naming_convention(file_name, convention) {
+                    path_errors.push(ValidationError::InvalidFileName {
+                        file: file.path.clone(),
+                        convention: convention.clone(),
+                    });
+                }
+            }
+        }
+
+        if !path_errors.is_empty() {
+            return Err(path_errors);
+        }
+
+        // 2. Parallel Processing for Regex Rules. Deletions have no staged blob
+        // to inspect, so content policies apply only when content is available.
         let validation_results: Vec<ValidationError> = files
             .par_iter()
+            .filter(|f| f.content.is_some())
             .filter(|f| !f.is_binary && f.size_bytes <= 1_000_000)
             .filter(|f| !ignore_patterns.iter().any(|p| p.matches(&f.path)))
             .filter(|f| !f.path.ends_with(".evin/policy.json"))
             .flat_map(|file| {
                 let mut errors = Vec::new();
 
-                // Check block_paths
-                if block_paths.iter().any(|p| p.matches(&file.path)) {
-                    errors.push(ValidationError::PathBlocked {
-                        file: file.path.clone(),
-                    });
-                }
-
-                // Check naming_convention
-                if let Some(convention) = &naming_convention {
-                    let file_name = std::path::Path::new(&file.path)
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("");
-
-                    if !check_naming_convention(file_name, convention) {
-                        errors.push(ValidationError::InvalidFileName {
-                            file: file.path.clone(),
-                            convention: convention.clone(),
-                        });
-                    }
-                }
-
                 let blocks = Arc::clone(&content_blocks);
                 let rules = Arc::clone(&content_rules);
+                let content = file.content.as_deref().unwrap_or_default();
 
                 // Check History Content Blocks (AWS Keys, Private Keys)
                 for (re, err_msg) in blocks.iter() {
-                    if re.is_match(&file.content) {
+                    if re.is_match(content) {
                         errors.push(ValidationError::ContentBlockViolated {
                             file: file.path.clone(),
                             message: err_msg.clone(),
@@ -368,7 +396,7 @@ impl<'a> RepositoryPolicyValidator<'a> {
 
                     if matches_include && !matches_exclude {
                         if let Some(req) = require_re
-                            && !req.is_match(&file.content)
+                            && !req.is_match(content)
                         {
                             errors.push(ValidationError::MissingRequiredPattern {
                                 file: file.path.clone(),
@@ -376,7 +404,7 @@ impl<'a> RepositoryPolicyValidator<'a> {
                             });
                         }
                         if let Some(forbid) = forbid_re
-                            && forbid.is_match(&file.content)
+                            && forbid.is_match(content)
                         {
                             errors.push(ValidationError::ForbiddenPatternFound {
                                 file: file.path.clone(),
@@ -411,6 +439,9 @@ impl<'a> RepositoryPolicyValidator<'a> {
             }
 
             for file in files {
+                if file.kind == StagedChangeKind::Deleted || file.content.is_none() {
+                    continue;
+                }
                 for ext in &policies.require_tracking_for {
                     if file.path.ends_with(ext) && !file.is_lfs_tracked {
                         errors.push(ValidationError::LfsTrackingRequired {
@@ -429,19 +460,15 @@ impl<'a> RepositoryPolicyValidator<'a> {
 
     pub fn validate_submodules(
         &self,
-        files: &[StagedFile],
         submodule_urls: &[String],
+        staged_submodule_additions: &[String],
     ) -> Result<(), Vec<ValidationError>> {
         let mut errors = Vec::new();
         if let Some(submodules) = &self.rules.submodules
             && let Some(policies) = &submodules.policies
         {
-            if !policies.allow_creation.unwrap_or(true) {
-                for file in files {
-                    if file.path == ".gitmodules" && file.status.starts_with('A') {
-                        errors.push(ValidationError::SubmoduleCreationBlocked);
-                    }
-                }
+            if !policies.allow_creation.unwrap_or(true) && !staged_submodule_additions.is_empty() {
+                errors.push(ValidationError::SubmoduleCreationBlocked);
             }
 
             if !policies.allowed_hosts.is_empty() {
@@ -918,32 +945,119 @@ mod tests {
 
         let valid_files = vec![StagedFile {
             path: "src/main.rs".to_string(),
-            content: String::new(),
+            content: Some(String::new()),
             is_binary: false,
             size_bytes: 100,
             is_lfs_tracked: false,
-            status: "added".to_string(),
+            kind: StagedChangeKind::Added,
         }];
         assert!(validator.validate_staged_files(&valid_files).is_ok());
 
         let invalid_extension = vec![StagedFile {
             path: "bin/tool.exe".to_string(),
-            content: String::new(),
+            content: Some(String::new()),
             is_binary: false,
             size_bytes: 100,
             is_lfs_tracked: false,
-            status: "added".to_string(),
+            kind: StagedChangeKind::Added,
         }];
         assert!(validator.validate_staged_files(&invalid_extension).is_err());
 
         let oversized_file = vec![StagedFile {
             path: "large_data.bin".to_string(),
-            content: String::new(),
+            content: Some(String::new()),
             is_binary: false,
             size_bytes: 2 * 1024 * 1024,
             is_lfs_tracked: false,
-            status: "added".to_string(),
+            kind: StagedChangeKind::Added,
         }];
         assert!(validator.validate_staged_files(&oversized_file).is_err());
+    }
+
+    #[test]
+    fn deleted_paths_skip_content_size_and_lfs_tracking_rules() {
+        let mut rules = RepositoryPolicy::default();
+        rules
+            .history
+            .as_mut()
+            .unwrap()
+            .policies
+            .as_mut()
+            .unwrap()
+            .max_staged_file_size = Some("1B".to_string());
+        let files = rules.files.as_mut().unwrap();
+        files.content_rules.push(crate::models::ContentRule {
+            name: "required content".to_string(),
+            include: vec!["*.psd".to_string()],
+            exclude: vec![],
+            require_pattern: Some("required marker".to_string()),
+            forbid_pattern: None,
+            error_message: "missing required marker".to_string(),
+        });
+        rules
+            .lfs
+            .as_mut()
+            .unwrap()
+            .policies
+            .as_mut()
+            .unwrap()
+            .require_tracking_for = vec![".psd".to_string()];
+
+        let deleted = StagedFile {
+            path: "assets/old-file.psd".to_string(),
+            content: None,
+            is_binary: false,
+            size_bytes: 0,
+            is_lfs_tracked: false,
+            kind: StagedChangeKind::Deleted,
+        };
+        let validator = RepositoryPolicyValidator::new(&rules);
+
+        assert!(
+            validator
+                .validate_staged_files(std::slice::from_ref(&deleted))
+                .is_ok()
+        );
+        assert!(
+            validator
+                .validate_lfs(std::slice::from_ref(&deleted), false)
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn deleted_paths_still_obey_path_policies() {
+        let rules = RepositoryPolicy {
+            files: Some(FilesNamespace {
+                policies: Some(FilesPolicies {
+                    block_paths: vec!["private/**".to_string()],
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let validator = RepositoryPolicyValidator::new(&rules);
+        let deleted = StagedFile {
+            path: "private/old.txt".to_string(),
+            content: None,
+            is_binary: false,
+            size_bytes: 0,
+            is_lfs_tracked: false,
+            kind: StagedChangeKind::Deleted,
+        };
+
+        assert!(validator.validate_staged_files(&[deleted]).is_err());
+    }
+
+    #[test]
+    fn submodule_creation_policy_uses_staged_gitlink_additions() {
+        let rules = RepositoryPolicy::default();
+        let validator = RepositoryPolicyValidator::new(&rules);
+
+        assert!(
+            validator
+                .validate_submodules(&[], &["vendor/module".to_string()])
+                .is_err()
+        );
     }
 }
