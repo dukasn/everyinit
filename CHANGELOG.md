@@ -3,6 +3,45 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.3.3]
+
+### Bug Fixes
+
+- **site:** retry transient IndexNow requests (af245b3)
+- **policy:** resolve hook state through Git (3c29256)
+- **policy:** account for every staged change in hooks (3c3ca0d)
+- **release:** validate npm publisher identity before packaging (fe8e3a8)
+- **release:** pass npm trusted publishing identity (ae56145)
+- **release:** publish from isolated npm package copy (aba0641)
+- **release:** install trusted npm after setup-node (0dafabf)
+- **npm:** format package manifest (1c2cc68)
+- **release:** sync workflow tests for recovery runs (3365a84)
+- **release:** use OIDC for npmjs publishing (580c1f0)
+
+### Documentation
+
+- **site:** detail account verification steps (80e129f)
+- **site:** record IndexNow production retry (93c2a24)
+- **site:** document discoverability setup (892da00)
+- **contributing:** add contribution opportunities (0d3b12d)
+- clarify guides and npm release recovery (d0f192f)
+
+### Features
+
+- **site:** improve website discoverability (d057457)
+
+### Maintenance
+
+- **npm:** polish published package metadata (ad4373c)
+
+### Other Changes
+
+- **site-preview:** include generated middleware data (94b13b3)
+
+### Tests
+
+- **esh:** reduce timeout test flakiness (33732b3)
+
 ## [v0.3.2]
 
 ### Bug Fixes
