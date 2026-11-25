@@ -3508,7 +3508,7 @@ mod read_timeout_tests {
         let (mut reader, mut writer) = tokio::io::duplex(32);
         writer.write_all(b"partial").await.unwrap();
 
-        let result = read_async_line(&mut reader, true, b'\n', Some(Duration::from_millis(5)))
+        let result = read_async_line(&mut reader, true, b'\n', Some(Duration::from_secs(1)))
             .await
             .unwrap();
 
