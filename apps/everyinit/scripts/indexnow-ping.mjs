@@ -18,11 +18,44 @@ export function parseSitemapUrls(xml) {
   );
 }
 
-export async function pingIndexNow(fetcher = fetch) {
-  const sitemapResponse = await fetcher(sitemapUrl);
-  if (!sitemapResponse.ok) {
-    throw new Error(`Could not fetch the production sitemap: HTTP ${sitemapResponse.status}`);
+async function fetchWithRetry(fetcher, url, options, label, sleep, onRetry) {
+  const maxAttempts = 5;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await fetcher(url, options);
+      if (response.ok) return response;
+      lastError = new Error(`${label}: HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+
+    if (attempt < maxAttempts) {
+      const delayMs = 1000 * 2 ** (attempt - 1);
+      onRetry(`${lastError.message}; retrying in ${delayMs}ms (${attempt}/${maxAttempts - 1})`);
+      await sleep(delayMs);
+    }
   }
+
+  throw lastError;
+}
+
+export async function pingIndexNow(
+  fetcher = fetch,
+  {
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    onRetry = console.warn,
+  } = {},
+) {
+  const sitemapResponse = await fetchWithRetry(
+    fetcher,
+    sitemapUrl,
+    undefined,
+    "Could not fetch the production sitemap",
+    sleep,
+    onRetry,
+  );
 
   const urls = parseSitemapUrls(await sitemapResponse.text());
   if (urls.length === 0) throw new Error("The production sitemap contains no URLs");
@@ -31,11 +64,18 @@ export async function pingIndexNow(fetcher = fetch) {
     throw new Error("The production sitemap contains a URL outside the canonical HTTPS host");
   }
 
-  const response = await fetcher("https://api.indexnow.org/indexnow", {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify({ host, key: indexNowKey, urlList: urls }),
-  });
+  const response = await fetchWithRetry(
+    fetcher,
+    "https://api.indexnow.org/indexnow",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ host, key: indexNowKey, urlList: urls }),
+    },
+    "IndexNow rejected the sitemap URLs",
+    sleep,
+    onRetry,
+  );
   if (response.status !== 200 && response.status !== 202) {
     throw new Error(`IndexNow rejected the sitemap URLs: HTTP ${response.status}`);
   }

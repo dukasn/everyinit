@@ -51,3 +51,40 @@ test("IndexNow submits the canonical URLs from the production sitemap", async ()
     urlList: ["https://everyinit.dev/", "https://everyinit.dev/docs/"],
   });
 });
+
+test("IndexNow retries transient production sitemap and API failures", async () => {
+  const requests = [];
+  const delays = [];
+  const fetcher = async (url, options) => {
+    requests.push({ url, options });
+    if (url === "https://everyinit.dev/sitemap.xml") {
+      if (requests.filter((request) => request.url === url).length === 1) {
+        return new Response(null, { status: 500 });
+      }
+      return new Response("<urlset><url><loc>https://everyinit.dev/</loc></url></urlset>", {
+        status: 200,
+      });
+    }
+    if (requests.filter((request) => request.url === url).length === 1) {
+      return new Response(null, { status: 503 });
+    }
+    return new Response(null, { status: 202 });
+  };
+
+  await pingIndexNow(fetcher, {
+    sleep: async (delayMs) => delays.push(delayMs),
+    onRetry: () => {},
+  });
+
+  assert.deepEqual(
+    requests.map((request) => request.url),
+    [
+      "https://everyinit.dev/sitemap.xml",
+      "https://everyinit.dev/sitemap.xml",
+      "https://api.indexnow.org/indexnow",
+      "https://api.indexnow.org/indexnow",
+    ],
+  );
+  assert.deepEqual(delays, [1000, 1000]);
+  assert.deepEqual(JSON.parse(requests[3].options.body).urlList, ["https://everyinit.dev/"]);
+});

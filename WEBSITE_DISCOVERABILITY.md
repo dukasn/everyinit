@@ -19,6 +19,14 @@ noindex directives, trailing-slash URLs, metadata, structured data, and preview
 host exclusions are covered by `site:verify` and `site:e2e`. Successful
 production deployments submit the canonical sitemap URLs to IndexNow.
 
+Production deployment of commit `892da00` completed on 2026-11-25. Live checks
+confirmed `/robots.txt` and the IndexNow key use `text/plain`, `/sitemap.xml`
+uses `application/xml`, and `/llms.txt` uses `text/plain`. The first automatic
+IndexNow request reached the site before the sitemap was available and got
+HTTP 500; retrying after deployment returned HTTP 202. The IndexNow script now
+retries transient sitemap and API failures, with regression coverage in its
+Node test suite.
+
 Search-console verification, Cloudflare Crawler Hints, the remaining GitHub
 topics, and Visual Studio Marketplace domain verification remain account-level
 tasks. They require access to those services and are not changed by the site
@@ -99,9 +107,11 @@ and webmaster tools drive initial discovery and crawl frequency:
   `https://everyinit.dev/sitemap.xml`. These account-level settings have not
   been verified from the repository.
 - **IndexNow:** `.github/workflows/deploy.yml` submits the canonical production
-  URLs from `/sitemap.xml` after successful `main` deployments. The public
-  verification key is served from `apps/everyinit/public/`; a successful live
-  submission still needs confirmation from the first production deployment.
+  URLs from `/sitemap.xml` after successful `main` deployments, retrying
+  transient sitemap and API failures. The public verification key is served
+  from `apps/everyinit/public/`. A live submission was accepted with HTTP 202
+  on 2026-11-25 after the initial post-deployment sitemap request returned
+  HTTP 500; automatic retry behavior will be exercised by the next deployment.
 - **Cloudflare Crawler Hints:** This remains an optional account-level
   alternative. Cloudflare account access is not configured in this workspace.
 - **GitHub repository metadata:** The repository homepage is already set to
