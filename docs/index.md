@@ -18,6 +18,10 @@ automation and built-in actions for documentation, archives, and releases.
 
 ## Start here
 
+- [Why Everyinit](/book/concepts/why-everyinit) and see how workflows,
+  environment contracts, policy, and ESH fit together.
+- [Execution & trust model](/book/concepts/execution-and-trust-model) to review
+  inspection commands, process boundaries, release verification, and removal.
 - [Install Evin](/book/installation) and initialize a repository.
 - [Run your first workflow](/book/first-workflow) with commands your project
   already uses.
@@ -49,9 +53,11 @@ tasks:
     run: npm test
 ```
 
-Run the checks with one command:
+Inspect the plan, then run the checks:
 
 ```sh
+evin explain test
+evin run test --dry-run
 evin run test
 ```
 
@@ -68,6 +74,7 @@ evin run test
 ## Project links
 
 - [Source code](https://github.com/dukasn/everyinit)
+- [Security policy](https://github.com/dukasn/everyinit/blob/main/SECURITY.md)
 - [Licensing](/contributing/licensing)
 - [Acknowledgments](https://github.com/dukasn/everyinit/blob/main/ACKNOWLEDGMENTS.md)
 - [Third-party notices](https://github.com/dukasn/everyinit/blob/main/THIRD_PARTY_NOTICES.md)
