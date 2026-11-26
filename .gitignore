@@ -1,6 +1,10 @@
 # Ignore everything in the root
 /*
 
+# Developer notes and reports are local by default. The maintainers select each
+# individual document for tracking; do not add exceptions for them without an
+# explicit request.
+
 # Explicitly allow standard root files and directories
 !/.gitignore
 !/.mise.toml
@@ -11,7 +15,6 @@
 !/.node-version
 # Public repository entry point; the root deny-all rule otherwise excludes it.
 !/README.md
-!/WEBSITE_DISCOVERABILITY.md
 !/SECURITY.md
 !/CI.md
 !/release-comment-examples.md
