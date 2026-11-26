@@ -32,6 +32,9 @@ strsim = { workspace = true }
 evin-pipeline = { workspace = true }
 evin-action-changelog = { workspace = true }
 evin-action-archive = { workspace = true }
+evin-action-package-deb = { workspace = true }
+evin-action-package-apk = { workspace = true }
+evin-action-package-arch = { workspace = true }
 evin-git = { workspace = true }
 evin-repository-policy = { workspace = true }
 evin-config = { workspace = true }

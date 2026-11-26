@@ -1,0 +1,21 @@
+[package]
+license.workspace = true
+name = "evin-action-package-arch"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+evin-diagnostic = { workspace = true }
+evin-flow = { workspace = true }
+evin-action-sdk = { workspace = true }
+evin-locales = { workspace = true }
+serde = { workspace = true }
+async-trait = { workspace = true }
+zstandard = { workspace = true }
+
+[dev-dependencies]
+tar = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }

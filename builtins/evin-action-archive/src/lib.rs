@@ -14,4 +14,4 @@
 
 #![allow(clippy::result_large_err)]
 pub mod v1;
-pub use v1::{ApkPackageAction, ArchPackageAction, ArchiveAction, DebPackageAction};
+pub use v1::ArchiveAction;

@@ -10,6 +10,8 @@
 //! construction, but not workspace globbing or a distribution's outer
 //! container. Native actions provide those two boundaries.
 
+#![allow(clippy::result_large_err)]
+
 use crate::fs::WorkspaceFs;
 use flate2::{Compression, GzBuilder};
 use md5::{Digest as Md5Digest, Md5};
@@ -104,76 +106,6 @@ pub enum LinuxArch {
     Ppc64le,
     S390x,
     Noarch,
-}
-
-impl LinuxArch {
-    pub fn deb(self) -> &'static str {
-        match self {
-            Self::X86_64 => "amd64",
-            Self::Aarch64 => "arm64",
-            Self::X86 => "i386",
-            Self::Armv7 => "armhf",
-            Self::Riscv64 => "riscv64",
-            Self::Ppc64le => "ppc64el",
-            Self::S390x => "s390x",
-            Self::Noarch => "all",
-        }
-    }
-
-    pub fn apk(self) -> &'static str {
-        match self {
-            Self::X86_64 => "x86_64",
-            Self::Aarch64 => "aarch64",
-            Self::X86 => "x86",
-            Self::Armv7 => "armv7",
-            Self::Riscv64 => "riscv64",
-            Self::Ppc64le => "ppc64le",
-            Self::S390x => "s390x",
-            Self::Noarch => "noarch",
-        }
-    }
-
-    pub fn arch(self) -> &'static str {
-        match self {
-            Self::X86_64 => "x86_64",
-            Self::Aarch64 => "aarch64",
-            Self::X86 => "i686",
-            Self::Armv7 => "armv7h",
-            Self::Riscv64 => "riscv64",
-            Self::Ppc64le => "ppc64le",
-            Self::S390x => "s390x",
-            Self::Noarch => "any",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PackageFormat {
-    TarGz,
-    Deb,
-    Apk,
-    Arch,
-}
-
-impl PackageFormat {
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "tar.gz" => Some(Self::TarGz),
-            "deb" => Some(Self::Deb),
-            "apk" => Some(Self::Apk),
-            "arch" => Some(Self::Arch),
-            _ => None,
-        }
-    }
-
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::TarGz => "tar.gz",
-            Self::Deb => "deb",
-            Self::Apk => "apk",
-            Self::Arch => "arch",
-        }
-    }
 }
 
 pub fn parse_source_date_epoch(value: &str) -> Result<u64, PackagingError> {
@@ -507,7 +439,7 @@ pub fn write_atomically(
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     let mut temporary = tempfile::Builder::new()
-        .prefix(".evin-archive-")
+        .prefix(".evin-artifact-")
         .tempfile_in(parent)?;
     #[cfg(unix)]
     {
@@ -523,6 +455,179 @@ pub fn write_atomically(
         .persist(output)
         .map_err(|error| PackagingError::Archive(error.error))?;
     Ok(())
+}
+
+/// Summary of the payload successfully prepared and written into an artifact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedArtifactReport {
+    pub files: usize,
+    pub input_bytes: u64,
+    pub inputs: Vec<String>,
+}
+
+/// Prepare a deterministic package payload and publish the encoded artifact
+/// atomically. The writer receives the normalized payload and owns all
+/// format-specific metadata and container rules.
+pub fn prepare_and_write_atomically(
+    output: &Path,
+    epoch: u64,
+    sources: impl IntoIterator<Item = SourceEntry>,
+    write: impl FnOnce(&mut dyn Write, &PackageContext) -> Result<(), PackagingError>,
+) -> Result<PreparedArtifactReport, PackagingError> {
+    let context = PackageContext::prepare(epoch, sources)?;
+    let report = PreparedArtifactReport {
+        files: context
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == PreparedEntryKind::File)
+            .count(),
+        input_bytes: context
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == PreparedEntryKind::File)
+            .map(|entry| entry.data.len() as u64)
+            .sum(),
+        inputs: context
+            .entries
+            .iter()
+            .filter(|entry| entry.kind == PreparedEntryKind::File)
+            .map(|entry| entry.path.clone())
+            .collect(),
+    };
+    write_atomically(output, |writer| write(writer, &context))?;
+    Ok(report)
+}
+
+/// Shared action-level output handling for archive and package builders.
+/// Callers resolve metadata and payload sources and provide a format writer;
+/// this function owns safe output resolution, dry-run outputs, reproducible
+/// preparation, and atomic publication.
+pub async fn publish_artifact(
+    ctx: &crate::RunnerContext,
+    path: String,
+    format: String,
+    unresolved_inputs: Vec<String>,
+    sources: Vec<SourceEntry>,
+    compression_level: Option<u32>,
+    writer: impl FnOnce(&mut dyn Write, &PackageContext) -> Result<(), PackagingError> + Send + 'static,
+) -> Result<PreparedArtifactReport, evin_diagnostic::Diagnostic> {
+    if sources.is_empty() {
+        if ctx.mode == crate::PipelineMode::DryRun && !ctx.uncertainty().is_empty() {
+            ctx.mark_unverified(evin_locales::t!(
+                "artifact-dry-run-inputs-unverified",
+                includes = unresolved_inputs.join(", ")
+            ));
+            ctx.log
+                .plan(crate::activity::ArtifactPlanUnresolved { path: path.clone() });
+            ctx.state.set_output("path", &path);
+            ctx.state.set_output("size", "unknown");
+            return Ok(PreparedArtifactReport {
+                files: 0,
+                input_bytes: 0,
+                inputs: Vec::new(),
+            });
+        }
+        return Err(evin_locales::diagnostic(evin_diagnostic::IssueCode::new(
+            "no-files-matched",
+        )));
+    }
+
+    let output_path = ctx.fs.get_safe_physical_path(&path).map_err(|error| {
+        evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("issue-artifact-safe-path-failed")
+                .arg("context", "artifact path")
+                .arg("error", error.to_string()),
+        )
+    })?;
+    if ctx.mode == crate::PipelineMode::DryRun {
+        ctx.log.plan(crate::activity::ArtifactPlan {
+            files: sources.len(),
+            path: path.clone(),
+        });
+        ctx.state.set_output("path", &path);
+        ctx.state.set_output("size", "0");
+        return Ok(PreparedArtifactReport {
+            files: sources.len(),
+            input_bytes: 0,
+            inputs: Vec::new(),
+        });
+    }
+    if let Some(parent) = output_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        tokio::fs::create_dir_all(parent).await.map_err(|error| {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("create-output-dir-failed")
+                    .arg("error", error.to_string()),
+            )
+        })?;
+    }
+    crate::action_event!(
+        ctx.log,
+        crate::activity::ArtifactPreparing {
+            files: sources.len(),
+            path: path.clone(),
+        }
+    );
+    let epoch = match ctx.env.get("SOURCE_DATE_EPOCH") {
+        Some(value) => parse_source_date_epoch(value).map_err(|error| {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("artifact-source-date-epoch-invalid")
+                    .arg("error", error.to_string()),
+            )
+        })?,
+        None => ctx.git.head_commit_epoch().await.map_err(|error| {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("artifact-source-date-epoch-unavailable")
+                    .arg("error", error.to_string()),
+            )
+        })?,
+    };
+    let write_path = output_path.clone();
+    let report = tokio::task::spawn_blocking(move || {
+        prepare_and_write_atomically(&write_path, epoch, sources, writer)
+            .map_err(evin_diagnostic::Diagnostic::from)
+    })
+    .await
+    .map_err(|error| {
+        evin_locales::diagnostic(
+            evin_diagnostic::IssueCode::new("artifact-blocking-task-failed")
+                .arg("error", error.to_string()),
+        )
+    })??;
+
+    let output_bytes = tokio::fs::metadata(&output_path)
+        .await
+        .map_err(|error| {
+            evin_locales::diagnostic(
+                evin_diagnostic::IssueCode::new("artifact-output-size-unavailable")
+                    .arg("path", path.as_str())
+                    .arg("error", error.to_string()),
+            )
+        })?
+        .len();
+    ctx.state.set_output("path", &path);
+    ctx.state.set_output("size", &output_bytes.to_string());
+    ctx.log.activity(crate::activity::ArtifactCreated {
+        format: format.clone(),
+        path: path.clone(),
+        input_files: report.files,
+        input_size: format!("{} bytes", report.input_bytes),
+        output_size: format!("{output_bytes} bytes"),
+    });
+    ctx.log.debug_event(crate::debug::ArtifactInputs {
+        paths: report.inputs.join(", "),
+    });
+    ctx.log.debug_event(crate::debug::ArtifactOutput {
+        format,
+        path,
+        size_bytes: output_bytes,
+        input_bytes: report.input_bytes,
+        files: report.files,
+        compression_level,
+    });
+    Ok(report)
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -840,7 +945,7 @@ mod tests {
                 .unwrap()
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".evin-archive-")
+                .starts_with(".evin-artifact-")
         }));
     }
 
@@ -862,7 +967,7 @@ mod tests {
                 .unwrap()
                 .file_name()
                 .to_string_lossy()
-                .starts_with(".evin-archive-")
+                .starts_with(".evin-artifact-")
         }));
     }
 
@@ -883,5 +988,50 @@ mod tests {
             std::fs::metadata(output).unwrap().permissions().mode() & 0o777,
             0o644
         );
+    }
+
+    #[test]
+    fn prepared_artifact_report_counts_files_and_preserves_previous_output_on_failure() {
+        let temp = TempDir::new().unwrap();
+        let source = temp.path().join("input");
+        let output = temp.path().join("artifact");
+        std::fs::write(&source, b"payload").unwrap();
+        std::fs::write(&output, b"old").unwrap();
+
+        let report = prepare_and_write_atomically(
+            &output,
+            42,
+            [SourceEntry {
+                source,
+                destination: "usr/bin/example".into(),
+                mode: Some(0o755),
+            }],
+            |writer, payload| {
+                assert_eq!(payload.entries[0].path, "usr");
+                writer.write_all(b"complete")?;
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(report.files, 1);
+        assert_eq!(report.input_bytes, 7);
+        assert_eq!(report.inputs, ["usr/bin/example"]);
+        assert_eq!(std::fs::read(&output).unwrap(), b"complete");
+
+        let failure = prepare_and_write_atomically(
+            &output,
+            42,
+            [SourceEntry {
+                source: temp.path().join("input"),
+                destination: "usr/bin/example".into(),
+                mode: None,
+            }],
+            |writer, _| {
+                writer.write_all(b"partial")?;
+                Err(PackagingError::InvalidPath("injected failure".into()))
+            },
+        );
+        assert!(failure.is_err());
+        assert_eq!(std::fs::read(output).unwrap(), b"complete");
     }
 }

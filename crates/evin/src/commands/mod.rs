@@ -98,15 +98,15 @@ pub(crate) fn builtin_actions()
         ),
         (
             "evin/package-deb@v1",
-            Arc::new(evin_action_archive::DebPackageAction),
+            Arc::new(evin_action_package_deb::DebPackageAction),
         ),
         (
             "evin/package-apk@v1",
-            Arc::new(evin_action_archive::ApkPackageAction),
+            Arc::new(evin_action_package_apk::ApkPackageAction),
         ),
         (
             "evin/package-arch@v1",
-            Arc::new(evin_action_archive::ArchPackageAction),
+            Arc::new(evin_action_package_arch::ArchPackageAction),
         ),
         (
             "evin/git-release@v1",

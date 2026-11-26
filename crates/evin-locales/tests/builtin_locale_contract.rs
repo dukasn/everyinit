@@ -284,7 +284,6 @@ fn builtin_diagnostic_issue_codes_are_fluent_test_backed() {
     // through a stable builtin input. Keep this list small and remove entries
     // when a behavioral test is added.
     let unexercised_issue_codes = BTreeSet::from([
-        "archive-blocking-task-failed",
         "catalog-json-serialization-failed",
         "catalog-output-invalid",
         "docs-temporary-output-prepare-failed",

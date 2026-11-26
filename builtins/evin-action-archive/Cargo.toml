@@ -11,15 +11,13 @@ evin-flow = { workspace = true }
 evin-action-sdk = { workspace = true }
 evin-locales = { workspace = true }
 serde = { workspace = true }
-marked-yaml = { workspace = true }
 thiserror = { workspace = true }
-tar = { workspace = true }
 flate2 = { workspace = true }
-zstandard = { workspace = true }
 glob = { workspace = true }
 async-trait = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tar = { workspace = true }

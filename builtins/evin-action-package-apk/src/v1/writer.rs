@@ -90,3 +90,49 @@ pub fn write(
     output.write_all(&data)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn payload() -> PackageContext {
+        PackageContext {
+            epoch: 123,
+            entries: vec![PreparedEntry {
+                path: "usr/bin/example".into(),
+                kind: PreparedEntryKind::File,
+                data: b"payload".to_vec(),
+                mode: 0o755,
+                mtime: 123,
+                md5: Some("md5".into()),
+                sha256: Some("sha256".into()),
+            }],
+        }
+    }
+
+    #[test]
+    fn writes_deterministic_apk_with_gzip_payload_and_metadata() {
+        let context = payload();
+        let package = || ApkPackage {
+            context: &context,
+            name: "example",
+            version: "1.2.3",
+            revision: 4,
+            architecture: "x86_64",
+            summary: "Example package",
+            homepage: Some("https://example.test"),
+            maintainer: "Example <example@example.test>",
+            license: "MIT",
+            depends: vec!["zlib".into(), "glibc".into()],
+            scripts: vec![(".post-install".into(), b"echo installed\n".to_vec())],
+        };
+        let mut first = Vec::new();
+        write(&mut first, package()).unwrap();
+        let mut second = Vec::new();
+        write(&mut second, package()).unwrap();
+
+        assert_eq!(first, second);
+        assert!(first.starts_with(&[0x1f, 0x8b]));
+        assert!(first.len() > 64);
+    }
+}

@@ -226,6 +226,8 @@ define_activity_events! {
     pub struct DocsServeReady { url: String } => (Info, Ready, "activity-docs-serve-ready");
     pub struct ArchiveCompressing { files: usize, path: String } => (Info, Package, "activity-archive-compressing");
     pub struct ArchiveCreated { format: String, path: String, input_files: usize, input_size: String, output_size: String } => (Info, Package, "activity-archive-created");
+    pub struct ArtifactPreparing { files: usize, path: String } => (Info, Package, "activity-artifact-preparing");
+    pub struct ArtifactCreated { format: String, path: String, input_files: usize, input_size: String, output_size: String } => (Info, Package, "activity-artifact-created");
 }
 
 define_localized_messages! {
@@ -238,6 +240,8 @@ define_localized_messages! {
     pub struct DocsPlanServer {} => "plan-docs-server";
     pub struct ArchivePlanUnresolved { path: String } => "plan-archive-unresolved";
     pub struct ArchivePlan { files: usize, path: String } => "plan-archive";
+    pub struct ArtifactPlanUnresolved { path: String } => "plan-artifact-unresolved";
+    pub struct ArtifactPlan { files: usize, path: String } => "plan-artifact";
     pub struct ChangelogPlan { path: String, sections: String } => "plan-changelog";
     pub struct VersionUpdatePlan { version: String, path: String } => "plan-version-update";
     pub struct VersionCommitPlan { message: String } => "plan-version-commit";
@@ -270,6 +274,11 @@ pub const ACTIVITY_LOCALE_KEYS: &[(&str, &[&str])] = &[
         "activity-archive-created",
         &["format", "path", "input_files", "input_size", "output_size"],
     ),
+    ("activity-artifact-preparing", &["files", "path"]),
+    (
+        "activity-artifact-created",
+        &["format", "path", "input_files", "input_size", "output_size"],
+    ),
     ("status-docs-server-running", &["url"]),
     ("status-docs-watching", &[]),
     ("status-docs-rebuilding", &[]),
@@ -278,6 +287,8 @@ pub const ACTIVITY_LOCALE_KEYS: &[(&str, &[&str])] = &[
     ("plan-docs-server", &[]),
     ("plan-archive-unresolved", &["path"]),
     ("plan-archive", &["files", "path"]),
+    ("plan-artifact-unresolved", &["path"]),
+    ("plan-artifact", &["files", "path"]),
     ("plan-changelog", &["path", "sections"]),
     ("plan-version-update", &["version", "path"]),
     ("plan-version-commit", &["message"]),

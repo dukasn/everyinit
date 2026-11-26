@@ -13,9 +13,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use super::*;
-use std::collections::BTreeMap;
-
-use crate::{ApkPackageAction, ArchPackageAction, ArchiveAction, DebPackageAction};
+use crate::ArchiveAction;
 use evin_action_sdk::Action;
 use std::collections::HashMap;
 use tempfile::TempDir;
@@ -83,17 +81,6 @@ fn context_with_env(root: &std::path::Path, env: HashMap<String, String>) -> Run
     )
     .env(env)
     .build()
-}
-
-fn assert_artifact_outputs(ctx: &RunnerContext, expected_path: &str) {
-    let outputs = ctx.state.outputs.lock().unwrap();
-    assert_eq!(outputs.get("path").map(String::as_str), Some(expected_path));
-    assert!(
-        outputs
-            .get("size")
-            .and_then(|size| size.parse::<u64>().ok())
-            .is_some_and(|size| size > 0)
-    );
 }
 
 #[test]
@@ -170,116 +157,37 @@ async fn output_directory_failure_uses_fluent_diagnostic() {
 }
 
 #[tokio::test]
-async fn release_artifact_failures_use_fluent_diagnostics() {
-    let temp = TempDir::new().unwrap();
-    let ctx = context_with_env(temp.path(), HashMap::new());
-    let invalid_json = "not json";
-    let invalid = DebPackageAction
-        .execute(&ctx, Some(package_config(invalid_json)))
-        .await
-        .unwrap_err();
-    assert_eq!(invalid.code.key, "archive-release-output-invalid");
-    let detail = &invalid.code.args[0].1;
-    assert_eq!(
-        evin_locales::render_issue(&invalid.code),
-        evin_locales::t!("archive-release-output-invalid", error = detail)
-    );
-
-    let unsupported_schema = serde_json::json!({
-        "schema": 2,
-        "release": {"version": "1.0.0", "tag": "v1.0.0"},
-        "packages": {}
-    })
-    .to_string();
-    let unsupported = DebPackageAction
-        .execute(&ctx, Some(package_config(&unsupported_schema)))
-        .await
-        .unwrap_err();
-    assert_eq!(unsupported.code.key, "archive-release-schema-unsupported");
-    assert_eq!(
-        evin_locales::render_issue(&unsupported.code),
-        evin_locales::t!("archive-release-schema-unsupported", schema = 2)
-    );
-
-    let missing_revision = serde_json::json!({
-        "schema": 1,
-        "release": {"version": "1.0.0", "tag": "v1.0.0"},
-        "packages": {}
-    })
-    .to_string();
-    let missing = DebPackageAction
-        .execute(&ctx, Some(package_config(&missing_revision)))
-        .await
-        .unwrap_err();
-    assert_eq!(missing.code.key, "archive-release-revision-missing");
-    assert_eq!(
-        evin_locales::render_issue(&missing.code),
-        evin_locales::t!(
-            "archive-release-revision-missing",
-            target = "deb",
-            package = "app"
-        )
-    );
-
-    let invalid_revision = serde_json::json!({
-        "schema": 1,
-        "release": {"version": "1.0.0", "tag": "v1.0.0"},
-        "packages": {
-            "app": {
-                "revisions": {
-                    "deb": {"version": "", "revision": 0}
-                }
-            }
-        }
-    })
-    .to_string();
-    let invalid = DebPackageAction
-        .execute(&ctx, Some(package_config(&invalid_revision)))
-        .await
-        .unwrap_err();
-    assert_eq!(invalid.code.key, "archive-release-version-revision-invalid");
-    assert_eq!(
-        evin_locales::render_issue(&invalid.code),
-        evin_locales::t!("archive-release-version-revision-invalid")
-    );
-}
-
-fn package_config(release: &str) -> evin_flow::SpannedValue {
-    let release = serde_json::to_string(release).unwrap();
-    evin_flow::parse_yaml(&format!(
-        "output_dir: dist\narchitecture: x86_64\nrelease: {release}\npackage:\n  name: app\n  summary: app\n  maintainer: Maintainer\n"
-    ))
-    .unwrap()
-}
-
-#[tokio::test]
 async fn invalid_source_date_epoch_uses_fluent_message() {
     let temp = TempDir::new().unwrap();
+    std::fs::write(temp.path().join("input.txt"), b"input").unwrap();
     let ctx = context_with_env(
         temp.path(),
         HashMap::from([("SOURCE_DATE_EPOCH".into(), "yesterday".into())]),
     );
 
-    let error = resolve_epoch(&ctx).await.unwrap_err();
-    assert_eq!(error.code.key, "archive-source-date-epoch-invalid");
+    let with = evin_flow::parse_yaml("path: out.tar.gz\ninclude: [input.txt]\n").unwrap();
+    let error = ArchiveAction.execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "artifact-source-date-epoch-invalid");
     let detail = &error.code.args[0].1;
     assert_eq!(
         evin_locales::render_issue(&error.code),
-        evin_locales::t!("archive-source-date-epoch-invalid", error = detail)
+        evin_locales::t!("artifact-source-date-epoch-invalid", error = detail)
     );
 }
 
 #[tokio::test]
 async fn unavailable_source_date_epoch_uses_fluent_message() {
     let temp = TempDir::new().unwrap();
+    std::fs::write(temp.path().join("input.txt"), b"input").unwrap();
     let ctx = context_with_env(temp.path(), HashMap::new());
 
-    let error = resolve_epoch(&ctx).await.unwrap_err();
-    assert_eq!(error.code.key, "archive-source-date-epoch-unavailable");
+    let with = evin_flow::parse_yaml("path: out.tar.gz\ninclude: [input.txt]\n").unwrap();
+    let error = ArchiveAction.execute(&ctx, Some(with)).await.unwrap_err();
+    assert_eq!(error.code.key, "artifact-source-date-epoch-unavailable");
     let detail = &error.code.args[0].1;
     assert_eq!(
         evin_locales::render_issue(&error.code),
-        evin_locales::t!("archive-source-date-epoch-unavailable", error = detail)
+        evin_locales::t!("artifact-source-date-epoch-unavailable", error = detail)
     );
 }
 
@@ -683,169 +591,6 @@ async fn dry_run_missing_shell_artifact_is_unverified_not_failed() {
     assert_eq!(outputs.get("size").map(String::as_str), Some("unknown"));
     assert!(!ctx.uncertainty().is_empty());
     assert!(!temp.path().join("dist/app.tar.gz").exists());
-}
-
-#[tokio::test]
-async fn distro_packages_use_inline_config_and_derived_paths() {
-    let temp = TempDir::new().unwrap();
-    std::fs::create_dir_all(temp.path().join("bin")).unwrap();
-    std::fs::write(temp.path().join("bin/example"), "hello\n").unwrap();
-    std::fs::write(
-        temp.path().join("bin/install"),
-        "post_install() { echo installed; }\n",
-    )
-    .unwrap();
-    let (log_tx, _) = tokio::sync::mpsc::unbounded_channel();
-    let mut ctx = RunnerContext::new(
-        None,
-        "package".into(),
-        false,
-        evin_action_sdk::PipelineMode::Normal,
-        log_tx,
-        vec![],
-        None,
-        HashMap::from([("SOURCE_DATE_EPOCH".into(), "123".into())]),
-        temp.path().to_path_buf(),
-        HashMap::new(),
-        std::sync::Arc::new(evin_action_sdk::git::GitProvider::new(
-            temp.path().to_path_buf(),
-            evin_action_sdk::PipelineMode::Normal,
-            evin_action_sdk::Logger::new(
-                "test".into(),
-                tokio::sync::mpsc::unbounded_channel().0,
-                std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default()),
-            ),
-        )),
-        std::sync::Arc::new(evin_action_sdk::secrets::SecretsProvider::default()),
-    );
-    ctx.values =
-        evin_action_sdk::Values::new(HashMap::from([("package_name".into(), "example".into())]));
-    let release = evin_action_sdk::release::ReleaseArtifact {
-        schema: 1,
-        release: evin_action_sdk::release::ReleaseIdentity {
-            version: "1.2.3".into(),
-            tag: "v1.2.3".into(),
-        },
-        packages: std::collections::BTreeMap::from([(
-            "example".into(),
-            evin_action_sdk::release::ArtifactPackage {
-                revisions: std::collections::BTreeMap::from([
-                    (
-                        "deb".into(),
-                        evin_action_sdk::release::RevisionState {
-                            version: "1.2.3".into(),
-                            revision: 1,
-                        },
-                    ),
-                    (
-                        "apk".into(),
-                        evin_action_sdk::release::RevisionState {
-                            version: "1.2.3".into(),
-                            revision: 1,
-                        },
-                    ),
-                    (
-                        "arch".into(),
-                        evin_action_sdk::release::RevisionState {
-                            version: "1.2.3".into(),
-                            revision: 1,
-                        },
-                    ),
-                ]),
-            },
-        )]),
-    };
-    ctx.state.inputs.insert(
-        "bump".into(),
-        HashMap::from([("release".into(), serde_json::to_string(&release).unwrap())]),
-    );
-
-    let deb_with = evin_flow::parse_yaml(
-        "output_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\ndepends: [libc6]\n",
-    )
-    .unwrap();
-    DebPackageAction
-        .execute(&ctx, Some(deb_with))
-        .await
-        .unwrap();
-    let deb_relative = "dist/example_1.2.3-1_amd64.deb";
-    assert_artifact_outputs(&ctx, deb_relative);
-    let deb = std::fs::read(temp.path().join(deb_relative)).unwrap();
-    assert!(deb.starts_with(b"!<arch>\n"));
-    assert!(
-        deb.windows(b"control.tar.gz".len())
-            .any(|window| window == b"control.tar.gz")
-    );
-    assert!(
-        deb.windows(b"data.tar.gz".len())
-            .any(|window| window == b"data.tar.gz")
-    );
-
-    let apk_with = evin_flow::parse_yaml(
-        "output_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\nlicense: MIT\ndepends: [so:libc.musl-x86_64.so.1]\n",
-    )
-    .unwrap();
-    ApkPackageAction
-        .execute(&ctx, Some(apk_with))
-        .await
-        .unwrap();
-    let apk_relative = "dist/example-1.2.3-r1.apk";
-    assert_artifact_outputs(&ctx, apk_relative);
-    let apk = std::fs::read(temp.path().join(apk_relative)).unwrap();
-    assert!(apk.starts_with(&[0x1f, 0x8b]));
-    assert!(apk.len() > 64);
-    let arch_with = evin_flow::parse_yaml(
-        "output_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\nlicense: MIT\ndepends: [glibc]\noptdepends: ['bash: completion support']\nprovides: [example-cli]\nconflicts: [example-old]\nreplaces: [example-old]\nbackup: [etc/example.conf]\nscripts:\n  install: bin/install\n",
-    )
-    .unwrap();
-    ArchPackageAction
-        .execute(&ctx, Some(arch_with.clone()))
-        .await
-        .unwrap();
-    let arch_relative = "dist/example-1.2.3-1-x86_64.pkg.tar.zst";
-    assert_artifact_outputs(&ctx, arch_relative);
-    let arch_path = temp.path().join(arch_relative);
-    let bytes = std::fs::read(&arch_path).unwrap();
-    let tar = zstandard::decode_all(bytes.as_slice()).unwrap();
-    let mut archive = tar::Archive::new(std::io::Cursor::new(tar));
-    let mut members = BTreeMap::new();
-    for entry in archive.entries().unwrap() {
-        let mut entry = entry.unwrap();
-        let path = entry.path().unwrap().to_string_lossy().into_owned();
-        let mut contents = Vec::new();
-        std::io::Read::read_to_end(&mut entry, &mut contents).unwrap();
-        members.insert(path, contents);
-    }
-    let names = members.keys().cloned().collect::<Vec<_>>();
-    assert_eq!(names, {
-        let mut sorted = names.clone();
-        sorted.sort();
-        sorted
-    });
-    let pkginfo = std::str::from_utf8(&members[".PKGINFO"]).unwrap();
-    assert!(pkginfo.contains("pkgbase = example\n"));
-    assert!(pkginfo.contains("xdata = pkgtype=pkg\n"));
-    assert!(pkginfo.contains("pkgver = 1.2.3-1\n"));
-    assert!(pkginfo.contains("optdepend = bash: completion support\n"));
-    assert!(pkginfo.contains("provides = example-cli\n"));
-    assert!(pkginfo.contains("conflict = example-old\n"));
-    assert!(pkginfo.contains("replaces = example-old\n"));
-    assert!(pkginfo.contains("backup = etc/example.conf\n"));
-    assert!(
-        std::str::from_utf8(&members[".MTREE"])
-            .unwrap()
-            .contains("./usr/bin/example type=file mode=755 time=123")
-    );
-    assert_eq!(members[".INSTALL"], b"post_install() { echo installed; }\n");
-    ArchPackageAction
-        .execute(&ctx, Some(arch_with))
-        .await
-        .unwrap();
-    assert_eq!(bytes, std::fs::read(arch_path).unwrap());
-    assert_eq!(
-        evin_action_sdk::packaging::LinuxArch::X86_64.arch(),
-        "x86_64"
-    );
 }
 
 mod config;

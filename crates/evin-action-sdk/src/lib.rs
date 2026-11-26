@@ -17,6 +17,7 @@ pub mod debug;
 pub mod fs;
 pub mod git;
 pub mod http;
+pub mod package_action;
 pub mod packaging;
 pub mod release;
 pub mod secrets;

@@ -19,6 +19,8 @@ activity-docs-rebuild-failed = Documentation rebuild failed: { $reason }
 activity-docs-serve-ready = Documentation site ready at { $url }
 activity-archive-compressing = Compressing { $files } files into { $path }...
 activity-archive-created = Created { $format } archive at '{ $path }' from { $input_files } input files ({ $input_size }); output { $output_size }
+activity-artifact-preparing = Preparing { $files } input files for { $path }...
+activity-artifact-created = Created { $format } artifact at '{ $path }' from { $input_files } input files ({ $input_size }); output { $output_size }
 
 status-docs-server-running = Documentation server running at { $url }
 status-docs-watching = Watching documentation files
@@ -30,6 +32,8 @@ plan-docs-server = Start the documentation development server
 plan-docs-build = Generate documentation data at { $output }
 plan-archive-unresolved = Create archive at { $path } (input files resolve during execution)
 plan-archive = Create archive from { $files } files at { $path }
+plan-artifact-unresolved = Create artifact at { $path } (input files resolve during execution)
+plan-artifact = Create artifact from { $files } files at { $path }
 plan-changelog = Generate changelog at { $path } with sections { $sections }
 plan-version-update = Update { $path } to version { $version }
 plan-version-commit = Create version commit: { $message }

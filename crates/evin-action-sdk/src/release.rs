@@ -264,12 +264,16 @@ fn normalized_targets(policy: &PackageReleasePolicy) -> Result<BTreeSet<String>,
     let targets = policy.targets.iter().cloned().collect::<BTreeSet<_>>();
     if targets.is_empty()
         || targets.len() != policy.targets.len()
-        || targets
-            .iter()
-            .any(|v| v != "deb" && v != "apk" && v != "arch" && v != "vsix")
+        || targets.iter().any(|target| {
+            target.is_empty()
+                || !target.as_bytes()[0].is_ascii_lowercase()
+                || !target
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        })
     {
         return Err(ReleaseError::Policy(
-            "targets must be a non-empty unique subset of deb, apk, arch, and vsix".into(),
+            "targets must be non-empty, unique lowercase identifiers containing only letters, digits, and hyphens".into(),
         ));
     }
     Ok(targets)
@@ -800,6 +804,34 @@ mod tests {
         assert_eq!(
             artifact.packages["vscode"].revisions["vsix"].version,
             "0.2.0"
+        );
+    }
+
+    #[test]
+    fn package_policy_accepts_new_format_targets_without_sdk_changes() {
+        let policy = BTreeMap::from([(
+            "app".into(),
+            PackageReleasePolicy {
+                watch: vec!["src/**".into()],
+                targets: vec!["rpm".into()],
+                revision: evin_repository_policy::PackageRevisionPolicy {
+                    scope: PackageRevisionScope::Target,
+                },
+            },
+        )]);
+        let lock = resolve_lock(
+            None,
+            ReleaseIdentity {
+                version: "1.0.0".into(),
+                tag: "v1.0.0".into(),
+            },
+            &policy,
+            &BTreeMap::from([("app".into(), format!("sha256:{}", "a".repeat(64)))]),
+        )
+        .unwrap();
+        assert_eq!(
+            lock.artifact(&policy).unwrap().packages["app"].revisions["rpm"].revision,
+            1
         );
     }
 

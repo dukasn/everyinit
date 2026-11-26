@@ -78,6 +78,9 @@ evin-locales = { path = "crates/evin-locales" }
 evin-lsp = { path = "crates/evin-lsp" }
 evin-action-changelog = { path = "builtins/evin-action-changelog" }
 evin-action-archive = { path = "builtins/evin-action-archive" }
+evin-action-package-deb = { path = "builtins/evin-action-package-deb" }
+evin-action-package-apk = { path = "builtins/evin-action-package-apk" }
+evin-action-package-arch = { path = "builtins/evin-action-package-arch" }
 evin-action-version-bumper = { path = "builtins/evin-action-version-bumper" }
 evin-action-git-release = { path = "builtins/evin-action-git-release" }
 evin-action-review-request = { path = "builtins/evin-action-review-request" }

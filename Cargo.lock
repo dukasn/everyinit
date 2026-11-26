@@ -1051,6 +1051,9 @@ dependencies = [
  "evin-action-changelog",
  "evin-action-docs",
  "evin-action-git-release",
+ "evin-action-package-apk",
+ "evin-action-package-arch",
+ "evin-action-package-deb",
  "evin-action-release-sync",
  "evin-action-review-request",
  "evin-action-sdk",
@@ -1094,14 +1097,12 @@ dependencies = [
  "evin-locales",
  "flate2",
  "glob",
- "marked-yaml",
  "serde",
  "serde_json",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "zstandard",
 ]
 
 [[package]]
@@ -1180,6 +1181,55 @@ dependencies = [
  "evin-locales",
  "marked-yaml",
  "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "evin-action-package-apk"
+version = "0.3.3"
+dependencies = [
+ "async-trait",
+ "evin-action-sdk",
+ "evin-diagnostic",
+ "evin-flow",
+ "evin-locales",
+ "flate2",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "evin-action-package-arch"
+version = "0.3.3"
+dependencies = [
+ "async-trait",
+ "evin-action-sdk",
+ "evin-diagnostic",
+ "evin-flow",
+ "evin-locales",
+ "serde",
+ "serde_json",
+ "tar",
+ "tempfile",
+ "tokio",
+ "zstandard",
+]
+
+[[package]]
+name = "evin-action-package-deb"
+version = "0.3.3"
+dependencies = [
+ "async-trait",
+ "evin-action-sdk",
+ "evin-diagnostic",
+ "evin-flow",
+ "evin-locales",
+ "flate2",
  "serde",
  "serde_json",
  "tempfile",

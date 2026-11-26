@@ -138,3 +138,58 @@ fn append_ar_member(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn payload() -> PackageContext {
+        PackageContext {
+            epoch: 123,
+            entries: vec![PreparedEntry {
+                path: "usr/bin/example".into(),
+                kind: PreparedEntryKind::File,
+                data: b"payload".to_vec(),
+                mode: 0o755,
+                mtime: 123,
+                md5: Some("md5".into()),
+                sha256: Some("sha256".into()),
+            }],
+        }
+    }
+
+    fn package(context: &PackageContext) -> DebPackage<'_> {
+        DebPackage {
+            context,
+            name: "example",
+            version: "1.2.3",
+            revision: 4,
+            architecture: "amd64",
+            summary: "Example package",
+            description: Some("Long description\nSecond line"),
+            maintainer: "Example <example@example.test>",
+            homepage: Some("https://example.test"),
+            depends: vec!["zlib".into(), "glibc".into(), "zlib".into()],
+            scripts: vec![("postinst".into(), b"echo installed\n".to_vec())],
+        }
+    }
+
+    #[test]
+    fn writes_stable_debian_container_and_control_metadata() {
+        let context = payload();
+        let mut first = Vec::new();
+        write(&mut first, package(&context)).unwrap();
+        let mut second = Vec::new();
+        write(&mut second, package(&context)).unwrap();
+
+        assert_eq!(first, second);
+        assert!(first.starts_with(b"!<arch>\n"));
+        for member in [
+            b"debian-binary".as_slice(),
+            b"control.tar.gz",
+            b"data.tar.gz",
+        ] {
+            assert!(first.windows(member.len()).any(|window| window == member));
+        }
+    }
+}
