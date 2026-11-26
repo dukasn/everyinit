@@ -66,22 +66,12 @@
     "action.evin/archive@v1": {
       "name": "action.evin/archive@v1",
       "synopsis": "uses: evin/archive@v1",
-      "summary": "Create a reproducible archive or native package.",
+      "summary": "Create a reproducible tar.gz archive.",
       "category": "action",
       "handler": "",
-      "hover_markdown": "```flow\nuses: evin/archive@v1\n```\n\n**Archive action** (`action.evin/archive@v1`): Create a reproducible archive or native package.\n\nConfigure archive output through `with:`.",
-      "hover_plaintext": "uses: evin/archive@v1\n\nArchive action (action.evin/archive@v1): Create a reproducible archive or native package.\n\nConfigure archive output through with:.",
-      "terminal_ansi": "\u001b[1;36muses: evin/archive@v1\u001b[0m\n\n\u001b[1mArchive action\u001b[0m (action.evin/archive@v1): Create a reproducible archive or native package.\n\nConfigure archive output through \u001b[33mwith:\u001b[0m."
-    },
-    "action.evin/archive@v1.with.package": {
-      "name": "action.evin/archive@v1.with.package",
-      "synopsis": "package: <package-id>",
-      "summary": "Select the package to archive.",
-      "category": "action-field",
-      "handler": "",
-      "hover_markdown": "```flow\npackage: <package-id>\n```\n\n**Archive package** (`action.evin/archive@v1.with.package`): Select the package to archive.\n\nThe package ID selects declared package metadata.",
-      "hover_plaintext": "package: <package-id>\n\nArchive package (action.evin/archive@v1.with.package): Select the package to archive.\n\nThe package ID selects declared package metadata.",
-      "terminal_ansi": "\u001b[1;36mpackage: <package-id>\u001b[0m\n\n\u001b[1mArchive package\u001b[0m (action.evin/archive@v1.with.package): Select the package to archive.\n\nThe package ID selects declared package metadata."
+      "hover_markdown": "```flow\nuses: evin/archive@v1\n```\n\n**Archive action** (`action.evin/archive@v1`): Create a reproducible tar.gz archive.\n\nConfigure archive output through `with:`.",
+      "hover_plaintext": "uses: evin/archive@v1\n\nArchive action (action.evin/archive@v1): Create a reproducible tar.gz archive.\n\nConfigure archive output through with:.",
+      "terminal_ansi": "\u001b[1;36muses: evin/archive@v1\u001b[0m\n\n\u001b[1mArchive action\u001b[0m (action.evin/archive@v1): Create a reproducible tar.gz archive.\n\nConfigure archive output through \u001b[33mwith:\u001b[0m."
     },
     "action.evin/catalog@v1": {
       "name": "action.evin/catalog@v1",
@@ -192,6 +182,36 @@
       "hover_markdown": "```flow\nprune_stale_tags: true\n```\n\n**Prune stale tags** (`action.evin/git-release@v1.with.push.prune_stale_tags`): Delete unreleased remote tags that match the tag format.\n\nRequires `tag` and `push.base`. Tags whose commit is not reachable from `<remote>/<base>` are deleted; tags whose commit is missing locally are left alone.",
       "hover_plaintext": "prune_stale_tags: true\n\nPrune stale tags (action.evin/git-release@v1.with.push.prune_stale_tags): Delete unreleased remote tags that match the tag format.\n\nRequires tag and push.base. Tags whose commit is not reachable from <remote>/<base> are deleted; tags whose commit is missing locally are left alone.",
       "terminal_ansi": "\u001b[1;36mprune_stale_tags: true\u001b[0m\n\n\u001b[1mPrune stale tags\u001b[0m (action.evin/git-release@v1.with.push.prune_stale_tags): Delete unreleased remote tags that match the tag format.\n\nRequires \u001b[33mtag\u001b[0m and \u001b[33mpush.base\u001b[0m. Tags whose commit is not reachable from \u001b[33m<remote>/<base>\u001b[0m are deleted; tags whose commit is missing locally are left alone."
+    },
+    "action.evin/package-apk@v1": {
+      "name": "action.evin/package-apk@v1",
+      "synopsis": "uses: evin/package-apk@v1",
+      "summary": "Create a reproducible Alpine package.",
+      "category": "action",
+      "handler": "",
+      "hover_markdown": "```flow\nuses: evin/package-apk@v1\n```\n\n**Alpine package action** (`action.evin/package-apk@v1`): Create a reproducible Alpine package.\n\nConfigure APK output, release reference, package identity, and payload through `with:`.",
+      "hover_plaintext": "uses: evin/package-apk@v1\n\nAlpine package action (action.evin/package-apk@v1): Create a reproducible Alpine package.\n\nConfigure APK output, release reference, package identity, and payload through with:.",
+      "terminal_ansi": "\u001b[1;36muses: evin/package-apk@v1\u001b[0m\n\n\u001b[1mAlpine package action\u001b[0m (action.evin/package-apk@v1): Create a reproducible Alpine package.\n\nConfigure APK output, release reference, package identity, and payload through \u001b[33mwith:\u001b[0m."
+    },
+    "action.evin/package-arch@v1": {
+      "name": "action.evin/package-arch@v1",
+      "synopsis": "uses: evin/package-arch@v1",
+      "summary": "Create a reproducible Arch package.",
+      "category": "action",
+      "handler": "",
+      "hover_markdown": "```flow\nuses: evin/package-arch@v1\n```\n\n**Arch package action** (`action.evin/package-arch@v1`): Create a reproducible Arch package.\n\nConfigure Arch output, release reference, package identity, and payload through `with:`.",
+      "hover_plaintext": "uses: evin/package-arch@v1\n\nArch package action (action.evin/package-arch@v1): Create a reproducible Arch package.\n\nConfigure Arch output, release reference, package identity, and payload through with:.",
+      "terminal_ansi": "\u001b[1;36muses: evin/package-arch@v1\u001b[0m\n\n\u001b[1mArch package action\u001b[0m (action.evin/package-arch@v1): Create a reproducible Arch package.\n\nConfigure Arch output, release reference, package identity, and payload through \u001b[33mwith:\u001b[0m."
+    },
+    "action.evin/package-deb@v1": {
+      "name": "action.evin/package-deb@v1",
+      "synopsis": "uses: evin/package-deb@v1",
+      "summary": "Create a reproducible Debian package.",
+      "category": "action",
+      "handler": "",
+      "hover_markdown": "```flow\nuses: evin/package-deb@v1\n```\n\n**Debian package action** (`action.evin/package-deb@v1`): Create a reproducible Debian package.\n\nConfigure DEB output, release reference, package identity, and payload through `with:`.",
+      "hover_plaintext": "uses: evin/package-deb@v1\n\nDebian package action (action.evin/package-deb@v1): Create a reproducible Debian package.\n\nConfigure DEB output, release reference, package identity, and payload through with:.",
+      "terminal_ansi": "\u001b[1;36muses: evin/package-deb@v1\u001b[0m\n\n\u001b[1mDebian package action\u001b[0m (action.evin/package-deb@v1): Create a reproducible Debian package.\n\nConfigure DEB output, release reference, package identity, and payload through \u001b[33mwith:\u001b[0m."
     },
     "action.evin/review-request@v1": {
       "name": "action.evin/review-request@v1",
@@ -659,9 +679,9 @@
       "summary": "Exact identifier of the built-in action to invoke.",
       "category": "configuration",
       "handler": "",
-      "hover_markdown": "```flow\nuses: evin/archive@v1\n```\n\n**Action identifier** (`task.steps.uses`): Exact identifier of the built-in action to invoke.\n\nNames the built-in Evin action executed by this step.\n\n### Built-in actions\n\n* `evin/archive@v1`: Create reproducible archives and distribution packages (.tar.gz, .zip, .deb, etc.).\n* `evin/docs@v1`: Parse and validate documentation sources, then generate page data and a route manifest.\n* `evin/version-bumper@v1`: Calculate next semantic versions from Git history.\n* `evin/changelog@v1`: Generate changelogs from conventional commits.\n* `evin/git-release@v1`: Create Git tags and release bundles.\n* `evin/release-sync@v1`: Plan provider-neutral release-state reconciliation.",
-      "hover_plaintext": "uses: evin/archive@v1\n\nAction identifier (task.steps.uses): Exact identifier of the built-in action to invoke.\n\nNames the built-in Evin action executed by this step.\n\nBuilt-in actions\n\n- evin/archive@v1: Create reproducible archives and distribution packages (.tar.gz, .zip, .deb, etc.).\n- evin/docs@v1: Parse and validate documentation sources, then generate page data and a route manifest.\n- evin/version-bumper@v1: Calculate next semantic versions from Git history.\n- evin/changelog@v1: Generate changelogs from conventional commits.\n- evin/git-release@v1: Create Git tags and release bundles.\n- evin/release-sync@v1: Plan provider-neutral release-state reconciliation.",
-      "terminal_ansi": "\u001b[1;36muses: evin/archive@v1\u001b[0m\n\n\u001b[1mAction identifier\u001b[0m (task.steps.uses): Exact identifier of the built-in action to invoke.\n\nNames the built-in Evin action executed by this step.\n\n\u001b[1;33mBuilt-in actions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33mevin/archive@v1\u001b[0m: Create reproducible archives and distribution packages (.tar.gz, .zip, .deb, etc.).\n\u001b[36m•\u001b[0m \u001b[33mevin/docs@v1\u001b[0m: Parse and validate documentation sources, then generate page data and a route manifest.\n\u001b[36m•\u001b[0m \u001b[33mevin/version-bumper@v1\u001b[0m: Calculate next semantic versions from Git history.\n\u001b[36m•\u001b[0m \u001b[33mevin/changelog@v1\u001b[0m: Generate changelogs from conventional commits.\n\u001b[36m•\u001b[0m \u001b[33mevin/git-release@v1\u001b[0m: Create Git tags and release bundles.\n\u001b[36m•\u001b[0m \u001b[33mevin/release-sync@v1\u001b[0m: Plan provider-neutral release-state reconciliation."
+      "hover_markdown": "```flow\nuses: evin/archive@v1\n```\n\n**Action identifier** (`task.steps.uses`): Exact identifier of the built-in action to invoke.\n\nNames the built-in Evin action executed by this step.\n\n### Built-in actions\n\n* `evin/archive@v1`: Create reproducible tar.gz archives.\n* `evin/package-deb@v1`: Create reproducible Debian packages.\n* `evin/package-apk@v1`: Create reproducible Alpine packages.\n* `evin/package-arch@v1`: Create reproducible Arch packages.\n* `evin/docs@v1`: Parse and validate documentation sources, then generate page data and a route manifest.\n* `evin/version-bumper@v1`: Calculate next semantic versions from Git history.\n* `evin/changelog@v1`: Generate changelogs from conventional commits.\n* `evin/git-release@v1`: Create Git tags and release bundles.\n* `evin/release-sync@v1`: Plan provider-neutral release-state reconciliation.",
+      "hover_plaintext": "uses: evin/archive@v1\n\nAction identifier (task.steps.uses): Exact identifier of the built-in action to invoke.\n\nNames the built-in Evin action executed by this step.\n\nBuilt-in actions\n\n- evin/archive@v1: Create reproducible tar.gz archives.\n- evin/package-deb@v1: Create reproducible Debian packages.\n- evin/package-apk@v1: Create reproducible Alpine packages.\n- evin/package-arch@v1: Create reproducible Arch packages.\n- evin/docs@v1: Parse and validate documentation sources, then generate page data and a route manifest.\n- evin/version-bumper@v1: Calculate next semantic versions from Git history.\n- evin/changelog@v1: Generate changelogs from conventional commits.\n- evin/git-release@v1: Create Git tags and release bundles.\n- evin/release-sync@v1: Plan provider-neutral release-state reconciliation.",
+      "terminal_ansi": "\u001b[1;36muses: evin/archive@v1\u001b[0m\n\n\u001b[1mAction identifier\u001b[0m (task.steps.uses): Exact identifier of the built-in action to invoke.\n\nNames the built-in Evin action executed by this step.\n\n\u001b[1;33mBuilt-in actions\u001b[0m\n\n\u001b[36m•\u001b[0m \u001b[33mevin/archive@v1\u001b[0m: Create reproducible tar.gz archives.\n\u001b[36m•\u001b[0m \u001b[33mevin/package-deb@v1\u001b[0m: Create reproducible Debian packages.\n\u001b[36m•\u001b[0m \u001b[33mevin/package-apk@v1\u001b[0m: Create reproducible Alpine packages.\n\u001b[36m•\u001b[0m \u001b[33mevin/package-arch@v1\u001b[0m: Create reproducible Arch packages.\n\u001b[36m•\u001b[0m \u001b[33mevin/docs@v1\u001b[0m: Parse and validate documentation sources, then generate page data and a route manifest.\n\u001b[36m•\u001b[0m \u001b[33mevin/version-bumper@v1\u001b[0m: Calculate next semantic versions from Git history.\n\u001b[36m•\u001b[0m \u001b[33mevin/changelog@v1\u001b[0m: Generate changelogs from conventional commits.\n\u001b[36m•\u001b[0m \u001b[33mevin/git-release@v1\u001b[0m: Create Git tags and release bundles.\n\u001b[36m•\u001b[0m \u001b[33mevin/release-sync@v1\u001b[0m: Plan provider-neutral release-state reconciliation."
     },
     "task.steps.with": {
       "name": "task.steps.with",

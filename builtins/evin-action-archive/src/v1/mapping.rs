@@ -14,7 +14,7 @@
 
 #![allow(clippy::result_large_err)]
 use super::archiver::ArchiveEntry;
-use super::config::{ArchiveConfig, LayoutMode};
+use super::config::{LayoutMode, TarGzConfig};
 use evin_action_sdk::RunnerContext;
 use glob::Pattern;
 use std::collections::BTreeMap;
@@ -22,7 +22,7 @@ use std::path::PathBuf;
 
 pub(super) fn resolve_and_map_files(
     ctx: &RunnerContext,
-    config: &ArchiveConfig,
+    config: &TarGzConfig,
 ) -> Result<Vec<ArchiveEntry>, evin_diagnostic::Diagnostic> {
     let mut mapped_files: BTreeMap<PathBuf, ArchiveEntry> = BTreeMap::new();
     let prefix = config.prefix.as_deref().unwrap_or("");
@@ -36,7 +36,7 @@ pub(super) fn resolve_and_map_files(
         })?);
     }
 
-    for pattern in config.include.as_deref().unwrap_or_default() {
+    for pattern in &config.include {
         for path in ctx.fs.matching_files(pattern).map_err(|e| {
             evin_locales::diagnostic(
                 evin_diagnostic::IssueCode::new("issue-archive-safe-path-failed")

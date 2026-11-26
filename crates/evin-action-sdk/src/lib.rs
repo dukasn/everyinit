@@ -122,6 +122,15 @@ pub struct ActionValidationContext<'a> {
     pub needs: &'a [String],
 }
 
+/// Static package identity metadata used by side-effect-free release-policy
+/// analysis. Package actions describe the Flow path to the package ID and the
+/// explicit RepositoryPolicy release target they produce.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PackageReleaseContract {
+    pub package_name_path: &'static str,
+    pub target: &'static str,
+}
+
 /// Editor-facing, static description of a native action. Validation remains
 /// owned by the action's configuration parser; this data exists for analysis,
 /// completion, hover, and output-reference discovery.
@@ -838,6 +847,11 @@ pub trait Action: Send + Sync {
     /// Static editor metadata for built-in actions. This is an internal
     /// workspace contract and intentionally does not replace validation.
     fn editor_descriptor(&self) -> Option<&'static ActionDescriptor> {
+        None
+    }
+    /// Declares package identity and release-target fields for static policy
+    /// analysis. Non-package actions leave this unset.
+    fn package_release_contract(&self) -> Option<&'static PackageReleaseContract> {
         None
     }
     /// Whether this action validates standard and action-specific templates in

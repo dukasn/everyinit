@@ -54,9 +54,8 @@ tasks:
       - release:stage
       - release:pkg:state
     steps:
-      - uses: evin/archive@v1
+      - uses: evin/package-deb@v1
         with:
-          format: deb
           output_dir: target/release-archives
           architecture: x86_64
           release: "${release:pkg:state.release}"
@@ -64,7 +63,6 @@ tasks:
             name: evin
             summary: Evin workflow engine
             maintainer: Everyinit contributors
-            license: GPL-3.0-only
             homepage: https://everyinit.dev
             payload:
               - source: "target/release-staging/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/evin"
@@ -80,19 +78,16 @@ tasks:
               - source: LICENSES/**/*
                 strip_prefix: LICENSES
                 destination: /usr/share/licenses/evin/LICENSES
-            targets:
-              deb: {}
-      - uses: evin/archive@v1
+      - uses: evin/package-arch@v1
         with:
-          format: arch
           output_dir: target/release-archives
           architecture: x86_64
+          license: GPL-3.0-only
           release: "${release:pkg:state.release}"
           package:
             name: evin
             summary: Evin workflow engine
             maintainer: Everyinit contributors
-            license: GPL-3.0-only
             homepage: https://everyinit.dev
             payload:
               - source: "target/release-staging/evin-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/evin"
@@ -108,11 +103,8 @@ tasks:
               - source: LICENSES/**/*
                 strip_prefix: LICENSES
                 destination: /usr/share/licenses/evin/LICENSES
-            targets:
-              arch: {}
-      - uses: evin/archive@v1
+      - uses: evin/package-deb@v1
         with:
-          format: deb
           output_dir: target/release-archives
           architecture: x86_64
           release: "${release:pkg:state.release}"
@@ -120,7 +112,6 @@ tasks:
             name: esh
             summary: ESH portable shell runtime
             maintainer: Everyinit contributors
-            license: GPL-3.0-only
             homepage: https://everyinit.dev
             payload:
               - source: "target/release-staging/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/esh"
@@ -136,19 +127,16 @@ tasks:
               - source: LICENSES/**/*
                 strip_prefix: LICENSES
                 destination: /usr/share/licenses/esh/LICENSES
-            targets:
-              deb: {}
-      - uses: evin/archive@v1
+      - uses: evin/package-arch@v1
         with:
-          format: arch
           output_dir: target/release-archives
           architecture: x86_64
+          license: GPL-3.0-only
           release: "${release:pkg:state.release}"
           package:
             name: esh
             summary: ESH portable shell runtime
             maintainer: Everyinit contributors
-            license: GPL-3.0-only
             homepage: https://everyinit.dev
             payload:
               - source: "target/release-staging/esh-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/esh"
@@ -164,8 +152,6 @@ tasks:
               - source: LICENSES/**/*
                 strip_prefix: LICENSES
                 destination: /usr/share/licenses/esh/LICENSES
-            targets:
-              arch: {}
 
   vscode:
     stage: Publish

@@ -241,7 +241,7 @@ pub fn resolve_payloads(
                 relative.to_string_lossy().replace('\\', "/")
             );
             let install_path = normalize_archive_path(&install_path)?;
-            let safe_source = safe_payload_source(fs, &source_path)?;
+            let safe_source = resolve_workspace_source(fs, &source_path)?;
             if entries
                 .insert(
                     install_path.clone(),
@@ -260,7 +260,12 @@ pub fn resolve_payloads(
     Ok(entries.into_values().collect())
 }
 
-fn safe_payload_source(fs: &WorkspaceFs, source: &Path) -> Result<PathBuf, PackagingError> {
+/// Resolve an existing task input to a physical path within the workspace.
+/// Missing dry-run inputs keep their checked lexical path for planning.
+pub fn resolve_workspace_source(
+    fs: &WorkspaceFs,
+    source: &Path,
+) -> Result<PathBuf, PackagingError> {
     if source.exists() {
         let workspace_root = fs.workspace_root().canonicalize().map_err(|error| {
             PackagingError::UnsafePayloadSource {

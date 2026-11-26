@@ -15,7 +15,7 @@
 use super::*;
 use std::collections::BTreeMap;
 
-use crate::ArchiveAction;
+use crate::{ApkPackageAction, ArchPackageAction, ArchiveAction, DebPackageAction};
 use evin_action_sdk::Action;
 use std::collections::HashMap;
 use tempfile::TempDir;
@@ -85,12 +85,24 @@ fn context_with_env(root: &std::path::Path, env: HashMap<String, String>) -> Run
     .build()
 }
 
+fn assert_artifact_outputs(ctx: &RunnerContext, expected_path: &str) {
+    let outputs = ctx.state.outputs.lock().unwrap();
+    assert_eq!(outputs.get("path").map(String::as_str), Some(expected_path));
+    assert!(
+        outputs
+            .get("size")
+            .and_then(|size| size.parse::<u64>().ok())
+            .is_some_and(|size| size > 0)
+    );
+}
+
 #[test]
 fn invalid_exclude_glob_uses_fluent_diagnostic() {
     let temp = TempDir::new().unwrap();
     let ctx = context_with_env(temp.path(), HashMap::new());
-    let with = evin_flow::parse_yaml("exclude: ['[']\n").unwrap();
-    let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+    let with =
+        evin_flow::parse_yaml("path: out.tar.gz\ninclude: [src/**]\nexclude: ['[']\n").unwrap();
+    let config: TarGzConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
 
     let error = mapping::resolve_and_map_files(&ctx, &config).unwrap_err();
     assert_eq!(error.code.key, "invalid-glob");
@@ -106,7 +118,7 @@ fn workspace_escape_in_archive_glob_uses_fluent_diagnostic() {
     let temp = TempDir::new().unwrap();
     let ctx = context_with_env(temp.path(), HashMap::new());
     let with = evin_flow::parse_yaml("path: out.tar.gz\ninclude: ['../outside/*.txt']\n").unwrap();
-    let config: ArchiveConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
+    let config: TarGzConfig = evin_action_sdk::parse_config(Some(&with)).unwrap();
 
     let error = mapping::resolve_and_map_files(&ctx, &config).unwrap_err();
     assert_eq!(error.code.key, "issue-archive-safe-path-failed");
@@ -158,28 +170,11 @@ async fn output_directory_failure_uses_fluent_diagnostic() {
 }
 
 #[tokio::test]
-async fn missing_package_target_uses_fluent_diagnostic() {
-    let temp = TempDir::new().unwrap();
-    let ctx = context_with_env(temp.path(), HashMap::new());
-    let with = evin_flow::parse_yaml(
-        "format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: state\npackage:\n  name: app\n  summary: app\n  maintainer: Maintainer\n  license: MIT\n",
-    )
-    .unwrap();
-
-    let error = ArchiveAction.execute(&ctx, Some(with)).await.unwrap_err();
-    assert_eq!(error.code.key, "archive-package-target-missing");
-    assert_eq!(
-        evin_locales::render_issue(&error.code),
-        evin_locales::t!("archive-package-target-missing", format = "deb")
-    );
-}
-
-#[tokio::test]
 async fn release_artifact_failures_use_fluent_diagnostics() {
     let temp = TempDir::new().unwrap();
     let ctx = context_with_env(temp.path(), HashMap::new());
     let invalid_json = "not json";
-    let invalid = ArchiveAction
+    let invalid = DebPackageAction
         .execute(&ctx, Some(package_config(invalid_json)))
         .await
         .unwrap_err();
@@ -196,7 +191,7 @@ async fn release_artifact_failures_use_fluent_diagnostics() {
         "packages": {}
     })
     .to_string();
-    let unsupported = ArchiveAction
+    let unsupported = DebPackageAction
         .execute(&ctx, Some(package_config(&unsupported_schema)))
         .await
         .unwrap_err();
@@ -212,7 +207,7 @@ async fn release_artifact_failures_use_fluent_diagnostics() {
         "packages": {}
     })
     .to_string();
-    let missing = ArchiveAction
+    let missing = DebPackageAction
         .execute(&ctx, Some(package_config(&missing_revision)))
         .await
         .unwrap_err();
@@ -238,7 +233,7 @@ async fn release_artifact_failures_use_fluent_diagnostics() {
         }
     })
     .to_string();
-    let invalid = ArchiveAction
+    let invalid = DebPackageAction
         .execute(&ctx, Some(package_config(&invalid_revision)))
         .await
         .unwrap_err();
@@ -252,7 +247,7 @@ async fn release_artifact_failures_use_fluent_diagnostics() {
 fn package_config(release: &str) -> evin_flow::SpannedValue {
     let release = serde_json::to_string(release).unwrap();
     evin_flow::parse_yaml(&format!(
-        "format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: {release}\npackage:\n  name: app\n  summary: app\n  maintainer: Maintainer\n  license: MIT\n  targets:\n    deb: {{}}\n"
+        "output_dir: dist\narchitecture: x86_64\nrelease: {release}\npackage:\n  name: app\n  summary: app\n  maintainer: Maintainer\n"
     ))
     .unwrap()
 }
@@ -765,13 +760,17 @@ async fn distro_packages_use_inline_config_and_derived_paths() {
         HashMap::from([("release".into(), serde_json::to_string(&release).unwrap())]),
     );
 
-    let package = "package:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  license: MIT\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\n  targets:\n    deb:\n      depends: [libc6]\n    apk:\n      depends: [so:libc.musl-x86_64.so.1]\n    arch:\n      depends: [glibc]\n      optdepends: ['bash: completion support']\n      provides: [example-cli]\n      conflicts: [example-old]\n      replaces: [example-old]\n      backup: [etc/example.conf]\n      scripts:\n        install: bin/install\n";
-    let deb_with = evin_flow::parse_yaml(&format!(
-        "format: deb\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}"
-    ))
+    let deb_with = evin_flow::parse_yaml(
+        "output_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\ndepends: [libc6]\n",
+    )
     .unwrap();
-    ArchiveAction.execute(&ctx, Some(deb_with)).await.unwrap();
-    let deb = std::fs::read(temp.path().join("dist/example_1.2.3-1_amd64.deb")).unwrap();
+    DebPackageAction
+        .execute(&ctx, Some(deb_with))
+        .await
+        .unwrap();
+    let deb_relative = "dist/example_1.2.3-1_amd64.deb";
+    assert_artifact_outputs(&ctx, deb_relative);
+    let deb = std::fs::read(temp.path().join(deb_relative)).unwrap();
     assert!(deb.starts_with(b"!<arch>\n"));
     assert!(
         deb.windows(b"control.tar.gz".len())
@@ -782,20 +781,30 @@ async fn distro_packages_use_inline_config_and_derived_paths() {
             .any(|window| window == b"data.tar.gz")
     );
 
-    let apk_with = evin_flow::parse_yaml(&format!(
-        "format: apk\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}"
-    ))
+    let apk_with = evin_flow::parse_yaml(
+        "output_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\nlicense: MIT\ndepends: [so:libc.musl-x86_64.so.1]\n",
+    )
     .unwrap();
-    ArchiveAction.execute(&ctx, Some(apk_with)).await.unwrap();
-    let apk = std::fs::read(temp.path().join("dist/example-1.2.3-r1.apk")).unwrap();
+    ApkPackageAction
+        .execute(&ctx, Some(apk_with))
+        .await
+        .unwrap();
+    let apk_relative = "dist/example-1.2.3-r1.apk";
+    assert_artifact_outputs(&ctx, apk_relative);
+    let apk = std::fs::read(temp.path().join(apk_relative)).unwrap();
     assert!(apk.starts_with(&[0x1f, 0x8b]));
     assert!(apk.len() > 64);
-    let arch_with = evin_flow::parse_yaml(&format!("format: arch\noutput_dir: dist\narchitecture: x86_64\nrelease: ${{bump.release}}\n{package}")).unwrap();
-    ArchiveAction
+    let arch_with = evin_flow::parse_yaml(
+        "output_dir: dist\narchitecture: x86_64\nrelease: ${bump.release}\npackage:\n  name: ${package_name}\n  summary: Example package\n  maintainer: Example <example@example.test>\n  payload:\n    - source: bin/example\n      strip_prefix: bin\n      destination: /usr/bin\n      mode: 493\nlicense: MIT\ndepends: [glibc]\noptdepends: ['bash: completion support']\nprovides: [example-cli]\nconflicts: [example-old]\nreplaces: [example-old]\nbackup: [etc/example.conf]\nscripts:\n  install: bin/install\n",
+    )
+    .unwrap();
+    ArchPackageAction
         .execute(&ctx, Some(arch_with.clone()))
         .await
         .unwrap();
-    let arch_path = temp.path().join("dist/example-1.2.3-1-x86_64.pkg.tar.zst");
+    let arch_relative = "dist/example-1.2.3-1-x86_64.pkg.tar.zst";
+    assert_artifact_outputs(&ctx, arch_relative);
+    let arch_path = temp.path().join(arch_relative);
     let bytes = std::fs::read(&arch_path).unwrap();
     let tar = zstandard::decode_all(bytes.as_slice()).unwrap();
     let mut archive = tar::Archive::new(std::io::Cursor::new(tar));
@@ -828,7 +837,10 @@ async fn distro_packages_use_inline_config_and_derived_paths() {
             .contains("./usr/bin/example type=file mode=755 time=123")
     );
     assert_eq!(members[".INSTALL"], b"post_install() { echo installed; }\n");
-    ArchiveAction.execute(&ctx, Some(arch_with)).await.unwrap();
+    ArchPackageAction
+        .execute(&ctx, Some(arch_with))
+        .await
+        .unwrap();
     assert_eq!(bytes, std::fs::read(arch_path).unwrap());
     assert_eq!(
         evin_action_sdk::packaging::LinuxArch::X86_64.arch(),

@@ -68,9 +68,8 @@ tasks:
     needs: [stage, release:pkg:state]
     steps:
       - run: rm -f "crates/evin/dist/packages/evin_${RELEASE_VERSION}-"*_amd64.deb "crates/evin/dist/packages/evin-${RELEASE_VERSION}-r"*.apk "crates/evin/dist/packages/evin-${RELEASE_VERSION}-"*-x86_64.pkg.tar.zst
-      - uses: evin/archive@v1
+      - uses: evin/package-deb@v1
         with:
-          format: deb
           output_dir: ${package_output_dir}
           architecture: x86_64
           release: "${release:pkg:state.release}"
@@ -78,7 +77,6 @@ tasks:
             name: ${binary_name}
             summary: ${package_summary}
             maintainer: ${package_maintainer}
-            license: ${package_license}
             homepage: ${package_homepage}
             payload:
               - source: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/${binary_name}"
@@ -94,19 +92,16 @@ tasks:
               - source: "${licenses_source}"
                 strip_prefix: ${licenses_strip_prefix}
                 destination: ${licenses_dir}
-            targets:
-              deb: {}
-      - uses: evin/archive@v1
+      - uses: evin/package-apk@v1
         with:
-          format: apk
           output_dir: ${package_output_dir}
           architecture: x86_64
           release: "${release:pkg:state.release}"
+          license: ${package_license}
           package:
             name: ${binary_name}
             summary: ${package_summary}
             maintainer: ${package_maintainer}
-            license: ${package_license}
             homepage: ${package_homepage}
             payload:
               - source: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/${binary_name}"
@@ -122,19 +117,16 @@ tasks:
               - source: "${licenses_source}"
                 strip_prefix: ${licenses_strip_prefix}
                 destination: ${licenses_dir}
-            targets:
-              apk: {}
-      - uses: evin/archive@v1
+      - uses: evin/package-arch@v1
         with:
-          format: arch
           output_dir: ${package_output_dir}
           architecture: x86_64
           release: "${release:pkg:state.release}"
+          license: ${package_license}
           package:
             name: ${binary_name}
             summary: ${package_summary}
             maintainer: ${package_maintainer}
-            license: ${package_license}
             homepage: ${package_homepage}
             payload:
               - source: "${staging_dir}/${binary_name}-v${env.RELEASE_VERSION}-${env.RELEASE_TARGET}/bin/${binary_name}"
@@ -150,8 +142,6 @@ tasks:
               - source: "${licenses_source}"
                 strip_prefix: ${licenses_strip_prefix}
                 destination: ${licenses_dir}
-            targets:
-              arch: {}
 
   native-verify:
     stage: Publish

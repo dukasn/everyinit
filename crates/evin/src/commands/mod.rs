@@ -97,6 +97,18 @@ pub(crate) fn builtin_actions()
             Arc::new(evin_action_archive::ArchiveAction),
         ),
         (
+            "evin/package-deb@v1",
+            Arc::new(evin_action_archive::DebPackageAction),
+        ),
+        (
+            "evin/package-apk@v1",
+            Arc::new(evin_action_archive::ApkPackageAction),
+        ),
+        (
+            "evin/package-arch@v1",
+            Arc::new(evin_action_archive::ArchPackageAction),
+        ),
+        (
             "evin/git-release@v1",
             Arc::new(evin_action_git_release::GitReleaseAction),
         ),
@@ -159,5 +171,23 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn native_package_formats_have_distinct_action_boundaries() {
+        let actions = builtin_actions();
+        for id in [
+            "evin/package-deb@v1",
+            "evin/package-apk@v1",
+            "evin/package-arch@v1",
+        ] {
+            assert!(actions.contains_key(id), "missing {id}");
+            assert!(actions[id].package_release_contract().is_some(), "{id}");
+        }
+        assert!(
+            actions["evin/archive@v1"]
+                .package_release_contract()
+                .is_none()
+        );
     }
 }

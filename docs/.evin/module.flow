@@ -20,6 +20,9 @@ tasks:
             - actions/10.documentation-action.5100.md
             - actions/15.catalog-action.5170.md
             - actions/20.archive-action.5110.md
+            - actions/21.deb-package-action.5111.md
+            - actions/22.apk-package-action.5112.md
+            - actions/23.arch-package-action.5113.md
             - actions/30.changelog-action.5120.md
             - actions/40.git-release-action.5130.md
             - actions/50.version-bumper-action.5140.md

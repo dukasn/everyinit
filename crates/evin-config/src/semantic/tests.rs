@@ -81,7 +81,7 @@ fn actions() -> HashMap<String, Arc<dyn Action>> {
 async fn snapshot_keeps_raw_documents_and_template_definitions() {
     let mut source = OverlaySource::default();
     source.insert(".evin/workspace.flow", "workspace: { name: app, version: 1.0.0, include: [.evin/packages.flow] }\nstages: [Build]\nvalues: { artifact: dist }\n");
-    source.insert(".evin/packages.flow", "namespace: { name: packages }\ntasks:\n  build:\n    values: { artifact: local }\n    steps:\n      - uses: evin/archive@v1\n        with: { format: arch, package: { name: '${artifact}' } }\n");
+    source.insert(".evin/packages.flow", "namespace: { name: packages }\ntasks:\n  build:\n    values: { artifact: local }\n    steps:\n      - uses: evin/package-arch@v1\n        with: { package: { name: '${artifact}' } }\n");
     let snapshot = WorkspaceSnapshot::load(&source).await;
     assert_eq!(snapshot.documents.len(), 2);
     let index = WorkspaceSemanticIndex::build(snapshot, &HashMap::new());

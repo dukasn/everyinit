@@ -233,7 +233,8 @@ fn automation_only_publishes_merged_proposals_after_ci() {
     assert!(git["tag"].is_null(), "never tag an unmerged proposal");
     assert_eq!(git["enabled"].as_str(), Some("${release:bump.changed}"));
     assert!(proposal.contains("evin/review-request@v1"));
-    assert!(artifacts.contains("evin/archive@v1"));
+    assert!(artifacts.contains("evin/package-deb@v1"));
+    assert!(artifacts.contains("evin/package-arch@v1"));
     let notes = &flow(".evin/release/artifacts.flow")["tasks"]["notes"]["steps"][0]["with"];
     assert_eq!(notes["section"].as_str(), Some("${env.RELEASE_TAG}"));
     assert_eq!(

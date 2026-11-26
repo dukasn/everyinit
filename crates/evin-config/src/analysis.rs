@@ -205,39 +205,51 @@ fn package_policy_findings(
     for task in &config.tasks {
         let values = merged_values(config, task);
         for (step_index, step) in task.steps.iter().flatten().enumerate() {
-            if step
-                .uses
-                .as_ref()
-                .is_none_or(|uses| uses.as_str() != "evin/archive@v1")
-                || !actions.contains_key("evin/archive@v1")
-            {
+            let Some(action_id) = step.uses.as_ref().map(|uses| uses.as_str()) else {
                 continue;
-            }
+            };
+            let Some(contract) = actions
+                .get(action_id)
+                .and_then(|action| action.package_release_contract())
+            else {
+                continue;
+            };
             let Some(with) = step.with.as_ref() else {
                 continue;
             };
-            let Some(package_name) =
-                mapping_value(with, "package").and_then(|package| mapping_string(package, "name"))
-            else {
+            let Some(package_name) = mapping_string_path(with, contract.package_name_path) else {
                 continue;
             };
             let resolved = resolve_value(package_name.0, &values);
             let diagnostic = match resolved {
                 ResolvedValue::Known(name) => match policies {
                     Some(policies) if policies.contains_key(&name) => {
-                        let format = mapping_string(with, "format").and_then(|value| match resolve_value(value.0, &values) { ResolvedValue::Known(value) => Some(value), ResolvedValue::Dynamic => None });
-                        format.and_then(|format| (!policies[&name].targets.iter().any(|target| target == &format)).then(|| format!("RepositoryPolicy package policy '{name}' does not declare the archive target '{format}'"))).map(|message| diagnostic_at(task, package_name.1, message, Severity::Error))
+                        (!policies[&name]
+                            .targets
+                            .iter()
+                            .any(|target| target == contract.target))
+                        .then(|| {
+                            diagnostic_at(
+                                task,
+                                package_name.1,
+                                format!(
+                                    "RepositoryPolicy package policy '{name}' does not declare the native package target '{}'",
+                                    contract.target
+                                ),
+                                Severity::Error,
+                            )
+                        })
                     }
-                    _ => Some(diagnostic_at(task, package_name.1, format!("archive package '{name}' has no matching RepositoryPolicy release policy"), Severity::Error)),
+                    _ => Some(diagnostic_at(task, package_name.1, format!("native package '{name}' has no matching RepositoryPolicy release policy"), Severity::Error)),
                 },
-                ResolvedValue::Dynamic => Some(diagnostic_at(task, package_name.1, "archive package identity cannot be proven statically because it uses environment or task output templates".to_string(), Severity::Info)),
+                ResolvedValue::Dynamic => Some(diagnostic_at(task, package_name.1, "native package identity cannot be proven statically because it uses environment or task output templates".to_string(), Severity::Info)),
             };
             if let Some(diagnostic) = diagnostic {
                 findings.push(AnalysisFinding {
                     task_name: task.name.clone(),
                     source_file: task.source_file.clone(),
                     step_index: Some(step_index),
-                    action_id: Some("evin/archive@v1".into()),
+                    action_id: Some(action_id.to_owned()),
                     diagnostic,
                 });
             }
@@ -296,6 +308,20 @@ fn mapping_string<'a>(value: &'a SpannedValue, key: &str) -> Option<(&'a str, Sp
             }
             _ => None,
         })
+}
+fn mapping_string_path<'a>(value: &'a SpannedValue, path: &str) -> Option<(&'a str, Span)> {
+    let mut parts = path.split('.');
+    let mut current = value;
+    while let Some(part) = parts.next() {
+        if parts.clone().next().is_none() {
+            return match current {
+                SpannedValue::Mapping(_, _) => mapping_string(current, part),
+                _ => None,
+            };
+        }
+        current = mapping_value(current, part)?;
+    }
+    None
 }
 fn diagnostic_at(task: &TaskObject, span: Span, message: String, severity: Severity) -> Diagnostic {
     with_source_span(
@@ -358,11 +384,15 @@ fn first_template_error(value: Option<&SpannedValue>) -> Option<ConfigError> {
 mod tests {
     use super::*;
     use crate::parser::RepositoryPolicySource;
-    use evin_action_sdk::{Action, RunnerContext};
+    use evin_action_sdk::{Action, PackageReleaseContract, RunnerContext};
     use evin_flow::{Span, Spanned};
     use std::collections::BTreeMap;
 
     struct Archive;
+    const ARCH_CONTRACT: PackageReleaseContract = PackageReleaseContract {
+        package_name_path: "package.name",
+        target: "arch",
+    };
     #[async_trait::async_trait]
     impl Action for Archive {
         fn handles_template_validation(&self) -> bool {
@@ -370,6 +400,9 @@ mod tests {
         }
         fn validate_config(&self, _: Option<&SpannedValue>) -> Result<(), ConfigError> {
             Ok(())
+        }
+        fn package_release_contract(&self) -> Option<&'static PackageReleaseContract> {
+            Some(&ARCH_CONTRACT)
         }
         async fn execute(
             &self,
@@ -381,15 +414,14 @@ mod tests {
     }
 
     fn config(name: &str) -> EverInitConfig {
-        let with =
-            evin_flow::parse_yaml(&format!("format: arch\npackage:\n  name: {name}\n")).unwrap();
+        let with = evin_flow::parse_yaml(&format!("package:\n  name: {name}\n")).unwrap();
         let task = TaskObject {
             name: "packages:arch".into(),
             source_file: Some(".evin/packages.flow".into()),
             steps: Some(vec![crate::models::StepObject {
                 run: None,
                 uses: Some(Spanned {
-                    value: "evin/archive@v1".into(),
+                    value: "evin/package-arch@v1".into(),
                     span: Span::default(),
                 }),
                 with: Some(with),
@@ -434,20 +466,20 @@ mod tests {
     #[test]
     fn resolved_package_name_requires_matching_policy_target() {
         let actions = HashMap::from([(
-            "evin/archive@v1".into(),
+            "evin/package-arch@v1".into(),
             std::sync::Arc::new(Archive) as std::sync::Arc<dyn Action>,
         )]);
         let findings = analyze(&config("${package_name}"), &actions).findings;
         assert_eq!(findings.len(), 1);
         assert!(findings[0].diagnostic.to_string().contains(
-            "RepositoryPolicy package policy 'app' does not declare the archive target 'arch'"
+            "RepositoryPolicy package policy 'app' does not declare the native package target 'arch'"
         ));
     }
 
     #[test]
     fn dynamic_package_name_is_informational_not_an_error() {
         let actions = HashMap::from([(
-            "evin/archive@v1".into(),
+            "evin/package-arch@v1".into(),
             std::sync::Arc::new(Archive) as std::sync::Arc<dyn Action>,
         )]);
         let findings = analyze(&config("${env.PACKAGE_NAME}"), &actions).findings;
@@ -457,7 +489,7 @@ mod tests {
     #[test]
     fn output_references_require_direct_dependencies_and_allow_runtime_aliases() {
         let actions = HashMap::from([(
-            "evin/archive@v1".into(),
+            "evin/package-arch@v1".into(),
             Arc::new(Archive) as Arc<dyn Action>,
         )]);
         for (reference, needs, expected) in [
