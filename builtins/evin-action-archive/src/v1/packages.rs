@@ -20,7 +20,6 @@ use evin_action_sdk::{
     RunnerContext,
     packaging::{self, PackageContext, PackageFormat, SourceEntry},
 };
-use std::collections::BTreeMap;
 use std::io::Write;
 
 pub(super) struct PackageBuild {
@@ -57,67 +56,8 @@ pub(super) fn resolve_package_payloads(
     ctx: &RunnerContext,
     package: &PackageConfig,
 ) -> Result<Vec<SourceEntry>, evin_diagnostic::Diagnostic> {
-    let mut entries = BTreeMap::<String, SourceEntry>::new();
-    let root = ctx.fs.task_cwd();
-    for mapping in &package.payload {
-        if mapping.source.trim().is_empty() || mapping.strip_prefix.trim().is_empty() {
-            return Err(diagnostic(evin_diagnostic::IssueCode::new(
-                "archive-payload-source-prefix-required",
-            )));
-        }
-        if mapping.mode.is_some_and(|mode| mode > 0o777) {
-            return Err(diagnostic(evin_diagnostic::IssueCode::new(
-                "archive-payload-mode-invalid",
-            )));
-        }
-        let strip = packaging::safe_relative_path(&mapping.strip_prefix)
-            .map_err(evin_diagnostic::Diagnostic::from)?;
-        let destination = packaging::normalize_install_dir(&mapping.destination)
-            .map_err(evin_diagnostic::Diagnostic::from)?;
-        let strip = root.join(strip);
-        for source_path in ctx
-            .fs
-            .matching_files_from(root, &mapping.source)
-            .map_err(|error| {
-                diagnostic(
-                    evin_diagnostic::IssueCode::new("archive-payload-source-discovery-failed")
-                        .arg("source", mapping.source.as_str())
-                        .arg("error", error.to_string()),
-                )
-            })?
-        {
-            let relative = source_path.strip_prefix(&strip).map_err(|_| {
-                diagnostic(
-                    evin_diagnostic::IssueCode::new("archive-payload-outside-strip-prefix")
-                        .arg("source", source_path.display())
-                        .arg("prefix", strip.display()),
-                )
-            })?;
-            let destination = format!(
-                "{destination}/{}",
-                relative.to_string_lossy().replace('\\', "/")
-            );
-            let destination = packaging::normalize_archive_path(&destination)
-                .map_err(evin_diagnostic::Diagnostic::from)?;
-            if entries
-                .insert(
-                    destination.clone(),
-                    SourceEntry {
-                        source: source_path,
-                        destination: destination.clone(),
-                        mode: mapping.mode,
-                    },
-                )
-                .is_some()
-            {
-                return Err(diagnostic(
-                    evin_diagnostic::IssueCode::new("archive-payload-collision")
-                        .arg("destination", destination),
-                ));
-            }
-        }
-    }
-    Ok(entries.into_values().collect())
+    packaging::resolve_payloads(&ctx.fs, &package.payload)
+        .map_err(evin_diagnostic::Diagnostic::from)
 }
 
 pub(super) fn load_scripts(
@@ -486,8 +426,8 @@ mod tests {
             resolve_package_payloads(&ctx, &package(vec![payload("", "app", "/usr")])).unwrap_err();
         assert_fluent_error(
             error,
-            "archive-payload-source-prefix-required",
-            evin_locales::t!("archive-payload-source-prefix-required"),
+            "package-payload-source-prefix-required",
+            evin_locales::t!("package-payload-source-prefix-required"),
         );
 
         let mut invalid_mode = payload("app/*", "app", "/usr");
@@ -495,8 +435,8 @@ mod tests {
         let error = resolve_package_payloads(&ctx, &package(vec![invalid_mode])).unwrap_err();
         assert_fluent_error(
             error,
-            "archive-payload-mode-invalid",
-            evin_locales::t!("archive-payload-mode-invalid"),
+            "package-payload-mode-invalid",
+            evin_locales::t!("package-payload-mode-invalid"),
         );
 
         let source = "[";
@@ -509,9 +449,9 @@ mod tests {
             .unwrap_err();
         assert_fluent_error(
             error,
-            "archive-payload-source-discovery-failed",
+            "package-payload-source-discovery-failed",
             evin_locales::t!(
-                "archive-payload-source-discovery-failed",
+                "package-payload-source-discovery-failed",
                 source = source,
                 error = detail
             ),
@@ -532,9 +472,9 @@ mod tests {
         .unwrap_err();
         assert_fluent_error(
             error,
-            "archive-payload-outside-strip-prefix",
+            "package-payload-outside-strip-prefix",
             evin_locales::t!(
-                "archive-payload-outside-strip-prefix",
+                "package-payload-outside-strip-prefix",
                 source = temp.path().join("outside/tool").display().to_string(),
                 prefix = temp.path().join("inside").display().to_string()
             ),
@@ -554,8 +494,8 @@ mod tests {
         .unwrap_err();
         assert_fluent_error(
             error,
-            "archive-payload-collision",
-            evin_locales::t!("archive-payload-collision", destination = "usr/bin/tool"),
+            "package-payload-collision",
+            evin_locales::t!("package-payload-collision", destination = "usr/bin/tool"),
         );
     }
 

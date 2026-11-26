@@ -34,15 +34,7 @@ pub struct PackageConfig {
     pub targets: PackageTargets,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PayloadMapping {
-    pub source: String,
-    pub strip_prefix: String,
-    pub destination: String,
-    #[serde(default)]
-    pub mode: Option<u32>,
-}
+pub use evin_action_sdk::packaging::PayloadMapping;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]

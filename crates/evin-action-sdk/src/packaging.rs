@@ -10,6 +10,7 @@
 //! construction, but not workspace globbing or a distribution's outer
 //! container. Native actions provide those two boundaries.
 
+use crate::fs::WorkspaceFs;
 use flate2::{Compression, GzBuilder};
 use md5::{Digest as Md5Digest, Md5};
 use serde::Deserialize;
@@ -25,8 +26,20 @@ pub enum PackagingError {
     InvalidPath(String),
     #[error("package path collision at '{0}'")]
     Collision(String),
+    #[error("package payload collision at '{0}'")]
+    PayloadCollision(String),
     #[error("cannot read package input '{path}': {source}")]
     Read { path: PathBuf, source: io::Error },
+    #[error("package payload source and strip prefix must not be empty")]
+    EmptyPayloadSourceOrPrefix,
+    #[error("package payload mode {0:o} is outside the supported range")]
+    InvalidPayloadMode(u32),
+    #[error("could not resolve package payload source '{pattern}': {error}")]
+    PayloadSourceDiscovery { pattern: String, error: String },
+    #[error("package payload '{path}' is outside strip prefix '{prefix}'")]
+    PayloadOutsideStripPrefix { path: PathBuf, prefix: PathBuf },
+    #[error("could not safely resolve package payload source '{path}': {error}")]
+    UnsafePayloadSource { path: PathBuf, error: String },
     #[error("invalid SOURCE_DATE_EPOCH: {0}")]
     InvalidEpoch(String),
     #[error("archive writer failed: {0}")]
@@ -44,9 +57,31 @@ impl From<PackagingError> for evin_diagnostic::Diagnostic {
             PackagingError::Collision(path) => {
                 IssueCode::new("package-path-collision").arg("path", path)
             }
+            PackagingError::PayloadCollision(destination) => {
+                IssueCode::new("package-payload-collision").arg("destination", destination)
+            }
             PackagingError::Read { path, source } => IssueCode::new("package-input-read-failed")
                 .arg("path", path.display().to_string())
                 .arg("error", source.to_string()),
+            PackagingError::EmptyPayloadSourceOrPrefix => {
+                IssueCode::new("package-payload-source-prefix-required")
+            }
+            PackagingError::InvalidPayloadMode(_) => IssueCode::new("package-payload-mode-invalid"),
+            PackagingError::PayloadSourceDiscovery { pattern, error } => {
+                IssueCode::new("package-payload-source-discovery-failed")
+                    .arg("source", pattern)
+                    .arg("error", error)
+            }
+            PackagingError::PayloadOutsideStripPrefix { path, prefix } => {
+                IssueCode::new("package-payload-outside-strip-prefix")
+                    .arg("source", path.display().to_string())
+                    .arg("prefix", prefix.display().to_string())
+            }
+            PackagingError::UnsafePayloadSource { path, error } => {
+                IssueCode::new("package-payload-safe-path-failed")
+                    .arg("source", path.display().to_string())
+                    .arg("error", error)
+            }
             PackagingError::InvalidEpoch(value) => {
                 IssueCode::new("package-source-date-epoch-invalid").arg("value", value)
             }
@@ -154,6 +189,123 @@ pub struct SourceEntry {
     pub mode: Option<u32>,
 }
 
+/// A task-relative source mapping into a package installation directory.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PayloadMapping {
+    pub source: String,
+    pub strip_prefix: String,
+    pub destination: String,
+    #[serde(default)]
+    pub mode: Option<u32>,
+}
+
+/// Resolve package payload mappings through Evin's workspace-safe filesystem.
+///
+/// The result is ordered by installation path and rejects escaping sources,
+/// unsafe physical paths, invalid modes, and destination collisions before a
+/// package encoder reads any payload bytes.
+pub fn resolve_payloads(
+    fs: &WorkspaceFs,
+    mappings: &[PayloadMapping],
+) -> Result<Vec<SourceEntry>, PackagingError> {
+    let root = fs.task_cwd();
+    let mut entries = BTreeMap::<String, SourceEntry>::new();
+    for mapping in mappings {
+        if mapping.source.trim().is_empty() || mapping.strip_prefix.trim().is_empty() {
+            return Err(PackagingError::EmptyPayloadSourceOrPrefix);
+        }
+        if mapping.mode.is_some_and(|mode| mode > 0o777) {
+            return Err(PackagingError::InvalidPayloadMode(
+                mapping.mode.unwrap_or_default(),
+            ));
+        }
+        let strip = safe_relative_path(&mapping.strip_prefix)?;
+        let destination = normalize_install_dir(&mapping.destination)?;
+        let strip_path = root.join(strip);
+        for source_path in fs
+            .matching_files_from(root, &mapping.source)
+            .map_err(|error| PackagingError::PayloadSourceDiscovery {
+                pattern: mapping.source.clone(),
+                error: error.to_string(),
+            })?
+        {
+            let relative = source_path.strip_prefix(&strip_path).map_err(|_| {
+                PackagingError::PayloadOutsideStripPrefix {
+                    path: source_path.clone(),
+                    prefix: strip_path.clone(),
+                }
+            })?;
+            let install_path = format!(
+                "{destination}/{}",
+                relative.to_string_lossy().replace('\\', "/")
+            );
+            let install_path = normalize_archive_path(&install_path)?;
+            let safe_source = safe_payload_source(fs, &source_path)?;
+            if entries
+                .insert(
+                    install_path.clone(),
+                    SourceEntry {
+                        source: safe_source,
+                        destination: install_path.clone(),
+                        mode: mapping.mode,
+                    },
+                )
+                .is_some()
+            {
+                return Err(PackagingError::PayloadCollision(install_path));
+            }
+        }
+    }
+    Ok(entries.into_values().collect())
+}
+
+fn safe_payload_source(fs: &WorkspaceFs, source: &Path) -> Result<PathBuf, PackagingError> {
+    if source.exists() {
+        let workspace_root = fs.workspace_root().canonicalize().map_err(|error| {
+            PackagingError::UnsafePayloadSource {
+                path: source.to_path_buf(),
+                error: error.to_string(),
+            }
+        })?;
+        let task_cwd =
+            fs.task_cwd()
+                .canonicalize()
+                .map_err(|error| PackagingError::UnsafePayloadSource {
+                    path: source.to_path_buf(),
+                    error: error.to_string(),
+                })?;
+        if !task_cwd.starts_with(&workspace_root) {
+            return Err(PackagingError::UnsafePayloadSource {
+                path: source.to_path_buf(),
+                error: "task cwd resolves outside the workspace".into(),
+            });
+        }
+        let physical_source =
+            source
+                .canonicalize()
+                .map_err(|error| PackagingError::UnsafePayloadSource {
+                    path: source.to_path_buf(),
+                    error: error.to_string(),
+                })?;
+        if !physical_source.starts_with(&workspace_root) {
+            return Err(PackagingError::UnsafePayloadSource {
+                path: source.to_path_buf(),
+                error: "source resolves outside the workspace".into(),
+            });
+        }
+        Ok(physical_source)
+    } else {
+        // Dry-run virtual inputs do not exist on disk; retain their checked
+        // workspace-relative spelling for planning without dereferencing them.
+        fs.get_safe_physical_path(&source.to_string_lossy())
+            .map_err(|error| PackagingError::UnsafePayloadSource {
+                path: source.to_path_buf(),
+                error: error.to_string(),
+            })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreparedEntryKind {
     Directory,
@@ -184,6 +336,11 @@ impl PackageContext {
     ) -> Result<Self, PackagingError> {
         let mut output = BTreeMap::new();
         for entry in entries {
+            if entry.mode.is_some_and(|mode| mode > 0o777) {
+                return Err(PackagingError::InvalidPayloadMode(
+                    entry.mode.unwrap_or_default(),
+                ));
+            }
             let path = normalize_archive_path(&entry.destination)?;
             let data = std::fs::read(&entry.source).map_err(|source| PackagingError::Read {
                 path: entry.source.clone(),
@@ -426,6 +583,27 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+    fn workspace_fs(root: &Path) -> WorkspaceFs {
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel();
+        let secrets = std::sync::Arc::new(crate::secrets::SecretsProvider::default());
+        let log = crate::Logger::new("packaging-test".into(), tx, secrets);
+        WorkspaceFs::new(
+            root.to_path_buf(),
+            root.to_path_buf(),
+            crate::PipelineMode::Normal,
+            log,
+        )
+    }
+
+    fn payload(source: &str, strip_prefix: &str, destination: &str) -> PayloadMapping {
+        PayloadMapping {
+            source: source.into(),
+            strip_prefix: strip_prefix.into(),
+            destination: destination.into(),
+            mode: None,
+        }
+    }
+
     #[test]
     fn packaging_errors_render_through_fluent_diagnostics() {
         let cases = [
@@ -440,6 +618,12 @@ mod tests {
                 "package-path-collision",
                 evin_locales::t!("package-path-collision", path = "usr/bin/tool"),
                 evin_locales::t!("package-path-collision-title"),
+            ),
+            (
+                PackagingError::PayloadCollision("usr/bin/tool".into()),
+                "package-payload-collision",
+                evin_locales::t!("package-payload-collision", destination = "usr/bin/tool"),
+                evin_locales::t!("package-payload-collision", destination = "usr/bin/tool"),
             ),
             (
                 PackagingError::Read {
@@ -474,6 +658,109 @@ mod tests {
             assert_eq!(evin_locales::render_issue(&diagnostic.code), expected);
             assert_eq!(diagnostic.title, expected_title);
         }
+    }
+
+    #[test]
+    fn payload_resolution_maps_files_safely_and_deterministically() {
+        let temp = TempDir::new().unwrap();
+        std::fs::create_dir_all(temp.path().join("bin")).unwrap();
+        std::fs::write(temp.path().join("bin/zeta"), "z").unwrap();
+        std::fs::write(temp.path().join("bin/alpha"), "a").unwrap();
+        let fs = workspace_fs(temp.path());
+
+        let entries = resolve_payloads(&fs, &[payload("bin/*", "bin", "/usr/bin")]).unwrap();
+
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.destination.as_str())
+                .collect::<Vec<_>>(),
+            ["usr/bin/alpha", "usr/bin/zeta"]
+        );
+        assert_eq!(entries[0].source, temp.path().join("bin/alpha"));
+        assert_eq!(entries[0].mode, None);
+    }
+
+    #[test]
+    fn payload_resolution_rejects_empty_fields_invalid_modes_and_bad_globs() {
+        let temp = TempDir::new().unwrap();
+        let fs = workspace_fs(temp.path());
+
+        assert!(matches!(
+            resolve_payloads(&fs, &[payload("", "bin", "/usr/bin")]),
+            Err(PackagingError::EmptyPayloadSourceOrPrefix)
+        ));
+
+        let mut invalid_mode = payload("bin/*", "bin", "/usr/bin");
+        invalid_mode.mode = Some(0o1000);
+        assert!(matches!(
+            resolve_payloads(&fs, &[invalid_mode]),
+            Err(PackagingError::InvalidPayloadMode(0o1000))
+        ));
+
+        assert!(matches!(
+            resolve_payloads(&fs, &[payload("[", ".", "/usr")]),
+            Err(PackagingError::PayloadSourceDiscovery { .. })
+        ));
+    }
+
+    #[test]
+    fn payload_resolution_rejects_strip_prefix_escapes_and_collisions() {
+        let temp = TempDir::new().unwrap();
+        std::fs::create_dir_all(temp.path().join("one")).unwrap();
+        std::fs::create_dir_all(temp.path().join("two")).unwrap();
+        std::fs::write(temp.path().join("one/tool"), "one").unwrap();
+        std::fs::write(temp.path().join("two/tool"), "two").unwrap();
+        let fs = workspace_fs(temp.path());
+
+        assert!(matches!(
+            resolve_payloads(&fs, &[payload("one/*", "two", "/usr/bin")]),
+            Err(PackagingError::PayloadOutsideStripPrefix { .. })
+        ));
+        assert!(matches!(
+            resolve_payloads(
+                &fs,
+                &[
+                    payload("one/*", "one", "/usr/bin"),
+                    payload("two/*", "two", "/usr/bin")
+                ]
+            ),
+            Err(PackagingError::PayloadCollision(path)) if path == "usr/bin/tool"
+        ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn payload_resolution_rejects_symlinks_that_escape_the_workspace() {
+        let temp = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+        std::fs::write(outside.path().join("secret"), "secret").unwrap();
+        std::os::unix::fs::symlink(outside.path(), temp.path().join("linked")).unwrap();
+        let fs = workspace_fs(temp.path());
+
+        assert!(matches!(
+            resolve_payloads(&fs, &[payload("linked/*", "linked", "/usr/share")]),
+            Err(PackagingError::UnsafePayloadSource { .. })
+        ));
+    }
+
+    #[test]
+    fn prepared_payload_rejects_modes_outside_unix_permission_bits() {
+        let temp = TempDir::new().unwrap();
+        let file = temp.path().join("input");
+        std::fs::write(&file, "input").unwrap();
+
+        assert!(matches!(
+            PackageContext::prepare(
+                1,
+                [SourceEntry {
+                    source: file,
+                    destination: "usr/bin/tool".into(),
+                    mode: Some(0o1000),
+                }]
+            ),
+            Err(PackagingError::InvalidPayloadMode(0o1000))
+        ));
     }
 
     #[test]
