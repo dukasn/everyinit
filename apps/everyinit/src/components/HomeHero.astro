@@ -27,52 +27,293 @@ tasks:
     run: npm test`;
 ---
 
-    <section class="mx-auto grid max-w-7xl gap-14 px-5 pb-24 pt-12 sm:px-8 sm:pt-20 lg:grid-cols-[1.03fr_.97fr] lg:items-center lg:px-12 lg:pb-32 lg:pt-24">
-      <div class="max-w-2xl">
-        <p class="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3.5 py-2 text-xs font-medium tracking-wide text-moss">
-          <span class="size-2 rounded-full bg-[var(--accent-strong)]"></span>
-          {t("home-hero-eyebrow")}
-        </p>
-        <h1 class="max-w-[12ch] text-[clamp(2.6rem,8vw,6.6rem)] font-semibold leading-[.91] tracking-[-.075em] text-ink">
-          {t("home-hero-title-first")}<br /><span class="text-moss">{t("home-hero-title-second")}</span>
-        </h1>
-        <p class="mt-8 max-w-xl text-lg leading-8 text-moss sm:text-xl sm:leading-9">
-          {t("home-hero-description")}
-        </p>
-        <div class="mt-9 flex flex-wrap items-center gap-3">
-          <a href="/docs/book/installation/" class="group inline-flex items-center gap-3 rounded-full bg-ink px-6 py-4 text-sm font-semibold text-paper shadow-[0_12px_28px_-16px_var(--color-ink)] transition hover:-translate-y-0.5 hover:bg-moss active:scale-[.98]">
-            {t("home-hero-install")} <span class="text-lime motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span>
-          </a>
-          <a href="https://github.com/dukasn/everyinit" class="group inline-flex items-center gap-2 rounded-full border border-line px-6 py-4 text-sm font-semibold text-ink transition hover:border-moss hover:bg-surface/80 active:scale-[.98]">
-            {t("home-hero-explore")} <span class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1" aria-hidden="true">↗</span>
-          </a>
+<section
+  class="mx-auto grid max-w-7xl gap-14 px-5 pb-24 pt-12 sm:px-8 sm:pt-20 lg:grid-cols-[1.03fr_.97fr] lg:items-center lg:px-12 lg:pb-32 lg:pt-24"
+>
+  <div class="max-w-2xl">
+    <p
+      class="mb-7 inline-flex items-center gap-2 rounded-full border border-line bg-surface/80 px-3.5 py-2 text-xs font-medium tracking-wide text-moss"
+    >
+      <span class="size-2 rounded-full bg-[var(--accent-strong)]"></span>
+      {t("home-hero-eyebrow")}
+    </p>
+    <h1
+      class="max-w-[12ch] text-[clamp(2.6rem,8vw,6.6rem)] font-semibold leading-[.91] tracking-[-.075em] text-ink"
+    >
+      {t("home-hero-title-first")}<br /><span class="text-moss">{t("home-hero-title-second")}</span>
+    </h1>
+    <p class="mt-8 max-w-xl text-lg leading-8 text-moss sm:text-xl sm:leading-9">
+      {t("home-hero-description")}
+    </p>
+    <div class="mt-9 flex flex-wrap items-center gap-3">
+      <a
+        href="/docs/book/installation/"
+        class="group inline-flex items-center gap-3 rounded-full bg-ink px-6 py-4 text-sm font-semibold text-paper shadow-[0_12px_28px_-16px_var(--color-ink)] transition hover:-translate-y-0.5 hover:bg-moss active:scale-[.98]"
+      >
+        {t("home-hero-install")}
+        <span
+          class="text-lime motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1"
+          aria-hidden="true">↗</span
+        >
+      </a>
+      <a
+        href="/docs/book/concepts/why-everyinit/"
+        class="group inline-flex items-center gap-2 rounded-full border border-line px-6 py-4 text-sm font-semibold text-ink transition hover:border-moss hover:bg-surface/80 active:scale-[.98]"
+      >
+        {t("home-hero-why")}
+        <span
+          class="motion-safe:transition-transform motion-safe:duration-200 group-hover:translate-x-1"
+          aria-hidden="true">↗</span
+        >
+      </a>
+    </div>
+    <p class="mt-5 text-xs leading-5 text-moss">{t("home-hero-availability")}</p>
+  </div>
+
+  <home-hero-tabs class="relative mx-auto block w-full max-w-[590px] lg:ml-auto">
+    <div
+      class="home-hero-backdrop absolute -inset-2 rotate-0 rounded-[2rem] bg-[color-mix(in_srgb,var(--color-lime)_24%,var(--color-paper))] sm:-inset-4 sm:-rotate-2"
+    >
+    </div>
+    <div
+      class="home-hero-window relative overflow-hidden rounded-[1.5rem] border border-[color-mix(in_srgb,var(--color-ink)_72%,white_28%)] bg-[color-mix(in_srgb,var(--color-ink)_94%,white_6%)] shadow-[0_30px_90px_-35px_rgba(22,34,24,.55)] transition-[border-color,box-shadow] duration-300 hover:border-[color-mix(in_srgb,var(--color-ink)_55%,white_45%)] hover:shadow-[0_36px_100px_-35px_rgba(22,34,24,.68)] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-1"
+    >
+      <div
+        class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3.5 sm:px-5 sm:py-4"
+      >
+        <div class="flex items-center gap-3">
+          <div class="flex gap-1.5">
+            <span class="size-2.5 rounded-full bg-[#839278]"></span><span
+              class="size-2.5 rounded-full bg-[#62735c]"
+            ></span><span class="size-2.5 rounded-full bg-[#4b5c4b]"></span>
+          </div>
+          <span class="hidden font-mono text-[11px] text-[#9eac9a] sm:inline">storefront · evin</span>
         </div>
-        <p class="mt-5 text-xs leading-5 text-moss">{t("home-hero-availability")}</p>
+        <div
+          role="tablist"
+          aria-label={t("home-hero-modes-label")}
+          class="inline-flex rounded-full border border-white/12 bg-[color-mix(in_srgb,var(--color-ink)_82%,white_18%)] p-0.5 font-mono text-[10px]"
+        >
+          <button
+            id="hero-tab-define"
+            role="tab"
+            type="button"
+            aria-selected="true"
+            aria-controls="hero-panel-define"
+            data-hero-tab="define"
+            class="hero-mode-tab rounded-full px-2.5 py-1 transition"
+          >
+            {t("home-hero-tab-define")}
+          </button>
+          <button
+            id="hero-tab-inspect"
+            role="tab"
+            type="button"
+            aria-selected="false"
+            aria-controls="hero-panel-inspect"
+            data-hero-tab="inspect"
+            tabindex="-1"
+            class="hero-mode-tab rounded-full px-2.5 py-1 transition"
+          >
+            {t("home-hero-tab-inspect")}
+          </button>
+          <button
+            id="hero-tab-run"
+            role="tab"
+            type="button"
+            aria-selected="false"
+            aria-controls="hero-panel-run"
+            data-hero-tab="run"
+            tabindex="-1"
+            class="hero-mode-tab rounded-full px-2.5 py-1 transition"
+          >
+            {t("home-hero-tab-run")}
+          </button>
+        </div>
       </div>
 
-      <div class="relative mx-auto w-full max-w-[590px] lg:ml-auto">
-        <div class="home-hero-backdrop absolute -inset-2 rotate-0 rounded-[2rem] bg-[color-mix(in_srgb,var(--color-lime)_24%,var(--color-paper))] sm:-inset-4 sm:-rotate-2"></div>
-        <div class="relative overflow-hidden rounded-[1.5rem] border border-[color-mix(in_srgb,var(--color-ink)_72%,white_28%)] bg-[color-mix(in_srgb,var(--color-ink)_94%,white_6%)] shadow-[0_30px_90px_-35px_rgba(22,34,24,.55)] transition-[border-color,box-shadow] duration-300 hover:border-[color-mix(in_srgb,var(--color-ink)_55%,white_45%)] hover:shadow-[0_36px_100px_-35px_rgba(22,34,24,.68)] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:-translate-y-1">
-          <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
-            <div class="flex gap-1.5"><span class="size-2.5 rounded-full bg-[#839278]"></span><span class="size-2.5 rounded-full bg-[#62735c]"></span><span class="size-2.5 rounded-full bg-[#4b5c4b]"></span></div>
-            <span class="font-mono text-[11px] text-[#9eac9a]">storefront · evin</span>
-            <span class="rounded-full bg-[color-mix(in_srgb,var(--color-ink)_78%,white_22%)] px-2.5 py-1 font-mono text-[10px] text-lime">{t("home-hero-ready")}</span>
-          </div>
+      <div class="hero-panels-stack">
+        <div
+          id="hero-panel-define"
+          role="tabpanel"
+          aria-labelledby="hero-tab-define"
+          data-hero-panel="define"
+          data-active="true"
+          class="hero-panel"
+        >
           <div class="px-5 py-6 sm:px-7 sm:py-8">
             <p class="font-mono text-xs text-[#a0ae9b]">.evin/workspace.flow</p>
-            <pre class="home-hero-code mt-5 overflow-x-auto font-mono text-[12px] leading-[1.9] text-[#e5ebdf] sm:text-[13px]"><code set:html={renderHighlightedCode(heroCode, "flow")}></code></pre>
+            <pre
+              class="home-hero-code mt-5 overflow-x-auto font-mono text-[12px] leading-[1.9] text-[#e5ebdf] sm:text-[13px]"><code set:html={renderHighlightedCode(heroCode, "flow")} /></pre>
           </div>
-          <div class="border-t border-white/10 bg-[color-mix(in_srgb,var(--color-ink)_88%,white_12%)] px-5 py-4 sm:px-7">
-            <div class="flex items-center justify-between font-mono text-[11px]">
-              <span class="text-[#a7b3a2]">$ evin run test</span><span class="text-lime">{t("home-hero-passed")}</span>
+          <div
+            class="hero-panel-footer border-t border-white/10 bg-[color-mix(in_srgb,var(--color-ink)_88%,white_12%)] px-5 pt-4 pb-5 sm:px-7 sm:pb-11"
+          >
+            <div class="flex items-center justify-between gap-2 font-mono text-[11px]">
+              <span class="truncate text-[#a7b3a2]">$ evin check && evin run test</span><span
+                class="shrink-0 text-lime">{t("home-hero-passed")}</span
+              >
             </div>
-            <div class="mt-3 flex gap-2"><span class="h-1.5 flex-[2] rounded-full bg-lime/80"></span><span class="h-1.5 flex-1 rounded-full bg-lime/50"></span><span class="h-1.5 flex-[3] rounded-full bg-lime/30"></span></div>
-            <p class="mt-3 font-mono text-[10px] text-[#92a18e]">{t("home-hero-run-summary", { lintTime: "0.42s", testTime: "2.18s" })}</p>
+            <div class="mt-3 flex gap-2">
+              <span class="h-1.5 flex-[2] rounded-full bg-lime/80"></span><span
+                class="h-1.5 flex-1 rounded-full bg-lime/50"
+              ></span><span class="h-1.5 flex-[3] rounded-full bg-lime/30"></span>
+            </div>
+            <p class="hero-panel-summary mt-3 font-mono text-[10px] text-[#92a18e]">
+              {t("home-hero-run-summary", { lintTime: "0.42s", testTime: "2.18s" })}
+            </p>
           </div>
         </div>
-        <div class="absolute -bottom-7 -left-5 hidden rounded-2xl border border-[#d5ddce] bg-surface px-4 py-3 shadow-lg sm:flex sm:items-center sm:gap-3">
-          <span class="grid size-9 place-items-center rounded-full bg-lime text-lg">↳</span>
-          <span><span class="block text-xs font-semibold">{t("home-hero-task-graph")}</span><span class="block text-[11px] text-moss">{t("home-hero-channels")}</span></span>
+
+        <div
+          id="hero-panel-inspect"
+          role="tabpanel"
+          aria-labelledby="hero-tab-inspect"
+          data-hero-panel="inspect"
+          data-active="false"
+          inert
+          class="hero-panel"
+        >
+          <div class="space-y-5 px-5 py-6 font-mono text-[12px] sm:px-7 sm:py-8 sm:text-[13px]">
+            <div>
+              <p class="text-[#f0cd75]">$ evin check</p>
+              <p class="mt-1.5 text-[11px] leading-5 text-[#c0ccbc]">
+                {t("home-hero-inspect-check-note")}
+              </p>
+            </div>
+            <div class="border-t border-white/10 pt-4">
+              <p class="text-[#f0cd75]">$ evin explain test</p>
+              <p class="mt-1.5 text-[11px] leading-5 text-[#c0ccbc]">
+                {t("home-hero-inspect-explain-note")}
+              </p>
+            </div>
+            <div class="border-t border-white/10 pt-4">
+              <p class="text-[#f0cd75]">$ evin run test --dry-run</p>
+              <p class="mt-1.5 text-[11px] leading-5 text-[#c0ccbc]">
+                {t("home-hero-inspect-dry-run-note")}
+              </p>
+            </div>
+          </div>
+          <div
+            class="hero-panel-footer border-t border-white/10 bg-[color-mix(in_srgb,var(--color-ink)_88%,white_12%)] px-5 pt-4 pb-5 sm:px-7 sm:pb-11"
+          >
+            <div class="flex items-center justify-between gap-2 font-mono text-[11px]">
+              <span class="truncate text-[#a7b3a2]">plan: lint → test</span><span
+                class="shrink-0 text-lime">{t("home-hero-verified")}</span
+              >
+            </div>
+            <p class="hero-panel-summary mt-3 font-mono text-[10px] text-[#92a18e]">
+              {t("home-hero-inspect-summary")}
+            </p>
+          </div>
+        </div>
+
+        <div
+          id="hero-panel-run"
+          role="tabpanel"
+          aria-labelledby="hero-tab-run"
+          data-hero-panel="run"
+          data-active="false"
+          inert
+          class="hero-panel"
+        >
+          <div class="space-y-4 px-5 py-6 font-mono text-[12px] sm:px-7 sm:py-8 sm:text-[13px]">
+            <p class="text-[#f0cd75]">$ evin run test</p>
+            <div class="space-y-3 rounded-xl border border-white/10 bg-black/15 p-4 text-[11px]">
+              <div class="flex items-center justify-between gap-3 text-[#e5ebdf]">
+                <span class="truncate"
+                  ><span class="text-[#a7cf8c]">Check</span> › lint · {
+                    t("home-hero-run-step-lint")
+                  }</span
+                >
+                <span class="shrink-0 text-lime">0.42s ✓</span>
+              </div>
+              <div
+                class="flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-[#e5ebdf]"
+              >
+                <span class="truncate"
+                  ><span class="text-[#a7cf8c]">Test</span> › test · {
+                    t("home-hero-run-step-test")
+                  }</span
+                >
+                <span class="shrink-0 text-lime">2.18s ✓</span>
+              </div>
+            </div>
+            <p class="text-[11px] leading-5 text-[#a0ae9b]">{t("home-hero-run-trace-note")}</p>
+          </div>
+          <div
+            class="hero-panel-footer border-t border-white/10 bg-[color-mix(in_srgb,var(--color-ink)_88%,white_12%)] px-5 pt-4 pb-5 sm:px-7 sm:pb-11"
+          >
+            <div class="flex items-center justify-between gap-2 font-mono text-[11px]">
+              <span class="truncate text-[#a7b3a2]">.evin/trace.json</span><span
+                class="shrink-0 text-lime">{t("home-hero-traced")}</span
+              >
+            </div>
+            <div class="mt-3 flex gap-2">
+              <span class="h-1.5 flex-[2] rounded-full bg-lime/80"></span><span
+                class="h-1.5 flex-[5] rounded-full bg-lime/55"
+              ></span>
+            </div>
+            <p class="hero-panel-summary mt-3 font-mono text-[10px] text-[#92a18e]">
+              {t("home-hero-run-summary", { lintTime: "0.42s", testTime: "2.18s" })}
+            </p>
+          </div>
         </div>
       </div>
-    </section>
+    </div>
+    <div
+      class="home-hero-badge absolute -bottom-8 -left-4 hidden rounded-2xl border border-[#d5ddce] bg-surface px-4 py-3 shadow-lg sm:flex sm:items-center sm:gap-3"
+    >
+      <span class="grid size-9 place-items-center rounded-full bg-lime text-lg">↳</span>
+      <span
+        ><span class="block text-xs font-semibold">{t("home-hero-task-graph")}</span><span
+          class="block text-[11px] text-moss">{t("home-hero-channels")}</span
+        ></span
+      >
+    </div>
+  </home-hero-tabs>
+</section>
+
+<script>
+  import "../scripts/home-hero";
+</script>
+
+<style>
+  .hero-panels-stack {
+    display: grid;
+  }
+
+  .hero-panel {
+    grid-area: 1 / 1;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
+  .hero-panel[data-active="false"] {
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .hero-mode-tab {
+    color: #9eac9a;
+    cursor: pointer;
+  }
+
+  .hero-mode-tab:hover {
+    color: #e5ebdf;
+  }
+
+  .hero-mode-tab[aria-selected="true"] {
+    background: var(--color-lime);
+    color: var(--color-ink);
+    font-weight: 650;
+  }
+
+  .hero-mode-tab:focus-visible {
+    outline: 2px solid var(--color-lime);
+    outline-offset: 2px;
+  }
+</style>

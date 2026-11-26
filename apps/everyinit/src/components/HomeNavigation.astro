@@ -7,7 +7,7 @@ interface Props {
 
 const { locale } = Astro.props;
 const t = createTranslator(locale);
-const localeHref = (language: string) => language === "en" ? "/" : `/${language}/`;
+const localeHref = (language: string) => (language === "en" ? "/" : `/${language}/`);
 const localeNames = new Intl.DisplayNames([locale], { type: "language" });
 
 const navigation = [
@@ -15,30 +15,102 @@ const navigation = [
     title: t("home-nav-tools"),
     alignRight: false,
     links: [
-      { title: t("home-nav-evin-title"), description: t("home-nav-evin-description"), href: "/docs/book/installation/", icon: "workflow" },
-      { title: t("home-nav-install-title"), description: t("home-nav-install-description"), href: "/docs/book/installation/", icon: "play" },
-      { title: t("home-nav-esh-title"), description: t("home-nav-esh-description"), href: "/docs/book/esh/", icon: "terminal" },
-      { title: t("home-nav-ide-title"), description: t("home-nav-ide-description"), href: "/docs/book/esh/editor-integration/", icon: "window" },
-      { title: t("home-nav-web-title"), description: t("home-nav-web-description"), href: "https://github.com/dukasn/everyinit/tree/main/packages/everyinit", icon: "globe" },
+      {
+        title: t("home-nav-evin-title"),
+        description: t("home-nav-evin-description"),
+        href: "/docs/book/",
+        icon: "workflow",
+      },
+      {
+        title: t("home-nav-esh-title"),
+        description: t("home-nav-esh-description"),
+        href: "/docs/book/esh/",
+        icon: "terminal",
+      },
+      {
+        title: t("home-nav-ide-title"),
+        description: t("home-nav-ide-description"),
+        href: "/docs/book/esh/editor-integration/",
+        icon: "window",
+      },
+      {
+        title: t("home-nav-web-title"),
+        description: t("home-nav-web-description"),
+        href: "/docs/reference/everyinit-package/",
+        icon: "globe",
+      },
     ],
   },
   {
-    title: t("home-nav-resources"),
+    title: t("home-nav-learn"),
     alignRight: false,
     links: [
-      { title: t("home-nav-docs-title"), description: t("home-nav-docs-description"), href: "/docs/", icon: "book" },
-      { title: t("home-nav-how-title"), description: t("home-nav-how-description"), href: "#workflow", icon: "route" },
-      { title: t("home-nav-integrations-title"), description: t("home-nav-integrations-description"), href: "#integrations", icon: "layers" },
-      { title: t("home-nav-source-title"), description: t("home-nav-source-description"), href: "https://github.com/dukasn/everyinit", icon: "code" },
+      {
+        title: t("home-nav-why-title"),
+        description: t("home-nav-why-description"),
+        href: "/docs/book/concepts/why-everyinit/",
+        icon: "layers",
+      },
+      {
+        title: t("home-nav-compare-title"),
+        description: t("home-nav-compare-description"),
+        href: "/docs/book/concepts/why-everyinit/#compared-with-other-tools",
+        icon: "route",
+      },
+      {
+        title: t("home-nav-trust-title"),
+        description: t("home-nav-trust-description"),
+        href: "/docs/book/concepts/execution-and-trust-model/",
+        icon: "shield",
+      },
+      {
+        title: t("home-nav-docs-title"),
+        description: t("home-nav-docs-description"),
+        href: "/docs/",
+        icon: "book",
+      },
+      {
+        title: t("home-nav-reference-title"),
+        description: t("home-nav-reference-description"),
+        href: "/docs/reference/",
+        icon: "code",
+      },
     ],
   },
   {
-    title: t("home-nav-help"),
+    title: t("home-nav-community"),
     alignRight: true,
     links: [
-      { title: t("home-nav-get-started-title"), description: t("home-nav-get-started-description"), href: "/docs/book/installation/", icon: "play" },
-      { title: t("home-nav-contribute-title"), description: t("home-nav-contribute-description"), href: "/docs/contributing/development/", icon: "people" },
-      { title: t("home-nav-issue-title"), description: t("home-nav-issue-description"), href: "https://github.com/dukasn/everyinit/issues", icon: "message" },
+      {
+        title: t("home-nav-contribute-title"),
+        description: t("home-nav-contribute-description"),
+        href: "/docs/contributing/",
+        icon: "people",
+      },
+      {
+        title: t("home-nav-opportunities-title"),
+        description: t("home-nav-opportunities-description"),
+        href: "/docs/contributing/opportunities/",
+        icon: "spark",
+      },
+      {
+        title: t("home-nav-source-title"),
+        description: t("home-nav-source-description"),
+        href: "https://github.com/dukasn/everyinit",
+        icon: "code",
+      },
+      {
+        title: t("home-nav-issue-title"),
+        description: t("home-nav-issue-description"),
+        href: "https://github.com/dukasn/everyinit/issues",
+        icon: "message",
+      },
+      {
+        title: t("home-nav-security-title"),
+        description: t("home-nav-security-description"),
+        href: "https://github.com/dukasn/everyinit/security/advisories/new",
+        icon: "shield",
+      },
     ],
   },
 ];
@@ -47,74 +119,234 @@ const navigationIconPaths = {
   workflow: "M4 6h6v5H4z M14 13h6v5h-6z M10 8.5h4v7h-4 M12 15.5v-7",
   terminal: "M4 5h16v14H4z M7 9l3 3-3 3 M12 15h4",
   window: "M4 5h16v14H4z M4 9h16 M8 5v4",
-  globe: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M3.5 12h17 M12 3c2.2 2.4 3.2 5.4 3.2 9S14.2 18.6 12 21c-2.2-2.4-3.2-5.4-3.2-9S9.8 5.4 12 3z",
+  globe:
+    "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M3.5 12h17 M12 3c2.2 2.4 3.2 5.4 3.2 9S14.2 18.6 12 21c-2.2-2.4-3.2-5.4-3.2-9S9.8 5.4 12 3z",
   book: "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22z M4 5.5v14A2.5 2.5 0 0 1 6.5 17H20 M8 7h8",
-  route: "M6 5a2 2 0 1 0 0 .01z M18 19a2 2 0 1 0 0 .01z M6 7v5a2 2 0 0 0 2 2h8a2 2 0 0 1 2 2v1 M14 5a2 2 0 1 0 0 .01z M14 7v2",
+  route:
+    "M6 5a2 2 0 1 0 0 .01z M18 19a2 2 0 1 0 0 .01z M6 7v5a2 2 0 0 0 2 2h8a2 2 0 0 1 2 2v1 M14 5a2 2 0 1 0 0 .01z M14 7v2",
   layers: "m12 3 9 5-9 5-9-5 9-5z M3 12l9 5 9-5 M3 16l9 5 9-5",
   code: "m8 8-4 4 4 4 M16 8l4 4-4 4 M14 5l-4 14",
-  play: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z M10 8l6 4-6 4z",
-  people: "M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M20 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
-  message: "M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z",
+  shield: "M12 3l7 3v5.5c0 4.5-3 7.9-7 9.5-4-1.6-7-5-7-9.5V6l7-3z M9.5 12l1.8 1.8 3.4-3.6",
+  spark: "M12 3v4 M12 17v4 M3 12h4 M17 12h4 M6.3 6.3l2.4 2.4 M15.3 15.3l2.4 2.4 M17.7 6.3l-2.4 2.4 M8.7 15.3l-2.4 2.4",
+  people:
+    "M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M20 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
+  message:
+    "M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8z",
 };
-
 ---
 
 <home-navigation class="contents">
-  <header class="relative z-40 mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8 lg:px-12">
-    <a href={localeHref(locale)} class="group flex items-center gap-3 font-semibold tracking-tight" aria-label={t("site-home")}>
+  <header
+    class="relative z-40 mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8 lg:px-12"
+  >
+    <a
+      href={localeHref(locale)}
+      class="group flex items-center gap-3 font-semibold tracking-tight"
+      aria-label={t("site-home")}
+    >
       <span class="grid size-10 place-items-center rounded-xl bg-ink text-lime shadow-sm">
-        <span class="brand-mark size-6 motion-safe:transition-transform motion-safe:duration-300 group-hover:rotate-6 group-hover:scale-105" aria-hidden="true"></span>
+        <span
+          class="brand-mark size-6 motion-safe:transition-transform motion-safe:duration-300 group-hover:rotate-6 group-hover:scale-105"
+          aria-hidden="true"></span>
       </span>
       <span class="text-lg">everyinit</span>
     </a>
-    <nav class="hidden items-center gap-1 text-sm text-moss lg:flex xl:gap-2" aria-label={t("site-main-navigation")}>
-      {navigation.map((menu) => <details data-nav-menu class="home-nav-menu group relative">
-        <summary class="inline-flex cursor-pointer list-none items-center gap-2 rounded-full px-3.5 py-2 font-medium transition hover:bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] hover:text-ink group-open:bg-[color-mix(in_srgb,var(--color-lime)_22%,var(--color-surface))] group-open:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">
-          {menu.title}<svg class="home-nav-chevron size-3.5 text-moss transition-transform" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
-        </summary>
-        <div class:list={["absolute top-full z-50 w-[min(24rem,calc(100vw-2rem))] pt-2.5", { "left-0": !menu.alignRight, "right-0": menu.alignRight }]}>
-          <div class="rounded-2xl border border-line bg-surface/95 p-2 shadow-[0_24px_60px_-28px_rgba(16,25,18,.32)] backdrop-blur-xl">
-            <p class="px-3 pt-1.5 pb-2 text-[10px] font-semibold uppercase tracking-[.14em] text-moss/80">{menu.title}</p>
-            <ul class="grid gap-0.5">
-              {menu.links.map((link) => <li>
-                <a class="group/link grid grid-cols-[2.25rem_1fr_auto] items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--accent-strong)]" href={link.href}>
-                  <span class="grid size-9 place-items-center rounded-xl border border-line/80 bg-paper text-moss transition group-hover/link:border-ink group-hover/link:bg-ink group-hover/link:text-lime"><svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
-                  <span class="min-w-0"><span class="block text-sm font-semibold text-ink">{link.title}</span><span class="mt-0.5 block text-xs leading-5 text-moss">{link.description}</span></span>
-                  <span class="text-xs text-[var(--accent-strong)] opacity-0 transition group-hover/link:translate-x-0.5 group-hover/link:opacity-100 group-focus-visible/link:opacity-100" aria-hidden="true">↗</span>
-                </a>
-              </li>)}
-            </ul>
-          </div>
-        </div>
-      </details>)}
+    <nav
+      class="hidden items-center gap-1 text-sm text-moss lg:flex xl:gap-2"
+      aria-label={t("site-main-navigation")}
+    >
+      {
+        navigation.map((menu) => (
+          <details data-nav-menu class="home-nav-menu group relative">
+            <summary class="inline-flex cursor-pointer list-none items-center gap-2 rounded-full px-3.5 py-2 font-medium transition hover:bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] hover:text-ink group-open:bg-[color-mix(in_srgb,var(--color-lime)_22%,var(--color-surface))] group-open:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">
+              {menu.title}
+              <svg
+                class="home-nav-chevron size-3.5 text-moss transition-transform"
+                viewBox="0 0 20 20"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="m5 7.5 5 5 5-5"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </summary>
+            <div
+              class:list={[
+                "absolute top-full z-50 w-[min(24rem,calc(100vw-2rem))] pt-2.5",
+                { "left-0": !menu.alignRight, "right-0": menu.alignRight },
+              ]}
+            >
+              <div class="rounded-2xl border border-line bg-surface/95 p-2 shadow-[0_24px_60px_-28px_rgba(16,25,18,.32)] backdrop-blur-xl">
+                <p class="px-3 pt-1.5 pb-2 text-[10px] font-semibold uppercase tracking-[.14em] text-moss/80">
+                  {menu.title}
+                </p>
+                <ul class="grid gap-0.5">
+                  {menu.links.map((link) => (
+                    <li>
+                      <a
+                        class="group/link grid grid-cols-[2.25rem_1fr_auto] items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-[var(--accent-strong)]"
+                        href={link.href}
+                      >
+                        <span class="grid size-9 place-items-center rounded-xl border border-line/80 bg-paper text-moss transition group-hover/link:border-ink group-hover/link:bg-ink group-hover/link:text-lime">
+                          <svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                              d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]}
+                              stroke="currentColor"
+                              stroke-width="1.6"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <span class="min-w-0">
+                          <span class="block text-sm font-semibold text-ink">{link.title}</span>
+                          <span class="mt-0.5 block text-xs leading-5 text-moss">
+                            {link.description}
+                          </span>
+                        </span>
+                        <span
+                          class="text-xs text-[var(--accent-strong)] opacity-0 transition group-hover/link:translate-x-0.5 group-hover/link:opacity-100 group-focus-visible/link:opacity-100"
+                          aria-hidden="true"
+                        >
+                          ↗
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </details>
+        ))
+      }
     </nav>
-    {availableLocales.length > 1 && <details class="home-language-menu group relative">
-      <summary class="cursor-pointer list-none rounded-full border border-line px-3 py-2 text-xs font-medium text-moss hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] [&::-webkit-details-marker]:hidden" aria-label={t("site-locale")}>{locale}</summary>
-      <div class="absolute right-0 top-full z-50 min-w-36 pt-2">
-        <ul class="rounded-xl border border-line bg-surface p-1 shadow-lg">
-          {availableLocales.map((language) => <li><a class:list={["block rounded-lg px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))]", { "font-semibold text-ink": language === locale }]} href={locale === language ? undefined : localeHref(language)} lang={language}>{localeNames.of(language) ?? language}</a></li>)}
-        </ul>
-      </div>
-    </details>}
-    <a href="/docs/book/installation/" class="hidden shrink-0 items-center rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:bg-moss active:scale-[.98] lg:inline-flex">
-      {t("home-get-started")} <span class="ml-2 text-lime" aria-hidden="true">↗</span>
-    </a>
+    <div class="hidden shrink-0 items-center gap-2 lg:flex">
+      {
+        availableLocales.length > 1 && (
+          <details class="home-language-menu group relative">
+            <summary
+              class="cursor-pointer list-none rounded-full border border-line px-3 py-2 text-xs font-medium text-moss hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] [&::-webkit-details-marker]:hidden"
+              aria-label={t("site-locale")}
+            >
+              {locale}
+            </summary>
+            <div class="absolute right-0 top-full z-50 min-w-36 pt-2">
+              <ul class="rounded-xl border border-line bg-surface p-1 shadow-lg">
+                {availableLocales.map((language) => (
+                  <li>
+                    <a
+                      class:list={[
+                        "block rounded-lg px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))]",
+                        { "font-semibold text-ink": language === locale },
+                      ]}
+                      href={locale === language ? undefined : localeHref(language)}
+                      lang={language}
+                    >
+                      {localeNames.of(language) ?? language}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </details>
+        )
+      }
+      <a
+        href="https://github.com/dukasn/everyinit"
+        class="inline-flex h-10 items-center rounded-full border border-transparent px-3.5 text-xs font-medium text-moss transition hover:border-[color-mix(in_srgb,var(--accent-strong)_38%,var(--color-line))] hover:bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] hover:text-ink"
+      >
+        {t("home-nav-github")}
+      </a>
+      <a
+        href="/docs/book/installation/"
+        class="inline-flex items-center rounded-full bg-ink px-5 py-3 text-sm font-medium text-paper transition hover:bg-moss active:scale-[.98]"
+      >
+        {t("home-get-started")} <span class="ml-2 text-lime" aria-hidden="true">↗</span>
+      </a>
+    </div>
     <details data-nav-menu class="home-mobile-nav group relative lg:hidden">
-      <summary class="grid size-11 cursor-pointer list-none place-items-center rounded-full border border-line text-ink transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)] [&::-webkit-details-marker]:hidden">
-        <span class="grid gap-[5px]" aria-hidden="true"><span class="h-0.5 w-4 rounded-full bg-current transition group-open:translate-y-[3.5px] group-open:rotate-45"></span><span class="h-0.5 w-4 rounded-full bg-current transition group-open:-translate-y-[3.5px] group-open:-rotate-45"></span></span>
+      <summary
+        class="grid size-11 cursor-pointer list-none place-items-center rounded-full border border-line text-ink transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)] [&::-webkit-details-marker]:hidden"
+      >
+        <span class="grid gap-[5px]" aria-hidden="true"
+          ><span
+            class="h-0.5 w-4 rounded-full bg-current transition group-open:translate-y-[3.5px] group-open:rotate-45"
+          ></span><span
+            class="h-0.5 w-4 rounded-full bg-current transition group-open:-translate-y-[3.5px] group-open:-rotate-45"
+          ></span></span
+        >
         <span class="sr-only">{t("site-menu")}</span>
       </summary>
-      <nav aria-label={t("site-mobile-navigation")} class="fixed left-1/2 top-[5.75rem] z-[60] max-h-[calc(100dvh-7rem)] w-[min(48rem,calc(100vw-3rem))] -translate-x-1/2 overflow-y-auto overscroll-contain rounded-[1.75rem] border border-line bg-surface p-5 shadow-[0_28px_70px_-36px_rgba(16,25,18,.42)] sm:p-6">
+      <nav
+        aria-label={t("site-mobile-navigation")}
+        class="fixed left-1/2 top-[5.75rem] z-[60] max-h-[calc(100dvh-7rem)] w-[min(48rem,calc(100vw-3rem))] -translate-x-1/2 overflow-y-auto overscroll-contain rounded-[1.75rem] border border-line bg-surface p-5 shadow-[0_28px_70px_-36px_rgba(16,25,18,.42)] sm:p-6"
+      >
         <div class="mb-1 flex items-center justify-between gap-4 border-b border-line px-1 pb-5 sm:px-2">
-          <span class="text-[10px] font-semibold uppercase tracking-[.18em] text-moss sm:text-xs">{t("home-explore")}</span>
-          <a class="inline-flex shrink-0 items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-semibold text-paper transition hover:bg-moss" href="/docs/book/installation/">{t("home-get-started")} <span class="text-lime" aria-hidden="true">↗</span></a>
+          <span class="text-[10px] font-semibold uppercase tracking-[.18em] text-moss sm:text-xs"
+            >{t("home-explore")}</span
+          >
+          <a
+            class="inline-flex shrink-0 items-center gap-2 rounded-full bg-ink px-4 py-3 text-sm font-semibold text-paper transition hover:bg-moss"
+            href="/docs/book/installation/"
+            >{t("home-get-started")} <span class="text-lime" aria-hidden="true">↗</span></a
+          >
         </div>
-        {navigation.map((menu) => <details class="home-mobile-nav-group border-b border-line last:border-b-0">
-          <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-3 text-[clamp(1.125rem,2vw,1.25rem)] font-semibold tracking-[-.025em] text-ink [&::-webkit-details-marker]:hidden sm:py-3.5">{menu.title}<svg class="home-nav-chevron size-4 shrink-0 text-moss transition-transform" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7.5 5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></summary>
-          <ul class="grid gap-1 pb-4 sm:grid-cols-2">
-            {menu.links.map((link) => <li><a class="group/link grid grid-cols-[2.25rem_1fr] items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-[var(--accent-strong)]" href={link.href}><span class="grid size-9 place-items-center rounded-lg border border-line/80 bg-paper text-moss transition group-hover/link:border-ink group-hover/link:bg-ink group-hover/link:text-lime"><svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]} stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></span><span class="min-w-0"><span class="block text-sm font-semibold text-ink">{link.title}</span><span class="mt-0.5 block text-xs leading-5 text-moss">{link.description}</span></span></a></li>)}
-          </ul>
-        </details>)}
+        {
+          navigation.map((menu) => (
+            <details class="home-mobile-nav-group border-b border-line last:border-b-0">
+              <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-3 text-[clamp(1.125rem,2vw,1.25rem)] font-semibold tracking-[-.025em] text-ink [&::-webkit-details-marker]:hidden sm:py-3.5">
+                {menu.title}
+                <svg
+                  class="home-nav-chevron size-4 shrink-0 text-moss transition-transform"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m5 7.5 5 5 5-5"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </summary>
+              <ul class="grid gap-1 pb-4 sm:grid-cols-2">
+                {menu.links.map((link) => (
+                  <li>
+                    <a
+                      class="group/link grid grid-cols-[2.25rem_1fr] items-center gap-3 rounded-xl px-2 py-2.5 transition hover:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:bg-[color-mix(in_srgb,var(--color-lime)_14%,var(--color-surface))] focus-visible:outline-2 focus-visible:outline-[var(--accent-strong)]"
+                      href={link.href}
+                    >
+                      <span class="grid size-9 place-items-center rounded-lg border border-line/80 bg-paper text-moss transition group-hover/link:border-ink group-hover/link:bg-ink group-hover/link:text-lime">
+                        <svg class="size-[17px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path
+                            d={navigationIconPaths[link.icon as keyof typeof navigationIconPaths]}
+                            stroke="currentColor"
+                            stroke-width="1.6"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                          />
+                        </svg>
+                      </span>
+                      <span class="min-w-0">
+                        <span class="block text-sm font-semibold text-ink">{link.title}</span>
+                        <span class="mt-0.5 block text-xs leading-5 text-moss">
+                          {link.description}
+                        </span>
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ))
+        }
       </nav>
     </details>
   </header>
@@ -143,5 +375,4 @@ const navigationIconPaths = {
       }
     }
   </style>
-
 </home-navigation>

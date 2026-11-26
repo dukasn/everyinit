@@ -36,12 +36,19 @@ if (breadcrumbSegments[0] === route.locale) breadcrumbSegments.shift();
 const breadcrumbItems = [
   { name: "Everyinit", item: "https://everyinit.dev/" },
   { name: "Documentation", item: "https://everyinit.dev/docs/" },
-  ...breadcrumbSegments.map((segment, index) => ({
-    name: index === breadcrumbSegments.length - 1
-      ? title
-      : segment.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    item: `https://everyinit.dev${docsPath(`/${breadcrumbSegments.slice(0, index + 1).join("/")}`)}`,
-  })),
+  ...breadcrumbSegments.flatMap((segment, index) => {
+    const candidatePath = `/${breadcrumbSegments.slice(0, index + 1).join("/")}`;
+    const isCurrent = index === breadcrumbSegments.length - 1;
+    if (!isCurrent && !docs.resolveRoute(candidatePath)) return [];
+    return [
+      {
+        name: isCurrent
+          ? title
+          : segment.replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+        item: `https://everyinit.dev${docsPath(candidatePath)}`,
+      },
+    ];
+  }),
 ];
 const structuredData = [
   {
@@ -69,6 +76,7 @@ const navLabelIds: Record<string, string> = {
   Guides: "docs-nav-guides",
   Reference: "docs-nav-reference",
   Contributing: "docs-nav-contributing",
+  Concepts: "docs-nav-concepts",
   Workflows: "docs-nav-workflows",
   Delivery: "docs-nav-delivery",
   ESH: "docs-nav-esh",
@@ -77,12 +85,21 @@ const navLabelIds: Record<string, string> = {
   Project: "docs-nav-project",
   Pages: "docs-nav-pages",
 };
+const sectionOrder: Record<string, number> = {
+  Concepts: 0,
+  Workflows: 1,
+  Delivery: 2,
+  ESH: 3,
+  "Core reference": 4,
+  Actions: 5,
+  Project: 6,
+};
 const navLabel = (label: string) => navLabelIds[label] ? t(navLabelIds[label]) : label;
 for (const item of docs.routes.filter((item) => item.version === route.version && item.locale === route.locale)) {
   if (item.path === "/") continue;
   const [key = "guides", subsection = ""] = item.path.split("/").filter(Boolean);
   const section = key === "book"
-    ? subsection === "esh" ? "ESH" : subsection === "delivery" ? "Delivery" : "Workflows"
+    ? subsection === "concepts" ? "Concepts" : subsection === "esh" ? "ESH" : subsection === "delivery" ? "Delivery" : "Workflows"
     : key === "reference"
       ? subsection === "esh" ? "ESH" : subsection === "actions" ? "Actions" : "Core reference"
       : key === "contributing" ? "Project" : subsection || "Pages";
@@ -94,10 +111,12 @@ for (const item of docs.routes.filter((item) => item.version === route.version &
 }
 const navGroups = [...groups.entries()].map(([key, sections]) => ({
   title: navLabel(key === "book" ? "Guides" : key === "reference" ? "Reference" : key === "contributing" ? "Contributing" : key),
-  sections: [...sections.entries()].map(([title, entries]) => ({
-    title: navLabel(title),
-    entries: entries.sort((a, b) => (a.navigation_order ?? 9999) - (b.navigation_order ?? 9999) || a.path.localeCompare(b.path)),
-  })),
+  sections: [...sections.entries()]
+    .sort(([left], [right]) => (sectionOrder[left] ?? 99) - (sectionOrder[right] ?? 99) || left.localeCompare(right))
+    .map(([title, entries]) => ({
+      title: navLabel(title),
+      entries: entries.sort((a, b) => (a.navigation_order ?? 9999) - (b.navigation_order ?? 9999) || a.path.localeCompare(b.path)),
+    })),
 }));
 const navSections = navGroups.flatMap((group) => group.sections);
 const currentSection = navSections.find((section) => section.entries.some((item) => item.path === route.path));
@@ -250,6 +269,10 @@ const content = renderDocument(
             <a class="docs-quick-secondary" href="/docs/book/first-workflow/" aria-current={route.path === "/book/first-workflow" ? "page" : undefined}>
               <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
               <span class="min-w-0 flex-1 truncate">{t("docs-quick-first-workflow")}</span>
+            </a>
+            <a class="docs-quick-secondary" href="/docs/book/concepts/execution-and-trust-model/" aria-current={route.path === "/book/concepts/execution-and-trust-model" ? "page" : undefined}>
+              <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3l7 3v5.5c0 4.5-3 7.9-7 9.5-4-1.6-7-5-7-9.5V6l7-3zM9.5 12l1.8 1.8 3.4-3.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              <span class="min-w-0 flex-1 truncate">{t("docs-quick-trust-model")}</span>
             </a>
             <a class="docs-quick-secondary docs-quick-overview" href="/docs/" aria-current={route.path === "/" ? "page" : undefined}>
               <svg class="size-4 shrink-0 text-moss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22zM4 5.5v14A2.5 2.5 0 0 1 6.5 17H20" stroke-linecap="round" stroke-linejoin="round"></path></svg>

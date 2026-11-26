@@ -49,7 +49,31 @@ test("the project home presents Evin and links to current installation instructi
   }
   await expect(page.getByText(/VS Code extension packages syntax support/)).toBeVisible();
   await expect(page.getByText("NPM PACKAGE · PUBLISHED")).toBeVisible();
+  for (const contract of [
+    ".evin/workspace.flow",
+    ".evin/environment.json",
+    ".evin/policy.json",
+    "04 / SCRIPT · *.esh",
+  ]) {
+    await expect(page.locator("#workflow").getByText(contract)).toBeVisible();
+  }
+  await expect(
+    page.getByRole("heading", { name: "Know what runs. Know what it can access." }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Everyinit provides orchestration and process-group supervision, not security sandboxing or automatic rollback.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Help shape what Everyinit becomes." }),
+  ).toBeVisible();
+  await expect(page.locator("body")).not.toContainText("workspace clean");
   const footer = page.getByRole("contentinfo");
+  await expect(footer.getByRole("link", { name: "Security policy" })).toHaveAttribute(
+    "href",
+    "https://github.com/dukasn/everyinit/blob/main/SECURITY.md",
+  );
   await expect(footer.getByRole("link", { name: "Project license" })).toHaveAttribute(
     "href",
     "https://github.com/dukasn/everyinit/blob/main/LICENSE",
@@ -65,7 +89,50 @@ test("the project home presents Evin and links to current installation instructi
     "href",
     "/docs/book/installation/",
   );
+  await expect(page.getByRole("link", { name: "Why Everyinit?" }).first()).toHaveAttribute(
+    "href",
+    "/docs/book/concepts/why-everyinit/",
+  );
   await expect(page.getByText(/Linux x86_64 CLI downloads available/)).toBeVisible();
+
+  await page.setViewportSize({ width: 1366, height: 900 });
+  const heroWindow = page.locator(".home-hero-window");
+  const heroBadge = page.locator(".home-hero-badge");
+  const defineBox = await heroWindow.boundingBox();
+  const defineSummaryBox = await page
+    .locator("#hero-panel-define .hero-panel-summary")
+    .boundingBox();
+  const badgeBox = await heroBadge.boundingBox();
+  expect(badgeBox.y).toBeGreaterThanOrEqual(defineSummaryBox.y + defineSummaryBox.height);
+
+  const inspectTab = page.getByRole("tab", { name: "Inspect" });
+  const runTab = page.getByRole("tab", { name: "Run" });
+  const defineTab = page.getByRole("tab", { name: "Define" });
+  await inspectTab.click();
+  await expect(page.locator("#hero-panel-inspect")).toBeVisible();
+  await expect(page.locator("#hero-panel-define")).toBeHidden();
+  await expect(page.locator("#hero-panel-inspect")).toContainText("evin explain test");
+  await expect(page.locator("#hero-panel-inspect")).toContainText("evin run test --dry-run");
+  const inspectBox = await heroWindow.boundingBox();
+  const inspectSummaryBox = await page
+    .locator("#hero-panel-inspect .hero-panel-summary")
+    .boundingBox();
+  const inspectBadgeBox = await heroBadge.boundingBox();
+  expect(inspectBox.height).toBeCloseTo(defineBox.height, 2);
+  expect(inspectBadgeBox.y).toBeGreaterThanOrEqual(inspectSummaryBox.y + inspectSummaryBox.height);
+
+  await inspectTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(runTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#hero-panel-run")).toContainText(".evin/trace.json");
+  const runBox = await heroWindow.boundingBox();
+  const runSummaryBox = await page.locator("#hero-panel-run .hero-panel-summary").boundingBox();
+  const runBadgeBox = await heroBadge.boundingBox();
+  expect(runBox.height).toBeCloseTo(defineBox.height, 2);
+  expect(runBadgeBox.y).toBeGreaterThanOrEqual(runSummaryBox.y + runSummaryBox.height);
+
+  await defineTab.click();
+  await expect(page.locator("#hero-panel-define")).toBeVisible();
 
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
@@ -95,30 +162,40 @@ test("the home navigation menus work with pointer, keyboard, and touch layouts",
   await expect(toolsMenu).not.toHaveAttribute("open", "");
   await expect(toolsMenu.locator("summary")).toBeFocused();
 
-  const resourcesMenu = desktopNavigation.locator(".home-nav-menu").nth(1);
-  await resourcesMenu.locator("summary").click();
-  await expect(resourcesMenu.getByRole("link", { name: "Documentation" })).toBeVisible();
+  const learnMenu = desktopNavigation.locator(".home-nav-menu").nth(1);
+  await learnMenu.locator("summary").click();
+  await expect(learnMenu.getByRole("link", { name: /Why Everyinit\?/ })).toBeVisible();
+  await expect(learnMenu.getByRole("link", { name: /Execution & trust model/ })).toBeVisible();
+  await expect(learnMenu.getByRole("link", { name: /Documentation/ })).toBeVisible();
   await expect(toolsMenu).not.toHaveAttribute("open", "");
 
   await page.setViewportSize({ width: 1024, height: 900 });
-  const helpMenu = desktopNavigation.locator(".home-nav-menu").nth(2);
-  await helpMenu.locator("summary").click();
-  const helpMenuBounds = await helpMenu.locator(":scope > div").boundingBox();
-  expect(helpMenuBounds?.x).toBeGreaterThanOrEqual(0);
-  expect(helpMenuBounds && helpMenuBounds.x + helpMenuBounds.width).toBeLessThanOrEqual(1024);
+  const communityMenu = desktopNavigation.locator(".home-nav-menu").nth(2);
+  await communityMenu.locator("summary").click();
+  await expect(communityMenu.getByRole("link", { name: /Report a vulnerability/ })).toBeVisible();
+  const communityMenuBounds = await communityMenu.locator(":scope > div").boundingBox();
+  expect(communityMenuBounds?.x).toBeGreaterThanOrEqual(0);
+  expect(
+    communityMenuBounds && communityMenuBounds.x + communityMenuBounds.width,
+  ).toBeLessThanOrEqual(1024);
 
   await page.setViewportSize({ width: 320, height: 700 });
   const mobileMenu = page.locator(".home-mobile-nav");
   await mobileMenu.locator(":scope > summary").click();
   const mobileNavigation = page.getByRole("navigation", { name: "Mobile navigation" });
   await expect(mobileNavigation).toBeVisible();
-  const helpGroup = mobileMenu.locator(".home-mobile-nav-group").nth(2);
-  const helpChevron = helpGroup.locator(".home-nav-chevron");
-  expect(await helpChevron.evaluate((icon) => getComputedStyle(icon).transform)).toBe("none");
-  await helpGroup.locator("summary").click();
-  expect(await helpChevron.evaluate((icon) => getComputedStyle(icon).transform)).not.toBe("none");
+  const communityGroup = mobileMenu.locator(".home-mobile-nav-group").nth(2);
+  const communityChevron = communityGroup.locator(".home-nav-chevron");
+  expect(await communityChevron.evaluate((icon) => getComputedStyle(icon).transform)).toBe("none");
+  await communityGroup.locator("summary").click();
+  expect(await communityChevron.evaluate((icon) => getComputedStyle(icon).transform)).not.toBe(
+    "none",
+  );
   await expect(
     mobileNavigation.getByRole("link", { name: /Ask or report an issue/ }),
+  ).toBeVisible();
+  await expect(
+    mobileNavigation.getByRole("link", { name: /Report a vulnerability/ }),
   ).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.keyboard.press("Escape");
@@ -131,7 +208,7 @@ test("the home navigation menus work with pointer, keyboard, and touch layouts",
     visibleHeight: menu.clientHeight,
   }));
   expect(compactMenuSize.contentHeight).toBeLessThanOrEqual(compactMenuSize.visibleHeight);
-  for (const group of ["Tools", "Resources", "Help"]) {
+  for (const group of ["Tools", "Learn", "Community"]) {
     await expect(
       mobileNavigation.locator(".home-mobile-nav-group > summary", { hasText: group }),
     ).toBeVisible();
@@ -301,6 +378,33 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   await expect(page.locator(".docs-page-nav")).toBeVisible();
   await expect(page.locator(".docs-page-previous")).toContainText("The Evin Book");
   await expect(page.locator(".docs-page-next")).toContainText("Run your first workflow");
+  await expect(page.locator("#verify-a-release")).toBeVisible();
+  await expect(page.locator("#removing-everyinit")).toBeVisible();
+
+  await page.goto("/docs/book/concepts/why-everyinit/");
+  await expect(page.locator("main h1")).toHaveText("Why Everyinit");
+  await expect(page.locator("#compared-with-other-tools")).toBeVisible();
+  await expect(page.locator(".doc-content")).toContainText("mise");
+  await expect(page.locator(".doc-content")).toContainText("Taskfile.yml");
+  await expect(page.locator(".docs-page-next")).toContainText("Execution & trust model");
+  const conceptSchemas = JSON.parse(
+    await page.locator('script[type="application/ld+json"]').textContent(),
+  );
+  expect(conceptSchemas[1].itemListElement.map((entry) => entry.item)).toEqual([
+    "https://everyinit.dev/",
+    "https://everyinit.dev/docs/",
+    "https://everyinit.dev/docs/book/",
+    "https://everyinit.dev/docs/book/concepts/why-everyinit/",
+  ]);
+
+  await page.goto("/docs/book/concepts/execution-and-trust-model/");
+  await expect(page.locator("main h1")).toHaveText("Execution & trust model");
+  await expect(page.locator("#failure-does-not-imply-rollback")).toBeVisible();
+  await expect(page.locator("#compatibility-and-upgrades")).toBeVisible();
+  await expect(page.locator(".docs-page-previous")).toContainText("Why Everyinit");
+  await expectNoHorizontalOverflow(page);
+
+  await page.goto("/docs/book/installation/");
   const overviewLink = page.locator(".docs-quick-overview");
   await expect(overviewLink).toHaveAttribute("href", "/docs/");
   await expect(page.locator(".docs-nav-overview")).toHaveCount(0);

@@ -25,6 +25,8 @@ export const GET: APIRoute = () => {
     "## Start here",
     "",
     `- [Documentation overview](${docsUrl("/")})`,
+    `- [Why Everyinit](${docsUrl("/book/concepts/why-everyinit")})`,
+    `- [Execution & trust model](${docsUrl("/book/concepts/execution-and-trust-model")})`,
     `- [Installation](${docsUrl("/book/installation")})`,
     `- [Your first workflow](${docsUrl("/book/first-workflow")})`,
     "",
