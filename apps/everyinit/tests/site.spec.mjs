@@ -68,6 +68,25 @@ test("the project home presents Evin and links to current installation instructi
   await expect(
     page.getByRole("heading", { name: "Help shape what Everyinit becomes." }),
   ).toBeVisible();
+  const homeAccentStyling = await page.evaluate(() => {
+    const eyebrow = document.querySelector("#integrations p");
+    const integrationDot = document.querySelector("#integrations span.rounded-full");
+    const supportDot = document.querySelector(
+      '[aria-labelledby="support-heading"] ul span.rounded-full',
+    );
+    const contractWash = document.querySelector("#workflow article");
+    const accentColor = eyebrow ? getComputedStyle(eyebrow).color : "";
+    return {
+      accentColor,
+      integrationDotBg: integrationDot ? getComputedStyle(integrationDot).backgroundColor : "",
+      supportDotBg: supportDot ? getComputedStyle(supportDot).backgroundColor : "",
+      contractBgImage: contractWash ? getComputedStyle(contractWash).backgroundImage : "",
+    };
+  });
+  expect(homeAccentStyling.accentColor).not.toBe("");
+  expect(homeAccentStyling.integrationDotBg).toBe(homeAccentStyling.accentColor);
+  expect(homeAccentStyling.supportDotBg).toBe(homeAccentStyling.accentColor);
+  expect(homeAccentStyling.contractBgImage).toContain("linear-gradient");
   await expect(page.locator("body")).not.toContainText("workspace clean");
   const footer = page.getByRole("contentinfo");
   await expect(footer.getByRole("link", { name: "Security policy" })).toHaveAttribute(
@@ -387,6 +406,26 @@ test("the docs site renders generated routes and manifest selectors", async ({ p
   await expect(page.locator(".doc-content")).toContainText("mise");
   await expect(page.locator(".doc-content")).toContainText("Taskfile.yml");
   await expect(page.locator(".docs-page-next")).toContainText("Execution & trust model");
+  const docsAccentStyling = await page.evaluate(() => {
+    const direction = document.querySelector(".docs-page-direction");
+    const bulletItem = document.querySelector(".doc-content ul:not(.task-list) > li");
+    const orderedList = document.querySelector(".doc-content ol:not(.stepper)");
+    const orderedItem = orderedList?.querySelector(":scope > li");
+    const tableHead = document.querySelector(".doc-content thead");
+    return {
+      accentColor: direction ? getComputedStyle(direction).color : "",
+      bulletMarkerColor: bulletItem ? getComputedStyle(bulletItem, "::marker").color : "",
+      orderedListStyle: orderedList ? getComputedStyle(orderedList).listStyleType : "",
+      orderedMarkerColor: orderedItem ? getComputedStyle(orderedItem, "::marker").color : "",
+      theadBgImage: tableHead ? getComputedStyle(tableHead).backgroundImage : "",
+    };
+  });
+  expect(docsAccentStyling.accentColor).not.toBe("");
+  expect(docsAccentStyling.bulletMarkerColor).toBe(docsAccentStyling.accentColor);
+  expect(docsAccentStyling.orderedListStyle).toBe("evin-leading-zero");
+  expect(docsAccentStyling.orderedMarkerColor).toBe(docsAccentStyling.accentColor);
+  expect(docsAccentStyling.theadBgImage).toContain("linear-gradient");
+  await expectNoHorizontalOverflow(page);
   const conceptSchemas = JSON.parse(
     await page.locator('script[type="application/ld+json"]').textContent(),
   );

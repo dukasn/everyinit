@@ -142,14 +142,14 @@ const projects = [
       <div
         class="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-7 sm:px-8 lg:flex-row lg:items-center lg:justify-between lg:px-12"
       >
-        <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">
+        <p class="text-xs font-semibold uppercase tracking-[.16em] text-[var(--accent-strong)]">
           {t("home-integrations-eyebrow")}
         </p>
         <div class="flex flex-wrap gap-x-7 gap-y-3 text-sm text-moss">
           {
             integrations.map((integration) => (
-              <span class="inline-flex items-center gap-2">
-                <span class="size-1.5 rounded-full bg-[var(--accent-strong)]" />
+              <span class="inline-flex items-center gap-2.5">
+                <span class="size-2 rounded-full bg-[var(--accent-strong)]" />
                 {integration}
               </span>
             ))
@@ -161,7 +161,7 @@ const projects = [
     <section id="workflow" class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12 lg:py-28">
       <div class="grid gap-12 lg:grid-cols-[.8fr_1.2fr]">
         <div class="max-w-md">
-          <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">
+          <p class="text-xs font-semibold uppercase tracking-[.16em] text-[var(--accent-strong)]">
             {t("home-workflow-eyebrow")}
           </p>
           <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">
@@ -186,9 +186,10 @@ const projects = [
         <div class="grid gap-3 sm:grid-cols-2">
           {
             contracts.map((item) => (
-              <article class="rounded-2xl border border-line bg-surface p-6 sm:p-7">
+              <article class="rounded-2xl border border-line bg-[linear-gradient(155deg,color-mix(in_srgb,var(--color-lime)_8%,var(--color-surface))_0%,var(--color-surface)_65%)] p-6 transition-colors hover:border-[color-mix(in_srgb,var(--accent-strong)_34%,var(--color-line))] sm:p-7">
                 <p class="font-mono text-xs text-moss">
-                  {item.number} / {item.kind}
+                  <span class="font-semibold text-[var(--accent-strong)]">{item.number}</span> /{" "}
+                  {item.kind}
                 </p>
                 <p class="mt-4 font-mono text-xs font-medium text-[var(--accent-strong)]">
                   {item.file}
@@ -200,9 +201,11 @@ const projects = [
           }
           <a
             href="/docs/book/esh/"
-            class="group flex flex-col justify-between rounded-2xl border border-[color-mix(in_srgb,var(--accent-strong)_22%,var(--color-line))] bg-[color-mix(in_srgb,var(--color-lime)_24%,var(--color-surface))] p-6 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--accent-strong)_45%,var(--color-line))] hover:shadow-[0_16px_36px_-28px_rgba(23,33,26,.5)] sm:p-7"
+            class="group flex flex-col justify-between rounded-2xl border border-[color-mix(in_srgb,var(--accent-strong)_26%,var(--color-line))] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--color-lime)_32%,var(--color-surface))_0%,color-mix(in_srgb,var(--color-lime)_14%,var(--color-paper))_100%)] p-6 transition-[border-color,box-shadow,transform] duration-300 hover:-translate-y-1 hover:border-[color-mix(in_srgb,var(--accent-strong)_48%,var(--color-line))] hover:shadow-[0_16px_36px_-28px_rgba(23,33,26,.5)] sm:p-7"
           >
-            <p class="font-mono text-xs text-moss">{t("home-contract-four-label")}</p>
+            <p class="font-mono text-xs font-medium text-[var(--accent-strong)]">
+              {t("home-contract-four-label")}
+            </p>
             <div class="mt-8 flex items-end justify-between gap-4">
               <p class="max-w-[15rem] text-xl font-semibold leading-snug tracking-tight text-ink">
                 {t("home-contract-four-copy")}
@@ -226,7 +229,7 @@ const projects = [
         class="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 sm:py-24 lg:grid-cols-[.82fr_1.18fr] lg:items-start lg:px-12 lg:py-28"
       >
         <div class="max-w-md">
-          <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">
+          <p class="text-xs font-semibold uppercase tracking-[.16em] text-[var(--accent-strong)]">
             {t("home-trust-eyebrow")}
           </p>
           <h2
@@ -237,7 +240,7 @@ const projects = [
           </h2>
           <p class="mt-6 text-base leading-7 text-moss">{t("home-trust-description")}</p>
           <p
-            class="mt-6 rounded-xl border border-[color-mix(in_srgb,var(--accent-strong)_24%,var(--color-line))] bg-surface/90 px-4 py-3 font-mono text-xs leading-5 text-ink"
+            class="mt-6 rounded-xl border border-[color-mix(in_srgb,var(--accent-strong)_26%,var(--color-line))] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--color-lime)_24%,var(--color-paper))_0%,color-mix(in_srgb,var(--color-lime)_8%,var(--color-surface))_100%)] px-4 py-3.5 font-mono text-xs leading-5 text-ink"
           >
             {t("home-trust-disclaimer")}
           </p>
@@ -264,8 +267,8 @@ const projects = [
         <div class="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2">
           {
             trustPillars.map((pillar) => (
-              <article class="bg-surface p-6 sm:p-7">
-                <p class="font-mono text-[10px] font-medium uppercase tracking-[.14em] text-moss">
+              <article class="bg-[linear-gradient(160deg,color-mix(in_srgb,var(--color-lime)_9%,var(--color-surface))_0%,var(--color-surface)_55%)] p-6 sm:p-7">
+                <p class="font-mono text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--accent-strong)]">
                   {pillar.label}
                 </p>
                 <h3 class="mt-5 text-lg font-semibold tracking-tight text-ink">{pillar.title}</h3>
@@ -280,7 +283,7 @@ const projects = [
     <section id="projects" class="mx-auto max-w-7xl px-5 py-20 sm:px-8 sm:py-24 lg:px-12 lg:py-28">
       <div class="mb-10 grid gap-6 sm:mb-12 lg:grid-cols-[1fr_auto] lg:items-end">
         <div class="max-w-2xl">
-          <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">
+          <p class="text-xs font-semibold uppercase tracking-[.16em] text-[var(--accent-strong)]">
             {t("home-ecosystem-eyebrow")}
           </p>
           <h2 class="mt-5 text-4xl font-semibold leading-tight tracking-[-.055em] sm:text-5xl">
@@ -296,7 +299,8 @@ const projects = [
         <article class="relative flex flex-col justify-between gap-10 bg-ink p-7 text-paper sm:p-10">
           <div>
             <p class="font-mono text-xs uppercase tracking-[.14em] text-[#bac8b0]">
-              01 <span class="px-1 text-[#71806e]">/</span> {t("home-ecosystem-core-label")}
+              <span class="text-lime">01</span> <span class="px-1 text-[#71806e]">/</span>{" "}
+              {t("home-ecosystem-core-label")}
             </p>
             <h3 class="mt-8 text-4xl font-semibold tracking-[-.05em] sm:text-5xl">Evin</h3>
             <p class="mt-4 max-w-sm text-sm leading-6 text-[#c0c9bc]">
@@ -326,9 +330,11 @@ const projects = [
               <a
                 href={project.href}
                 aria-label={`${project.link} — ${project.name}`}
-                class="group grid gap-3 px-6 py-6 transition-colors hover:bg-[color-mix(in_srgb,var(--color-lime)_10%,var(--color-surface))] sm:grid-cols-[3.5rem_1fr_auto] sm:items-center sm:gap-5 sm:px-10 sm:py-7"
+                class="group grid gap-3 px-6 py-6 transition-colors hover:bg-[linear-gradient(90deg,color-mix(in_srgb,var(--color-lime)_15%,var(--color-surface))_0%,var(--color-surface)_100%)] sm:grid-cols-[3.5rem_1fr_auto] sm:items-center sm:gap-5 sm:px-10 sm:py-7"
               >
-                <span class="font-mono text-xs text-moss/80">{project.number}</span>
+                <span class="font-mono text-xs font-semibold text-[var(--accent-strong)]">
+                  {project.number}
+                </span>
                 <div>
                   <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <h3 class="text-lg font-semibold tracking-tight text-ink">{project.name}</h3>
@@ -425,7 +431,7 @@ const projects = [
         class="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:gap-16 lg:px-12 lg:py-24"
       >
         <div class="max-w-2xl">
-          <p class="text-xs font-semibold uppercase tracking-[.16em] text-moss">
+          <p class="text-xs font-semibold uppercase tracking-[.16em] text-[var(--accent-strong)]">
             {t("home-support-eyebrow")}
           </p>
           <h2
@@ -439,15 +445,15 @@ const projects = [
           </p>
           <ul class="mt-6 space-y-2.5 text-sm leading-6 text-moss">
             <li class="flex items-start gap-3">
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--accent-strong)]"></span>
+              <span class="mt-2 size-2 shrink-0 rounded-full bg-[var(--accent-strong)]"></span>
               <span>{t("home-support-way-discuss")}</span>
             </li>
             <li class="flex items-start gap-3">
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--accent-strong)]"></span>
+              <span class="mt-2 size-2 shrink-0 rounded-full bg-[var(--accent-strong)]"></span>
               <span>{t("home-support-way-contribute")}</span>
             </li>
             <li class="flex items-start gap-3">
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-[var(--accent-strong)]"></span>
+              <span class="mt-2 size-2 shrink-0 rounded-full bg-[var(--accent-strong)]"></span>
               <span>{t("home-support-way-feedback")}</span>
             </li>
           </ul>
@@ -473,32 +479,32 @@ const projects = [
 
         <div class="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2">
           <div class="bg-surface p-6 sm:p-7">
-            <p class="font-mono text-[10px] font-medium uppercase tracking-[.14em] text-moss">
+            <p class="font-mono text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--accent-strong)]">
               {t("home-support-costs")}
             </p>
             <ul class="mt-5 space-y-3 text-sm text-[#536052]">
               <li class="flex items-center gap-3">
-                <span class="size-1.5 rounded-full bg-[var(--accent-strong)]"></span>{
+                <span class="size-2 rounded-full bg-[var(--accent-strong)]"></span>{
                   t("home-support-hosting")
                 }
               </li>
               <li class="flex items-center gap-3">
-                <span class="size-1.5 rounded-full bg-[var(--accent-strong)]"></span>{
+                <span class="size-2 rounded-full bg-[var(--accent-strong)]"></span>{
                   t("home-support-infrastructure")
                 }
               </li>
               <li class="flex items-center gap-3">
-                <span class="size-1.5 rounded-full bg-[var(--accent-strong)]"></span>{
+                <span class="size-2 rounded-full bg-[var(--accent-strong)]"></span>{
                   t("home-support-development")
                 }
               </li>
             </ul>
           </div>
           <div
-            class="flex flex-col justify-between gap-7 bg-[color-mix(in_srgb,var(--color-lime)_16%,var(--color-surface))] p-6 sm:p-7"
+            class="flex flex-col justify-between gap-7 bg-[linear-gradient(145deg,color-mix(in_srgb,var(--color-lime)_26%,var(--color-surface))_0%,color-mix(in_srgb,var(--color-lime)_10%,var(--color-paper))_100%)] p-6 sm:p-7"
           >
             <div>
-              <p class="font-mono text-[10px] font-medium uppercase tracking-[.14em] text-moss">
+              <p class="font-mono text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--accent-strong)]">
                 {t("home-support-maintainer")}
               </p>
               <p class="mt-4 text-lg font-semibold tracking-tight text-ink">dukasn</p>
