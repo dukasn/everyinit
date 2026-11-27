@@ -3,6 +3,36 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.3.4]
+
+### Bug Fixes
+
+- **site:** prevent hero grid overflow on Linux fallback fonts (de9eca9)
+
+### Documentation
+
+- **concepts:** document architecture, trust model, and comparisons (bf02a8a)
+- **packaging:** document native package action contracts (4018e73)
+
+### Features
+
+- **site:** style lists, tables, and callouts with accent tokens (bbed1f8)
+- **site:** surface contracts, trust boundaries, and hero inspection (9314819)
+- **packaging:** split native package actions by format (8ae375a)
+
+### Maintenance
+
+- update gitignore (4d6947d)
+
+### Other Changes
+
+- **site-preview:** include data in retirement build (1798f32)
+
+### Refactoring
+
+- **packaging:** move format actions into dedicated crates (5371315)
+- **packaging:** share safe payload resolution (b24c428)
+
 ## [v0.3.3]
 
 ### Bug Fixes
