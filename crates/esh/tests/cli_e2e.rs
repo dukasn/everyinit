@@ -290,16 +290,22 @@ fn read_consumes_real_terminal_input_and_applies_backslash_modes() {
 
 #[cfg(unix)]
 #[test]
-fn terminal_ctrl_c_cancels_esh_and_runs_shell_traps() {
+fn terminal_ctrl_c_cancels_esh_and_kills_sigint_ignoring_descendants() {
     use std::time::Duration;
 
-    let script = r#"trap 'echo interrupt-trap' INT
+    let temp = tempdir().unwrap();
+    let pid_file = temp.path().join("server-descendant.pid");
+    let mut cleanup = DescendantCleanup(Some(pid_file.clone()));
+    let script = format!(
+        r#"trap 'echo interrupt-trap' INT
 trap 'echo exit-trap' EXIT
-sh -c 'echo server-ready; exec sleep 30'
+sh -c '( trap "" INT; sleep 30 & echo $! > {}; echo server-ready; wait ) & wait'
 echo after-interrupt
-"#;
+"#,
+        pid_file.display()
+    );
 
-    let (status, output) = run_esh_with_pty(script, b"\x03", Duration::ZERO, Some("server-ready"));
+    let (status, output) = run_esh_with_pty(&script, b"\x03", Duration::ZERO, Some("server-ready"));
     let output = String::from_utf8_lossy(&output).replace("\r\n", "\n");
     assert_eq!(
         status.code(),
@@ -314,6 +320,22 @@ echo after-interrupt
     );
     assert_eq!(output.matches("interrupt-trap\n").count(), 1, "{output}");
     assert_eq!(output.matches("exit-trap\n").count(), 1, "{output}");
+
+    let descendant_pid: libc::pid_t = fs::read_to_string(&pid_file)
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    for _ in 0..100 {
+        // SAFETY: signal zero only checks whether the test-owned descendant
+        // process still exists.
+        if unsafe { libc::kill(descendant_pid, 0) } == -1 {
+            cleanup.0 = None;
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    panic!("SIGINT-ignoring descendant {descendant_pid} survived; PTY output: {output}");
 }
 
 #[cfg(unix)]

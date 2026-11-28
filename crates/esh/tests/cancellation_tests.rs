@@ -354,7 +354,7 @@ async fn test_cancellation_terminates_the_external_process_group() {
 
 #[cfg(unix)]
 #[tokio::test]
-async fn terminal_sigint_cancels_external_command_and_runs_shell_traps() {
+async fn terminal_sigint_cleans_up_external_descendants_and_runs_shell_traps() {
     let temp = tempfile::tempdir().unwrap();
     let engine = engine();
     let mut ctx = ExecutionContext::new();
@@ -363,19 +363,22 @@ async fn terminal_sigint_cancels_external_command_and_runs_shell_traps() {
     let run = tokio::spawn(async move {
         engine
             .eval_str(
-                "trap 'echo INT > int-fired' INT; trap 'echo EXIT > exit-fired' EXIT; sh -c 'echo $$ > root.pid; exec sleep 30'",
+                "trap 'echo INT > int-fired' INT; trap 'echo EXIT > exit-fired' EXIT; sh -c 'trap \"trap - INT; kill -INT \\$\\$\" INT; echo $$ > root.pid; sleep 30 & echo $! > child.pid; wait'",
                 &mut ctx,
             )
             .await
     });
 
-    let root_pid = tokio::time::timeout(Duration::from_secs(2), async {
+    let (root_pid, child_pid) = tokio::time::timeout(Duration::from_secs(2), async {
         loop {
             let root_pid = std::fs::read_to_string(temp.path().join("root.pid"))
                 .ok()
                 .and_then(|value| value.trim().parse::<i32>().ok());
-            if let Some(root_pid) = root_pid {
-                break root_pid;
+            let child_pid = std::fs::read_to_string(temp.path().join("child.pid"))
+                .ok()
+                .and_then(|value| value.trim().parse::<i32>().ok());
+            if let (Some(root_pid), Some(child_pid)) = (root_pid, child_pid) {
+                break (root_pid, child_pid);
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
@@ -406,6 +409,16 @@ async fn terminal_sigint_cancels_external_command_and_runs_shell_traps() {
         std::fs::read_to_string(temp.path().join("exit-fired")).unwrap(),
         "EXIT\n"
     );
+
+    for _ in 0..500 {
+        // SAFETY: signal zero only checks whether the test-owned descendant
+        // process is still present.
+        if unsafe { libc::kill(child_pid as libc::pid_t, 0) } == -1 {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("SIGINT-ignoring descendant process {child_pid} survived cleanup");
 }
 
 #[cfg(unix)]
