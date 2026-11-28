@@ -741,7 +741,7 @@ fn write_telemetry_report(
             if let Some(source) = source_opt {
                 let source_path = Path::new(source);
                 if let Some(mod_root) = evin_config::paths::find_module_root(source_path) {
-                    let root_str = mod_root.display().to_string();
+                    let root_str = mod_root.display().to_string().replace('\\', "/");
                     let mod_name = event
                         .args
                         .get("module")
@@ -914,7 +914,7 @@ fn write_telemetry_report(
             display_time_unit: "ms".to_string(),
         };
 
-        let mod_trace_rel = format!("{mod_root}/.evin/trace.json");
+        let mod_trace_rel = format!("{}/.evin/trace.json", mod_root.replace('\\', "/"));
         let mod_trace_path = workspace_root.join(&mod_trace_rel);
         if let Ok(json) = serde_json::to_string_pretty(&mod_doc) {
             let _ = atomic_write_json(&mod_trace_path, &json);

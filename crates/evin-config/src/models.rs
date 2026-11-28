@@ -330,7 +330,15 @@ mod tests {
     fn watch_rejects_empty_unsafe_or_invalid_configuration() {
         assert!(watch(&[], &[], "300ms").validate().is_err());
         assert!(watch(&[""], &[], "300ms").validate().is_err());
-        assert!(watch(&["/tmp/**"], &[], "300ms").validate().is_err());
+        let outside_workspace = std::env::temp_dir()
+            .join("evin-watch-outside-workspace")
+            .to_string_lossy()
+            .into_owned();
+        assert!(
+            watch(&[&outside_workspace], &[], "300ms")
+                .validate()
+                .is_err()
+        );
         assert!(
             watch(&["crates/../secrets/**"], &[], "300ms")
                 .validate()

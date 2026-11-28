@@ -165,7 +165,7 @@ impl IoContext {
 
     pub fn matching_files(&self, pattern: &str) -> Result<Vec<PathBuf>, IoError> {
         let safe_pattern = self.resolve(pattern)?;
-        let pattern_text = safe_pattern.to_string_lossy().to_string();
+        let pattern_text = glob_pattern_text(&safe_pattern);
         let mut matches = std::collections::BTreeSet::new();
 
         for path in glob::glob(&pattern_text)
@@ -212,8 +212,9 @@ impl IoContext {
             });
         }
         let joined = base.join(pattern);
+        let pattern_text = glob_pattern_text(&joined);
         let mut matches = std::collections::BTreeSet::new();
-        for path in glob::glob(&joined.to_string_lossy())
+        for path in glob::glob(&pattern_text)
             .map_err(|e| IoError::InvalidPattern(e.to_string()))?
             .flatten()
         {
@@ -231,5 +232,17 @@ impl IoContext {
         }
         fs::create_dir_all(safe_path)?;
         Ok(())
+    }
+}
+
+fn glob_pattern_text(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    #[cfg(windows)]
+    {
+        text.replace('\\', "/")
+    }
+    #[cfg(not(windows))]
+    {
+        text.into_owned()
     }
 }

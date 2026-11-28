@@ -147,8 +147,8 @@ mod tests {
 
         assert_eq!(parsed.scheme(), "file");
         assert_eq!(
-            parsed.to_file_path().unwrap(),
-            directory.canonicalize().unwrap()
+            parsed.to_file_path().unwrap().canonicalize().unwrap(),
+            directory.canonicalize().unwrap(),
         );
         assert!(!uri.contains('\\'));
     }

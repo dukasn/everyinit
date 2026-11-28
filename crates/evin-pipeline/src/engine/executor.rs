@@ -949,7 +949,7 @@ mod cancellation_tests {
         resolver.add_task(TaskObject {
             name: "long-running".to_string(),
             run: Some(if cfg!(windows) {
-                "timeout 30".to_string()
+                "ping.exe -n 31 127.0.0.1 >NUL".to_string()
             } else {
                 "sleep 30".to_string()
             }),

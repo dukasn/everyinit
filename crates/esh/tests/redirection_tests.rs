@@ -637,7 +637,7 @@ async fn failed_output_redirection_prevents_stateful_builtin_dispatch() {
         .unwrap();
 
     assert_eq!(status, 0);
-    assert_eq!(ctx.cwd(), temp.path());
+    assert_eq!(ctx.cwd(), temp.path().canonicalize().unwrap());
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
         "redirection=1\nreached-tail\n"

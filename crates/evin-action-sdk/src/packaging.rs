@@ -787,7 +787,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["usr/bin/alpha", "usr/bin/zeta"]
         );
-        assert_eq!(entries[0].source, temp.path().join("bin/alpha"));
+        assert_eq!(
+            entries[0].source,
+            temp.path().join("bin/alpha").canonicalize().unwrap()
+        );
         assert_eq!(entries[0].mode, None);
     }
 

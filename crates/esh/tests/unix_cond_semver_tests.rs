@@ -275,6 +275,12 @@ async fn test_file_time_predicates_handle_missing_paths_explicitly() {
 
     #[cfg(unix)]
     for (shell, args) in [("bash", vec!["--posix", "-c"]), ("dash", vec!["-c"])] {
+        if cfg!(target_os = "macos") && shell == "dash" {
+            // Darwin's bundled dash reports false for both missing-path time
+            // comparisons, while ESH implements the documented missing-path
+            // behavior asserted above.
+            continue;
+        }
         if let Ok(reference) = Command::new(shell)
             .current_dir(tmp.path())
             .args(args)

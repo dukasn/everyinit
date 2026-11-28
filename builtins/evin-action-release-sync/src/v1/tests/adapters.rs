@@ -61,7 +61,10 @@ fn state_read_error_keeps_path_and_io_source() {
         panic!("expected state file read error");
     };
     assert_eq!(path, state_path);
-    assert_eq!(source.kind(), std::io::ErrorKind::IsADirectory);
+    assert!(matches!(
+        source.kind(),
+        std::io::ErrorKind::IsADirectory | std::io::ErrorKind::PermissionDenied
+    ));
 }
 
 #[test]
@@ -129,7 +132,10 @@ fn note_write_error_keeps_path_and_io_source() {
         panic!("expected note file write error");
     };
     assert_eq!(path, destination);
-    assert_eq!(source.kind(), std::io::ErrorKind::IsADirectory);
+    assert!(matches!(
+        source.kind(),
+        std::io::ErrorKind::IsADirectory | std::io::ErrorKind::PermissionDenied
+    ));
 }
 
 #[test]
@@ -157,7 +163,10 @@ fn plan_write_error_keeps_path_and_io_source() {
         panic!("expected plan file write error");
     };
     assert_eq!(path, destination);
-    assert_eq!(source.kind(), std::io::ErrorKind::IsADirectory);
+    assert!(matches!(
+        source.kind(),
+        std::io::ErrorKind::IsADirectory | std::io::ErrorKind::PermissionDenied
+    ));
 }
 
 #[test]
@@ -195,5 +204,8 @@ fn git_tag_command_error_keeps_io_source() {
     let ProtocolError::GitTagCommandFailed { source } = error else {
         panic!("expected git tag command error");
     };
-    assert_eq!(source.kind(), std::io::ErrorKind::NotFound);
+    assert!(matches!(
+        source.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    ));
 }

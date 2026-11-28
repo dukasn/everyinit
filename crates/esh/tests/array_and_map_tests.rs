@@ -166,7 +166,7 @@ async fn associative_maps_keep_expanded_keys_with_spaces_as_one_key() {
     );
 
     #[cfg(unix)]
-    {
+    if bash_supports_associative_arrays() {
         let reference_script = r#"
             declare -A MAP
             KEY='two words'
@@ -187,6 +187,14 @@ async fn associative_maps_keep_expanded_keys_with_spaces_as_one_key() {
         );
         assert_eq!(reference.stderr, b"");
     }
+}
+
+#[cfg(unix)]
+fn bash_supports_associative_arrays() -> bool {
+    Command::new("bash")
+        .args(["--posix", "-c", "declare -A MAP"])
+        .output()
+        .is_ok_and(|output| output.status.success())
 }
 
 #[tokio::test]

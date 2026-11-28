@@ -70,6 +70,7 @@ async fn cancellation_during_control_flow_tests_and_expansions_returns_interrupt
         "while sleep 30; do printf 'wrong-body\\n'; done",
         "until sleep 30; do printf 'wrong-body\\n'; done",
     ] {
+        let script = script.replace("sleep 30", long_running_descendant_command());
         let token = CancellationToken::new();
         let cancel = token.clone();
         tokio::spawn(async move {
@@ -80,7 +81,7 @@ async fn cancellation_during_control_flow_tests_and_expansions_returns_interrupt
         let mut ctx = ExecutionContext::new().with_token(token);
         ctx.enable_capture();
         let status =
-            tokio::time::timeout(Duration::from_secs(3), engine.eval_str(script, &mut ctx))
+            tokio::time::timeout(Duration::from_secs(3), engine.eval_str(&script, &mut ctx))
                 .await
                 .expect("condition cancellation timed out")
                 .expect("evaluation failed");
@@ -102,6 +103,7 @@ async fn cancellation_inside_control_flow_bodies_returns_interrupted_status_and_
         "until false; do sleep 30; done",
         "case value in value) sleep 30;; esac",
     ] {
+        let script = script.replace("sleep 30", long_running_descendant_command());
         let token = CancellationToken::new();
         let cancel = token.clone();
         tokio::spawn(async move {
@@ -112,7 +114,7 @@ async fn cancellation_inside_control_flow_bodies_returns_interrupted_status_and_
         let mut ctx = ExecutionContext::new().with_token(token);
         ctx.enable_capture();
         let status =
-            tokio::time::timeout(Duration::from_secs(3), engine.eval_str(script, &mut ctx))
+            tokio::time::timeout(Duration::from_secs(3), engine.eval_str(&script, &mut ctx))
                 .await
                 .expect("control-flow body cancellation timed out")
                 .expect("evaluation failed");
@@ -137,7 +139,13 @@ async fn cancellation_inside_select_body_returns_interrupted_status_and_unwinds_
     ctx.set_stdin(b"1\n".to_vec());
     let status = tokio::time::timeout(
         Duration::from_secs(3),
-        engine.eval_str("select choice in one; do sleep 30; done", &mut ctx),
+        engine.eval_str(
+            &format!(
+                "select choice in one; do {}; done",
+                long_running_descendant_command()
+            ),
+            &mut ctx,
+        ),
     )
     .await
     .expect("select body cancellation timed out")
@@ -165,7 +173,10 @@ async fn cancellation_inside_function_unwinds_function_and_loop_scopes() {
     let status = tokio::time::timeout(
         Duration::from_secs(3),
         engine.eval_str(
-            "wait_for_server() { sleep 30; printf 'wrong-function-tail\\n'; }\nfor attempt in one two; do wait_for_server; printf 'wrong-loop-tail\\n'; done\nprintf 'wrong-script-tail\\n'",
+            &format!(
+                "wait_for_server() {{ {}; printf 'wrong-function-tail\\n'; }}\nfor attempt in one two; do wait_for_server; printf 'wrong-loop-tail\\n'; done\nprintf 'wrong-script-tail\\n'",
+                long_running_descendant_command()
+            ),
             &mut ctx,
         ),
     )
@@ -187,7 +198,10 @@ async fn cancellation_inside_sourced_file_restores_caller_positionals() {
     let temp = tempfile::tempdir().unwrap();
     std::fs::write(
         temp.path().join("interruptible.esh"),
-        "SOURCE_POSITIONALS=\"$#:$1\"\nsleep 30\nprintf 'wrong-source-tail\\n'\n",
+        format!(
+            "SOURCE_POSITIONALS=\"$#:$1\"\n{}\nprintf 'wrong-source-tail\\n'\n",
+            long_running_descendant_command()
+        ),
     )
     .unwrap();
 
@@ -581,7 +595,6 @@ async fn native_workflow_failure_runs_cleanup_without_parallel_state_leaks() {
     );
 }
 
-#[cfg(unix)]
 fn engine() -> Engine {
     Engine::new()
 }

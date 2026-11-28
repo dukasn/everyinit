@@ -4108,6 +4108,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                     "posix_cdpath_falls_back_and_ignores_explicit_relative_paths"
                         | "posix_heredoc_expands_positional_lists_without_removing_body_quotes"
                         | "posix_assignment_only_command_status"
+                        | "posix_assignment_only_status_uses_last_value_substitution"
                         | "posix_printf_float_sign_flags_apply_to_nan"
                         | "posix_printf_zero_padding_is_ignored_for_infinity_and_nan"
                         | "posix_special_parameter_default_operators_preserve_at_fields"
@@ -4842,6 +4843,14 @@ async fn errexit_for_a_negated_command_documents_esh_divergence_from_posix_shell
 }
 
 #[cfg(unix)]
+fn bash_is_legacy_macos_version() -> bool {
+    let Ok(version) = Command::new("bash").arg("--version").output() else {
+        return false;
+    };
+    String::from_utf8_lossy(&version.stdout).contains("version 3.2.")
+}
+
+#[cfg(unix)]
 #[tokio::test]
 async fn export_prefix_scope_documents_esh_divergence_from_posix_shells() {
     // ESH restores prefix assignments uniformly for builtins, while POSIX
@@ -4909,6 +4918,11 @@ async fn parameter_replacement_delimiters_track_nested_expansions_like_bash_posi
         ctx.get_captured_stdout().unwrap(),
         "X/c|X/c|X-alpha|X/file|path/toX/file\n"
     );
+
+    // macOS ships Bash 3.2, which cannot parse this nested replacement form.
+    if cfg!(target_os = "macos") && bash_is_legacy_macos_version() {
+        return;
+    }
 
     let reference = Command::new("bash")
         .args(["--posix", "-c", script])
@@ -4997,6 +5011,12 @@ printf 'after-continue-loop\n'
         "after-break-loop\nafter-continue-loop\n"
     );
     assert_eq!(ctx.get_captured_stderr().unwrap(), "");
+
+    // Bash 3.2 on macOS propagates loop control through functions like ESH;
+    // compare the documented divergence only with Bash versions that support it.
+    if cfg!(target_os = "macos") && bash_is_legacy_macos_version() {
+        return;
+    }
 
     let reference = Command::new("bash")
         .args(["--posix", "-c", script])
@@ -5239,7 +5259,11 @@ async fn tilde_plus_and_minus_document_esh_divergence_from_posix() {
     assert!(reference.status.success());
     assert_eq!(
         reference.stdout,
-        format!("<{}>|</posix/audit-previous>\n", tmp.path().display()).as_bytes()
+        format!(
+            "<{}>|</posix/audit-previous>\n",
+            tmp.path().canonicalize().unwrap().display()
+        )
+        .as_bytes()
     );
 }
 

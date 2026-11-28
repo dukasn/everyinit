@@ -86,7 +86,7 @@ impl ResolvedAssets {
                     [
                         ("first", existing.as_str().to_string()),
                         ("second", reference.as_str().to_string()),
-                        ("output", output.display().to_string()),
+                        ("output", path_to_url(output)),
                     ],
                 ));
             }
@@ -142,10 +142,7 @@ impl ResolvedAssets {
                 std::fs::create_dir_all(parent).map_err(|error| {
                     asset_issue(
                         "docs-generated-media-directory-create-failed",
-                        [
-                            ("path", parent.display().to_string()),
-                            ("error", error.to_string()),
-                        ],
+                        [("path", path_to_url(parent)), ("error", error.to_string())],
                     )
                 })?;
             }
@@ -153,7 +150,7 @@ impl ResolvedAssets {
                 asset_issue(
                     "docs-local-image-publish-failed",
                     [
-                        ("path", destination.display().to_string()),
+                        ("path", path_to_url(&destination)),
                         ("error", error.to_string()),
                     ],
                 )
@@ -180,10 +177,7 @@ impl ResolvedAssets {
                 std::fs::remove_file(&file).map_err(|error| {
                     asset_issue(
                         "docs-stale-generated-image-prune-failed",
-                        [
-                            ("path", file.display().to_string()),
-                            ("error", error.to_string()),
-                        ],
+                        [("path", path_to_url(&file)), ("error", error.to_string())],
                     )
                 })?;
             }
@@ -431,7 +425,7 @@ fn canonicalize(path: &Path, description: &str) -> Result<PathBuf, evin_diagnost
             "docs-path-resolve-failed",
             [
                 ("description", description.to_string()),
-                ("path", path.display().to_string()),
+                ("path", path_to_url(path)),
                 ("error", error.to_string()),
             ],
         )
@@ -445,10 +439,7 @@ fn collect_files(root: &Path, files: &mut Vec<PathBuf>) -> Result<(), evin_diagn
     for entry in std::fs::read_dir(root).map_err(|error| {
         asset_issue(
             "docs-asset-directory-read-failed",
-            [
-                ("path", root.display().to_string()),
-                ("error", error.to_string()),
-            ],
+            [("path", path_to_url(root)), ("error", error.to_string())],
         )
     })? {
         let entry = entry.map_err(|error| {
@@ -474,10 +465,7 @@ fn prune_empty_dirs(root: &Path) -> Result<(), evin_diagnostic::Diagnostic> {
     for entry in std::fs::read_dir(root).map_err(|error| {
         asset_issue(
             "docs-generated-media-read-failed",
-            [
-                ("path", root.display().to_string()),
-                ("error", error.to_string()),
-            ],
+            [("path", path_to_url(root)), ("error", error.to_string())],
         )
     })? {
         let entry = entry.map_err(|error| {
@@ -729,7 +717,7 @@ mod tests {
             "docs-local-image-publish-failed",
             evin_locales::t!(
                 "docs-local-image-publish-failed",
-                path = destination.display().to_string(),
+                path = path_to_url(&destination),
                 error = write_error
             ),
         );
