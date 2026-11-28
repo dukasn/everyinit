@@ -658,8 +658,10 @@ async fn unquoted_redirection_expansion_keeps_spaces_and_wildcards_in_one_path()
 
     let script = if cfg!(windows) {
         // Win32 rejects `*` in filenames, while the same ESH literal-path
-        // behavior remains covered on filesystems that permit it.
-        "TARGET='space name.txt'; echo spaced > $TARGET\nTARGET=' spaced on both sides '; echo whitespace > $TARGET\n"
+        // behavior remains covered on filesystems that permit it. Win32 also
+        // strips trailing spaces from ordinary paths, so keep the second name
+        // to leading whitespace only.
+        "TARGET='space name.txt'; echo spaced > $TARGET\nTARGET=' spaced on left'; echo whitespace > $TARGET\n"
     } else {
         "TARGET='space name.txt'; echo spaced > $TARGET\nTARGET='literal*.txt'; echo wildcard > $TARGET\nTARGET=' spaced on both sides '; echo whitespace > $TARGET\n"
     };
@@ -677,7 +679,12 @@ async fn unquoted_redirection_expansion_keeps_spaces_and_wildcards_in_one_path()
         );
     }
     assert_eq!(
-        std::fs::read_to_string(tmp.path().join(" spaced on both sides ")).unwrap(),
+        std::fs::read_to_string(tmp.path().join(if cfg!(windows) {
+            " spaced on left"
+        } else {
+            " spaced on both sides "
+        }))
+        .unwrap(),
         "whitespace\n"
     );
     assert_eq!(

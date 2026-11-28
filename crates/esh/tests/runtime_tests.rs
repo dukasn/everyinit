@@ -498,16 +498,16 @@ async fn cd_dash_toggles_exported_pwd_and_prints_the_destination() {
     let script = "cd child\nprintf '<%s>\\n' \"$PWD\"\ncd -\nprintf '<%s>\\n' \"$OLDPWD\"\ncd -\n";
     let status = engine.eval_str(script, &mut ctx).await.unwrap();
 
-    let temp_path = temp_path.to_string_lossy();
-    let child_path = child.to_string_lossy();
+    let temp_path = common::presented_path(&temp_path);
+    let child_path = common::presented_path(&child);
     assert_eq!(status, 0);
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
         format!("<{child_path}>\n{temp_path}\n<{child_path}>\n{child_path}\n")
     );
     assert_eq!(ctx.cwd(), child.as_path());
-    assert_eq!(ctx.get_var("PWD").as_deref(), Some(child_path.as_ref()));
-    assert_eq!(ctx.get_var("OLDPWD").as_deref(), Some(temp_path.as_ref()));
+    assert_eq!(ctx.get_var("PWD").as_deref(), Some(child_path.as_str()));
+    assert_eq!(ctx.get_var("OLDPWD").as_deref(), Some(temp_path.as_str()));
     assert!(ctx.env_vars().contains_key("PWD"));
     assert!(ctx.env_vars().contains_key("OLDPWD"));
 }
@@ -690,14 +690,14 @@ async fn cd_double_dash_ends_options_and_alone_selects_home() {
         ctx.get_captured_stdout().unwrap(),
         format!(
             "{}:{}:{}\n",
-            dash_directory.display(),
-            literal_dash_directory.display(),
-            home.display()
+            common::presented_path(&dash_directory),
+            common::presented_path(&literal_dash_directory),
+            common::presented_path(&home)
         )
     );
     assert_eq!(
         ctx.get_var("OLDPWD").as_deref(),
-        Some(literal_dash_directory.to_string_lossy().as_ref())
+        Some(common::presented_path(&literal_dash_directory).as_str())
     );
 }
 
@@ -743,7 +743,7 @@ async fn cd_searches_cdpath_in_order_and_prints_selected_directory() {
     );
     assert_eq!(
         ctx.get_var("OLDPWD").as_deref(),
-        Some(temp_path.to_str().unwrap())
+        Some(common::presented_path(&temp_path).as_str())
     );
 }
 
