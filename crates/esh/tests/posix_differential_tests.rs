@@ -4099,8 +4099,9 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
 
             // macOS ships Bash 3.2 and BSD grep, which differ from the behavior
             // these ESH cases test for CDPATH, here-documents, assignment-only
-            // status, NaN formatting flags, special-parameter defaults, and
-            // grep's combined -l/-c output and quiet missing-file diagnostics.
+            // status, short-circuit arithmetic under nounset, NaN formatting
+            // flags, special-parameter defaults, and grep's combined -l/-c
+            // output and quiet missing-file diagnostics.
             if cfg!(target_os = "macos")
                 && *shell == "bash"
                 && matches!(
@@ -4109,6 +4110,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                         | "posix_heredoc_expands_positional_lists_without_removing_body_quotes"
                         | "posix_assignment_only_command_status"
                         | "posix_assignment_only_status_uses_last_value_substitution"
+                        | "posix_arithmetic_conditional_does_not_read_unselected_unset_variables"
                         | "posix_printf_float_sign_flags_apply_to_nan"
                         | "posix_printf_zero_padding_is_ignored_for_infinity_and_nan"
                         | "posix_special_parameter_default_operators_preserve_at_fields"
