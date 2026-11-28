@@ -78,10 +78,14 @@ unless it is required by the architecture.
 
 The `Platform probe` workflow is available through `workflow_dispatch` only.
 Select the branch to inspect and choose Windows, macOS, or both. Each selected
-native runner executes verbose `cargo check --workspace --all-targets --locked`
-and `cargo test --workspace --locked` directly. The jobs are independent, so
-one platform's failure does not cancel the other's result. Each job uploads its
-Cargo log as a workflow artifact, including when a check fails.
+native runner records the commit and Rust toolchain, then runs workspace target
+compilation, library and binary unit tests, integration tests, and
+documentation tests as separate diagnostic groups. Cargo continues through
+failing test binaries, and a failed group does not prevent the later groups
+from running. The job reports each group's result in the Actions summary and
+uploads the summary, environment details, failure index, result table, and full
+per-command logs as an artifact. The jobs are independent, so one platform's
+failure does not cancel the other's result.
 
 Dispatch it from the Actions tab, or use GitHub CLI:
 

@@ -31,21 +31,17 @@ jobs:
       - uses: jdx/mise-action@v5
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v1-platform-probe
-      - name: Run exploratory workspace checks
+          prefix-key: v2-platform-probe
+      - name: Run platform diagnostics
         shell: bash
-        run: |
-          set -euo pipefail
-          export RUST_BACKTRACE=short
-          cargo check --workspace --all-targets --locked 2>&1 | tee platform-probe.log
-          cargo test --workspace --locked -- --show-output 2>&1 | tee -a platform-probe.log
-      - name: Upload platform probe log
+        run: bash .github/scripts/platform-probe.sh
+      - name: Upload platform probe report
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: platform-probe-windows-${{ github.run_id }}
-          path: platform-probe.log
-          if-no-files-found: warn
+          path: platform-probe-report/
+          if-no-files-found: error
 
   macos:
     name: Experimental macOS probe
@@ -57,18 +53,14 @@ jobs:
       - uses: jdx/mise-action@v5
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v1-platform-probe
-      - name: Run exploratory workspace checks
+          prefix-key: v2-platform-probe
+      - name: Run platform diagnostics
         shell: bash
-        run: |
-          set -euo pipefail
-          export RUST_BACKTRACE=short
-          cargo check --workspace --all-targets --locked 2>&1 | tee platform-probe.log
-          cargo test --workspace --locked -- --show-output 2>&1 | tee -a platform-probe.log
-      - name: Upload platform probe log
+        run: bash .github/scripts/platform-probe.sh
+      - name: Upload platform probe report
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: platform-probe-macos-${{ github.run_id }}
-          path: platform-probe.log
-          if-no-files-found: warn
+          path: platform-probe-report/
+          if-no-files-found: error
