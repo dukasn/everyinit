@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file.
 
 Everyinit is canary-era software. CLI and ESH downloads use the canary mirror channel; npm and Marketplace packages use regular workspace versions. The extension is not published as a VS Code pre-release.
 
+## [v0.3.5]
+
+### Bug Fixes
+
+- **esh:** unwrap Windows stdin read result (36c6328)
+- resolve platform probe regressions (0402f31)
+- **ci:** exclude passing probes from failure index (6f1f64d)
+- make workspace path handling portable (c40e27a)
+
+### Other Changes
+
+- collect complete platform probe reports (2839abb)
+
+### Tests
+
+- **esh:** isolate terminal signal cleanup probe (79f1628)
+- **esh:** restore interrupt descendant cleanup checks (fac6834)
+- **esh:** skip Bash 3.2 arithmetic mismatch (f6f181b)
+- **esh:** ignore macOS Bash signal notice (166ea20)
+- **esh:** normalize Windows path expectations (5465823)
+- **esh:** skip legacy Bash fallthrough mismatch (cd8d71f)
+- **esh:** make signal probes portable (557724d)
+
 ## [v0.3.4]
 
 ### Bug Fixes
