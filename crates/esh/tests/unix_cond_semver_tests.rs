@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+
 use esh::{Engine, ExecutionContext};
 use std::fs;
 use std::process::Command;
@@ -75,10 +77,12 @@ async fn test_supports_boolean_precedence_parentheses_and_permission_predicates(
     let status = engine.eval_str(script, &mut ctx).await.unwrap();
 
     assert_eq!(status, 0);
-    assert_eq!(
-        ctx.get_captured_stdout().unwrap(),
+    let expected = if cfg!(windows) {
+        "lone bang is a non-empty string\nand binds tighter than or\nparentheses work\ninteger comparison works\nstring ordering works\nunicode ordering works\ndirectory is searchable\n"
+    } else {
         "lone bang is a non-empty string\nand binds tighter than or\nparentheses work\ninteger comparison works\nstring ordering works\nunicode ordering works\nfile tests work\ndirectory is searchable\n"
-    );
+    };
+    assert_eq!(ctx.get_captured_stdout().unwrap(), expected);
 }
 
 #[tokio::test]
@@ -179,9 +183,10 @@ async fn test_and_bracket_accept_double_equals_as_string_equality_extension() {
     let stdout = ctx.get_captured_stdout().unwrap();
     assert_eq!(stdout, "true:false\n");
 
-    if let Ok(reference) = Command::new("bash")
-        .args(["--posix", "-c", script])
-        .output()
+    if common::should_compare_against_bash()
+        && let Ok(reference) = Command::new("bash")
+            .args(["--posix", "-c", script])
+            .output()
     {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, stdout.as_bytes());

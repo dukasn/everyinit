@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+
 use esh::{Engine, ExecutionContext, ScopeManager};
 
 #[tokio::test]
@@ -597,9 +599,10 @@ printf '%s:%s:%s\n' "$FIRST" "$NEXT" "$OPTIND"
     assert_eq!(ctx.get_captured_stdout().unwrap(), "a:b:1\n");
 
     #[cfg(unix)]
-    if let Ok(reference) = std::process::Command::new("bash")
-        .args(["--posix", "-c", script])
-        .output()
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c", script])
+            .output()
     {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, b"a:b:1\n");
@@ -624,9 +627,10 @@ printf '%s:%s\n' "$OPTION" "$OPTIND"
     assert_eq!(ctx.get_captured_stdout().unwrap(), "a:1\n");
 
     #[cfg(unix)]
-    if let Ok(reference) = std::process::Command::new("bash")
-        .args(["--posix", "-c", script])
-        .output()
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c", script])
+            .output()
     {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, b"a:1\n");

@@ -438,13 +438,12 @@ async fn test_archive_relative_layout_outside_cwd() {
     let res = action.execute(&ctx, Some(spanned_mapping(with))).await;
     let error = res.unwrap_err();
     assert_eq!(error.code.key, "relative-path-escape");
-    assert_eq!(
-        evin_locales::render_issue(&error.code),
-        evin_locales::t!(
-            "relative-path-escape",
-            path = module_b.join("file.txt").display().to_string()
-        )
+    let rendered = evin_locales::render_issue(&error.code);
+    let expected = evin_locales::t!(
+        "relative-path-escape",
+        path = module_b.join("file.txt").display().to_string()
     );
+    assert_eq!(rendered.replace('\\', "/"), expected.replace('\\', "/"));
 }
 
 #[tokio::test]

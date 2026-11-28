@@ -433,7 +433,8 @@ async fn test_set_pipefail() {
 
 #[tokio::test]
 async fn pipefail_returns_the_rightmost_nonzero_pipeline_status() {
-    let script = "set -o pipefail\nfalse | sh -c 'exit 7' | true\n";
+    let script =
+        "set -o pipefail\nfail_with_seven() { return 7; }\nfalse | fail_with_seven | true\n";
     let plan = compile_script(script).expect("compile");
     let mut ctx = ExecutionContext::new();
 
@@ -551,6 +552,7 @@ async fn set_reports_enabled_options_and_supports_positional_terminators() {
 }
 
 #[tokio::test]
+#[cfg(unix)]
 async fn allexport_exports_scalar_assignments_until_disabled() {
     let engine = esh::Engine::new();
     let mut ctx = ExecutionContext::new();

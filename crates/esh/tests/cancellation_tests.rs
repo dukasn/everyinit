@@ -363,7 +363,7 @@ async fn terminal_sigint_cleans_up_external_descendants_and_runs_shell_traps() {
     let run = tokio::spawn(async move {
         engine
             .eval_str(
-                "trap 'echo INT > int-fired' INT; trap 'echo EXIT > exit-fired' EXIT; sh -c 'echo $$ > root.pid; sleep 30 & echo $! > child.pid; wait'",
+                "trap 'echo INT > int-fired' INT; trap 'echo EXIT > exit-fired' EXIT; sh -c 'trap \"trap - INT; kill -INT \\$\\$\" INT; echo $$ > root.pid; sleep 30 & echo $! > child.pid; wait'",
                 &mut ctx,
             )
             .await

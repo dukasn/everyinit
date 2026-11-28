@@ -2820,8 +2820,7 @@ pub fn read<'a>(
                     }
                     #[cfg(not(unix))]
                     {
-                        let mut stdin = tokio::io::stdin();
-                        read_async_line(&mut stdin, raw, delimiter, timeout_dur).await
+                        read_windows_stdin_line(raw, delimiter, timeout_dur).await
                     }
                 }
             }
@@ -2855,6 +2854,102 @@ pub fn read<'a>(
 
         Ok(if found_delimiter && !timed_out { 0 } else { 1 })
     })
+}
+
+#[cfg(windows)]
+async fn read_windows_stdin_line(
+    raw: bool,
+    delimiter: u8,
+    timeout: Option<std::time::Duration>,
+) -> Result<(String, bool, bool), ExecError> {
+    use std::sync::OnceLock;
+
+    type PendingStdinRead =
+        tokio::sync::Mutex<Option<tokio::task::JoinHandle<std::io::Result<(usize, u8)>>>>;
+    static PENDING_READ: OnceLock<PendingStdinRead> = OnceLock::new();
+
+    async fn next_byte(
+        deadline: Option<tokio::time::Instant>,
+    ) -> Result<Option<(usize, u8)>, ExecError> {
+        let pending = PENDING_READ.get_or_init(|| tokio::sync::Mutex::new(None));
+        let mut pending = pending.lock().await;
+        if pending.is_none() {
+            *pending = Some(tokio::spawn(async {
+                use tokio::io::AsyncReadExt;
+                let mut stdin = tokio::io::stdin();
+                let mut byte = [0_u8; 1];
+                stdin.read(&mut byte).await.map(|count| (count, byte[0]))
+            }));
+        }
+
+        let read = pending.as_mut().expect("stdin read was initialized");
+        let result = if let Some(deadline) = deadline {
+            match tokio::time::timeout_at(deadline, &mut *read).await {
+                Ok(result) => Some(result),
+                Err(_) => None,
+            }
+        } else {
+            Some(read.await)
+        };
+
+        let Some(result) = result else {
+            return Ok(None);
+        };
+        pending.take();
+        let (count, byte) = result.map_err(|error| ExecError::IoError(error.to_string()))?;
+        Ok(Some((count, byte)))
+    }
+
+    let deadline = timeout.map(|duration| tokio::time::Instant::now() + duration);
+    let mut line = Vec::new();
+    let mut escaping = false;
+    let mut found_delimiter = false;
+    let mut timed_out = false;
+
+    loop {
+        if deadline.is_some_and(|deadline| tokio::time::Instant::now() >= deadline) {
+            timed_out = true;
+            break;
+        }
+        let Some((count, current)) = next_byte(deadline).await? else {
+            timed_out = true;
+            break;
+        };
+        if count == 0 {
+            if escaping {
+                line.push(b'\\');
+            }
+            break;
+        }
+
+        if !raw && escaping {
+            if current != b'\n' {
+                line.push(b'\\');
+                line.push(current);
+            }
+            escaping = false;
+        } else if !raw && current == b'\\' {
+            escaping = true;
+        } else if current == delimiter {
+            found_delimiter = true;
+            break;
+        } else {
+            line.push(current);
+        }
+    }
+
+    if line.is_empty() && !found_delimiter && !timed_out {
+        return Err(ExecError::Custom("EOF".to_string()));
+    }
+    if timed_out && escaping {
+        line.push(b'\\');
+    }
+
+    Ok((
+        String::from_utf8_lossy(&line).into_owned(),
+        found_delimiter,
+        timed_out,
+    ))
 }
 
 async fn read_async_line<R>(

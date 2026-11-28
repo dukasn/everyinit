@@ -299,7 +299,7 @@ fn terminal_ctrl_c_cancels_esh_and_kills_sigint_ignoring_descendants() {
     let script = format!(
         r#"trap 'echo interrupt-trap' INT
 trap 'echo exit-trap' EXIT
-sh -c '( trap "" INT; sleep 30 & echo $! > {}; echo server-ready; wait ) & wait'
+sh -c 'trap "trap - INT; kill -INT \$\$" INT; ( trap "" INT; sleep 30 & echo $! > {}; echo server-ready; wait ) & wait'
 echo after-interrupt
 "#,
         pid_file.display()

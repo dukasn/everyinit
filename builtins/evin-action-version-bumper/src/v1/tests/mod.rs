@@ -486,7 +486,7 @@ async fn tagged_pre_one_releases_use_commit_impacts() {
 async fn proposal_recalculation_uses_last_tag_when_main_adds_a_breaking_change() {
     let temp = tempfile::TempDir::new().unwrap();
     init_repo(temp.path());
-    std::fs::write(temp.path().join("VERSION"), "0.1.0\n").unwrap();
+    std::fs::write(temp.path().join("VERSION"), "0.1.0\r\n").unwrap();
     git(temp.path(), &["add", "VERSION"]);
     git(temp.path(), &["commit", "-qm", "feat: initial"]);
     git(temp.path(), &["branch", "-M", "main"]);
@@ -534,7 +534,7 @@ async fn proposal_recalculation_uses_last_tag_when_main_adds_a_breaking_change()
     assert_eq!(updated.state.outputs.lock().unwrap()["version"], "0.2.0");
     assert_eq!(
         std::fs::read_to_string(temp.path().join("VERSION")).unwrap(),
-        "0.2.0\n"
+        "0.2.0\r\n"
     );
 }
 

@@ -525,9 +525,70 @@ fn normalized_span(source: &str, span: Span) -> Span {
 }
 
 fn push_unique(diagnostics: &mut Vec<Diagnostic>, diagnostic: Diagnostic) {
-    if !diagnostics.contains(&diagnostic) {
+    if !diagnostics
+        .iter()
+        .any(|existing| same_diagnostic(existing, &diagnostic))
+    {
         diagnostics.push(diagnostic);
     }
+}
+
+fn same_diagnostic(left: &Diagnostic, right: &Diagnostic) -> bool {
+    let same_location = match (&left.location, &right.location) {
+        (None, None) => true,
+        (
+            Some(evin_diagnostic::FileLocation::Path {
+                path: left_path,
+                line: left_line,
+                column: left_column,
+            }),
+            Some(evin_diagnostic::FileLocation::Path {
+                path: right_path,
+                line: right_line,
+                column: right_column,
+            }),
+        ) => {
+            same_diagnostic_path(left_path, right_path)
+                && left_line == right_line
+                && left_column == right_column
+        }
+        (
+            Some(evin_diagnostic::FileLocation::ByteSpan {
+                path: left_path,
+                offset: left_offset,
+                length: left_length,
+                label: left_label,
+            }),
+            Some(evin_diagnostic::FileLocation::ByteSpan {
+                path: right_path,
+                offset: right_offset,
+                length: right_length,
+                label: right_label,
+            }),
+        ) => {
+            same_diagnostic_path(left_path, right_path)
+                && left_offset == right_offset
+                && left_length == right_length
+                && left_label == right_label
+        }
+        _ => false,
+    };
+
+    left.title == right.title
+        && left.code == right.code
+        && left.hint == right.hint
+        && left.severity == right.severity
+        && same_location
+}
+
+#[cfg(windows)]
+fn same_diagnostic_path(left: &str, right: &str) -> bool {
+    left.replace('\\', "/") == right.replace('\\', "/")
+}
+
+#[cfg(not(windows))]
+fn same_diagnostic_path(left: &str, right: &str) -> bool {
+    left == right
 }
 
 fn document_kind(path: &Path, has_header: bool) -> DocumentKind {

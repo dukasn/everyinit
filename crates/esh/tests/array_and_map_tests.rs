@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+
 use esh::{Engine, ExecutionContext};
 #[cfg(unix)]
 use std::process::Command;
@@ -371,7 +373,7 @@ async fn array_at_pattern_removal_and_slicing_preserve_sparse_values() {
     );
 
     #[cfg(unix)]
-    {
+    if common::should_compare_against_bash() {
         // ESH does not field-split unquoted expansions, so its empty array
         // element remains an argument where Bash removes it.
         let reference_script = r#"

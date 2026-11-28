@@ -55,7 +55,12 @@ impl<'a> PlanSink for FsPlanSink<'a> {
         }
 
         self.written_notes.push(relative_path.clone());
-        Ok(relative_path.to_string_lossy().to_string())
+        let relative_path = relative_path.to_string_lossy();
+        #[cfg(windows)]
+        let relative_path = relative_path.replace('\\', "/");
+        #[cfg(not(windows))]
+        let relative_path = relative_path.into_owned();
+        Ok(relative_path)
     }
 
     fn write_plan(&mut self, plan: &ReleaseSyncPlan) -> Result<(), ProtocolError> {

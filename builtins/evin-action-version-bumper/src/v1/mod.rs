@@ -531,9 +531,17 @@ pub async fn execute(
                 file_path_error("version-bumper-file-read-failed", &path, error)
             })?,
         };
-        let regex = if regex.is_match(&content) {
+        // Git for Windows may check out text files with CRLF even when the
+        // repository stores LF. Match configuration patterns against a
+        // normalized view, then restore the file's line-ending convention.
+        let has_crlf = content.contains("\r\n");
+        let match_content = content.replace("\r\n", "\n");
+        let regex = if regex.is_match(&match_content) {
             &regex
-        } else if let Some(fallback) = fallback_regex.as_ref().filter(|r| r.is_match(&content)) {
+        } else if let Some(fallback) = fallback_regex
+            .as_ref()
+            .filter(|r| r.is_match(&match_content))
+        {
             fallback
         } else {
             return Err(evin_locales::diagnostic(
@@ -541,7 +549,12 @@ pub async fn execute(
                     .arg("path", path),
             ));
         };
-        let new_content = regex.replace(&content, replacement.as_str()).to_string();
+        let mut new_content = regex
+            .replace(&match_content, replacement.as_str())
+            .to_string();
+        if has_crlf {
+            new_content = new_content.replace('\n', "\r\n");
+        }
         if content != new_content {
             planned_contents.insert(physical_path, new_content.clone());
             planned_updates.push((path, new_content));

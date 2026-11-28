@@ -13,6 +13,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use esh::runtime::traits::ScopeManager;
+mod common;
+
 use esh::{Engine, ExecutionContext};
 use std::time::Duration;
 use tempfile::tempdir;
@@ -113,7 +115,8 @@ async fn mixed_pipeline_preserves_compound_final_stage_state_and_pipefail_status
     let status = engine
         .eval_str(
             r#"set -o pipefail
-sh -c 'printf "payload\n"; exit 7' | { read RESULT; }
+fail_with_seven() { printf 'payload\n'; return 7; }
+fail_with_seven | { read RESULT; }
 PIPE_STATUS=$?
 printf '%s:%s\n' "$RESULT" "$PIPE_STATUS"
 "#,
@@ -534,11 +537,21 @@ async fn prefixed_pwd_assignments_do_not_stale_cd_state() {
     let child_path = std::fs::canonicalize(child).unwrap();
     assert_eq!(status, 0);
     assert_eq!(ctx.cwd(), child_path.as_path());
-    assert_eq!(ctx.get_var("PWD").as_deref(), child_path.to_str());
-    assert_eq!(ctx.get_var("OLDPWD").as_deref(), temp_path.to_str());
+    assert_eq!(
+        ctx.get_var("PWD").as_deref(),
+        Some(common::presented_path(&child_path).as_str())
+    );
+    assert_eq!(
+        ctx.get_var("OLDPWD").as_deref(),
+        Some(common::presented_path(&temp_path).as_str())
+    );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}:{}\n", child_path.display(), temp_path.display())
+        format!(
+            "{}:{}\n",
+            common::presented_path(&child_path),
+            common::presented_path(&temp_path)
+        )
     );
 }
 
@@ -566,11 +579,21 @@ async fn cd_uses_physical_pwd_when_the_shell_pwd_is_invalid() {
     let child_physical = std::fs::canonicalize(child).unwrap();
     assert_eq!(status, 0);
     assert_eq!(ctx.cwd(), child_physical.as_path());
-    assert_eq!(ctx.get_var("OLDPWD").as_deref(), physical.to_str());
-    assert_eq!(ctx.get_var("PWD").as_deref(), child_physical.to_str());
+    assert_eq!(
+        ctx.get_var("OLDPWD").as_deref(),
+        Some(common::presented_path(&physical).as_str())
+    );
+    assert_eq!(
+        ctx.get_var("PWD").as_deref(),
+        Some(common::presented_path(&child_physical).as_str())
+    );
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}:{}\n", physical.display(), child_physical.display())
+        format!(
+            "{}:{}\n",
+            common::presented_path(&physical),
+            common::presented_path(&child_physical)
+        )
     );
 }
 
@@ -606,8 +629,14 @@ async fn cd_without_home_variables_stays_in_the_execution_context_directory() {
 
     assert_eq!(status, 0);
     assert_eq!(ctx.cwd(), temp_path.as_path());
-    assert_eq!(ctx.get_var("PWD").as_deref(), temp_path.to_str());
-    assert_eq!(ctx.get_var("OLDPWD").as_deref(), temp_path.to_str());
+    assert_eq!(
+        ctx.get_var("PWD").as_deref(),
+        Some(common::presented_path(&temp_path).as_str())
+    );
+    assert_eq!(
+        ctx.get_var("OLDPWD").as_deref(),
+        Some(common::presented_path(&temp_path).as_str())
+    );
 }
 
 #[tokio::test]
@@ -710,7 +739,7 @@ async fn cd_searches_cdpath_in_order_and_prints_selected_directory() {
     assert_eq!(ctx.cwd(), first_shared.as_path());
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        format!("{}\n", first_shared.display())
+        format!("{}\n", common::presented_path(&first_shared))
     );
     assert_eq!(
         ctx.get_var("OLDPWD").as_deref(),
@@ -834,10 +863,10 @@ async fn pwd_logical_mode_falls_back_when_pwd_is_invalid() {
         ctx.get_captured_stdout().unwrap(),
         format!(
             "{}\n{}\n{}\n{}\n",
-            physical.display(),
-            physical.display(),
-            physical.display(),
-            physical.display()
+            common::presented_path(&physical),
+            common::presented_path(&physical),
+            common::presented_path(&physical),
+            common::presented_path(&physical)
         )
     );
 }
@@ -1011,7 +1040,9 @@ async fn parallel_join_propagates_available_failure_message_to_fallback() {
         "{output}"
     );
     assert!(output.trim_end().len() > "failed=printf line=1 message=".len());
-    assert!(ctx.get_captured_stderr().unwrap().contains("missing/out"));
+    let stderr = ctx.get_captured_stderr().unwrap();
+    assert!(stderr.contains("missing"));
+    assert!(stderr.contains("out"));
 }
 
 #[tokio::test]

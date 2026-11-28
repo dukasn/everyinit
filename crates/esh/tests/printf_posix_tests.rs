@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+
 use esh::{Engine, ExecutionContext};
 
 #[tokio::test]
@@ -71,10 +73,11 @@ async fn printf_missing_character_operand_emits_nul_and_continues_conversions() 
     assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 
     #[cfg(unix)]
-    if let Ok(reference) = std::process::Command::new("bash")
-        .args(["--posix", "-c"])
-        .arg(script)
-        .output()
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c"])
+            .arg(script)
+            .output()
     {
         assert!(
             reference.status.success(),

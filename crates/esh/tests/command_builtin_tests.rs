@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+
 use esh::{Engine, ExecutionContext};
 
 #[tokio::test]
@@ -144,9 +146,10 @@ async fn command_queries_recognize_reserved_words_like_posix_shells() {
         "if\nif is a reserved word\n!\n! is a reserved word\n"
     );
 
-    if let Ok(reference) = std::process::Command::new("bash")
-        .args(["--posix", "-c", "command -v if; command -v '!'"])
-        .output()
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c", "command -v if; command -v '!'"])
+            .output()
     {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, b"if\n!\n");

@@ -354,29 +354,35 @@ impl EvinLspServer {
                 (path.clone(), self.line_range(&path, None, None))
             }
         };
-        grouped
-            .entry(self.uri_for(&path))
-            .or_default()
-            .push(Diagnostic {
-                range: range.unwrap_or(Range {
-                    start: Position {
-                        line: 0,
-                        character: 0,
-                    },
-                    end: Position {
-                        line: 0,
-                        character: 1,
-                    },
-                }),
-                severity: Some(match diagnostic.severity {
-                    Severity::Error => 1,
-                    Severity::Warning => 2,
-                    Severity::Info => 3,
-                }),
-                code: Some(diagnostic.code.key.to_owned()),
-                source: Some("evin".into()),
-                message: evin_locales::render_issue(&diagnostic.code),
-            });
+        let diagnostic = Diagnostic {
+            range: range.unwrap_or(Range {
+                start: Position {
+                    line: 0,
+                    character: 0,
+                },
+                end: Position {
+                    line: 0,
+                    character: 1,
+                },
+            }),
+            severity: Some(match diagnostic.severity {
+                Severity::Error => 1,
+                Severity::Warning => 2,
+                Severity::Info => 3,
+            }),
+            code: Some(diagnostic.code.key.to_owned()),
+            source: Some("evin".into()),
+            message: evin_locales::render_issue(&diagnostic.code),
+        };
+        let diagnostics = grouped.entry(self.uri_for(&path)).or_default();
+        if !diagnostics.iter().any(|existing| {
+            existing.range == diagnostic.range
+                && existing.severity == diagnostic.severity
+                && existing.code == diagnostic.code
+                && existing.message == diagnostic.message
+        }) {
+            diagnostics.push(diagnostic);
+        }
     }
 
     fn publish<W: Write>(

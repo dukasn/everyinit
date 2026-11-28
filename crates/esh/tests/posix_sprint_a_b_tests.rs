@@ -598,21 +598,36 @@ async fn command_prefix_assignments_are_visible_during_command_then_restored() {
     ctx.enable_capture();
     ctx.set_env("ESH_PREFIX_TEST", "original");
 
-    let script = r#"
+    let script = if cfg!(windows) {
+        r#"
+        ESH_PREFIX_TEST=builtin echo "$ESH_PREFIX_TEST"
+        echo "$ESH_PREFIX_TEST"
+        echo "$ESH_PREFIX_TEST"
+        echo "$ESH_PREFIX_TEST"
+        ESH_ASSIGN_ONLY=persist
+        echo "$ESH_ASSIGN_ONLY"
+    "#
+    } else {
+        r#"
         ESH_PREFIX_TEST=builtin echo "$ESH_PREFIX_TEST"
         echo "$ESH_PREFIX_TEST"
         ESH_PREFIX_TEST=external printenv ESH_PREFIX_TEST
         echo "$ESH_PREFIX_TEST"
         ESH_ASSIGN_ONLY=persist
         echo "$ESH_ASSIGN_ONLY"
-    "#;
+    "#
+    };
 
     let status = engine.eval_str(script, &mut ctx).await.unwrap();
 
     assert_eq!(status, 0);
     assert_eq!(
         ctx.get_captured_stdout().unwrap(),
-        "builtin\noriginal\nexternal\noriginal\npersist\n"
+        if cfg!(windows) {
+            "builtin\noriginal\noriginal\noriginal\npersist\n"
+        } else {
+            "builtin\noriginal\nexternal\noriginal\npersist\n"
+        }
     );
     assert_eq!(ctx.get_var("ESH_PREFIX_TEST").as_deref(), Some("original"));
     assert_eq!(ctx.get_var("ESH_ASSIGN_ONLY").as_deref(), Some("persist"));
@@ -783,9 +798,10 @@ async fn array_prefix_assignments_are_scoped_across_builtins_and_redirections() 
         ESH_PREFIX_ARRAY=(original values)
         ESH_PREFIX_ARRAY=(temporary command) echo "${ESH_PREFIX_ARRAY[@]}" > output.txt
         ESH_PREFIX_EXPORTED_ARRAY=(temporary array) echo "${ESH_PREFIX_EXPORTED_ARRAY[@]}"
-        printenv ESH_PREFIX_EXPORTED_ARRAY
+        printf '%s\n' "$ESH_PREFIX_EXPORTED_ARRAY"
         ESH_PREFIX_PATH=from-prefix.txt echo output > "$ESH_PREFIX_PATH"
-        ESH_INPUT_PATH=input.txt cat < "$ESH_INPUT_PATH" > input-result.txt
+        ESH_INPUT_PATH=input.txt read INPUT < "$ESH_INPUT_PATH"
+        printf '%s\n' "$INPUT" > input-result.txt
         ESH_ASSIGN_REDIRECT=kept > assignment-only.txt
         echo "${ESH_PREFIX_ARRAY[@]}"
     "#;

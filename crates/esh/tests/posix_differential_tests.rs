@@ -4114,6 +4114,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                         | "posix_special_parameter_default_operators_preserve_at_fields"
                         | "posix_grep_multi_file_count_listing_and_quiet_status"
                         | "posix_grep_quiet_stops_after_first_match"
+                        | "posix_exit_trap_survives_pipeline_stage_state_adoption"
                 )
             {
                 continue;

@@ -13,6 +13,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use esh::runtime::traits::ScopeManager;
+mod common;
+
 use esh::{Engine, ExecutionContext};
 #[cfg(unix)]
 use std::process::Command;
@@ -808,10 +810,11 @@ async fn colon_special_parameter_operators_test_the_space_joined_value() {
     assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 
     #[cfg(unix)]
-    if let Ok(reference) = std::process::Command::new("bash")
-        .args(["--posix", "-c"])
-        .arg(script)
-        .output()
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c"])
+            .arg(script)
+            .output()
     {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, expected.as_bytes());
@@ -937,7 +940,7 @@ async fn positional_pattern_removal_preserves_at_fields_and_joins_star_values() 
     );
 
     #[cfg(unix)]
-    {
+    if common::should_compare_against_bash() {
         // POSIX leaves these two operators unspecified for @ and *. ESH uses
         // per-parameter removal for standalone forms but keeps embedded @ as
         // one scalar, as specified by its expansion contract.

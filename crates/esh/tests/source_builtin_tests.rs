@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod common;
+
 use esh::{Engine, ExecutionContext, ScopeManager};
 use std::fs;
 use tempfile::tempdir;
@@ -194,10 +196,11 @@ async fn nested_dot_restores_each_positional_frame_and_return_boundary() {
     );
 
     #[cfg(unix)]
-    if let Ok(reference) = std::process::Command::new("bash")
-        .args(["--posix", "-c", script])
-        .current_dir(tmp.path())
-        .output()
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c", script])
+            .current_dir(tmp.path())
+            .output()
     {
         assert!(reference.status.success());
         assert_eq!(
@@ -234,11 +237,12 @@ printf 'wrong-caller-tail\n'
         "source-before-return\nexit:7\n"
     );
 
-    let reference = std::process::Command::new("bash")
-        .args(["--posix", "-c", script])
-        .current_dir(tmp.path())
-        .output();
-    if let Ok(reference) = reference {
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c", script])
+            .current_dir(tmp.path())
+            .output()
+    {
         assert_eq!(reference.status.code(), Some(status));
         assert_eq!(
             reference.stdout,
@@ -273,12 +277,13 @@ async fn dot_searches_shell_path_for_bare_file_names_even_when_unexported() {
     assert_eq!(status, 0);
     assert_eq!(ctx.get_captured_stdout().unwrap(), "found\n");
 
-    let reference = std::process::Command::new("bash")
-        .args(["--posix", "-c"])
-        .arg("unset PATH\nPATH=../source-path\n. env.esh\nprintf '%s\\n' \"$PATH_SOURCE\"\n")
-        .current_dir(&working_dir)
-        .output();
-    if let Ok(reference) = reference {
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c"])
+            .arg("unset PATH\nPATH=../source-path\n. env.esh\nprintf '%s\\n' \"$PATH_SOURCE\"\n")
+            .current_dir(&working_dir)
+            .output()
+    {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, b"found\n");
         assert_eq!(reference.stderr, b"");
@@ -327,12 +332,13 @@ async fn dot_path_with_slash_bypasses_path_search() {
     assert_eq!(status, 0);
     assert_eq!(ctx.get_captured_stdout().unwrap(), "explicit-path\n");
 
-    let reference = std::process::Command::new("bash")
-        .args(["--posix", "-c"])
-        .arg("PATH=../source-path\n. ./nested/same.esh\nprintf '%s\\n' \"$SOURCE_ORIGIN\"\n")
-        .current_dir(&working_dir)
-        .output();
-    if let Ok(reference) = reference {
+    if common::should_compare_against_bash()
+        && let Ok(reference) = std::process::Command::new("bash")
+            .args(["--posix", "-c"])
+            .arg("PATH=../source-path\n. ./nested/same.esh\nprintf '%s\\n' \"$SOURCE_ORIGIN\"\n")
+            .current_dir(&working_dir)
+            .output()
+    {
         assert!(reference.status.success());
         assert_eq!(reference.stdout, b"explicit-path\n");
         assert_eq!(reference.stderr, b"");
