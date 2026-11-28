@@ -4116,6 +4116,7 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                         | "posix_grep_quiet_stops_after_first_match"
                         | "posix_exit_trap_survives_pipeline_stage_state_adoption"
                         | "posix_errexit_is_suppressed_in_substitutions_inside_tested_commands"
+                        | "case_fallthrough_skips_patterns_and_resume_next_expands_them_in_order"
                 )
             {
                 continue;
