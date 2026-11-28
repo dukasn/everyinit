@@ -4149,12 +4149,21 @@ printf '<%s><%s>\n' "$FIRST" "$SECOND"
                 "{shell} output: {}",
                 case.name
             );
-            assert_eq!(
-                String::from_utf8_lossy(&reference.stderr),
-                "",
-                "{shell} stderr: {}",
-                case.name
-            );
+            // macOS Bash prints its own signal-termination notice even when
+            // the signaled command redirects stderr. Keep status and stdout
+            // comparison, while excluding only this platform-specific noise.
+            if !(cfg!(target_os = "macos")
+                && *shell == "bash"
+                && case.name
+                    == "posix_signal_terminated_external_commands_use_shell_status_encoding")
+            {
+                assert_eq!(
+                    String::from_utf8_lossy(&reference.stderr),
+                    "",
+                    "{shell} stderr: {}",
+                    case.name
+                );
+            }
             assert_eq!(
                 esh_stdout, reference_stdout,
                 "ESH vs {shell} output: {}",
