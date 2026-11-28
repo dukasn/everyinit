@@ -4933,16 +4933,31 @@ async fn parameter_replacement_delimiters_track_nested_expansions_like_bash_posi
         "X/c|X/c|X-alpha|X/file|path/toX/file\n"
     );
 
-    // macOS ships Bash 3.2, which cannot parse this nested replacement form.
-    if cfg!(target_os = "macos") && bash_is_legacy_macos_version() {
-        return;
-    }
-
+    let version = Command::new("bash")
+        .arg("--version")
+        .output()
+        .expect("Bash should be available for the version check");
+    let version = String::from_utf8_lossy(&version.stdout);
     let reference = Command::new("bash")
         .args(["--posix", "-c", script])
         .output()
         .expect("Bash should be available for the nested-operand comparison");
-    assert!(reference.status.success());
+    if !reference.status.success() {
+        eprintln!(
+            "Bash nested-replacement reference failed: version={version:?}, status={:?}, stdout={:?}, stderr={:?}",
+            reference.status.code(),
+            String::from_utf8_lossy(&reference.stdout),
+            String::from_utf8_lossy(&reference.stderr)
+        );
+        assert!(
+            cfg!(target_os = "macos")
+                && version.contains("version 3.2.")
+                && !reference.stderr.is_empty(),
+            "unexpected Bash nested-replacement reference failure"
+        );
+        return;
+    }
+
     assert_eq!(reference.stdout, b"X/c|X/c|X-alpha|X/file|path/toX/file\n");
     assert_eq!(reference.stderr, b"");
 }

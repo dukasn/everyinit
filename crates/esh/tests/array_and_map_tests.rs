@@ -193,10 +193,25 @@ async fn associative_maps_keep_expanded_keys_with_spaces_as_one_key() {
 
 #[cfg(unix)]
 fn bash_supports_associative_arrays() -> bool {
-    Command::new("bash")
+    let Ok(version) = Command::new("bash").arg("--version").output() else {
+        return false;
+    };
+    let version = String::from_utf8_lossy(&version.stdout);
+    let Ok(capability) = Command::new("bash")
         .args(["--posix", "-c", "declare -A MAP"])
         .output()
-        .is_ok_and(|output| output.status.success())
+    else {
+        eprintln!("could not run Bash associative-array capability check ({version:?})");
+        return false;
+    };
+    if !capability.status.success() {
+        eprintln!(
+            "Bash associative-array reference unavailable: version={version:?}, status={:?}, stderr={:?}",
+            capability.status.code(),
+            String::from_utf8_lossy(&capability.stderr)
+        );
+    }
+    capability.status.success()
 }
 
 #[tokio::test]

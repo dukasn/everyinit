@@ -154,14 +154,6 @@ async fn select_without_positionals_skips_the_menu_and_preserves_stdin() {
     }
 }
 
-#[cfg(unix)]
-fn bash_is_legacy_macos_version() -> bool {
-    let Ok(version) = std::process::Command::new("bash").arg("--version").output() else {
-        return false;
-    };
-    String::from_utf8_lossy(&version.stdout).contains("version 3.2.")
-}
-
 #[tokio::test]
 async fn select_with_an_empty_in_list_does_not_fall_back_to_positionals() {
     let script = "set -- positional\nPS3='choose> '\nselect choice in; do\n  printf 'unexpected-body:<%s>\\n' \"$choice\"\ndone\nread AFTER\nprintf 'after=<%s>\\n' \"$AFTER\"\n";
@@ -179,25 +171,36 @@ async fn select_with_an_empty_in_list_does_not_fall_back_to_positionals() {
     assert_eq!(ctx.get_captured_stderr().unwrap(), "");
 
     #[cfg(unix)]
-    if !cfg!(target_os = "macos") || !bash_is_legacy_macos_version() {
+    if let Ok(version) = std::process::Command::new("bash").arg("--version").output() {
         use std::io::Write;
 
-        if let Ok(mut child) = std::process::Command::new("bash")
+        assert!(version.status.success(), "Bash --version failed");
+        let version = String::from_utf8_lossy(&version.stdout);
+        let mut child = std::process::Command::new("bash")
             .args(["--posix", "-c"])
             .arg(script)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
-        {
-            child.stdin.take().unwrap().write_all(b"1\n").unwrap();
-            let reference = child.wait_with_output().unwrap();
-            assert!(
-                reference.status.success(),
-                "Bash failed to run empty select list"
-            );
+            .expect("Bash was available for the version check");
+        let input_result = child.stdin.take().unwrap().write_all(b"1\n");
+        let reference = child.wait_with_output().unwrap();
+        if reference.status.success() {
+            assert!(input_result.is_ok(), "Bash did not accept select input");
             assert_eq!(reference.stdout, expected_stdout);
             assert_eq!(reference.stderr, b"");
+        } else {
+            eprintln!(
+                "Bash empty-select reference failed: version={version:?}, status={:?}, input={input_result:?}, stdout={:?}, stderr={:?}",
+                reference.status.code(),
+                String::from_utf8_lossy(&reference.stdout),
+                String::from_utf8_lossy(&reference.stderr)
+            );
+            assert!(
+                cfg!(target_os = "macos") && version.contains("version 3.2."),
+                "unexpected Bash empty-select reference failure"
+            );
         }
     }
 }
