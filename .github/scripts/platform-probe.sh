@@ -62,6 +62,10 @@ failure_index="$report_dir/failure-index.txt"
 {
   for log in "$report_dir"/{check-all-targets,unit-tests,integration-tests,documentation-tests}.log; do
     [[ -f "$log" ]] || continue
+    probe_id="${log##*/}"
+    probe_id="${probe_id%.log}"
+    status="$(awk -F '\t' -v id="$probe_id" '$1 == id { print $3; exit }' "$results_file")"
+    [[ "$status" != 0 ]] || continue
     printf '\n### %s\n' "${log##*/}"
     if ! grep -nE '^error(\[[^]]+\])?:|^---- .* stdout ----$|^test .* \.\.\. FAILED$|^test result: FAILED|^error: test failed, to rerun pass' "$log"; then
       printf 'No matching compiler error or failed-test summary lines. See the full log for details.\n'
@@ -83,7 +87,7 @@ failure_index="$report_dir/failure-index.txt"
     fi
     printf '| %s | %s | %s |\n' "$label" "$result" "$status"
   done < "$results_file"
-  printf '\n`failure-index.txt` lists compiler errors and failed-test summaries. Full command output is in the matching `.log` files. `environment.txt` records the runner and Rust toolchain.\n'
+  printf '\n`failure-index.txt` lists compiler errors and failed-test summaries from failed probes. Full command output is in the matching `.log` files. `environment.txt` records the runner and Rust toolchain.\n'
 } | tee "$summary_file"
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
