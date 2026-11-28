@@ -359,11 +359,20 @@ async fn terminal_sigint_cleans_up_external_descendants_and_runs_shell_traps() {
     let engine = engine();
     let mut ctx = ExecutionContext::new();
     ctx.set_cwd(temp.path()).unwrap();
+    ctx.set_env(
+        "ESH_TEST_HELPER",
+        std::env::current_exe()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
+    );
+    ctx.set_env("ESH_TEST_DIRECTORY", temp.path().to_string_lossy());
+    ctx.set_env("ESH_PROCESS_TREE_HELPER", "1");
 
     let run = tokio::spawn(async move {
         engine
             .eval_str(
-                "trap 'echo INT > int-fired' INT; trap 'echo EXIT > exit-fired' EXIT; sh -c 'trap \"trap - INT; kill -INT \\$\\$\" INT; echo $$ > root.pid; sleep 30 & echo $! > child.pid; wait'",
+                "trap 'echo INT > int-fired' INT; trap 'echo EXIT > exit-fired' EXIT; \"$ESH_TEST_HELPER\" --exact terminal_sigint_process_helper --nocapture",
                 &mut ctx,
             )
             .await
@@ -419,6 +428,50 @@ async fn terminal_sigint_cleans_up_external_descendants_and_runs_shell_traps() {
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
     panic!("SIGINT-ignoring descendant process {child_pid} survived cleanup");
+}
+
+#[cfg(unix)]
+#[test]
+#[allow(clippy::zombie_processes)] // The helper is killed before its child; PID 1 reaps it.
+fn terminal_sigint_process_helper() {
+    if std::env::var_os("ESH_PROCESS_TREE_HELPER").as_deref() != Some(std::ffi::OsStr::new("1")) {
+        return;
+    }
+
+    // Reset the libtest signal handler so the helper exits with a real
+    // SIGINT termination when the process group receives the terminal signal.
+    // SAFETY: SIGINT is a valid signal and SIG_DFL is the standard handler.
+    unsafe { libc::signal(libc::SIGINT, libc::SIG_DFL) };
+
+    let directory = std::path::PathBuf::from(
+        std::env::var_os("ESH_TEST_DIRECTORY").expect("helper directory was not configured"),
+    );
+    let ready_file = directory.join("child-ready");
+    let child = std::process::Command::new("sh")
+        .args([
+            "-c",
+            "trap '' INT; : > \"$ESH_TEST_READY_FILE\"; exec sleep 30",
+        ])
+        .env("ESH_TEST_READY_FILE", &ready_file)
+        .spawn()
+        .expect("could not start SIGINT-ignoring descendant");
+
+    for _ in 0..200 {
+        if ready_file.exists() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(ready_file.exists(), "descendant did not become ready");
+
+    std::fs::write(directory.join("root.pid"), std::process::id().to_string())
+        .expect("could not write helper PID");
+    std::fs::write(directory.join("child.pid"), child.id().to_string())
+        .expect("could not write descendant PID");
+
+    loop {
+        std::thread::sleep(Duration::from_secs(60));
+    }
 }
 
 #[cfg(unix)]
