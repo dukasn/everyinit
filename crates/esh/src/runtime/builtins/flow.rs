@@ -2896,7 +2896,9 @@ async fn read_windows_stdin_line(
             return Ok(None);
         };
         pending.take();
-        let (count, byte) = result.map_err(|error| ExecError::IoError(error.to_string()))?;
+        let (count, byte) = result
+            .map_err(|error| ExecError::IoError(error.to_string()))?
+            .map_err(|error| ExecError::IoError(error.to_string()))?;
         Ok(Some((count, byte)))
     }
 
